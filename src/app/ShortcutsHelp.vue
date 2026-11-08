@@ -8,7 +8,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
     title: 'Montage',
     rows: [
       ['V', 'Sélection ; arrête la pose ou le tracé'],
-      ['W', 'Tracer un fil : un clic par coude, Maj inverse le L'],
+      ['W', 'Tracer un fil : un clic par coude, l’axe dominant d’abord, Maj inverse le L'],
       ['Entrée / double-clic', 'Terminer le fil (finir sur une broche ou un fil le termine aussi)'],
       ['Retour arrière', 'Retirer le dernier sommet du fil en cours'],
       ['Échap', 'Annuler le tracé, la pose, puis la sélection'],
@@ -23,7 +23,10 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['Ctrl+N / O / S', 'Nouveau / ouvrir / enregistrer (Ctrl+Maj+S : sous…)'],
       ['Ctrl+E', 'Exporter en PNG ou SVG'],
       ['0 / 1', 'Ajuster au contenu / zoom 100 %'],
-      ['Molette, Espace + glisser', 'Zoom autour du curseur, déplacer la vue']
+      ['Molette, Espace + glisser', 'Zoom autour du curseur, déplacer la vue'],
+      ['I', 'Afficher / masquer le panneau de propriétés'],
+      ['Clic droit', 'Menu contextuel : composant, fil, étiquette ou vide'],
+      ['Double-clic', 'Valeur d’un composant, texte d’une étiquette']
     ]
   },
   {
@@ -34,7 +37,9 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['E / B', 'Texte / broche (sur le bord)'],
       ['Entrée', 'Terminer la polyligne'],
       ['Suppr, Échap', 'Supprimer, annuler'],
-      ['Ctrl+Z / Y / S / N', 'Annuler / rétablir / enregistrer / nouveau']
+      ['Ctrl+Z / Y / S / N', 'Annuler / rétablir / enregistrer / nouveau'],
+      ['Ctrl+molette', 'Zoom centré sur le curseur'],
+      ['Ctrl+glisser', 'Saisir la poignée la plus proche de la forme']
     ]
   }
 ]

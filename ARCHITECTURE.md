@@ -34,6 +34,11 @@ Immer). Toute modification passe par une commande nommée du store (`setSize`, `
 patches inverses, l'annulation les rejoue. Les champs de l'inspecteur valident au changement,
 pas à chaque touche, donc une saisie = une commande.
 
+Dans le montage, toute commande qui déplace ou réoriente des composants passe par
+`applyWithElasticWires` : après la recette, `wiresFollowingPins` (`src/domain/elastic.ts`) compare
+la position des broches avant et après et fait suivre les extrémités de fil posées dessus (coude
+ajouté par `dragVertex`) ; le canevas appelle la même fonction pour l'aperçu pendant le glisser.
+
 ## Conventions de coordonnées
 
 - Unité du domaine : la cellule de grille, en entiers. Canevas infini, négatifs permis.

@@ -6,11 +6,13 @@ import { DEFAULT_PROFILE } from './profile'
 import { createEmptyProject, wireGeometryProblem, type Wire } from './project'
 import {
   dragVertex,
+  horizontalFirstFor,
   locateOnWire,
   moveSegment,
   nearestSegmentIndex,
   normalizePoints,
   routeL,
+  routeLAuto,
   simplifyPoints,
   wireIntersectsRect,
   wirePathData
@@ -95,6 +97,25 @@ describe('forme des fils', () => {
       [0, 0],
       [4, 0]
     ])
+  })
+
+  it('choisit l’axe dominant en premier, et l’autre avec Maj', () => {
+    expect(routeLAuto([0, 0], [6, 2])).toEqual([
+      [0, 0],
+      [6, 0],
+      [6, 2]
+    ])
+    expect(routeLAuto([0, 0], [2, 6])).toEqual([
+      [0, 0],
+      [0, 6],
+      [2, 6]
+    ])
+    expect(routeLAuto([0, 0], [2, 6], true)).toEqual([
+      [0, 0],
+      [2, 0],
+      [2, 6]
+    ])
+    expect(horizontalFirstFor([0, 0], [3, 3])).toBe(true)
   })
 
   it('situe un point sur un fil', () => {

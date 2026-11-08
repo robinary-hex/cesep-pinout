@@ -310,3 +310,116 @@ describe('montage : fils', () => {
     expect(parseProject(text)).toEqual(store.doc)
   })
 })
+
+describe('montage : élasticité des fils, valeurs, collage', () => {
+  function twoResistorsWithWire(): {
+    store: ReturnType<typeof useSchematicStore>
+    a: string
+    b: string
+    wire: string
+  } {
+    const store = useSchematicStore()
+    store.startPlacing(resistor())
+    const a = store.placeAt(0, 0) // broches (0,1) et (4,1)
+    const b = store.placeAt(10, 0) // broches (10,1) et (14,1)
+    store.stopPlacing()
+    const wire = store.addWire([
+      [4, 1],
+      [10, 1]
+    ])
+    if (!a || !b || !wire) throw new Error('mise en place refusée')
+    return { store, a, b, wire }
+  }
+
+  function sameNet(store: ReturnType<typeof useSchematicStore>, a: string, b: string): boolean {
+    const nets = store.connectivity.pinNet
+    return nets.get(`${a}:b`) !== undefined && nets.get(`${a}:b`) === nets.get(`${b}:a`)
+  }
+
+  it('les fils posés sur les broches suivent un composant déplacé', () => {
+    const { store, a, b, wire } = twoResistorsWithWire()
+    expect(sameNet(store, a, b)).toBe(true)
+    store.selection = [b]
+    store.moveSelection(0, 3)
+    expect(store.doc.wires.find((candidate) => candidate.id === wire)?.points).toEqual([
+      [4, 1],
+      [4, 4],
+      [10, 4]
+    ])
+    expect(sameNet(store, a, b)).toBe(true)
+    store.undo()
+    expect(store.doc.wires[0]?.points).toEqual([
+      [4, 1],
+      [10, 1]
+    ])
+  })
+
+  it('un fil déplacé avec son composant reste accroché à l’autre composant', () => {
+    const { store, a, b, wire } = twoResistorsWithWire()
+    store.selection = [a]
+    store.selectedWires = [wire]
+    store.moveSelection(0, 3)
+    expect(store.doc.wires[0]?.points).toEqual([
+      [4, 4],
+      [4, 1],
+      [10, 1]
+    ])
+    expect(sameNet(store, a, b)).toBe(true)
+  })
+
+  it('les fils suivent aussi une rotation et un miroir', () => {
+    const { store, a, b } = twoResistorsWithWire()
+    store.selection = [b]
+    store.rotateSelection('cw')
+    expect(sameNet(store, a, b)).toBe(true)
+    store.flipSelection('vertical')
+    expect(sameNet(store, a, b)).toBe(true)
+    expect(store.doc.wires[0]?.points.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('donne une valeur à un texte variable et revient à la valeur par défaut', () => {
+    const store = useSchematicStore()
+    const def = resistor()
+    def.visual = {
+      kind: 'drawing',
+      primitives: [
+        {
+          kind: 'text',
+          x: 8,
+          y: 4,
+          text: 'R',
+          size: 0.5,
+          anchor: 'middle',
+          color: '#000000',
+          variable: true,
+          defaultValue: '10 kΩ'
+        }
+      ]
+    }
+    store.startPlacing(def)
+    const id = store.placeAt(0, 0)
+    store.stopPlacing()
+    if (!id) throw new Error('pose refusée')
+    store.setInstanceField(id, 'R', ' 4,7 kΩ ')
+    expect(store.doc.components[0]?.fields).toEqual({ R: '4,7 kΩ' })
+    store.setInstanceField(id, 'R', '')
+    expect(store.doc.components[0]?.fields).toEqual({})
+    store.undo()
+    expect(store.doc.components[0]?.fields).toEqual({ R: '4,7 kΩ' })
+  })
+
+  it('colle le presse-papiers à la cellule demandée', () => {
+    const store = useSchematicStore()
+    store.startPlacing(resistor())
+    const id = store.placeAt(3, 2)
+    store.stopPlacing()
+    if (!id) throw new Error('pose refusée')
+    expect(store.clipboardEmpty).toBe(true)
+    store.selection = [id]
+    store.copySelection()
+    expect(store.clipboardEmpty).toBe(false)
+    store.pasteClipboardAt(20, 10)
+    expect(store.doc.components).toHaveLength(2)
+    expect(store.doc.components[1]).toMatchObject({ x: 20, y: 10 })
+  })
+})

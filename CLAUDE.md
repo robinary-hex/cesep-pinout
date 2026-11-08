@@ -48,12 +48,18 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     Ctrl+Page haut/bas
     (Maj pour premier/arrière-plan) = ordre des fils, 0 ajuster au contenu, 1 zoom 100 %,
     molette = zoom, Espace + glisser ou bouton du milieu = déplacer la vue, E étiquette texte,
-    Alt+clic sur un croisement = inverser l'ordre à cet endroit seulement.
+    Alt+clic sur un croisement = inverser l'ordre à cet endroit seulement, I = panneau de
+    propriétés (replié par défaut), clic droit = menu contextuel (composant, fil, étiquette ou
+    vide ; termine un fil en cours, arrête une pose), double-clic = valeur d'un composant ou texte
+    d'une étiquette.
 - Fils : la géométrie pure est dans `src/domain/wires.ts` (tracé, coins arrondis, édition de
   segments et de sommets), la connectivité dérivée dans `src/domain/connectivity.ts` (jonctions,
   extrémités libres, nets par union-find). Un fil garde ses extrémités fixes quand on déplace un
   segment ou un sommet : un coude s'ajoute au besoin. Un sommet au milieu d'un segment droit est
-  permis ; les demi-tours et les sommets confondus sont refusés.
+  permis ; les demi-tours et les sommets confondus sont refusés. Le L d'un tracé suit l'axe
+  dominant (Maj inverse). Élasticité (`src/domain/elastic.ts`) : les extrémités posées sur une
+  broche suivent le composant déplacé, tourné ou retourné ; un fil déplacé en bloc garde ses
+  extrémités sur les broches immobiles.
 - Export : `src/domain/svg.ts` construit le SVG autonome (viewBox en cellules, même ordre
   d'empilement que l'éditeur, sans marqueurs d'édition) ; `src/features/export/` le rastérise en
   PNG via un canvas et le copie dans le presse-papiers. Les réglages d'export, la palette, le profil
@@ -63,7 +69,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   modifications non enregistrées ; `App.vue` la propose au lancement. La garde à la fermeture est
   dans `electron/main.ts` (le rendu tient `setDirty` à jour, puis répond à `autosave-then-quit`).
 - Boîtes de dialogue : `src/ui/ModalDialog.vue` ; tant qu'une est ouverte (`openModals`), les
-  éditeurs ignorent leurs raccourcis.
+  éditeurs ignorent leurs raccourcis. `src/ui/PromptDialog.vue` (saisie d'une valeur) et
+  `src/ui/ContextMenu.vue` (menu contextuel, entrées décrites dans `contextMenu.ts`) comptent aussi
+  dans `openModals`.
 - Croisements : `src/domain/crossings.ts` (croisements stricts, fil du dessus, exceptions Alt+clic
   élaguées à chaque commande). Broches reliées à rien : `unconnectedPinKeys` de la connectivité.
 - Exécutable : `pnpm icon` régénère `build/icon.png` (script sans dépendance), `pnpm build:win`

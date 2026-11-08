@@ -11,11 +11,11 @@ import {
   nearestSegmentIndex,
   rectsIntersect,
   rotatedSize,
-  routeL,
+  routeLAuto,
   textLabelBounds,
-  translatePoints,
   wireIntersectsRect,
   wirePathData,
+  wiresFollowingPins,
   type ComponentInstance,
   type GridPoint,
   type GridRect,
@@ -26,6 +26,7 @@ import {
   type Wire
 } from '@/domain'
 import ComponentGraphic from '@/render/ComponentGraphic.vue'
+import type { MenuRequest, MenuTarget } from './menu'
 import { useSchematicStore, type PlacedInstance } from './store'
 
 // Canevas infini du montage. Tout le contenu est dessiné en unités de cellule dans un groupe
@@ -35,6 +36,11 @@ import { useSchematicStore, type PlacedInstance } from './store'
 // tracé en cours, rectangle de sélection.
 
 const store = useSchematicStore()
+const emit = defineEmits<{
+  openMenu: [request: MenuRequest]
+  editInstance: [id: string]
+  editLabel: [id: string]
+}>()
 const host = ref<HTMLDivElement | null>(null)
 const svg = ref<SVGSVGElement | null>(null)
 
@@ -173,7 +179,6 @@ const moveOffset = computed(() => {
   return current?.kind === 'move'
     ? {
         ids: new Set(current.ids),
-        wireIds: new Set(current.wireIds),
         labelIds: new Set(current.labelIds),
         dx: current.dx,
         dy: current.dy
@@ -190,6 +195,27 @@ function labelOffsetOf(id: string): { dx: number; dy: number } {
   const offset = moveOffset.value
   return offset && offset.labelIds.has(id) ? { dx: offset.dx, dy: offset.dy } : { dx: 0, dy: 0 }
 }
+
+/**
+ * Fils pendant un déplacement : les fils sélectionnés suivent le vecteur, les extrémités posées
+ * sur une broche d'un composant déplacé suivent leur broche (même règle que la commande finale).
+ */
+const previewWires = computed<Map<string, readonly GridPoint[]> | null>(() => {
+  const current = drag.value
+  if (current?.kind !== 'move' || (current.dx === 0 && current.dy === 0)) return null
+  const { dx, dy } = current
+  const moving = new Set(current.ids)
+  const pinsAfter = store.pinRefs.map((pin) =>
+    moving.has(pin.instanceId)
+      ? { ...pin, point: [pin.point[0] + dx, pin.point[1] + dy] as GridPoint }
+      : pin
+  )
+  const translated = new Map<string, GridPoint>(
+    current.wireIds.map((id) => [id, [dx, dy] as GridPoint])
+  )
+  const adjusted = wiresFollowingPins(store.doc.wires, store.pinRefs, pinsAfter, translated)
+  return new Map(adjusted.map((wire) => [wire.id, wire.points]))
+})
 
 // Instances
 
@@ -259,10 +285,7 @@ function wirePoints(wire: Wire): readonly GridPoint[] {
   ) {
     return current.preview
   }
-  const offset = moveOffset.value
-  if (offset && offset.wireIds.has(wire.id))
-    return translatePoints(wire.points, offset.dx, offset.dy)
-  return wire.points
+  return previewWires.value?.get(wire.id) ?? wire.points
 }
 
 const renderedWires = computed(() =>
@@ -341,7 +364,7 @@ const drawingPreview = computed(() => {
   const committed = wirePathData(current.points, cornerRadius.value)
   if (!point) return { committed, pending: '', end: null as GridPoint | null, onPin: false }
   const snap = wireSnap(point)
-  const route = routeL(last, snap.point, !store.shiftHeld)
+  const route = routeLAuto(last, snap.point, store.shiftHeld)
   return {
     committed,
     pending: wirePathData([...current.points, ...route.slice(1)], cornerRadius.value),
@@ -529,7 +552,7 @@ function onPointerDown(event: PointerEvent): void {
     }
     const last = current.points.at(-1)
     if (!last) return
-    store.appendWirePoints(routeL(last, snap.point, !store.shiftHeld).slice(1))
+    store.appendWirePoints(routeLAuto(last, snap.point, store.shiftHeld).slice(1))
     if (snap.pinKey !== null || wireAt(snap.point)) store.finishWire()
     return
   }
@@ -622,6 +645,51 @@ function onDoubleClick(): void {
   if (store.tool === 'wire') store.finishWire()
 }
 
+function onInstanceDoubleClick(id: string, event: MouseEvent): void {
+  if (store.tool !== 'select') return
+  event.stopPropagation()
+  emit('editInstance', id)
+}
+
+function onLabelDoubleClick(id: string, event: MouseEvent): void {
+  if (store.tool !== 'select') return
+  event.stopPropagation()
+  emit('editLabel', id)
+}
+
+/**
+ * Clic droit : termine le fil en cours ou arrête la pose ; sinon l'élément visé entre dans la
+ * sélection (s'il n'y est pas déjà) et le menu contextuel s'ouvre.
+ */
+function onContextMenu(event: MouseEvent, target: MenuTarget): void {
+  event.preventDefault()
+  event.stopPropagation()
+  if (drag.value) {
+    drag.value = null
+    return
+  }
+  if (store.tool === 'wire' && store.drawing) {
+    store.finishWire()
+    return
+  }
+  if (store.tool === 'place') {
+    store.stopPlacing()
+    return
+  }
+  if (target.kind === 'instance' && !selectedSet.value.has(target.id)) {
+    store.clearSelection()
+    store.selection = [target.id]
+  } else if (target.kind === 'wire' && !selectedWireSet.value.has(target.id)) {
+    store.clearSelection()
+    store.selectedWires = [target.id]
+  } else if (target.kind === 'label' && !selectedLabelSet.value.has(target.id)) {
+    store.clearSelection()
+    store.selectedLabels = [target.id]
+  }
+  const world = toWorld(screenPoint(event))
+  emit('openMenu', { x: event.clientX, y: event.clientY, cell: snapGrid(world), target })
+}
+
 function onWheel(event: WheelEvent): void {
   const screen = screenPoint(event)
   store.zoomAround(event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP, screen.x, screen.y)
@@ -663,7 +731,7 @@ const cursorClass = computed(() => {
         @pointerleave="hover = null"
         @dblclick="onDoubleClick"
         @wheel.prevent="onWheel"
-        @contextmenu.prevent
+        @contextmenu="onContextMenu($event, { kind: 'empty' })"
       >
         <g class="grid">
           <line
@@ -709,6 +777,7 @@ const cursorClass = computed(() => {
                 @pointerdown="onWireDown(item.wire.id, $event)"
                 @pointerenter="store.hoverWireId = item.wire.id"
                 @pointerleave="store.hoverWireId = null"
+                @contextmenu="onContextMenu($event, { kind: 'wire', id: item.wire.id })"
               />
             </template>
           </g>
@@ -751,6 +820,8 @@ const cursorClass = computed(() => {
             class="instance"
             :transform="transformOf(item)"
             @pointerdown="onInstanceDown(item.instance.id, $event)"
+            @dblclick="onInstanceDoubleClick(item.instance.id, $event)"
+            @contextmenu="onContextMenu($event, { kind: 'instance', id: item.instance.id })"
           >
             <ComponentGraphic
               :def="item.def"
@@ -785,6 +856,8 @@ const cursorClass = computed(() => {
               :key="entry.label.id"
               class="text-label"
               @pointerdown="onLabelDown(entry.label, $event)"
+              @dblclick="onLabelDoubleClick(entry.label.id, $event)"
+              @contextmenu="onContextMenu($event, { kind: 'label', id: entry.label.id })"
             >
               <text
                 :x="entry.x"
@@ -865,6 +938,7 @@ const cursorClass = computed(() => {
               :r="4.5 / cell"
               vector-effect="non-scaling-stroke"
               @pointerdown="onVertexDown(handle.wireId, handle.index, $event)"
+              @contextmenu="onContextMenu($event, { kind: 'wire', id: handle.wireId })"
             />
           </g>
 

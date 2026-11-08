@@ -7,6 +7,7 @@ import {
   createEmptyProject,
   crossingPieces,
   flippedInstance,
+  instanceBounds,
   nearestCrossing,
   nextNumberedId,
   normalizePoints,
@@ -15,14 +16,19 @@ import {
   pruneCrossingOverrides,
   rotatedInstance,
   simplifyPoints,
+  textLabelBounds,
   toggledOverrides,
   translatePoints,
+  unionRects,
+  wireBounds,
   wireGeometryProblem,
+  wiresFollowingPins,
   type ComponentDefinition,
   type ComponentInstance,
   type FlipAxis,
   type FreeEndStyle,
   type GridPoint,
+  type GridRect,
   type Project,
   type RotateDirection,
   type Rotation,
@@ -107,6 +113,8 @@ export const useSchematicStore = defineStore('schematic', () => {
   const viewport = ref({ width: 1200, height: 800 })
   const showPins = ref(true)
   const showUnconnected = ref(true)
+  /** Panneau de propriétés à droite : replié par défaut (touche I). */
+  const inspectorOpen = ref(false)
   const panKeyHeld = ref(false)
   const shiftHeld = ref(false)
   const hoverWireId = ref<string | null>(null)
@@ -169,6 +177,32 @@ export const useSchematicStore = defineStore('schematic', () => {
     })
     if (changed) sync()
     return changed
+  }
+
+  /**
+   * Commande qui déplace ou réoriente des composants : les extrémités de fil posées sur leurs
+   * broches suivent (élasticité) ; les fils de `translatedWires` sont déplacés en bloc et gardent
+   * leurs extrémités posées sur des broches immobiles.
+   */
+  function applyWithElasticWires(
+    label: string,
+    recipe: (draft: Draft<Project>) => void,
+    translatedWires: ReadonlyMap<string, GridPoint> = new Map()
+  ): boolean {
+    const wiresBefore = doc.value.wires
+    const pinsBefore = pinRefs.value
+    return apply(label, (draft) => {
+      recipe(draft)
+      const adjusted = wiresFollowingPins(
+        wiresBefore,
+        pinsBefore,
+        projectPins(draft),
+        translatedWires
+      )
+      if (adjusted.some((wire, index) => wire !== wiresBefore[index])) {
+        draft.wires = castDraft(adjusted)
+      }
+    })
   }
 
   function undo(): void {
@@ -566,39 +600,45 @@ export const useSchematicStore = defineStore('schematic', () => {
 
   function moveInstances(ids: readonly string[], dx: number, dy: number): void {
     if ((dx === 0 && dy === 0) || ids.length === 0) return
-    apply(ids.length > 1 ? 'Déplacer la sélection' : 'Déplacer le composant', (draft) => {
-      for (const instance of draft.components) {
-        if (ids.includes(instance.id)) {
-          instance.x += dx
-          instance.y += dy
+    applyWithElasticWires(
+      ids.length > 1 ? 'Déplacer la sélection' : 'Déplacer le composant',
+      (draft) => {
+        for (const instance of draft.components) {
+          if (ids.includes(instance.id)) {
+            instance.x += dx
+            instance.y += dy
+          }
         }
       }
-    })
+    )
   }
 
   /** Déplace composants, fils et étiquettes sélectionnés d'un même vecteur, en une commande. */
   function moveSelection(dx: number, dy: number): void {
     if ((dx === 0 && dy === 0) || !hasSelection.value) return
     const instanceIds = selection.value
-    const wireIds = selectedWires.value
     const labelIds = selectedLabels.value
-    apply('Déplacer la sélection', (draft) => {
-      for (const instance of draft.components) {
-        if (instanceIds.includes(instance.id)) {
-          instance.x += dx
-          instance.y += dy
+    const translated = new Map<string, GridPoint>(
+      selectedWires.value.map((id) => [id, [dx, dy] as GridPoint])
+    )
+    applyWithElasticWires(
+      'Déplacer la sélection',
+      (draft) => {
+        for (const instance of draft.components) {
+          if (instanceIds.includes(instance.id)) {
+            instance.x += dx
+            instance.y += dy
+          }
         }
-      }
-      for (const wire of draft.wires) {
-        if (wireIds.includes(wire.id)) wire.points = castDraft(translatePoints(wire.points, dx, dy))
-      }
-      for (const label of draft.labels) {
-        if (labelIds.includes(label.id)) {
-          label.x += dx
-          label.y += dy
+        for (const label of draft.labels) {
+          if (labelIds.includes(label.id)) {
+            label.x += dx
+            label.y += dy
+          }
         }
-      }
-    })
+      },
+      translated
+    )
   }
 
   function transformSelection(
@@ -611,7 +651,7 @@ export const useSchematicStore = defineStore('schematic', () => {
       if (def) updates.set(instance.id, transform(instance, def))
     }
     if (updates.size === 0) return
-    apply(label, (draft) => {
+    applyWithElasticWires(label, (draft) => {
       draft.components.forEach((instance, index) => {
         const update = updates.get(instance.id)
         if (update) draft.components[index] = castDraft(update)
@@ -728,6 +768,34 @@ export const useSchematicStore = defineStore('schematic', () => {
     insertCopies(clipboard.value, 1, 1, 'Coller')
   }
 
+  function clipboardBounds(data: ClipboardData): GridRect | null {
+    let result: GridRect | null = null
+    const include = (bounds: GridRect): void => {
+      result = result ? unionRects(result, bounds) : { ...bounds }
+    }
+    for (const item of data.items) include(instanceBounds(item.instance, item.def))
+    for (const wire of data.wires) {
+      const bounds = wireBounds(wire.points)
+      if (bounds) include(bounds)
+    }
+    for (const label of data.labels) include(textLabelBounds(label, doc.value.profile.cellPx))
+    return result
+  }
+
+  /** Colle le presse-papiers avec son coin supérieur gauche sur la cellule donnée. */
+  function pasteClipboardAt(x: number, y: number): void {
+    const bounds = clipboardBounds(clipboard.value)
+    if (!bounds) return
+    insertCopies(clipboard.value, x - bounds.x, y - bounds.y, 'Coller')
+  }
+
+  const clipboardEmpty = computed(
+    () =>
+      clipboard.value.items.length === 0 &&
+      clipboard.value.wires.length === 0 &&
+      clipboard.value.labels.length === 0
+  )
+
   function setInstanceLabel(id: string, label: string): void {
     apply('Modifier le repère', (draft) => {
       const instance = draft.components.find((candidate) => candidate.id === id)
@@ -735,8 +803,32 @@ export const useSchematicStore = defineStore('schematic', () => {
     })
   }
 
+  /** Valeur d'un texte variable pour un composant posé ; vide = revenir à la valeur par défaut. */
+  function setInstanceField(id: string, name: string, value: string): void {
+    const trimmed = value.trim()
+    apply(`Valeur de ${name}`, (draft) => {
+      const instance = draft.components.find((candidate) => candidate.id === id)
+      if (!instance) return
+      if (trimmed.length > 0) {
+        instance.fields[name] = trimmed
+      } else if (Object.hasOwn(instance.fields, name)) {
+        instance.fields = Object.fromEntries(
+          Object.entries(instance.fields).filter(([key]) => key !== name)
+        )
+      }
+    })
+  }
+
+  /** Définition de la bibliothèque plus récente que la copie embarquée, s'il y en a une. */
+  function newerLibraryDefinition(defId: string): ComponentDefinition | null {
+    const embedded = doc.value.embeddedDefs[defId]
+    const entry = library.entries.find((candidate) => candidate.def?.id === defId)
+    if (!embedded || !entry?.def) return null
+    return JSON.stringify(entry.def) === JSON.stringify(embedded) ? null : entry.def
+  }
+
   function setInstancePosition(id: string, x: number, y: number): void {
-    apply('Déplacer le composant', (draft) => {
+    applyWithElasticWires('Déplacer le composant', (draft) => {
       const instance = draft.components.find((candidate) => candidate.id === id)
       if (instance) {
         instance.x = x
@@ -746,7 +838,7 @@ export const useSchematicStore = defineStore('schematic', () => {
   }
 
   function setInstanceOrientation(id: string, rotation: Rotation, mirror: boolean): void {
-    apply('Orienter le composant', (draft) => {
+    applyWithElasticWires('Orienter le composant', (draft) => {
       const instance = draft.components.find((candidate) => candidate.id === id)
       if (instance) {
         instance.rotation = rotation
@@ -820,6 +912,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     viewport,
     showPins,
     showUnconnected,
+    inspectorOpen,
     panKeyHeld,
     shiftHeld,
     hoverWireId,
@@ -837,6 +930,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     pieces,
     hoverNet,
     hasSelection,
+    clipboardEmpty,
     undo,
     redo,
     newProject,
@@ -884,7 +978,10 @@ export const useSchematicStore = defineStore('schematic', () => {
     duplicateSelection,
     copySelection,
     pasteClipboard,
+    pasteClipboardAt,
     setInstanceLabel,
+    setInstanceField,
+    newerLibraryDefinition,
     setInstancePosition,
     setInstanceOrientation,
     zoomAround,

@@ -244,6 +244,18 @@ function openRecent(event: Event, path: string): void {
       </label>
     </div>
 
+    <div class="group">
+      <button
+        type="button"
+        class="tool"
+        :class="{ active: store.inspectorOpen }"
+        title="Afficher ou masquer le panneau de propriétés (I)"
+        @click="store.inspectorOpen = !store.inspectorOpen"
+      >
+        Panneau <kbd>I</kbd>
+      </button>
+    </div>
+
     <div class="spacer" />
 
     <span class="doc-name" :title="store.filePath ?? 'Pas encore enregistré'">

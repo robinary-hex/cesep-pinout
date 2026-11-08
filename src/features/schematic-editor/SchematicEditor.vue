@@ -1,25 +1,46 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
-import { FileFormatError } from '@/domain'
+import {
+  componentFields,
+  FileFormatError,
+  type ComponentDefinition,
+  type ComponentInstance
+} from '@/domain'
 import ExportDialog from '@/features/export/ExportDialog.vue'
 import { useLibraryStore } from '@/features/library/store'
 import { clearAutosave } from '@/io/autosave'
 import { chooseProjectToOpen, chooseProjectToSave, writeProject } from '@/io/projectFiles'
+import ContextMenu from '@/ui/ContextMenu.vue'
+import { heading, item, SEPARATOR, type MenuItem } from '@/ui/contextMenu'
 import { openModals } from '@/ui/modalState'
+import PromptDialog from '@/ui/PromptDialog.vue'
+import type { MenuRequest } from './menu'
 import ProfileDialog from './ProfileDialog.vue'
 import SchematicCanvas from './SchematicCanvas.vue'
 import SchematicInspector from './SchematicInspector.vue'
 import SchematicToolbar from './SchematicToolbar.vue'
 import { useSchematicStore } from './store'
 
-// Éditeur de montage : barre d'outils, canevas, inspecteur, raccourcis, fichiers de projet,
-// export et profil de style.
+// Éditeur de montage : barre d'outils, canevas, inspecteur (replié par défaut), raccourcis,
+// menu contextuel, boîtes de saisie, fichiers de projet, export et profil de style.
 
 const store = useSchematicStore()
 const library = useLibraryStore()
 const canvas = useTemplateRef<InstanceType<typeof SchematicCanvas>>('canvas')
 const showExport = ref(false)
 const showProfile = ref(false)
+
+interface PromptState {
+  title: string
+  label: string
+  value: string
+  placeholder?: string
+  hint?: string
+  onSubmit: (value: string) => void
+}
+
+const menu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
+const prompt = ref<PromptState | null>(null)
 
 function describe(error: unknown): string {
   if (error instanceof FileFormatError) return [error.message, ...error.issues].join(' — ')
@@ -67,6 +88,208 @@ function openExport(): void {
   }
   showExport.value = true
 }
+
+// Saisie des valeurs (repère, champs, texte d'étiquette)
+
+function instanceOf(id: string): { instance: ComponentInstance; def: ComponentDefinition } | null {
+  const instance = store.doc.components.find((candidate) => candidate.id === id)
+  const def = instance ? store.doc.embeddedDefs[instance.defId] : undefined
+  return instance && def ? { instance, def } : null
+}
+
+function instanceTitle(instance: ComponentInstance, def: ComponentDefinition): string {
+  return instance.label.length > 0 ? `${def.name} · ${instance.label}` : def.name
+}
+
+function editField(id: string, name: string, defaultValue: string): void {
+  const found = instanceOf(id)
+  if (!found) return
+  prompt.value = {
+    title: instanceTitle(found.instance, found.def),
+    label: `Valeur de « ${name} »`,
+    value: found.instance.fields[name] ?? '',
+    placeholder: defaultValue,
+    hint:
+      defaultValue.length > 0
+        ? `Vide : valeur par défaut « ${defaultValue} ».`
+        : 'Vide : le nom du champ s’affiche.',
+    onSubmit: (value) => store.setInstanceField(id, name, value)
+  }
+}
+
+function editInstanceLabel(id: string): void {
+  const found = instanceOf(id)
+  if (!found) return
+  prompt.value = {
+    title: found.def.name,
+    label: 'Repère',
+    value: found.instance.label,
+    placeholder: 'R1, U2…',
+    onSubmit: (value) => store.setInstanceLabel(id, value.trim())
+  }
+}
+
+function editLabelText(id: string): void {
+  const label = store.doc.labels.find((candidate) => candidate.id === id)
+  if (!label) return
+  prompt.value = {
+    title: 'Étiquette',
+    label: 'Texte',
+    value: label.text,
+    onSubmit: (value) => store.setLabelText(id, value)
+  }
+}
+
+/** Double-clic : la valeur s'il y a un seul champ, le panneau s'il y en a plusieurs, sinon le repère. */
+function editInstance(id: string): void {
+  const found = instanceOf(id)
+  if (!found) return
+  const fields = componentFields(found.def)
+  const only = fields[0]
+  if (fields.length === 1 && only) editField(id, only.name, only.defaultValue)
+  else if (fields.length > 1) store.inspectorOpen = true
+  else editInstanceLabel(id)
+}
+
+// Menu contextuel
+
+function swatchItem(current: string | null): MenuItem {
+  const matches = (hex: string): boolean => current?.toLowerCase() === hex.toLowerCase()
+  return {
+    kind: 'swatches',
+    swatches: [
+      ...library.palette.map((color) => ({
+        hex: color.hex,
+        name: color.name,
+        current: matches(color.hex)
+      })),
+      ...library.customColors.map((hex) => ({ hex, name: hex, current: matches(hex) }))
+    ],
+    pick: (hex) => store.setCurrentColor(hex)
+  }
+}
+
+function commonItems(): MenuItem[] {
+  return [
+    item('Dupliquer', () => store.duplicateSelection(), { hint: 'Ctrl+D' }),
+    item('Copier', () => store.copySelection(), { hint: 'Ctrl+C' }),
+    item(
+      'Propriétés',
+      () => {
+        store.inspectorOpen = true
+      },
+      { hint: 'I' }
+    ),
+    SEPARATOR,
+    item('Supprimer', () => store.removeSelection(), { hint: 'Suppr', danger: true })
+  ]
+}
+
+function openMenu(request: MenuRequest): void {
+  const items: MenuItem[] = []
+  const count = store.selection.length + store.selectedWires.length + store.selectedLabels.length
+  const multi = count > 1
+  const target = request.target
+
+  if (target.kind === 'instance') {
+    const found = instanceOf(target.id)
+    if (!found) return
+    const { instance, def } = found
+    items.push(heading(multi ? `${count} éléments` : instanceTitle(instance, def)))
+    if (!multi) {
+      for (const field of componentFields(def)) {
+        const shown = instance.fields[field.name] ?? field.defaultValue
+        items.push(
+          item(`${field.name} : ${shown.length > 0 ? shown : '(vide)'}…`, () =>
+            editField(instance.id, field.name, field.defaultValue)
+          )
+        )
+      }
+      items.push(item('Repère…', () => editInstanceLabel(instance.id)))
+      const newer = store.newerLibraryDefinition(def.id)
+      if (newer) {
+        items.push(
+          item('Mettre à jour depuis la bibliothèque', () => store.updateDefinition(newer))
+        )
+      }
+      items.push(SEPARATOR)
+    }
+    items.push(
+      item('Rotation horaire', () => store.rotate('cw'), { hint: 'R' }),
+      item('Rotation antihoraire', () => store.rotate('ccw'), { hint: 'Maj+R' }),
+      item('Miroir horizontal', () => store.flip('horizontal'), { hint: 'T' }),
+      item('Miroir vertical', () => store.flip('vertical'), { hint: 'Maj+T' }),
+      SEPARATOR,
+      ...commonItems()
+    )
+  } else if (target.kind === 'wire') {
+    const wire = store.doc.wires.find((candidate) => candidate.id === target.id)
+    if (!wire) return
+    const wiresOnly = count === store.selectedWires.length
+    items.push(heading(multi ? (wiresOnly ? `${count} fils` : `${count} éléments`) : 'Fil'))
+    items.push(swatchItem(multi ? null : wire.color))
+    if (!multi) {
+      items.push(
+        item(
+          'Extrémités libres prolongées d’une flèche',
+          () => store.setWireFreeEnds(wire.id, wire.freeEnds === 'arrow' ? 'flat' : 'arrow'),
+          { checked: wire.freeEnds === 'arrow' }
+        )
+      )
+    }
+    items.push(
+      SEPARATOR,
+      item('Avancer', () => store.reorderWires('up'), { hint: 'Ctrl+Page haut' }),
+      item('Reculer', () => store.reorderWires('down'), { hint: 'Ctrl+Page bas' }),
+      item('Premier plan', () => store.reorderWires('top'), { hint: 'Ctrl+Maj+Page haut' }),
+      item('Arrière-plan', () => store.reorderWires('bottom'), { hint: 'Ctrl+Maj+Page bas' }),
+      SEPARATOR,
+      ...commonItems()
+    )
+  } else if (target.kind === 'label') {
+    const label = store.doc.labels.find((candidate) => candidate.id === target.id)
+    if (!label) return
+    items.push(heading(multi ? `${count} éléments` : 'Étiquette'))
+    if (!multi)
+      items.push(
+        item('Modifier le texte…', () => editLabelText(label.id)),
+        SEPARATOR
+      )
+    items.push(...commonItems())
+  } else {
+    const [x, y] = request.cell
+    items.push(
+      item('Coller ici', () => store.pasteClipboardAt(x, y), {
+        hint: 'Ctrl+V',
+        disabled: store.clipboardEmpty
+      }),
+      item('Tout sélectionner', () => store.selectAll(), { hint: 'Ctrl+A' }),
+      SEPARATOR,
+      item('Tracer un fil', () => store.startWireTool(), { hint: 'W' }),
+      item(
+        'Poser une étiquette ici',
+        () => {
+          store.addLabel(x, y)
+        },
+        { hint: 'E' }
+      ),
+      SEPARATOR,
+      item('Ajuster au contenu', () => store.fitToContent(), { hint: '0' }),
+      item('Zoom 100 %', () => store.resetZoom(), { hint: '1' }),
+      SEPARATOR,
+      item(
+        'Panneau de propriétés',
+        () => {
+          store.inspectorOpen = !store.inspectorOpen
+        },
+        { hint: 'I', checked: store.inspectorOpen }
+      )
+    )
+  }
+  menu.value = { x: request.x, y: request.y, items }
+}
+
+// Clavier
 
 function isEditable(target: EventTarget | null): boolean {
   return (
@@ -164,6 +387,9 @@ function onKeyDown(event: KeyboardEvent): void {
     case 'e':
       store.startTextTool()
       break
+    case 'i':
+      store.inspectorOpen = !store.inspectorOpen
+      break
     case 'r':
       store.rotate(event.shiftKey ? 'ccw' : 'cw')
       break
@@ -247,11 +473,27 @@ onUnmounted(() => {
       @export-image="openExport"
     />
     <div class="editor-body">
-      <SchematicCanvas ref="canvas" />
-      <SchematicInspector @edit-profile="showProfile = true" />
+      <SchematicCanvas
+        ref="canvas"
+        @open-menu="openMenu"
+        @edit-instance="editInstance"
+        @edit-label="editLabelText"
+      />
+      <SchematicInspector v-if="store.inspectorOpen" @edit-profile="showProfile = true" />
     </div>
     <ExportDialog v-if="showExport" @close="showExport = false" />
     <ProfileDialog v-if="showProfile" @close="showProfile = false" />
+    <ContextMenu v-if="menu" :x="menu.x" :y="menu.y" :items="menu.items" @close="menu = null" />
+    <PromptDialog
+      v-if="prompt"
+      :title="prompt.title"
+      :label="prompt.label"
+      :value="prompt.value"
+      :placeholder="prompt.placeholder"
+      :hint="prompt.hint"
+      @submit="prompt.onSubmit($event)"
+      @close="prompt = null"
+    />
   </section>
 </template>
 

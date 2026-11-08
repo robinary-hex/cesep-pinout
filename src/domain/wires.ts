@@ -108,6 +108,20 @@ export function routeL(from: GridPoint, to: GridPoint, horizontalFirst: boolean)
   return dedupeConsecutive([from, corner, to])
 }
 
+/**
+ * Ordre naturel du L entre deux points : l'axe dominant d'abord (horizontal à égalité) ;
+ * `invert` (Maj) prend l'autre ordre.
+ */
+export function horizontalFirstFor(from: GridPoint, to: GridPoint, invert = false): boolean {
+  const horizontal = Math.abs(to[0] - from[0]) >= Math.abs(to[1] - from[1])
+  return horizontal !== invert
+}
+
+/** Trajet en L dans l'ordre naturel (voir `horizontalFirstFor`). */
+export function routeLAuto(from: GridPoint, to: GridPoint, invert = false): GridPoint[] {
+  return routeL(from, to, horizontalFirstFor(from, to, invert))
+}
+
 export function segmentLength(a: GridPoint, b: GridPoint): number {
   return Math.abs(b[0] - a[0]) + Math.abs(b[1] - a[1])
 }

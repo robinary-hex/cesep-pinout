@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import {
+  componentFields,
   instanceBounds,
   ROTATIONS,
   segmentLength,
@@ -10,7 +11,8 @@ import {
 import { useLibraryStore } from '@/features/library/store'
 import { useSchematicStore } from './store'
 
-// Panneau de droite du montage : projet, puis composant(s), fil(s) ou étiquette(s) sélectionné(s).
+// Panneau de droite du montage (replié par défaut, touche I) : projet, puis composant(s),
+// fil(s) ou étiquette(s) sélectionné(s).
 
 const emit = defineEmits<{ editProfile: [] }>()
 const store = useSchematicStore()
@@ -31,14 +33,12 @@ const single = computed(() => {
   return instance && def ? { instance, def } : null
 })
 
+const fields = computed(() => (single.value ? componentFields(single.value.def) : []))
+
 /** Définition de la bibliothèque plus récente que la copie embarquée, s'il y en a une. */
-const libraryUpdate = computed(() => {
-  const current = single.value
-  if (!current) return null
-  const entry = library.entries.find((candidate) => candidate.def?.id === current.def.id)
-  if (!entry?.def) return null
-  return JSON.stringify(entry.def) === JSON.stringify(current.def) ? null : entry.def
-})
+const libraryUpdate = computed(() =>
+  single.value ? store.newerLibraryDefinition(single.value.def.id) : null
+)
 
 const selectedWireList = computed(() =>
   doc.value.wires.filter((wire) => store.selectedWires.includes(wire.id))
@@ -131,6 +131,11 @@ function setMirror(event: Event): void {
   )
 }
 
+function setField(name: string, event: Event): void {
+  const current = single.value
+  if (current) store.setInstanceField(current.instance.id, name, inputValue(event))
+}
+
 function recolor(hex: string): void {
   store.setCurrentColor(hex)
 }
@@ -159,6 +164,18 @@ function setLabelSize(event: Event): void {
 
 <template>
   <aside class="inspector">
+    <header class="panel-head">
+      <span>Propriétés</span>
+      <button
+        type="button"
+        class="small"
+        title="Masquer le panneau (I)"
+        @click="store.inspectorOpen = false"
+      >
+        ✕
+      </button>
+    </header>
+
     <section class="block">
       <h3>Projet</h3>
       <label class="field">
@@ -167,8 +184,8 @@ function setLabelSize(event: Event): void {
       </label>
       <p class="hint">
         Profil « {{ doc.profile.name }} » : {{ doc.profile.cellPx }} px par cellule, fils de
-        {{ doc.profile.wireWidth }} cellule, rayon {{ doc.profile.cornerRadius }}, point de jonction
-        ×{{ doc.profile.junctionScale }}.
+        {{ doc.profile.wireWidth }} cellule, trait des composants {{ doc.profile.componentStroke }},
+        rayon {{ doc.profile.cornerRadius }}, point de jonction ×{{ doc.profile.junctionScale }}.
       </p>
       <p class="hint">
         {{ doc.components.length }} composant(s), {{ doc.wires.length }} fil(s),
@@ -190,6 +207,18 @@ function setLabelSize(event: Event): void {
           @change="store.setInstanceLabel(single.instance.id, inputValue($event).trim())"
         />
       </label>
+      <template v-if="fields.length > 0">
+        <label v-for="field in fields" :key="field.name" class="field">
+          <span>{{ field.name }}</span>
+          <input
+            type="text"
+            :value="single.instance.fields[field.name] ?? ''"
+            :placeholder="field.defaultValue.length > 0 ? field.defaultValue : '(vide)'"
+            @change="setField(field.name, $event)"
+          />
+        </label>
+        <p class="hint">Un champ vide reprend la valeur par défaut de la définition.</p>
+      </template>
       <div class="row">
         <label class="field">
           <span>X (cellules)</span>
@@ -335,13 +364,13 @@ function setLabelSize(event: Event): void {
       <h3>Sélection</h3>
       <p class="hint">
         Clique un composant de la bibliothèque pour le poser, puis clique sur le montage. W trace un
-        fil : départ sur une broche ou une intersection, un clic par coude, Maj inverse le L,
-        double-clic ou Entrée pour finir ; finir sur une broche ou un fil crée la connexion. E pose
-        une étiquette texte. Sur le montage : clic pour sélectionner, Maj+clic pour ajouter, glisser
-        pour déplacer ou pour tracer un rectangle de sélection ; molette pour zoomer, Espace +
-        glisser pour se déplacer.
+        fil : départ sur une broche ou une intersection, un clic par coude (l’axe dominant d’abord,
+        Maj inverse), double-clic ou Entrée pour finir ; finir sur une broche ou un fil crée la
+        connexion. E pose une étiquette texte. Clic droit : menu contextuel ; double-clic sur un
+        composant : sa valeur.
       </p>
       <p class="hint">
+        Les fils posés sur les broches suivent les composants qu’on déplace, tourne ou retourne.
         Carrés rouges : extrémités de fil reliées à rien. Cercles rouges : broches reliées à rien.
         Survoler un fil éclaire tout son net. Alt+clic sur un croisement choisit le fil du dessus.
       </p>
@@ -356,6 +385,20 @@ function setLabelSize(event: Event): void {
   overflow-y: auto;
   background: #ffffff;
   border-left: 1px solid #d0d7de;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #57606a;
+  border-bottom: 1px solid #eaeef2;
+  background: #f6f8fa;
 }
 
 .block {
