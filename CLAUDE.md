@@ -42,3 +42,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 
 - Un commit par phase de la feuille de route (accordé par Robin le 8 novembre 2026), après
   `pnpm check` vert. Message en français, trailer `Co-Authored-By` conservé.
+
+## Lancer et vérifier l'interface
+
+- Un terminal ouvert par Claude Code hérite de `ELECTRON_RUN_AS_NODE=1` (VS Code) : le retirer
+  avant `pnpm dev` (`Remove-Item Env:ELECTRON_RUN_AS_NODE` en PowerShell), sinon le processus
+  principal tourne sous Node nu et `electron.app` est indéfini.
+- Le bac à sable de Claude Code n'ouvre pas de fenêtre : la vérification visuelle (`pnpm dev`)
+  revient à Robin. Les tests et `pnpm build` restent la preuve automatisée.
