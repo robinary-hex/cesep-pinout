@@ -11,7 +11,14 @@ import type { GridPoint } from './grid'
 import type { Wire } from './project'
 
 function wire(id: string, points: GridPoint[], stack: number): Wire {
-  return { id, color: '#000000', points, stack, freeEnds: 'flat' }
+  return {
+    id,
+    color: '#000000',
+    points,
+    stack,
+    freeEnds: 'flat',
+    endLabels: { start: '', end: '' }
+  }
 }
 
 const horizontal = wire(

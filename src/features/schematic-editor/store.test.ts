@@ -180,7 +180,8 @@ describe('montage : fils', () => {
         [10, 1]
       ],
       stack: 0,
-      freeEnds: 'flat'
+      freeEnds: 'flat',
+      endLabels: { start: '', end: '' }
     })
     const nets = store.connectivity
     expect(nets.freeEnds).toEqual([])
@@ -468,5 +469,41 @@ describe('montage : pose depuis la bibliothèque', () => {
     expect(store.connectivity.pinNet.get(`${first}:b`)).toBe(
       store.connectivity.wireNet.get(store.doc.wires[0]?.id ?? '')
     )
+  })
+})
+
+describe('montage : étiquettes d’extrémité et copie au glisser', () => {
+  it('pose et retire une étiquette sur chaque extrémité d’un fil', () => {
+    const store = useSchematicStore()
+    const id = store.addWire([
+      [0, 0],
+      [4, 0]
+    ])
+    if (!id) throw new Error('fil refusé')
+    store.setWireEndLabel(id, 0, ' VCC ')
+    store.setWireEndLabel(id, 1, 'vers J3')
+    expect(store.doc.wires[0]?.endLabels).toEqual({ start: 'VCC', end: 'vers J3' })
+    store.setWireEndLabel(id, 1, '')
+    expect(store.doc.wires[0]?.endLabels).toEqual({ start: 'VCC', end: '' })
+    store.undo()
+    expect(store.doc.wires[0]?.endLabels.end).toBe('vers J3')
+  })
+
+  it('dépose une copie de la sélection au décalage donné, en une commande', () => {
+    const store = useSchematicStore()
+    store.startPlacing(resistor())
+    const id = store.placeAt(0, 0)
+    store.stopPlacing()
+    if (!id) throw new Error('pose refusée')
+    store.selection = [id]
+    store.duplicateSelectionAt(6, 2)
+    expect(store.doc.components).toHaveLength(2)
+    expect(store.doc.components[0]).toMatchObject({ x: 0, y: 0 })
+    expect(store.doc.components[1]).toMatchObject({ x: 6, y: 2 })
+    expect(store.selection).toEqual([store.doc.components[1]?.id])
+    store.duplicateSelectionAt(0, 0)
+    expect(store.doc.components).toHaveLength(2)
+    store.undo()
+    expect(store.doc.components).toHaveLength(1)
   })
 })

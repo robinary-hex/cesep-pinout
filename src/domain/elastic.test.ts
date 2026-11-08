@@ -4,7 +4,14 @@ import { wiresFollowingPins } from './elastic'
 import type { Wire } from './project'
 
 function wire(id: string, points: [number, number][]): Wire {
-  return { id, color: '#000000', points, stack: 0, freeEnds: 'flat' }
+  return {
+    id,
+    color: '#000000',
+    points,
+    stack: 0,
+    freeEnds: 'flat',
+    endLabels: { start: '', end: '' }
+  }
 }
 
 function pin(key: string, x: number, y: number): PinRef {

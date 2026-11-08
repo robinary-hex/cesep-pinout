@@ -39,7 +39,9 @@ describe('export SVG', () => {
     const result = buildProjectSvg(project, DEFAULT_EXPORT)
     if (!result) throw new Error('export vide')
     // w3 (extrémités prolongées) a une extrémité libre en (24, 6), direction +x.
-    expect(result.svg).toContain('<polygon points="24,6.225 24,5.775 24.45,6" fill="#d62828"/>')
+    // Pointe sur le bout du fil, corps raccourci à sa base : rien ne dépasse du cadre.
+    expect(result.svg).toContain('<polygon points="24,6 23.475,6.21 23.475,5.79" fill="#d62828"/>')
+    expect(result.svg).toContain('L 23.475 6"')
   })
 
   it('respecte fond transparent, grille et repères masqués', () => {

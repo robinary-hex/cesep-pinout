@@ -8,7 +8,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
     title: 'Montage',
     rows: [
       ['V', 'Sélection ; arrête la pose ou le tracé'],
-      ['W', 'Tracer un fil : un clic par coude, l’axe dominant d’abord, Maj inverse le L'],
+      ['F', 'Tracer un fil : un clic par coude, l’axe dominant d’abord, Maj inverse le L'],
       ['Entrée / double-clic', 'Terminer le fil (finir sur une broche ou un fil le termine aussi)'],
       ['Retour arrière', 'Retirer le dernier sommet du fil en cours'],
       ['Échap', 'Annuler le tracé, la pose, puis la sélection'],
@@ -26,7 +26,11 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['Molette, Espace + glisser', 'Zoom autour du curseur, déplacer la vue'],
       ['I', 'Afficher / masquer le panneau de propriétés'],
       ['Clic droit', 'Menu contextuel : composant, fil, étiquette ou vide'],
-      ['Double-clic', 'Valeur d’un composant, texte d’une étiquette']
+      [
+        'Double-clic',
+        'Valeur d’un composant, texte d’une étiquette, étiquette d’une extrémité libre'
+      ],
+      ['Alt+glisser', 'Déposer une copie de la sélection']
     ]
   },
   {
@@ -39,7 +43,10 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['Suppr, Échap', 'Supprimer, annuler'],
       ['Ctrl+Z / Y / S / N', 'Annuler / rétablir / enregistrer / nouveau'],
       ['Ctrl+molette', 'Zoom centré sur le curseur'],
-      ['Ctrl+glisser', 'Saisir la poignée la plus proche de la forme']
+      ['Ctrl+glisser', 'Saisir la poignée la plus proche de la forme'],
+      ['Lasso, Maj+clic', 'Sélectionner plusieurs formes'],
+      ['Alt+glisser', 'Déposer une copie des formes sélectionnées'],
+      ['Ctrl+C / V / D', 'Copier / coller / dupliquer les formes']
     ]
   }
 ]

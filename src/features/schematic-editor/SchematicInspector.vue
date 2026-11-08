@@ -159,6 +159,11 @@ function setFreeEnds(event: Event): void {
   if (wire) store.setWireFreeEnds(wire.id, inputValue(event) as FreeEndStyle)
 }
 
+function setEndLabel(endIndex: number, event: Event): void {
+  const wire = singleWire.value
+  if (wire) store.setWireEndLabel(wire.id, endIndex, inputValue(event))
+}
+
 function setLabelText(event: Event): void {
   const label = singleLabel.value
   if (label) store.setLabelText(label.id, inputValue(event))
@@ -379,12 +384,37 @@ function setLabelSize(event: Event): void {
       </div>
       <template v-if="singleWire">
         <label class="field">
-          <span>Extrémités libres à l’export</span>
+          <span>Extrémités libres</span>
           <select :value="singleWire.freeEnds" @change="setFreeEnds">
             <option value="flat">Nettes</option>
-            <option value="arrow">Prolongées d’une flèche</option>
+            <option value="arrow">En flèche</option>
+            <option value="dotted">En pointillés</option>
           </select>
         </label>
+        <div class="row">
+          <label class="field">
+            <span>Étiquette au départ</span>
+            <input
+              type="text"
+              :value="singleWire.endLabels.start"
+              placeholder="VCC"
+              @change="setEndLabel(0, $event)"
+            />
+          </label>
+          <label class="field">
+            <span>Étiquette à l’arrivée</span>
+            <input
+              type="text"
+              :value="singleWire.endLabels.end"
+              placeholder="vers J3"
+              @change="setEndLabel(singleWire.points.length - 1, $event)"
+            />
+          </label>
+        </div>
+        <p class="hint">
+          Visibles sur une extrémité libre, avec un point, dans le prolongement du fil. Double-clic
+          sur le bout d’un fil pour les saisir.
+        </p>
         <p class="hint">
           {{ singleWire.points.length - 1 }} segment(s), longueur
           {{ wireLength(singleWire.points) }} cellules, rang d’empilement {{ singleWire.stack }}.

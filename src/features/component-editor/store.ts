@@ -6,6 +6,7 @@ import {
   createEmptyComponent,
   pinsOnBorder,
   PNG_PX_PER_CELL,
+  QUARTERS_PER_CELL,
   renumberPins,
   translatePrimitive,
   type ComponentDefinition,
@@ -313,6 +314,65 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     else if (current?.kind === 'pin') removePin(current.id)
   }
 
+  // Presse-papiers des formes
+
+  const clipboard = shallowRef<Primitive[]>([])
+  const clipboardEmpty = computed(() => clipboard.value.length === 0)
+
+  function primitivesAt(indexes: readonly number[]): Primitive[] {
+    if (doc.value.visual.kind !== 'drawing') return []
+    const list = doc.value.visual.primitives
+    return indexes.flatMap((index) => {
+      const primitive = list[index]
+      return primitive ? [primitive] : []
+    })
+  }
+
+  /** Ajoute des copies translatées (quarts de cellule) et les sélectionne, en une commande. */
+  function insertPrimitiveCopies(
+    source: readonly Primitive[],
+    dx: number,
+    dy: number,
+    label: string
+  ): void {
+    if (source.length === 0) return
+    let first = -1
+    apply(label, (draft) => {
+      const list = drawing(draft)
+      if (!list) return
+      first = list.length
+      for (const primitive of source) list.push(castDraft(translatePrimitive(primitive, dx, dy)))
+    })
+    if (first >= 0) selectPrimitives(source.map((_, offset) => first + offset))
+  }
+
+  function copySelection(): void {
+    const selected = primitivesAt(selectedIndexes.value)
+    if (selected.length === 0) return
+    clipboard.value = structuredClone(selected)
+    status.value = `${selected.length} forme(s) copiée(s).`
+  }
+
+  /** Colle décalé d'une cellule, pour distinguer la copie de l'original. */
+  function pasteClipboard(): void {
+    insertPrimitiveCopies(clipboard.value, QUARTERS_PER_CELL, QUARTERS_PER_CELL, 'Coller')
+  }
+
+  function duplicateSelection(): void {
+    insertPrimitiveCopies(
+      primitivesAt(selectedIndexes.value),
+      QUARTERS_PER_CELL,
+      QUARTERS_PER_CELL,
+      'Dupliquer'
+    )
+  }
+
+  /** Alt+glisser : copie des formes déposée au décalage donné. */
+  function duplicatePrimitivesAt(indexes: readonly number[], dx: number, dy: number): void {
+    if (dx === 0 && dy === 0) return
+    insertPrimitiveCopies(primitivesAt(indexes), dx, dy, 'Dupliquer')
+  }
+
   // Affichage
 
   function setCellPx(value: number): void {
@@ -375,6 +435,11 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     movePin,
     removePin,
     removeSelection,
+    clipboardEmpty,
+    copySelection,
+    pasteClipboard,
+    duplicateSelection,
+    duplicatePrimitivesAt,
     setCellPx,
     zoomBy,
     fitToViewport

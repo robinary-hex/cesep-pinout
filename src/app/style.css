@@ -34,6 +34,14 @@
   --backdrop: rgba(31, 35, 40, 0.45);
   --paper: #ffffff;
   --paper-margin: #f0f2f5;
+  --paper-text: #1f2328;
+  --paper-border: #57606a;
+  --grid-line: #eceff2;
+  --grid-major: #d8dee4;
+  --grid-cell: #c9d1d9;
+  --grid-dot: #b6bec7;
+  --checker-a: #ffffff;
+  --checker-b: #e6e9ed;
 }
 
 :root[data-theme='dark'] {
@@ -63,8 +71,17 @@
   --shadow: rgba(0, 0, 0, 0.45);
   --shadow-strong: rgba(0, 0, 0, 0.65);
   --backdrop: rgba(0, 0, 0, 0.6);
-  --paper: #ffffff;
-  --paper-margin: #2a2f36;
+  /* Surfaces de dessin : gris bleuté, assez clair pour les traits noirs des composants. */
+  --paper: #3b4453;
+  --paper-margin: #20252d;
+  --paper-text: #e6edf3;
+  --paper-border: #9da7b3;
+  --grid-line: #475162;
+  --grid-major: #5a6678;
+  --grid-cell: #5a6678;
+  --grid-dot: #6b778a;
+  --checker-a: #2a2f36;
+  --checker-b: #343a43;
 }
 
 * {
@@ -200,4 +217,21 @@ button.icon-only {
 
 kbd {
   font-family: inherit;
+}
+
+/* Champs de saisie : couleurs du thème plutôt que celles du navigateur (grisaille en sombre). */
+input[type='text'],
+input[type='search'],
+input[type='number'],
+select,
+textarea {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+  accent-color: var(--accent);
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--accent);
 }

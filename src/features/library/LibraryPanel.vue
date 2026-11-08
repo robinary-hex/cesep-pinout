@@ -226,6 +226,8 @@ async function remove(entry: LibraryEntry): Promise<void> {
   padding: 5px 8px;
   border: 1px solid var(--border);
   border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--text);
 }
 
 .problem {

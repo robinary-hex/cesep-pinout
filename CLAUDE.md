@@ -43,7 +43,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Raccourcis définis par la lettre (`KeyboardEvent.key`), clavier AZERTY belge, jamais de crochets
   ni de touches AltGr. Les deux seuls chiffres (0, 1) se lisent par touche physique (`event.code`)
   car la rangée du haut demande Maj sur ce clavier.
-  - Montage : V sélection (arrête la pose ou le fil), W fil (clic par coude, Maj inverse le L,
+  - Montage : V sélection (arrête la pose ou le fil), F fil (clic par coude, Maj inverse le L,
     double-clic ou Entrée termine, Retour arrière retire le dernier sommet, Échap annule),
     R / Maj+R rotation, T / Maj+T miroir, Suppr, Échap, flèches = déplacer d'une cellule,
     Ctrl+A / D / C / V, Ctrl+Z / Y, Ctrl+S, Ctrl+Maj+S, Ctrl+O, Ctrl+N, Ctrl+E export, F1 aide,
@@ -56,7 +56,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     d'une étiquette. Pose d'un composant : clic dans le panneau puis clic sur le montage, ou
     glisser-déposer ; une pose = un composant (la pose s'arrête, le composant posé est sélectionné).
     Poser un composant remplace la copie embarquée de sa définition par celle de la bibliothèque
-    si elle a changé, pour tout le montage (fils élastiques compris).
+    si elle a changé, pour tout le montage (fils élastiques compris). Alt+glisser dépose une copie
+    de la sélection (Alt+clic sur un croisement garde son rôle) ; double-clic sur l'extrémité
+    libre d'un fil saisit son étiquette d'extrémité.
 - Fils : la géométrie pure est dans `src/domain/wires.ts` (tracé, coins arrondis, édition de
   segments et de sommets), la connectivité dérivée dans `src/domain/connectivity.ts` (jonctions,
   extrémités libres, nets par union-find). Un fil garde ses extrémités fixes quand on déplace un
@@ -65,7 +67,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   dominant (Maj inverse). Élasticité (`src/domain/elastic.ts`) : les extrémités posées sur une
   broche suivent le composant déplacé, tourné ou retourné ; un fil déplacé en bloc garde ses
   extrémités sur les broches immobiles. Un nouveau fil prend la couleur du dernier fil tracé ou
-  recoloré (`currentColor`, recalée sur le dernier fil du projet à l'ouverture).
+  recoloré (`currentColor`, recalée sur le dernier fil du projet à l'ouverture). Extrémités
+  libres (`freeEnds`) : nettes, en flèche ou en pointillés, dessinées pareil à l'écran et à
+  l'export par `src/domain/wireEnds.ts` (corps raccourci, pointe sur le bout du fil, queue
+  pointillée d'1,5 cellule). Étiquettes d'extrémité (`endLabels`) : point sur le bout libre et
+  texte placé à l'opposé du fil, position toujours dérivée de la géométrie.
 - Export : `src/domain/svg.ts` construit le SVG autonome (viewBox en cellules, même ordre
   d'empilement que l'éditeur, sans marqueurs d'édition) ; `src/features/export/` le rastérise en
   PNG via un canvas et le copie dans le presse-papiers. Les réglages d'export, la palette, le profil
@@ -82,8 +88,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   tracés de `src/ui/icons.ts` (SVG inline, trait de la couleur courante, pas de police d'icônes).
 - Thème clair ou sombre choisi dans les paramètres (`theme`) : `src/ui/theme.ts` pose
   `data-theme` sur `<html>` et toutes les couleurs de l'interface passent par les variables CSS de
-  `src/app/style.css`, jamais en dur dans les styles ; les surfaces de dessin (`--paper`) restent
-  claires pour que composants et fils gardent leurs couleurs d'export.
+  `src/app/style.css`, jamais en dur dans les styles ; les surfaces de dessin (`--paper`) sont blanches en clair et
+  gris bleuté en sombre (grille et textes sur papier via `--grid-*` et `--paper-text`) ; l'export
+  garde ses propres couleurs.
 - Profil de style : la boîte « Profil de style du montage » prévisualise chaque réglage sur le
   montage via `profilePreview` (le store expose `profile` = aperçu ou profil du projet) et
   n'enregistre qu'à « Appliquer », en une commande. Les Paramètres proposent « Appliquer au
@@ -104,11 +111,12 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     la poignée la plus proche. Redimensionner le composant supprime les broches qui ne sont plus sur
     le bord ; les noms numériques des broches suivent toujours leur ordre (`renumberPins`).
     Sélection multiple : lasso dans le vide, Maj+clic ajoute ou retire une forme, glisser déplace
-    toutes les formes sélectionnées ; le panneau de droite ne montre que l'élément sélectionné
-    (forme, formes ou broche), sinon le composant.
+    toutes les formes sélectionnées, Alt+glisser en dépose une copie, Ctrl+C / V / D copient,
+    collent (décalées d'une cellule) et dupliquent ; le panneau de droite ne montre que l'élément
+    sélectionné (forme, formes ou broche), sinon le composant.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 3, projet 3, paramètres 4
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 3, projet 4, paramètres 4
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

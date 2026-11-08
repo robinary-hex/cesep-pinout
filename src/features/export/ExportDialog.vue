@@ -258,11 +258,12 @@ legend {
 
 .preview.transparent {
   background-image:
-    linear-gradient(45deg, #e6e9ed 25%, transparent 25%),
-    linear-gradient(-45deg, #e6e9ed 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #e6e9ed 75%),
-    linear-gradient(-45deg, transparent 75%, #e6e9ed 75%);
-  background-size: 16px 16px;
+    linear-gradient(45deg, var(--checker-b) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--checker-b) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--checker-b) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--checker-b) 75%);
+  background-color: var(--checker-a);
+  background-size: 12px 12px;
   background-position:
     0 0,
     0 8px,

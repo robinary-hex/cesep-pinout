@@ -106,3 +106,30 @@ describe('éditeur de composants : sélection multiple', () => {
     expect(store.doc.visual.primitives).toHaveLength(3)
   })
 })
+
+describe('éditeur de composants : copier, coller, dupliquer', () => {
+  it('colle des copies décalées d’une cellule et dépose une copie à un décalage donné', () => {
+    const store = useComponentEditorStore()
+    const style = { stroke: '#000000', weight: 1, fill: 'none' }
+    store.addPrimitive({ kind: 'rect', x: 0, y: 0, w: 4, h: 4, rx: 0, style }, 'r')
+    expect(store.clipboardEmpty).toBe(true)
+    store.copySelection()
+    expect(store.clipboardEmpty).toBe(false)
+    store.pasteClipboard()
+    if (store.doc.visual.kind !== 'drawing') throw new Error('dessin attendu')
+    expect(store.doc.visual.primitives).toHaveLength(2)
+    expect(store.doc.visual.primitives[1]).toMatchObject({ x: 4, y: 4 })
+    expect(store.selectedIndexes).toEqual([1])
+
+    store.duplicatePrimitivesAt([0, 1], 8, 0)
+    expect(store.doc.visual.primitives).toHaveLength(4)
+    expect(store.doc.visual.primitives.slice(2).map((p) => (p.kind === 'rect' ? p.x : -1))).toEqual(
+      [8, 12]
+    )
+    expect(store.selectedIndexes).toEqual([2, 3])
+    store.duplicatePrimitivesAt([0], 0, 0)
+    expect(store.doc.visual.primitives).toHaveLength(4)
+    store.undo()
+    expect(store.doc.visual.primitives).toHaveLength(2)
+  })
+})

@@ -12,7 +12,7 @@ import {
 import { styleProfileSchema, type StyleProfile } from './profile'
 import { isUTurn } from './wires'
 
-export const PROJECT_SCHEMA_VERSION = 3
+export const PROJECT_SCHEMA_VERSION = 4
 
 /** Composant posé sur le montage ; (x, y) = coin supérieur gauche de sa boîte, en grille. */
 export const componentInstanceSchema = z.object({
@@ -29,8 +29,8 @@ export const componentInstanceSchema = z.object({
 })
 export type ComponentInstance = z.infer<typeof componentInstanceSchema>
 
-/** Rendu d'une extrémité libre à l'export : nette, ou prolongée d'une petite flèche. */
-export const freeEndStyleSchema = z.enum(['flat', 'arrow'])
+/** Extrémités libres d'un fil, à l'écran comme à l'export : nettes, en flèche ou en pointillés. */
+export const freeEndStyleSchema = z.enum(['flat', 'arrow', 'dotted'])
 export type FreeEndStyle = z.infer<typeof freeEndStyleSchema>
 
 /**
@@ -62,7 +62,9 @@ export const wireSchema = z
     points: z.array(gridPointSchema).min(2),
     /** Rang d'empilement : un fil de rang supérieur passe au-dessus aux croisements. */
     stack: z.number().int(),
-    freeEnds: freeEndStyleSchema
+    freeEnds: freeEndStyleSchema,
+    /** Étiquettes d'extrémité (nom de net, destination), affichées sur une extrémité libre. */
+    endLabels: z.object({ start: z.string(), end: z.string() })
   })
   .superRefine((wire, ctx) => {
     const problem = wireGeometryProblem(wire.points)

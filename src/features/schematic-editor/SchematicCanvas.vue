@@ -9,12 +9,15 @@ import {
   matrixToSvg,
   moveSegment,
   nearestSegmentIndex,
+  pointsAttribute,
   rectsIntersect,
   rotatedSize,
   routeLAuto,
   textLabelBounds,
+  wireEndLabelPlacement,
   wireIntersectsRect,
   wirePathData,
+  wireRenderParts,
   wiresFollowingPins,
   type ComponentInstance,
   type GridPoint,
@@ -23,7 +26,8 @@ import {
   type PinKind,
   type PinRef,
   type TextLabel,
-  type Wire
+  type Wire,
+  type WireEndFlags
 } from '@/domain'
 import ComponentGraphic from '@/render/ComponentGraphic.vue'
 import type { MenuRequest, MenuTarget } from './menu'
@@ -31,15 +35,17 @@ import { useSchematicStore, type PlacedInstance } from './store'
 
 // Canevas infini du montage. Tout le contenu est dessiné en unités de cellule dans un groupe
 // mis à l'échelle (zoom) et translaté (pan) ; seule la grille est calculée en pixels d'écran.
-// Ordre d'empilement : grille, fils, croisements (fil du dessus avec liseré), points de jonction,
-// composants, repères, étiquettes, broches, surcouches de sélection et d'édition, fantôme de pose,
-// tracé en cours, rectangle de sélection.
+// Ordre d'empilement : grille, fils (corps, queues pointillées, pointes), croisements (fil du
+// dessus avec liseré), points de jonction, composants, repères, étiquettes, étiquettes
+// d'extrémité, broches, surcouches de sélection et d'édition, copies fantômes (Alt+glisser),
+// fantôme de pose, tracé en cours, rectangle de sélection.
 
 const store = useSchematicStore()
 const emit = defineEmits<{
   openMenu: [request: MenuRequest]
   editInstance: [id: string]
   editLabel: [id: string]
+  editWireEnd: [wireId: string, endIndex: number]
 }>()
 const host = ref<HTMLDivElement | null>(null)
 const svg = ref<SVGSVGElement | null>(null)
@@ -53,12 +59,15 @@ const PIN_COLORS: Record<PinKind, string> = {
 const MIN_GRID_PX = 6
 const ZOOM_STEP = 1.1
 const PIN_SNAP_CELLS = 0.5
+const END_PICK_CELLS = 0.5
+const NO_FREE_ENDS: WireEndFlags = { start: false, end: false }
 
 const cell = computed(() => store.cellPx)
 const view = computed(() => store.view)
 const profile = computed(() => store.profile)
 const wireWidth = computed(() => profile.value.wireWidth)
 const cornerRadius = computed(() => profile.value.cornerRadius)
+const labelFontCells = computed(() => profile.value.labelFont.size / profile.value.cellPx)
 
 type Drag =
   | { kind: 'pan'; lastX: number; lastY: number }
@@ -70,6 +79,8 @@ type Drag =
       start: LocalPoint
       dx: number
       dy: number
+      /** Alt+glisser : les originaux restent, une copie se dépose à l'arrivée. */
+      duplicate: boolean
     }
   | { kind: 'band'; start: LocalPoint; current: LocalPoint; additive: boolean }
   | {
@@ -174,9 +185,10 @@ const selectedSet = computed(() => new Set(store.selection))
 const selectedWireSet = computed(() => new Set(store.selectedWires))
 const selectedLabelSet = computed(() => new Set(store.selectedLabels))
 
+/** Décalage appliqué aux originaux pendant un déplacement (pas pendant une copie). */
 const moveOffset = computed(() => {
   const current = drag.value
-  return current?.kind === 'move'
+  return current?.kind === 'move' && !current.duplicate
     ? {
         ids: new Set(current.ids),
         labelIds: new Set(current.labelIds),
@@ -202,7 +214,9 @@ function labelOffsetOf(id: string): { dx: number; dy: number } {
  */
 const previewWires = computed<Map<string, readonly GridPoint[]> | null>(() => {
   const current = drag.value
-  if (current?.kind !== 'move' || (current.dx === 0 && current.dy === 0)) return null
+  if (current?.kind !== 'move' || current.duplicate || (current.dx === 0 && current.dy === 0)) {
+    return null
+  }
   const { dx, dy } = current
   const moving = new Set(current.ids)
   const pinsAfter = store.pinRefs.map((pin) =>
@@ -215,6 +229,29 @@ const previewWires = computed<Map<string, readonly GridPoint[]> | null>(() => {
   )
   const adjusted = wiresFollowingPins(store.doc.wires, store.pinRefs, pinsAfter, translated)
   return new Map(adjusted.map((wire) => [wire.id, wire.points]))
+})
+
+/** Copies fantômes pendant un Alt+glisser : la sélection, décalée, en transparence. */
+const ghostCopies = computed(() => {
+  const current = drag.value
+  if (current?.kind !== 'move' || !current.duplicate || (current.dx === 0 && current.dy === 0)) {
+    return null
+  }
+  const ids = new Set(current.ids)
+  const wireIds = new Set(current.wireIds)
+  const labelIds = new Set(current.labelIds)
+  return {
+    transform: `translate(${current.dx} ${current.dy})`,
+    instances: store.placed.filter((item) => ids.has(item.instance.id)),
+    wires: store.doc.wires
+      .filter((wire) => wireIds.has(wire.id))
+      .map((wire) => ({
+        id: wire.id,
+        color: wire.color,
+        d: wirePathData(wire.points, cornerRadius.value)
+      })),
+    labels: store.doc.labels.filter((label) => labelIds.has(label.id))
+  }
 })
 
 // Instances
@@ -256,8 +293,6 @@ const pins = computed(() => {
   })
 })
 
-const labelFontCells = computed(() => profile.value.labelFont.size / profile.value.cellPx)
-
 // Étiquettes texte
 
 const labels = computed(() =>
@@ -288,13 +323,31 @@ function wirePoints(wire: Wire): readonly GridPoint[] {
   return previewWires.value?.get(wire.id) ?? wire.points
 }
 
+/** Extrémités libres par fil (début, fin), d'après la connectivité du document. */
+const freeEndFlags = computed(() => {
+  const flags = new Map<string, WireEndFlags>()
+  for (const end of store.connectivity.freeEnds) {
+    const wire = store.doc.wires.find((candidate) => candidate.id === end.wireId)
+    if (!wire) continue
+    const current = flags.get(end.wireId) ?? { start: false, end: false }
+    if (end.endIndex === 0) current.start = true
+    if (end.endIndex === wire.points.length - 1) current.end = true
+    flags.set(end.wireId, current)
+  }
+  return flags
+})
+
 const renderedWires = computed(() =>
   store.sortedWires.map((wire) => {
     const points = wirePoints(wire)
+    const flags = freeEndFlags.value.get(wire.id) ?? NO_FREE_ENDS
+    const shown = wireRenderParts(points, wire.freeEnds, flags, wireWidth.value)
     return {
       wire,
-      points,
       d: wirePathData(points, cornerRadius.value),
+      body: shown.body.length >= 2 ? wirePathData(shown.body, cornerRadius.value) : '',
+      dotted: shown.dotted.map((tail) => wirePathData(tail, cornerRadius.value)),
+      heads: shown.heads.map((head) => pointsAttribute(head)),
       selected: selectedWireSet.value.has(wire.id),
       inHoverNet:
         store.hoverNet !== null && store.connectivity.wireNet.get(wire.id) === store.hoverNet
@@ -306,7 +359,7 @@ const hitWidth = computed(() => Math.max(wireWidth.value, 10 / cell.value))
 
 const wireColorById = computed(() => new Map(store.doc.wires.map((wire) => [wire.id, wire.color])))
 
-/** Croisements : le fil du dessus, redessiné sur une demi-cellule avec un liseré blanc. */
+/** Croisements : le fil du dessus, redessiné sur une demi-cellule avec un liseré couleur papier. */
 const crossingMarks = computed(() =>
   store.pieces.map((piece) => {
     const [x, y] = piece.point
@@ -333,12 +386,44 @@ const junctions = computed(() => {
   }))
 })
 
+function endLabelText(wire: Wire, endIndex: number): string {
+  return endIndex === 0 ? wire.endLabels.start : wire.endLabels.end
+}
+
+/** Étiquettes d'extrémité : point sur le bout libre et texte placé à l'opposé du fil. */
+const endLabels = computed(() =>
+  store.connectivity.freeEnds.flatMap((end) => {
+    const wire = store.doc.wires.find((candidate) => candidate.id === end.wireId)
+    if (!wire) return []
+    const text = endLabelText(wire, end.endIndex)
+    if (text.length === 0) return []
+    const points = wirePoints(wire)
+    const placement = wireEndLabelPlacement(points, end.endIndex)
+    const dot = points[end.endIndex]
+    if (!placement || !dot) return []
+    return [
+      {
+        key: `${wire.id}:${end.endIndex}`,
+        wireId: wire.id,
+        endIndex: end.endIndex,
+        text,
+        color: wire.color,
+        dotX: dot[0],
+        dotY: dot[1],
+        ...placement
+      }
+    ]
+  })
+)
+
+/** Extrémités reliées à rien, sans étiquette : un petit carré rouge d'édition. */
 const freeEnds = computed(() =>
-  store.connectivity.freeEnds.map((end) => ({
-    key: `${end.wireId}:${end.endIndex}`,
-    x: end.point[0],
-    y: end.point[1]
-  }))
+  store.connectivity.freeEnds.flatMap((end) => {
+    const wire = store.doc.wires.find((candidate) => candidate.id === end.wireId)
+    if (!wire || endLabelText(wire, end.endIndex).length > 0) return []
+    const point = wirePoints(wire)[end.endIndex] ?? end.point
+    return [{ key: `${end.wireId}:${end.endIndex}`, x: point[0], y: point[1] }]
+  })
 )
 
 const vertexHandles = computed(() =>
@@ -430,7 +515,8 @@ function startMove(event: PointerEvent): void {
     labelIds: [...store.selectedLabels],
     start: toWorld(screenPoint(event)),
     dx: 0,
-    dy: 0
+    dy: 0,
+    duplicate: event.altKey
   }
   capture(event)
 }
@@ -471,10 +557,8 @@ function onWireDown(wireId: string, event: PointerEvent): void {
   if (event.button !== 0 || store.panKeyHeld || store.tool !== 'select') return
   event.stopPropagation()
   const world = toWorld(screenPoint(event))
-  if (event.altKey) {
-    if (!store.toggleCrossing(world.x, world.y)) store.status = 'Aucun croisement ici.'
-    return
-  }
+  // Alt+clic sur un croisement : l'autre fil passe au-dessus ; ailleurs, Alt+glisser copie.
+  if (event.altKey && store.toggleCrossing(world.x, world.y)) return
   if (event.shiftKey) {
     store.selectedWires = selectedWireSet.value.has(wireId)
       ? store.selectedWires.filter((selected) => selected !== wireId)
@@ -485,8 +569,9 @@ function onWireDown(wireId: string, event: PointerEvent): void {
     store.clearSelection()
     store.selectedWires = [wireId]
   }
-  // Plusieurs éléments sélectionnés : le glisser déplace tout ; un fil seul : on déplace le segment.
+  // Plusieurs éléments sélectionnés, ou copie : le glisser déplace tout ; un fil seul : son segment.
   if (
+    event.altKey ||
     store.selection.length > 0 ||
     store.selectedLabels.length > 0 ||
     store.selectedWires.length > 1
@@ -608,7 +693,8 @@ function onPointerUp(event: PointerEvent): void {
   if (!current) return
   drag.value = null
   if (current.kind === 'move') {
-    store.moveSelection(current.dx, current.dy)
+    if (current.duplicate) store.duplicateSelectionAt(current.dx, current.dy)
+    else store.moveSelection(current.dx, current.dy)
   } else if (current.kind === 'band') {
     const rect = normalizeRect(current.start, current.current)
     if (rect.width > 0.05 || rect.height > 0.05) {
@@ -667,8 +753,18 @@ function onDrop(event: DragEvent): void {
   placeGhost()
 }
 
-function onDoubleClick(): void {
-  if (store.tool === 'wire') store.finishWire()
+/** Double-clic : termine le fil en cours ; en sélection, sur une extrémité libre, son étiquette. */
+function onDoubleClick(event: MouseEvent): void {
+  if (store.tool === 'wire') {
+    store.finishWire()
+    return
+  }
+  if (store.tool !== 'select') return
+  const world = toWorld(screenPoint(event))
+  const hit = store.connectivity.freeEnds.find(
+    (end) => Math.hypot(end.point[0] - world.x, end.point[1] - world.y) <= END_PICK_CELLS
+  )
+  if (hit) emit('editWireEnd', hit.wireId, hit.endIndex)
 }
 
 function onInstanceDoubleClick(id: string, event: MouseEvent): void {
@@ -681,6 +777,12 @@ function onLabelDoubleClick(id: string, event: MouseEvent): void {
   if (store.tool !== 'select') return
   event.stopPropagation()
   emit('editLabel', id)
+}
+
+function onEndLabelDoubleClick(wireId: string, endIndex: number, event: MouseEvent): void {
+  if (store.tool !== 'select') return
+  event.stopPropagation()
+  emit('editWireEnd', wireId, endIndex)
 }
 
 /**
@@ -798,7 +900,29 @@ const cursorClass = computed(() => {
                 :d="item.d"
                 :stroke-width="wireWidth + 6 / cell"
               />
-              <path class="wire" :d="item.d" :stroke="item.wire.color" :stroke-width="wireWidth" />
+              <path
+                v-if="item.body"
+                class="wire"
+                :d="item.body"
+                :stroke="item.wire.color"
+                :stroke-width="wireWidth"
+              />
+              <path
+                v-for="(tail, t) in item.dotted"
+                :key="`tail${t}`"
+                class="wire wire-dotted"
+                :d="tail"
+                :stroke="item.wire.color"
+                :stroke-width="wireWidth"
+                :stroke-dasharray="`0 ${wireWidth * 2}`"
+              />
+              <polygon
+                v-for="(head, h) in item.heads"
+                :key="`head${h}`"
+                class="wire-head"
+                :points="head"
+                :fill="item.wire.color"
+              />
               <path
                 class="wire-hit"
                 :d="item.d"
@@ -916,6 +1040,27 @@ const cursorClass = computed(() => {
             </g>
           </g>
 
+          <g class="end-labels">
+            <g
+              v-for="entry in endLabels"
+              :key="entry.key"
+              class="end-label"
+              @dblclick="onEndLabelDoubleClick(entry.wireId, entry.endIndex, $event)"
+            >
+              <circle :cx="entry.dotX" :cy="entry.dotY" :r="wireWidth" :fill="entry.color" />
+              <text
+                :x="entry.x"
+                :y="entry.y"
+                :font-size="labelFontCells"
+                :font-family="profile.labelFont.family"
+                :text-anchor="entry.anchor"
+                :dominant-baseline="entry.baseline"
+              >
+                {{ entry.text }}
+              </text>
+            </g>
+          </g>
+
           <g class="pins">
             <template v-for="pin in pins" :key="pin.key">
               <circle
@@ -969,6 +1114,40 @@ const cursorClass = computed(() => {
               @pointerdown="onVertexDown(handle.wireId, handle.index, $event)"
               @contextmenu="onContextMenu($event, { kind: 'wire', id: handle.wireId })"
             />
+          </g>
+
+          <g v-if="ghostCopies" class="ghost" :transform="ghostCopies.transform">
+            <path
+              v-for="wire in ghostCopies.wires"
+              :key="wire.id"
+              class="ghost-wire"
+              :d="wire.d"
+              :stroke="wire.color"
+              :stroke-width="wireWidth"
+            />
+            <g
+              v-for="item in ghostCopies.instances"
+              :key="item.instance.id"
+              :transform="matrixToSvg(instanceMatrix(item.instance, item.def))"
+            >
+              <ComponentGraphic
+                :def="item.def"
+                :cell-px="1"
+                :stroke-base="profile.componentStroke"
+                :fields="item.instance.fields"
+              />
+            </g>
+            <text
+              v-for="label in ghostCopies.labels"
+              :key="label.id"
+              class="ghost-text"
+              :x="label.x"
+              :y="label.y"
+              :font-size="label.size / profile.cellPx"
+              :font-family="profile.labelFont.family"
+            >
+              {{ label.text }}
+            </text>
           </g>
 
           <g v-if="ghost" class="ghost" :transform="ghost.transform">
@@ -1065,17 +1244,21 @@ const cursorClass = computed(() => {
 }
 
 .grid line {
-  stroke: #eceff2;
+  stroke: var(--grid-line);
 }
 
 .grid line.major {
-  stroke: #d8dee4;
+  stroke: var(--grid-major);
 }
 
 .wires path {
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.wire-head {
+  pointer-events: none;
 }
 
 .wire-hit {
@@ -1102,7 +1285,7 @@ const cursorClass = computed(() => {
 }
 
 .crossings .halo {
-  stroke: #ffffff;
+  stroke: var(--paper);
 }
 
 .junctions circle {
@@ -1114,7 +1297,7 @@ const cursorClass = computed(() => {
 }
 
 .labels text {
-  fill: #1f2328;
+  fill: var(--paper-text);
   pointer-events: none;
 }
 
@@ -1123,8 +1306,13 @@ const cursorClass = computed(() => {
 }
 
 .text-label text {
-  fill: #1f2328;
+  fill: var(--paper-text);
   pointer-events: none;
+}
+
+.end-label text {
+  fill: var(--paper-text);
+  cursor: text;
 }
 
 .pins circle {
@@ -1146,7 +1334,7 @@ const cursorClass = computed(() => {
 }
 
 .free-end {
-  fill: #ffffff;
+  fill: var(--paper);
   stroke: #cf222e;
   stroke-width: 1.5;
   pointer-events: none;
@@ -1162,6 +1350,16 @@ const cursorClass = computed(() => {
 .ghost {
   opacity: 0.55;
   pointer-events: none;
+}
+
+.ghost-wire {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ghost-text {
+  fill: var(--paper-text);
 }
 
 .ghost-box {

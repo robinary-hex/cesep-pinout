@@ -145,9 +145,21 @@ function migrateProjectV1(raw: RawRecord): RawRecord {
 
 // Projet v2 → v3 : définitions embarquées migrées (unité des textes variables).
 
+// Projet v3 → v4 : étiquettes d'extrémité des fils.
+
+function migrateProjectV3(raw: RawRecord): RawRecord {
+  const wires = Array.isArray(raw['wires']) ? raw['wires'] : []
+  return {
+    ...raw,
+    wires: wires.map((wire) =>
+      isRecord(wire) ? { endLabels: { start: '', end: '' }, ...wire } : wire
+    )
+  }
+}
+
 export const projectMigrations: MigrationTable = {
   current: PROJECT_SCHEMA_VERSION,
-  steps: { 1: migrateProjectV1, 2: migrateEmbeddedDefs }
+  steps: { 1: migrateProjectV1, 2: migrateEmbeddedDefs, 3: migrateProjectV3 }
 }
 
 // Paramètres v1 → v2 : export et copie de secours ; v2 → v3 : trait des composants du profil ;

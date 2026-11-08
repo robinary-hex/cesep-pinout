@@ -67,6 +67,9 @@ function onKeyDown(event: KeyboardEvent): void {
     if (key === 'z' && !event.shiftKey) store.undo()
     else if (key === 'y' || (key === 'z' && event.shiftKey)) store.redo()
     else if (key === 'n') createNew()
+    else if (key === 'c') store.copySelection()
+    else if (key === 'v') store.pasteClipboard()
+    else if (key === 'd') store.duplicateSelection()
     else return
     event.preventDefault()
     return

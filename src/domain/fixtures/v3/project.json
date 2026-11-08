@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 3,
+  "name": "Sonde",
+  "profile": {
+    "name": "Standard",
+    "cellPx": 20,
+    "wireWidth": 0.15,
+    "cornerRadius": 0.4,
+    "componentStroke": 0.1,
+    "junctionScale": 2,
+    "junctionColor": "wire",
+    "labelFont": { "family": "Segoe UI", "size": 11 }
+  },
+  "components": [],
+  "wires": [
+    {
+      "id": "w1",
+      "color": "#000000",
+      "points": [
+        [0, 0],
+        [4, 0]
+      ],
+      "stack": 0,
+      "freeEnds": "arrow"
+    }
+  ],
+  "crossingOverrides": [],
+  "labels": [],
+  "embeddedDefs": {}
+}

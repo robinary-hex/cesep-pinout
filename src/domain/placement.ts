@@ -7,6 +7,7 @@ import {
   type Rotation
 } from './grid'
 import type { ComponentInstance, Project } from './project'
+import { wireEndLabelBounds, wireEndLabelPlacement } from './wireEnds'
 
 /** Rectangle en cellules, coin supérieur gauche + taille. */
 export interface GridRect {
@@ -63,8 +64,14 @@ export function projectBounds(project: Project): GridRect | null {
     const def = project.embeddedDefs[instance.defId]
     if (def) include(instanceBounds(instance, def))
   }
+  const fontCells = project.profile.labelFont.size / project.profile.cellPx
   for (const wire of project.wires) {
     for (const [x, y] of wire.points) include({ x, y, width: 0, height: 0 })
+    for (const endIndex of [0, wire.points.length - 1]) {
+      const text = endIndex === 0 ? wire.endLabels.start : wire.endLabels.end
+      const placement = text.length > 0 ? wireEndLabelPlacement(wire.points, endIndex) : null
+      if (placement) include(wireEndLabelBounds(text, placement, fontCells))
+    }
   }
   for (const label of project.labels) include(textLabelBounds(label, project.profile.cellPx))
   return result

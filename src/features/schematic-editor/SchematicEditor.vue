@@ -5,7 +5,8 @@ import {
   FileFormatError,
   type ComponentDefinition,
   type ComponentField,
-  type ComponentInstance
+  type ComponentInstance,
+  type Wire
 } from '@/domain'
 import ExportDialog from '@/features/export/ExportDialog.vue'
 import { useLibraryStore } from '@/features/library/store'
@@ -157,6 +158,26 @@ function editInstance(id: string): void {
   else editInstanceLabel(id)
 }
 
+function editWireEnd(wireId: string, endIndex: number): void {
+  const wire = store.doc.wires.find((candidate) => candidate.id === wireId)
+  if (!wire) return
+  const atStart = endIndex === 0
+  prompt.value = {
+    title: 'Étiquette d’extrémité',
+    label: atStart ? 'Texte au départ du fil' : 'Texte à l’arrivée du fil',
+    value: atStart ? wire.endLabels.start : wire.endLabels.end,
+    placeholder: 'VCC, GND, vers J3…',
+    hint: 'Un point marque le bout libre, le texte se place dans le prolongement du fil. Vide : aucune.',
+    onSubmit: (value) => store.setWireEndLabel(wireId, endIndex, value)
+  }
+}
+
+function endLabelTitle(wire: Wire, endIndex: number): string {
+  const text = endIndex === 0 ? wire.endLabels.start : wire.endLabels.end
+  const where = endIndex === 0 ? 'Étiquette au départ' : 'Étiquette à l’arrivée'
+  return text.length > 0 ? `${where} : ${text}…` : `${where}…`
+}
+
 // Menu contextuel
 
 function swatchItem(current: string | null): MenuItem {
@@ -243,12 +264,23 @@ function openMenu(request: MenuRequest): void {
     items.push(heading(multi ? (wiresOnly ? `${count} fils` : `${count} éléments`) : 'Fil'))
     items.push(swatchItem(multi ? null : wire.color))
     if (!multi) {
+      const last = wire.points.length - 1
       items.push(
-        item(
-          'Extrémités libres prolongées d’une flèche',
-          () => store.setWireFreeEnds(wire.id, wire.freeEnds === 'arrow' ? 'flat' : 'arrow'),
-          { checked: wire.freeEnds === 'arrow', icon: 'arrow-right' }
-        )
+        SEPARATOR,
+        heading('Extrémités libres'),
+        item('Nettes', () => store.setWireFreeEnds(wire.id, 'flat'), {
+          checked: wire.freeEnds === 'flat'
+        }),
+        item('En flèche', () => store.setWireFreeEnds(wire.id, 'arrow'), {
+          checked: wire.freeEnds === 'arrow',
+          icon: 'arrow-right'
+        }),
+        item('En pointillés', () => store.setWireFreeEnds(wire.id, 'dotted'), {
+          checked: wire.freeEnds === 'dotted',
+          icon: 'dots'
+        }),
+        item(endLabelTitle(wire, 0), () => editWireEnd(wire.id, 0), { icon: 'tag' }),
+        item(endLabelTitle(wire, last), () => editWireEnd(wire.id, last), { icon: 'tag' })
       )
     }
     items.push(
@@ -293,7 +325,7 @@ function openMenu(request: MenuRequest): void {
       }),
       item('Tout sélectionner', () => store.selectAll(), { hint: 'Ctrl+A', icon: 'select-all' }),
       SEPARATOR,
-      item('Tracer un fil', () => store.startWireTool(), { hint: 'W', icon: 'wire' }),
+      item('Tracer un fil', () => store.startWireTool(), { hint: 'F', icon: 'wire' }),
       item(
         'Poser une étiquette ici',
         () => {
@@ -409,7 +441,7 @@ function onKeyDown(event: KeyboardEvent): void {
     case 'v':
       store.selectTool()
       break
-    case 'w':
+    case 'f':
       store.startWireTool()
       break
     case 'e':
@@ -502,6 +534,7 @@ defineExpose({ createNew, open, openRecent, save, openExport })
         @open-menu="openMenu"
         @edit-instance="editInstance"
         @edit-label="editLabelText"
+        @edit-wire-end="editWireEnd"
       />
       <SchematicInspector
         v-if="store.inspectorOpen"

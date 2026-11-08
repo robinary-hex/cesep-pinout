@@ -9,6 +9,8 @@ import {
   primitiveBounds,
   primitiveHandles,
   QUARTERS_PER_CELL,
+  translatePrimitive,
+  type ComponentDefinition,
   type LocalPoint,
   type Pin,
   type PinKind,
@@ -18,9 +20,9 @@ import { useLibraryStore } from '@/features/library/store'
 import ComponentGraphic from '@/render/ComponentGraphic.vue'
 import { useComponentEditorStore } from './store'
 
-// Canevas SVG de l'éditeur de composants : grille, formes, broches, poignées, lasso, aperçus de
-// tracé. Les coordonnées souris sont converties en cellules puis en quarts de cellule ; le domaine
-// ne reçoit que des entiers.
+// Canevas SVG de l'éditeur de composants : grille, formes, broches, poignées, lasso, copies
+// fantômes (Alt+glisser), aperçus de tracé. Les coordonnées souris sont converties en cellules
+// puis en quarts de cellule ; le domaine ne reçoit que des entiers.
 
 const store = useComponentEditorStore()
 const library = useLibraryStore()
@@ -57,7 +59,14 @@ interface QPoint {
 type Drag =
   | { kind: 'box'; tool: 'rect' | 'ellipse' | 'line'; start: QPoint; current: QPoint }
   | { kind: 'polyline'; points: QPoint[]; current: QPoint }
-  | { kind: 'move-primitives'; indexes: number[]; start: QPoint; current: QPoint }
+  | {
+      kind: 'move-primitives'
+      indexes: number[]
+      start: QPoint
+      current: QPoint
+      /** Alt+glisser : les originaux restent, une copie se dépose à l'arrivée. */
+      duplicate: boolean
+    }
   | { kind: 'move-pin'; id: string; current: LocalPoint }
   | { kind: 'handle'; index: number; handleId: string; original: Primitive; preview: Primitive }
   | { kind: 'band'; start: LocalPoint; current: LocalPoint; base: number[] }
@@ -151,15 +160,31 @@ function pinLabel(pin: Pin): { dx: number; dy: number; anchor: 'start' | 'middle
   return { dx: 0, dy: 16, anchor: 'middle' }
 }
 
+/** Décalage des originaux pendant un déplacement (pas pendant une copie). */
 const moving = computed(() => {
   const current = drag.value
-  return current?.kind === 'move-primitives'
+  return current?.kind === 'move-primitives' && !current.duplicate
     ? {
         indexes: current.indexes,
         dx: current.current.x - current.start.x,
         dy: current.current.y - current.start.y
       }
     : null
+})
+
+/** Copies fantômes pendant un Alt+glisser : les formes sélectionnées, décalées, en transparence. */
+const ghostDef = computed<ComponentDefinition | null>(() => {
+  const current = drag.value
+  if (current?.kind !== 'move-primitives' || !current.duplicate) return null
+  const dx = current.current.x - current.start.x
+  const dy = current.current.y - current.start.y
+  if ((dx === 0 && dy === 0) || store.doc.visual.kind !== 'drawing') return null
+  const list = store.doc.visual.primitives
+  const copies = current.indexes.flatMap((index) => {
+    const primitive = list[index]
+    return primitive ? [translatePrimitive(primitive, dx, dy)] : []
+  })
+  return { ...store.doc, visual: { kind: 'drawing', primitives: copies } }
 })
 
 const handlePreview = computed(() => {
@@ -203,7 +228,7 @@ const selectionBoxes = computed(() => {
 const handles = computed(() => {
   const indexes = store.selectedIndexes
   const index = indexes[0]
-  if (indexes.length !== 1 || index === undefined || store.tool !== 'select' || moving.value) {
+  if (indexes.length !== 1 || index === undefined || store.tool !== 'select' || drag.value) {
     return []
   }
   const primitive = shownPrimitive(index)
@@ -309,7 +334,8 @@ function onPrimitiveDown(index: number, event: PointerEvent): void {
     kind: 'move-primitives',
     indexes: [...store.selectedIndexes],
     start,
-    current: start
+    current: start,
+    duplicate: event.altKey
   }
   capture(event)
 }
@@ -480,13 +506,13 @@ function onPointerUp(event: PointerEvent): void {
     case 'box':
       commitBox(current)
       break
-    case 'move-primitives':
-      store.movePrimitives(
-        current.indexes,
-        current.current.x - current.start.x,
-        current.current.y - current.start.y
-      )
+    case 'move-primitives': {
+      const dx = current.current.x - current.start.x
+      const dy = current.current.y - current.start.y
+      if (current.duplicate) store.duplicatePrimitivesAt(current.indexes, dx, dy)
+      else store.movePrimitives(current.indexes, dx, dy)
       break
+    }
     case 'move-pin':
       store.movePin(current.id, { x: current.current.x, y: current.current.y })
       break
@@ -573,7 +599,7 @@ defineExpose({ cancel, finishPolyline })
             <path
               :d="`M ${cell} 0 L 0 0 0 ${cell}`"
               fill="none"
-              stroke="#c9d1d9"
+              stroke="var(--grid-cell)"
               stroke-width="1"
             />
             <circle
@@ -582,7 +608,7 @@ defineExpose({ cancel, finishPolyline })
               :cx="dot.x"
               :cy="dot.y"
               r="1"
-              fill="#b6bec7"
+              fill="var(--grid-dot)"
             />
           </pattern>
         </defs>
@@ -593,7 +619,7 @@ defineExpose({ cancel, finishPolyline })
             :width="boxWidth"
             :height="boxHeight"
             fill="none"
-            stroke="#57606a"
+            stroke="var(--paper-border)"
             stroke-width="1.5"
           />
 
@@ -605,6 +631,14 @@ defineExpose({ cancel, finishPolyline })
             :moving="moving"
             :preview="handlePreview"
             @primitive-down="onPrimitiveDown"
+          />
+
+          <ComponentGraphic
+            v-if="ghostDef"
+            class="ghost-copy"
+            :def="ghostDef"
+            :cell-px="cell"
+            :stroke-base="strokeBase"
           />
 
           <rect
@@ -652,14 +686,14 @@ defineExpose({ cancel, finishPolyline })
               stroke="#1f6feb"
               stroke-width="2"
             />
-            <circle r="6" :fill="PIN_COLORS[pin.kind]" stroke="#ffffff" stroke-width="2" />
+            <circle r="6" :fill="PIN_COLORS[pin.kind]" stroke="var(--paper)" stroke-width="2" />
             <text
               :x="pinLabel(pin).dx"
               :y="pinLabel(pin).dy"
               :text-anchor="pinLabel(pin).anchor"
               dominant-baseline="middle"
               font-size="11"
-              fill="#1f2328"
+              fill="var(--paper-text)"
             >
               {{ index + 1 }}{{ pin.name !== String(index + 1) ? ` · ${pin.name}` : '' }}
             </text>
@@ -750,6 +784,11 @@ defineExpose({ cancel, finishPolyline })
 
 .canvas:not(.tool-select) {
   cursor: crosshair;
+}
+
+.ghost-copy {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 .selection-box {

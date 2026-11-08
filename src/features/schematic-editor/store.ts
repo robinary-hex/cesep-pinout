@@ -471,7 +471,14 @@ export const useSchematicStore = defineStore('schematic', () => {
     const id = nextWireId()
     const stack = nextStack()
     apply('Tracer un fil', (draft) => {
-      draft.wires.push({ id, color, points: castDraft(clean), stack, freeEnds: 'flat' })
+      draft.wires.push({
+        id,
+        color,
+        points: castDraft(clean),
+        stack,
+        freeEnds: 'flat',
+        endLabels: { start: '', end: '' }
+      })
     })
     return id
   }
@@ -538,6 +545,20 @@ export const useSchematicStore = defineStore('schematic', () => {
       const wire = draft.wires.find((candidate) => candidate.id === id)
       if (wire) wire.freeEnds = style
     })
+  }
+
+  /** Étiquette d'une extrémité (0 = départ, sinon arrivée) ; vide = aucune. */
+  function setWireEndLabel(id: string, endIndex: number, text: string): void {
+    const trimmed = text.trim()
+    apply(
+      trimmed.length > 0 ? 'Étiquette d’extrémité' : 'Retirer l’étiquette d’extrémité',
+      (draft) => {
+        const wire = draft.wires.find((candidate) => candidate.id === id)
+        if (!wire) return
+        if (endIndex === 0) wire.endLabels.start = trimmed
+        else wire.endLabels.end = trimmed
+      }
+    )
   }
 
   function removeWires(ids: readonly string[]): void {
@@ -773,6 +794,12 @@ export const useSchematicStore = defineStore('schematic', () => {
     insertCopies(selectionData(), 1, 1, 'Dupliquer')
   }
 
+  /** Alt+glisser : copie de la sélection déposée au décalage donné, en une commande. */
+  function duplicateSelectionAt(dx: number, dy: number): void {
+    if (dx === 0 && dy === 0) return
+    insertCopies(selectionData(), dx, dy, 'Dupliquer')
+  }
+
   function copySelection(): void {
     const data = selectionData()
     if (data.items.length === 0 && data.wires.length === 0 && data.labels.length === 0) return
@@ -982,6 +1009,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     recolorWires,
     setCurrentColor,
     setWireFreeEnds,
+    setWireEndLabel,
     removeWires,
     reorderWires,
     toggleCrossing,
@@ -995,6 +1023,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     flip,
     removeSelection,
     duplicateSelection,
+    duplicateSelectionAt,
     copySelection,
     pasteClipboard,
     pasteClipboardAt,

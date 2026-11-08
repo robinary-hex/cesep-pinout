@@ -46,10 +46,10 @@ function pickCustom(event: Event): void {
         type="button"
         class="tool with-icon"
         :class="{ active: store.tool === 'wire' }"
-        title="Tracer un fil (W)"
+        title="Tracer un fil (F)"
         @click="store.startWireTool()"
       >
-        <Icon name="wire" /> Fil <kbd>W</kbd>
+        <Icon name="wire" /> Fil <kbd>F</kbd>
       </button>
       <button
         type="button"

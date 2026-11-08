@@ -4,6 +4,7 @@ import projectV1 from './fixtures/v1/project.json?raw'
 import settingsV1 from './fixtures/v1/settings.json?raw'
 import componentV2 from './fixtures/v2/component-drawing.json?raw'
 import projectV2 from './fixtures/v2/project.json?raw'
+import projectV3 from './fixtures/v3/project.json?raw'
 import settingsV3 from './fixtures/v3/settings.json?raw'
 import {
   componentMigrations,
@@ -105,10 +106,11 @@ describe('composant v2 → v3', () => {
   })
 })
 
-describe('projet v1 → v3', () => {
+describe('projet v1 → v4', () => {
   it('ajoute le trait des composants au profil, les champs aux instances, et migre les définitions', () => {
     const project = parseProject(projectV1)
-    expect(project.schemaVersion).toBe(3)
+    expect(project.schemaVersion).toBe(4)
+    expect(project.wires[0]?.endLabels).toEqual({ start: '', end: '' })
     expect(project.profile.componentStroke).toBe(0.1)
     expect(project.components.every((instance) => instance.fields !== undefined)).toBe(true)
     for (const def of Object.values(project.embeddedDefs)) {
@@ -118,16 +120,24 @@ describe('projet v1 → v3', () => {
   })
 })
 
-describe('projet v2 → v3', () => {
+describe('projet v2 → v4', () => {
   it('migre les définitions embarquées et garde les valeurs des instances', () => {
     const project = parseProject(projectV2)
-    expect(project.schemaVersion).toBe(3)
+    expect(project.schemaVersion).toBe(4)
     expect(project.components[0]?.fields).toEqual({ R: '4,7 kΩ' })
     const def = project.embeddedDefs['resistor']
     expect(def?.schemaVersion).toBe(3)
     if (def?.visual.kind !== 'drawing') throw new Error('dessin attendu')
     expect(def.visual.primitives[1]).toMatchObject({ kind: 'text', unit: '' })
     expect(project.wires[0]?.color).toBe('#d62828')
+  })
+})
+
+describe('projet v3 → v4', () => {
+  it('ajoute des étiquettes d’extrémité vides aux fils et garde le style des extrémités', () => {
+    const project = parseProject(projectV3)
+    expect(project.schemaVersion).toBe(4)
+    expect(project.wires[0]).toMatchObject({ freeEnds: 'arrow', endLabels: { start: '', end: '' } })
   })
 })
 

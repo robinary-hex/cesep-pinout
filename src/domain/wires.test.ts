@@ -19,7 +19,14 @@ import {
 } from './wires'
 
 function wire(id: string, points: GridPoint[], stack = 0): Wire {
-  return { id, color: '#000000', points, stack, freeEnds: 'flat' }
+  return {
+    id,
+    color: '#000000',
+    points,
+    stack,
+    freeEnds: 'flat',
+    endLabels: { start: '', end: '' }
+  }
 }
 
 describe('forme des fils', () => {

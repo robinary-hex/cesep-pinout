@@ -1,4 +1,5 @@
 import { arrowHeadPoints, pointsAttribute, trimForArrows } from './arrows'
+import { wireEndLabelPlacement, wireRenderParts } from './wireEnds'
 import {
   strokeWidthCells,
   textContent,
@@ -9,7 +10,7 @@ import {
 } from './component'
 import { computeConnectivity, projectPins, type FreeEnd } from './connectivity'
 import { crossingPieces } from './crossings'
-import { QUARTERS_PER_CELL, type GridPoint, type LocalPoint } from './grid'
+import { QUARTERS_PER_CELL, type LocalPoint } from './grid'
 import { instanceBounds, instanceMatrix, matrixToSvg, projectBounds, unionRects } from './placement'
 import type { Project } from './project'
 import type { ExportSettings } from './settings'
@@ -174,33 +175,6 @@ export function componentSvg(
 }
 
 /** Petite flèche au bout d'une extrémité libre « prolongée », dans la direction du dernier segment. */
-function arrowHead(
-  points: readonly GridPoint[],
-  endIndex: number,
-  wireWidth: number,
-  color: string
-): string {
-  const end = points[endIndex]
-  const neighbor = points[endIndex === 0 ? 1 : endIndex - 1]
-  if (!end || !neighbor) return ''
-  const length = Math.abs(end[0] - neighbor[0]) + Math.abs(end[1] - neighbor[1])
-  if (length === 0) return ''
-  const dirX = (end[0] - neighbor[0]) / length
-  const dirY = (end[1] - neighbor[1]) / length
-  const size = wireWidth * 3
-  const half = wireWidth * 1.5
-  const tipX = end[0] + dirX * size
-  const tipY = end[1] + dirY * size
-  const baseAx = end[0] - dirY * half
-  const baseAy = end[1] + dirX * half
-  const baseBx = end[0] + dirY * half
-  const baseBy = end[1] - dirX * half
-  return `<polygon ${attrs({
-    points: `${fmt(baseAx)},${fmt(baseAy)} ${fmt(baseBx)},${fmt(baseBy)} ${fmt(tipX)},${fmt(tipY)}`,
-    fill: color
-  })}/>`
-}
-
 export function buildProjectSvg(project: Project, options: ExportSettings): SvgExport | null {
   let bounds = projectBounds(project)
   if (!bounds) return null
@@ -249,24 +223,65 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
 
   const wires = [...project.wires].sort((a, b) => a.stack - b.stack)
   const wireParts: string[] = []
+  const endLabelParts: string[] = []
+  const fontCells = profile.labelFont.size / profile.cellPx
   for (const wire of wires) {
-    wireParts.push(
-      `<path ${attrs({
-        d: wirePathData(wire.points, profile.cornerRadius),
-        fill: 'none',
-        stroke: wire.color,
-        'stroke-width': profile.wireWidth,
-        'stroke-linecap': 'butt',
-        'stroke-linejoin': 'round'
-      })}/>`
-    )
-    if (wire.freeEnds === 'arrow') {
-      for (const end of freeEndsByWire.get(wire.id) ?? []) {
-        wireParts.push(arrowHead(wire.points, end.endIndex, profile.wireWidth, wire.color))
-      }
+    const free = freeEndsByWire.get(wire.id) ?? []
+    const flags = {
+      start: free.some((end) => end.endIndex === 0),
+      end: free.some((end) => end.endIndex === wire.points.length - 1)
+    }
+    const shown = wireRenderParts(wire.points, wire.freeEnds, flags, profile.wireWidth)
+    if (shown.body.length >= 2) {
+      wireParts.push(
+        `<path ${attrs({
+          d: wirePathData(shown.body, profile.cornerRadius),
+          fill: 'none',
+          stroke: wire.color,
+          'stroke-width': profile.wireWidth,
+          'stroke-linecap': 'butt',
+          'stroke-linejoin': 'round'
+        })}/>`
+      )
+    }
+    for (const tail of shown.dotted) {
+      wireParts.push(
+        `<path ${attrs({
+          d: wirePathData(tail, profile.cornerRadius),
+          fill: 'none',
+          stroke: wire.color,
+          'stroke-width': profile.wireWidth,
+          'stroke-linecap': 'round',
+          'stroke-dasharray': `0 ${fmt(profile.wireWidth * 2)}`
+        })}/>`
+      )
+    }
+    for (const head of shown.heads) {
+      wireParts.push(`<polygon ${attrs({ points: pointsAttribute(head), fill: wire.color })}/>`)
+    }
+    // Étiquettes d'extrémité : un point sur le bout libre, le texte dans le prolongement du fil.
+    for (const end of free) {
+      const text = end.endIndex === 0 ? wire.endLabels.start : wire.endLabels.end
+      const placement = text.length > 0 ? wireEndLabelPlacement(wire.points, end.endIndex) : null
+      if (!placement) continue
+      endLabelParts.push(
+        `<circle ${attrs({ cx: end.point[0], cy: end.point[1], r: profile.wireWidth, fill: wire.color })}/>`
+      )
+      endLabelParts.push(
+        `<text ${attrs({
+          x: placement.x,
+          y: placement.y,
+          'font-family': profile.labelFont.family,
+          'font-size': fontCells,
+          'text-anchor': placement.anchor,
+          'dominant-baseline': placement.baseline,
+          fill: '#1f2328'
+        })}>${escapeXml(text)}</text>`
+      )
     }
   }
   parts.push(`<g class="wires">${wireParts.join('')}</g>`)
+  if (endLabelParts.length > 0) parts.push(`<g class="end-labels">${endLabelParts.join('')}</g>`)
 
   // Croisements : le fil du dessus est redessiné sur une demi-cellule de part et d'autre, avec un
   // liseré couleur de fond qui rend l'ordre lisible même entre deux fils de même couleur.
