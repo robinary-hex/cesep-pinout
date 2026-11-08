@@ -508,3 +508,27 @@ describe('montage : étiquettes d’extrémité et copie au glisser', () => {
     expect(store.doc.components).toHaveLength(1)
   })
 })
+
+describe('montage : fin d’un tracé de fil', () => {
+  it('garde le fil commencé quand on change d’outil ou qu’on arrête, dès deux sommets', () => {
+    const store = useSchematicStore()
+    store.startWireTool()
+    store.beginWire([0, 0])
+    store.appendWirePoints([[4, 0]])
+    store.selectTool()
+    expect(store.doc.wires).toHaveLength(1)
+    expect(store.drawing).toBeNull()
+
+    store.startWireTool()
+    store.beginWire([0, 4])
+    expect(store.stopWireDrawing()).toBe(true)
+    expect(store.doc.wires).toHaveLength(1)
+    expect(store.stopWireDrawing()).toBe(false)
+
+    store.startWireTool()
+    store.beginWire([0, 6])
+    store.appendWirePoints([[6, 6]])
+    store.startTextTool()
+    expect(store.doc.wires).toHaveLength(2)
+  })
+})

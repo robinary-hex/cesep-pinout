@@ -1,5 +1,5 @@
 import { COMPONENT_SCHEMA_VERSION } from './component'
-import { DEFAULT_COMPONENT_STROKE } from './profile'
+import { DEFAULT_COMPONENT_STROKE, DEFAULT_END_LABEL_SIZE } from './profile'
 import { PROJECT_SCHEMA_VERSION } from './project'
 import { DEFAULT_AUTOSAVE_SECONDS, DEFAULT_EXPORT, SETTINGS_SCHEMA_VERSION } from './settings'
 
@@ -26,6 +26,22 @@ export interface MigrationTable {
 
 function isRecord(value: unknown): value is RawRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * Complète un profil de style brut avec les champs apparus depuis : trait des composants, police
+ * des étiquettes d'extrémité (même famille que les repères). Sert aux migrations et aux profils
+ * nommés enregistrés sur disque.
+ */
+export function completeProfile(raw: unknown): RawRecord {
+  const profile = isRecord(raw) ? raw : {}
+  const labelFont = isRecord(profile['labelFont']) ? profile['labelFont'] : {}
+  const family = typeof labelFont['family'] === 'string' ? labelFont['family'] : 'Segoe UI'
+  return {
+    componentStroke: DEFAULT_COMPONENT_STROKE,
+    endLabelFont: { family, size: DEFAULT_END_LABEL_SIZE },
+    ...profile
+  }
 }
 
 /**
@@ -205,7 +221,9 @@ export const projectMigrations: MigrationTable = {
     3: migrateProjectV3,
     4: migrateProjectV4,
     // Projet v5 → v6 : définitions embarquées migrées (flèche au milieu).
-    5: migrateEmbeddedDefs
+    5: migrateEmbeddedDefs,
+    // Projet v6 → v7 : police des étiquettes d'extrémité dans le profil.
+    6: (raw) => ({ ...raw, profile: completeProfile(raw['profile']) })
   }
 }
 
@@ -227,6 +245,8 @@ export const settingsMigrations: MigrationTable = {
         ...(isRecord(raw['defaultProfile']) ? raw['defaultProfile'] : {})
       }
     }),
-    3: (raw) => ({ ...raw, theme: 'light' })
+    3: (raw) => ({ ...raw, theme: 'light' }),
+    // v4 → v5 : police des étiquettes d'extrémité du profil par défaut.
+    4: (raw) => ({ ...raw, defaultProfile: completeProfile(raw['defaultProfile']) })
   }
 }

@@ -14,6 +14,15 @@ export const junctionScaleSchema = z.union([
 /** Trait de base des composants dessinés, en cellules ; les formes le multiplient. */
 export const DEFAULT_COMPONENT_STROKE = 0.1
 
+const fontSchema = z.object({
+  family: z.string().min(1),
+  size: z.number().positive()
+})
+export type FontSpec = z.infer<typeof fontSchema>
+
+/** Taille par défaut des étiquettes d'extrémité (points), plus lisible que les repères. */
+export const DEFAULT_END_LABEL_SIZE = 14
+
 /**
  * Profil de style : l'échelle et le trait, partagés entre projets.
  * Un projet en garde une copie. Changer de profil redimensionne un montage sans le casser,
@@ -33,10 +42,10 @@ export const styleProfileSchema = z.object({
   junctionScale: junctionScaleSchema,
   /** 'wire' = couleur du fil porteur ; sinon une couleur fixe. */
   junctionColor: z.union([z.literal('wire'), hexColorSchema]),
-  labelFont: z.object({
-    family: z.string().min(1),
-    size: z.number().positive()
-  })
+  /** Repères des composants (R1, U2…) et étiquettes texte, en points. */
+  labelFont: fontSchema,
+  /** Étiquettes d'extrémité des fils (nom de net, destination), en points. */
+  endLabelFont: fontSchema
 })
 export type StyleProfile = z.infer<typeof styleProfileSchema>
 
@@ -48,5 +57,6 @@ export const DEFAULT_PROFILE: StyleProfile = {
   componentStroke: DEFAULT_COMPONENT_STROKE,
   junctionScale: 2,
   junctionColor: 'wire',
-  labelFont: { family: 'Segoe UI', size: 11 }
+  labelFont: { family: 'Segoe UI', size: 11 },
+  endLabelFont: { family: 'Segoe UI', size: DEFAULT_END_LABEL_SIZE }
 }

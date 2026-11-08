@@ -9,6 +9,8 @@ import projectV3 from './fixtures/v3/project.json?raw'
 import componentV4 from './fixtures/v4/component-drawing.json?raw'
 import projectV4 from './fixtures/v4/project.json?raw'
 import projectV5 from './fixtures/v5/project.json?raw'
+import projectV6 from './fixtures/v6/project.json?raw'
+import settingsV4 from './fixtures/v4/settings.json?raw'
 import settingsV3 from './fixtures/v3/settings.json?raw'
 import {
   componentMigrations,
@@ -131,7 +133,7 @@ describe('composant v2 → v4', () => {
 describe('projet v1 → v5', () => {
   it('ajoute le trait des composants au profil, les champs aux instances, et migre les définitions', () => {
     const project = parseProject(projectV1)
-    expect(project.schemaVersion).toBe(6)
+    expect(project.schemaVersion).toBe(7)
     expect(project.wires[0]?.endLabels).toEqual({ start: '', end: '' })
     expect(project.profile.componentStroke).toBe(0.1)
     expect(project.components.every((instance) => instance.fields !== undefined)).toBe(true)
@@ -145,7 +147,7 @@ describe('projet v1 → v5', () => {
 describe('projet v2 → v5', () => {
   it('migre les définitions embarquées et garde les valeurs des instances', () => {
     const project = parseProject(projectV2)
-    expect(project.schemaVersion).toBe(6)
+    expect(project.schemaVersion).toBe(7)
     expect(project.components[0]?.fields).toEqual({ R: '4,7 kΩ' })
     const def = project.embeddedDefs['resistor']
     expect(def?.schemaVersion).toBe(5)
@@ -158,7 +160,7 @@ describe('projet v2 → v5', () => {
 describe('projet v3 → v5', () => {
   it('ajoute des étiquettes d’extrémité vides aux fils et garde le style des extrémités', () => {
     const project = parseProject(projectV3)
-    expect(project.schemaVersion).toBe(6)
+    expect(project.schemaVersion).toBe(7)
     expect(project.wires[0]).toMatchObject({ freeEnds: 'arrow', endLabels: { start: '', end: '' } })
   })
 })
@@ -175,7 +177,7 @@ describe('composant v3 → v4', () => {
 describe('projet v4 → v5', () => {
   it('ajoute la graisse aux étiquettes et migre les définitions embarquées', () => {
     const project = parseProject(projectV4)
-    expect(project.schemaVersion).toBe(6)
+    expect(project.schemaVersion).toBe(7)
     expect(project.labels[0]).toMatchObject({ text: 'Diviseur', bold: false })
     expect(project.wires[0]).toMatchObject({ freeEnds: 'dotted', endLabels: { end: 'OUT' } })
     const def = project.embeddedDefs['resistor']
@@ -201,7 +203,7 @@ describe('composant v4 → v5', () => {
 describe('projet v5 → v6', () => {
   it('migre les définitions embarquées et garde les étiquettes en gras', () => {
     const project = parseProject(projectV5)
-    expect(project.schemaVersion).toBe(6)
+    expect(project.schemaVersion).toBe(7)
     expect(project.labels[0]).toMatchObject({ bold: true, size: 16.5 })
     const def = project.embeddedDefs['arrow-line']
     expect(def?.schemaVersion).toBe(5)
@@ -210,20 +212,38 @@ describe('projet v5 → v6', () => {
   })
 })
 
-describe('paramètres v1 → v4', () => {
+describe('projet v6 → v7', () => {
+  it('donne au profil une police d’étiquettes d’extrémité, de la famille des repères', () => {
+    const project = parseProject(projectV6)
+    expect(project.schemaVersion).toBe(7)
+    expect(project.profile.endLabelFont).toEqual({ family: 'Consolas', size: 14 })
+    expect(project.wires[0]?.endLabels.start).toBe('VCC')
+  })
+})
+
+describe('paramètres v4 → v5', () => {
+  it('complète le profil par défaut et garde le thème', () => {
+    const settings = parseSettings(settingsV4)
+    expect(settings.schemaVersion).toBe(5)
+    expect(settings.theme).toBe('dark')
+    expect(settings.defaultProfile.endLabelFont).toEqual({ family: 'Segoe UI', size: 14 })
+  })
+})
+
+describe('paramètres v1 → v5', () => {
   it('ajoute export, copie de secours, trait des composants et thème', () => {
     const settings = parseSettings(settingsV1)
-    expect(settings.schemaVersion).toBe(4)
+    expect(settings.schemaVersion).toBe(5)
     expect(settings.defaultProfile.componentStroke).toBe(0.1)
     expect(settings.export.scale).toBe(2)
     expect(settings.theme).toBe('light')
   })
 })
 
-describe('paramètres v3 → v4', () => {
+describe('paramètres v3 → v5', () => {
   it('ajoute le thème clair et garde le reste', () => {
     const settings = parseSettings(settingsV3)
-    expect(settings.schemaVersion).toBe(4)
+    expect(settings.schemaVersion).toBe(5)
     expect(settings.theme).toBe('light')
     expect(settings.recentFiles).toEqual(['D:/Documents/diviseur.pinout.json'])
     expect(settings.autosaveSeconds).toBe(60)

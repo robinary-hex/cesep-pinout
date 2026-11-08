@@ -244,6 +244,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     syncCurrentColor()
     clearSelection()
     placement.value = null
+    // Le document change : un tracé en cours n'a plus de sens, il est abandonné.
     drawing.value = null
     tool.value = 'select'
   }
@@ -329,12 +330,12 @@ export const useSchematicStore = defineStore('schematic', () => {
   function selectTool(): void {
     tool.value = 'select'
     placement.value = null
-    drawing.value = null
+    stopWireDrawing()
   }
 
   function startPlacing(def: ComponentDefinition): void {
     placement.value = { def, rotation: 0, mirror: false }
-    drawing.value = null
+    stopWireDrawing()
     tool.value = 'place'
     clearSelection()
     status.value = `Pose de ${def.name} : clic pour poser, R et T pour tourner et retourner, Échap pour arrêter.`
@@ -348,7 +349,7 @@ export const useSchematicStore = defineStore('schematic', () => {
   function startWireTool(): void {
     tool.value = 'wire'
     placement.value = null
-    drawing.value = null
+    stopWireDrawing()
     clearSelection()
     status.value =
       'Fil : clic sur une broche ou une intersection pour partir, clic pour chaque coude, Maj inverse le L, double-clic ou Entrée pour finir, Échap annule.'
@@ -357,7 +358,7 @@ export const useSchematicStore = defineStore('schematic', () => {
   function startTextTool(): void {
     tool.value = 'text'
     placement.value = null
-    drawing.value = null
+    stopWireDrawing()
     clearSelection()
     status.value =
       'Texte : clic pour poser une étiquette, puis modifie-la dans le panneau de droite.'
@@ -517,9 +518,15 @@ export const useSchematicStore = defineStore('schematic', () => {
     return id
   }
 
-  function cancelWire(): boolean {
-    if (!drawing.value) return false
-    drawing.value = null
+  /**
+   * Arrête le tracé en cours (Échap, changement d'outil) : le fil est gardé dès qu'il a un départ
+   * et une arrivée, abandonné s'il n'a qu'un point. Vrai s'il y avait un tracé.
+   */
+  function stopWireDrawing(): boolean {
+    const current = drawing.value
+    if (!current) return false
+    if (current.points.length >= 2) finishWire()
+    else drawing.value = null
     return true
   }
 
@@ -1012,7 +1019,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     appendWirePoints,
     popWireVertex,
     finishWire,
-    cancelWire,
+    stopWireDrawing,
     setWirePoints,
     recolorWires,
     setCurrentColor,

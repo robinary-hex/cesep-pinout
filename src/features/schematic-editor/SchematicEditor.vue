@@ -472,7 +472,7 @@ function onKeyDown(event: KeyboardEvent): void {
       break
     case 'escape':
       if (canvas.value?.cancel()) break
-      if (store.cancelWire()) break
+      if (store.stopWireDrawing()) break
       if (store.placement) {
         store.stopPlacing()
         break

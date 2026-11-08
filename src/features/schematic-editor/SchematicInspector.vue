@@ -237,6 +237,10 @@ function setLabelSize(event: Event): void {
             }}
           </li>
           <li>Repères : {{ profile.labelFont.family }} {{ profile.labelFont.size }} pt</li>
+          <li>
+            Étiquettes d’extrémité : {{ profile.endLabelFont.family }}
+            {{ profile.endLabelFont.size }} pt
+          </li>
         </ul>
         <button type="button" class="small" @click="emit('editProfile')">
           Modifier le profil…

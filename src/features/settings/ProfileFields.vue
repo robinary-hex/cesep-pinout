@@ -142,6 +142,40 @@ function number(event: Event, fallback: number): number {
         />
       </label>
     </div>
+    <div class="row">
+      <label class="field">
+        <span>Police des étiquettes d’extrémité</span>
+        <input
+          type="text"
+          :value="profile.endLabelFont.family"
+          @change="
+            patch({
+              endLabelFont: {
+                ...profile.endLabelFont,
+                family: text($event).trim() || profile.endLabelFont.family
+              }
+            })
+          "
+        />
+      </label>
+      <label class="field">
+        <span>Taille (pt)</span>
+        <input
+          type="number"
+          min="4"
+          step="1"
+          :value="profile.endLabelFont.size"
+          @change="
+            patch({
+              endLabelFont: {
+                ...profile.endLabelFont,
+                size: Math.max(4, number($event, profile.endLabelFont.size))
+              }
+            })
+          "
+        />
+      </label>
+    </div>
   </div>
 </template>
 

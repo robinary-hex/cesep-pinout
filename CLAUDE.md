@@ -47,7 +47,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   ni de touches AltGr. Les deux seuls chiffres (0, 1) se lisent par touche physique (`event.code`)
   car la rangée du haut demande Maj sur ce clavier.
   - Montage : V sélection (arrête la pose ou le fil), F fil (clic par coude, Maj inverse le L,
-    double-clic ou Entrée termine, Retour arrière retire le dernier sommet, Échap annule),
+    double-clic ou Entrée termine, Retour arrière retire le dernier sommet, Échap termine aussi
+    dès deux sommets),
     R / Maj+R rotation, T / Maj+T miroir, Suppr, Échap, flèches = déplacer d'une cellule,
     Ctrl+A / D / C / V, Ctrl+Z / Y, Ctrl+S, Ctrl+Maj+S, Ctrl+O, Ctrl+N, Ctrl+E export, F1 aide,
     Ctrl+Page haut/bas
@@ -74,7 +75,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   libres (`freeEnds`) : nettes, en flèche ou en pointillés, dessinées pareil à l'écran et à
   l'export par `src/domain/wireEnds.ts` (corps raccourci, pointe sur le bout du fil, queue
   pointillée d'1,5 cellule). Étiquettes d'extrémité (`endLabels`) : point sur le bout libre et
-  texte placé à l'opposé du fil, position toujours dérivée de la géométrie.
+  texte placé à l'opposé du fil, position toujours dérivée de la géométrie, police `endLabelFont` du
+  profil (14 pt par défaut). Arrêter un tracé (Échap, changement d'outil) garde le fil dès qu'il a
+  deux sommets ; un seul point est abandonné (`stopWireDrawing`).
 - Export : `src/domain/svg.ts` construit le SVG autonome (viewBox en cellules, même ordre
   d'empilement que l'éditeur, sans marqueurs d'édition) ; `src/features/export/` le rastérise en
   PNG via un canvas et le copie dans le presse-papiers. Les réglages d'export, la palette, le profil
@@ -128,7 +131,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     absolue. Les panneaux ne portent pas de texte explicatif : l'aide est dans F1.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 5, projet 6, paramètres 4
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 5, projet 7, paramètres 5
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

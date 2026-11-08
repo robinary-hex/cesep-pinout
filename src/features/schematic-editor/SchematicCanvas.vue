@@ -69,6 +69,7 @@ const profile = computed(() => store.profile)
 const wireWidth = computed(() => profile.value.wireWidth)
 const cornerRadius = computed(() => profile.value.cornerRadius)
 const labelFontCells = computed(() => profile.value.labelFont.size / profile.value.cellPx)
+const endLabelFontCells = computed(() => profile.value.endLabelFont.size / profile.value.cellPx)
 
 type Drag =
   | { kind: 'pan'; lastX: number; lastY: number }
@@ -1057,8 +1058,8 @@ const cursorClass = computed(() => {
               <text
                 :x="entry.x"
                 :y="entry.y"
-                :font-size="labelFontCells"
-                :font-family="profile.labelFont.family"
+                :font-size="endLabelFontCells"
+                :font-family="profile.endLabelFont.family"
                 :text-anchor="entry.anchor"
                 :dominant-baseline="entry.baseline"
               >

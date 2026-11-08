@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 6,
+  "name": "Alimentation",
+  "profile": {
+    "name": "Standard",
+    "cellPx": 20,
+    "wireWidth": 0.15,
+    "cornerRadius": 0.4,
+    "componentStroke": 0.1,
+    "junctionScale": 2,
+    "junctionColor": "wire",
+    "labelFont": { "family": "Consolas", "size": 11 }
+  },
+  "components": [],
+  "wires": [
+    {
+      "id": "w1",
+      "color": "#d62828",
+      "points": [
+        [0, 0],
+        [6, 0]
+      ],
+      "stack": 0,
+      "freeEnds": "flat",
+      "endLabels": { "start": "VCC", "end": "" }
+    }
+  ],
+  "crossingOverrides": [],
+  "labels": [{ "id": "t1", "x": 0, "y": 3, "text": "Entrée", "size": 11, "bold": true }],
+  "embeddedDefs": {}
+}

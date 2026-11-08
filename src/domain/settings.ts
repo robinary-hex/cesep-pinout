@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { hexColorSchema } from './color'
 import { DEFAULT_PROFILE, styleProfileSchema } from './profile'
 
-export const SETTINGS_SCHEMA_VERSION = 4
+export const SETTINGS_SCHEMA_VERSION = 5
 
 export const paletteColorSchema = z.object({
   name: z.string().min(1),

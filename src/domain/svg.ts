@@ -232,7 +232,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
   const wires = [...project.wires].sort((a, b) => a.stack - b.stack)
   const wireParts: string[] = []
   const endLabelParts: string[] = []
-  const fontCells = profile.labelFont.size / profile.cellPx
+  const endFontCells = profile.endLabelFont.size / profile.cellPx
   for (const wire of wires) {
     const free = freeEndsByWire.get(wire.id) ?? []
     const flags = {
@@ -279,8 +279,8 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
         `<text ${attrs({
           x: placement.x,
           y: placement.y,
-          'font-family': profile.labelFont.family,
-          'font-size': fontCells,
+          'font-family': profile.endLabelFont.family,
+          'font-size': endFontCells,
           'text-anchor': placement.anchor,
           'dominant-baseline': placement.baseline,
           fill: '#1f2328'

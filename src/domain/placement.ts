@@ -64,7 +64,7 @@ export function projectBounds(project: Project): GridRect | null {
     const def = project.embeddedDefs[instance.defId]
     if (def) include(instanceBounds(instance, def))
   }
-  const fontCells = project.profile.labelFont.size / project.profile.cellPx
+  const fontCells = project.profile.endLabelFont.size / project.profile.cellPx
   for (const wire of project.wires) {
     for (const [x, y] of wire.points) include({ x, y, width: 0, height: 0 })
     for (const endIndex of [0, wire.points.length - 1]) {
