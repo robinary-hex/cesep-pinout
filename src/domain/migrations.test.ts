@@ -9,7 +9,9 @@ import projectV3 from './fixtures/v3/project.json?raw'
 import componentV4 from './fixtures/v4/component-drawing.json?raw'
 import projectV4 from './fixtures/v4/project.json?raw'
 import projectV5 from './fixtures/v5/project.json?raw'
+import componentV5 from './fixtures/v5/component-drawing.json?raw'
 import projectV6 from './fixtures/v6/project.json?raw'
+import projectV7 from './fixtures/v7/project.json?raw'
 import settingsV4 from './fixtures/v4/settings.json?raw'
 import settingsV3 from './fixtures/v3/settings.json?raw'
 import {
@@ -75,7 +77,7 @@ describe('migrations', () => {
 describe('composant v1 → v4', () => {
   it('convertit les épaisseurs en multiplicateurs, ajoute flèches, textes variables et unité, retire le préfixe', () => {
     const def = parseComponentDefinition(componentV1)
-    expect(def.schemaVersion).toBe(5)
+    expect(def.schemaVersion).toBe(6)
     expect('labelPrefix' in def).toBe(false)
     if (def.visual.kind !== 'drawing') throw new Error('dessin attendu')
     const [line, rect, , text] = def.visual.primitives
@@ -111,7 +113,7 @@ describe('composant v1 → v4', () => {
 describe('composant v2 → v4', () => {
   it('ajoute une unité vide aux textes et garde le reste', () => {
     const def = parseComponentDefinition(componentV2)
-    expect(def.schemaVersion).toBe(5)
+    expect(def.schemaVersion).toBe(6)
     if (def.visual.kind !== 'drawing') throw new Error('dessin attendu')
     const text = def.visual.primitives[3]
     expect(text).toMatchObject({
@@ -133,12 +135,12 @@ describe('composant v2 → v4', () => {
 describe('projet v1 → v5', () => {
   it('ajoute le trait des composants au profil, les champs aux instances, et migre les définitions', () => {
     const project = parseProject(projectV1)
-    expect(project.schemaVersion).toBe(7)
+    expect(project.schemaVersion).toBe(8)
     expect(project.wires[0]?.endLabels).toEqual({ start: '', end: '' })
     expect(project.profile.componentStroke).toBe(0.1)
     expect(project.components.every((instance) => instance.fields !== undefined)).toBe(true)
     for (const def of Object.values(project.embeddedDefs)) {
-      expect(def.schemaVersion).toBe(5)
+      expect(def.schemaVersion).toBe(6)
       expect('labelPrefix' in def).toBe(false)
     }
   })
@@ -147,10 +149,10 @@ describe('projet v1 → v5', () => {
 describe('projet v2 → v5', () => {
   it('migre les définitions embarquées et garde les valeurs des instances', () => {
     const project = parseProject(projectV2)
-    expect(project.schemaVersion).toBe(7)
+    expect(project.schemaVersion).toBe(8)
     expect(project.components[0]?.fields).toEqual({ R: '4,7 kΩ' })
     const def = project.embeddedDefs['resistor']
-    expect(def?.schemaVersion).toBe(5)
+    expect(def?.schemaVersion).toBe(6)
     if (def?.visual.kind !== 'drawing') throw new Error('dessin attendu')
     expect(def.visual.primitives[1]).toMatchObject({ kind: 'text', unit: '', bold: false })
     expect(project.wires[0]?.color).toBe('#d62828')
@@ -160,7 +162,7 @@ describe('projet v2 → v5', () => {
 describe('projet v3 → v5', () => {
   it('ajoute des étiquettes d’extrémité vides aux fils et garde le style des extrémités', () => {
     const project = parseProject(projectV3)
-    expect(project.schemaVersion).toBe(7)
+    expect(project.schemaVersion).toBe(8)
     expect(project.wires[0]).toMatchObject({ freeEnds: 'arrow', endLabels: { start: '', end: '' } })
   })
 })
@@ -168,7 +170,7 @@ describe('projet v3 → v5', () => {
 describe('composant v3 → v4', () => {
   it('ajoute une graisse normale aux textes et garde l’unité', () => {
     const def = parseComponentDefinition(componentV3)
-    expect(def.schemaVersion).toBe(5)
+    expect(def.schemaVersion).toBe(6)
     if (def.visual.kind !== 'drawing') throw new Error('dessin attendu')
     expect(def.visual.primitives[1]).toMatchObject({ kind: 'text', unit: 'kΩ', bold: false })
   })
@@ -177,11 +179,11 @@ describe('composant v3 → v4', () => {
 describe('projet v4 → v5', () => {
   it('ajoute la graisse aux étiquettes et migre les définitions embarquées', () => {
     const project = parseProject(projectV4)
-    expect(project.schemaVersion).toBe(7)
+    expect(project.schemaVersion).toBe(8)
     expect(project.labels[0]).toMatchObject({ text: 'Diviseur', bold: false })
     expect(project.wires[0]).toMatchObject({ freeEnds: 'dotted', endLabels: { end: 'OUT' } })
     const def = project.embeddedDefs['resistor']
-    expect(def?.schemaVersion).toBe(5)
+    expect(def?.schemaVersion).toBe(6)
     if (def?.visual.kind !== 'drawing') throw new Error('dessin attendu')
     expect(def.visual.primitives[0]).toMatchObject({ kind: 'text', bold: false })
   })
@@ -190,7 +192,7 @@ describe('projet v4 → v5', () => {
 describe('composant v4 → v5', () => {
   it('ajoute la flèche du milieu, absente, et garde les autres', () => {
     const def = parseComponentDefinition(componentV4)
-    expect(def.schemaVersion).toBe(5)
+    expect(def.schemaVersion).toBe(6)
     if (def.visual.kind !== 'drawing') throw new Error('dessin attendu')
     expect(def.visual.primitives[0]).toMatchObject({
       kind: 'line',
@@ -203,10 +205,10 @@ describe('composant v4 → v5', () => {
 describe('projet v5 → v6', () => {
   it('migre les définitions embarquées et garde les étiquettes en gras', () => {
     const project = parseProject(projectV5)
-    expect(project.schemaVersion).toBe(7)
+    expect(project.schemaVersion).toBe(8)
     expect(project.labels[0]).toMatchObject({ bold: true, size: 16.5 })
     const def = project.embeddedDefs['arrow-line']
-    expect(def?.schemaVersion).toBe(5)
+    expect(def?.schemaVersion).toBe(6)
     if (def?.visual.kind !== 'drawing') throw new Error('dessin attendu')
     expect(def.visual.primitives[0]).toMatchObject({ arrows: { middle: false, end: true } })
   })
@@ -215,9 +217,38 @@ describe('projet v5 → v6', () => {
 describe('projet v6 → v7', () => {
   it('donne au profil une police d’étiquettes d’extrémité, de la famille des repères', () => {
     const project = parseProject(projectV6)
-    expect(project.schemaVersion).toBe(7)
+    expect(project.schemaVersion).toBe(8)
     expect(project.profile.endLabelFont).toEqual({ family: 'Consolas', size: 14 })
     expect(project.wires[0]?.endLabels.start).toBe('VCC')
+  })
+})
+
+describe('composant v5 → v6', () => {
+  it('donne au texte une boîte déduite de son ancre, centrée sur l’ancien point', () => {
+    const def = parseComponentDefinition(componentV5)
+    expect(def.schemaVersion).toBe(6)
+    if (def.visual.kind !== 'drawing') throw new Error('dessin attendu')
+    // « R » de 0,5 cellule ancré au centre en (8, 1) : boîte 2 × 2 quarts autour de ce point.
+    expect(def.visual.primitives[1]).toMatchObject({
+      kind: 'text',
+      x: 7,
+      y: 0,
+      w: 2,
+      h: 2,
+      bold: true
+    })
+  })
+})
+
+describe('projet v7 → v8', () => {
+  it('migre les textes des définitions embarquées', () => {
+    const project = parseProject(projectV7)
+    expect(project.schemaVersion).toBe(8)
+    const def = project.embeddedDefs['motor']
+    expect(def?.schemaVersion).toBe(6)
+    if (def?.visual.kind !== 'drawing') throw new Error('dessin attendu')
+    // « M » d’une cellule ancré au centre en (8, 4) : hauteur 4, largeur 3, boîte décalée autour.
+    expect(def.visual.primitives[0]).toMatchObject({ kind: 'text', w: 3, h: 4, y: 2 })
   })
 })
 

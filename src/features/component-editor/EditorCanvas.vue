@@ -412,8 +412,10 @@ function onPointerDown(event: PointerEvent): void {
       store.addPrimitive(
         {
           kind: 'text',
-          x: q.x,
-          y: q.y,
+          x: q.x - 4,
+          y: q.y - 1,
+          w: 8,
+          h: 2,
           text: 'Texte',
           size: 0.5,
           anchor: 'middle',
@@ -425,6 +427,7 @@ function onPointerDown(event: PointerEvent): void {
         },
         'Ajouter un texte'
       )
+      store.tool = 'select'
       break
     case 'pin': {
       const nearest = nearestBorderPoint(cells, size.value)

@@ -110,6 +110,8 @@ describe('textes variables', () => {
   it('affiche la valeur, sinon la valeur par défaut, et colle l’unité à droite', () => {
     const base = {
       kind: 'text' as const,
+      w: 8,
+      h: 2,
       x: 0,
       y: 0,
       size: 0.5,

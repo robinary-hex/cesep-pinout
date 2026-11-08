@@ -28,6 +28,8 @@ describe('poignées des formes', () => {
     expect(
       primitiveHandles({
         kind: 'text',
+        w: 8,
+        h: 2,
         x: 0,
         y: 0,
         text: 'R',
@@ -39,7 +41,7 @@ describe('poignées des formes', () => {
         unit: '',
         bold: false
       })
-    ).toEqual([])
+    ).toHaveLength(8)
   })
 
   it('redimensionne un rectangle par un coin ou un côté sans descendre sous une cellule', () => {

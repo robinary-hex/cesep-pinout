@@ -626,6 +626,7 @@ function onPointerDown(event: PointerEvent): void {
   if (store.tool === 'text') {
     const [x, y] = snapGrid(world)
     store.addLabel(x, y)
+    store.selectTool()
     return
   }
 
@@ -1060,6 +1061,7 @@ const cursorClass = computed(() => {
                 :y="entry.y"
                 :font-size="endLabelFontCells"
                 :font-family="profile.endLabelFont.family"
+                font-weight="bold"
                 :text-anchor="entry.anchor"
                 :dominant-baseline="entry.baseline"
               >

@@ -14,6 +14,8 @@ describe('ComponentGraphic', () => {
         { kind: 'line', x1: 0, y1: 4, x2: 4, y2: 4, arrows: NO_ARROWS, style: DEFAULT_SHAPE_STYLE },
         {
           kind: 'text',
+          w: 8,
+          h: 2,
           x: 8,
           y: 1,
           text: 'R',
@@ -53,6 +55,8 @@ describe('ComponentGraphic', () => {
         },
         {
           kind: 'text',
+          w: 8,
+          h: 2,
           x: 8,
           y: 1,
           text: 'valeur',

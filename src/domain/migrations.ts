@@ -150,13 +150,39 @@ function migrateComponentV4(raw: RawRecord): RawRecord {
   }
 }
 
+// Composant v5 → v6 : le texte occupe une boîte, déduite de son ancre, de sa hauteur et de sa longueur.
+
+function migrateTextV5(raw: unknown): unknown {
+  if (!isRecord(raw) || raw['kind'] !== 'text') return raw
+  const size = typeof raw['size'] === 'number' ? raw['size'] : 0.5
+  const text = typeof raw['text'] === 'string' ? raw['text'] : ''
+  const fallback = typeof raw['defaultValue'] === 'string' ? raw['defaultValue'] : ''
+  const length = Math.max(1, text.length, raw['variable'] === true ? fallback.length : 0)
+  const h = Math.max(1, Math.round(size * 4))
+  const w = Math.max(1, Math.ceil(length * 0.6 * size * 4))
+  const x = typeof raw['x'] === 'number' ? raw['x'] : 0
+  const y = typeof raw['y'] === 'number' ? raw['y'] : 0
+  const left =
+    raw['anchor'] === 'start' ? x : raw['anchor'] === 'end' ? x - w : x - Math.round(w / 2)
+  return { ...raw, x: left, y: y - Math.round(h / 2), w, h }
+}
+
+function migrateComponentV5(raw: RawRecord): RawRecord {
+  const visual = raw['visual']
+  if (!isRecord(visual) || visual['kind'] !== 'drawing' || !Array.isArray(visual['primitives'])) {
+    return raw
+  }
+  return { ...raw, visual: { ...visual, primitives: visual['primitives'].map(migrateTextV5) } }
+}
+
 export const componentMigrations: MigrationTable = {
   current: COMPONENT_SCHEMA_VERSION,
   steps: {
     1: migrateComponentV1,
     2: migrateComponentV2,
     3: migrateComponentV3,
-    4: migrateComponentV4
+    4: migrateComponentV4,
+    5: migrateComponentV5
   }
 }
 
@@ -223,7 +249,9 @@ export const projectMigrations: MigrationTable = {
     // Projet v5 → v6 : définitions embarquées migrées (flèche au milieu).
     5: migrateEmbeddedDefs,
     // Projet v6 → v7 : police des étiquettes d'extrémité dans le profil.
-    6: (raw) => ({ ...raw, profile: completeProfile(raw['profile']) })
+    6: (raw) => ({ ...raw, profile: completeProfile(raw['profile']) }),
+    // Projet v7 → v8 : définitions embarquées migrées (boîtes de texte).
+    7: migrateEmbeddedDefs
   }
 }
 

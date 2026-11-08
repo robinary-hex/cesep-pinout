@@ -284,7 +284,8 @@ function setClosed(event: Event): void {
         </label>
         <label class="field">
           <span>{{ primitive.variable ? 'Nom du champ' : 'Texte' }}</span>
-          <input type="text" :value="primitive.text" @change="setText" />
+          <input v-if="primitive.variable" type="text" :value="primitive.text" @change="setText" />
+          <textarea v-else rows="3" :value="primitive.text" @change="setText" />
         </label>
         <template v-if="primitive.variable">
           <div class="row">

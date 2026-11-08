@@ -13,7 +13,8 @@ export interface Handle {
 
 export function primitiveHandles(primitive: Primitive): Handle[] {
   switch (primitive.kind) {
-    case 'rect': {
+    case 'rect':
+    case 'text': {
       const { x, y, w, h } = primitive
       return [
         { id: 'nw', x, y },
@@ -42,8 +43,6 @@ export function primitiveHandles(primitive: Primitive): Handle[] {
       ]
     case 'polyline':
       return primitive.points.map(([x, y], index) => ({ id: `v${index}`, x, y }))
-    case 'text':
-      return []
   }
 }
 
@@ -55,7 +54,8 @@ export function dragHandle(
 ): Primitive {
   const [tx, ty] = target
   switch (primitive.kind) {
-    case 'rect': {
+    case 'rect':
+    case 'text': {
       let x1 = primitive.x
       let y1 = primitive.y
       let x2 = primitive.x + primitive.w
@@ -80,8 +80,6 @@ export function dragHandle(
         points: primitive.points.map((point, i): QuarterPoint => (i === index ? [tx, ty] : point))
       }
     }
-    case 'text':
-      return primitive
   }
 }
 

@@ -2,12 +2,12 @@
 import { computed } from 'vue'
 import {
   arrowHeadPoints,
+  layoutText,
   middleArrowHead,
   NO_ARROWS,
   pointsAttribute,
   QUARTERS_PER_CELL,
   strokeWidthCells,
-  textContent,
   trimForArrows,
   type Arrows,
   type ComponentDefinition,
@@ -145,18 +145,8 @@ function arrowHeads(primitive: Stroked): string[] {
   return heads
 }
 
-function shownText(primitive: TextPrimitive): string {
-  return textContent(primitive, props.fields)
-}
-
-function textWidth(text: string, size: number): number {
-  return text.length * size * props.cellPx * 0.6
-}
-
-function textLeft(x: number, anchor: 'start' | 'middle' | 'end', width: number): number {
-  if (anchor === 'start') return q(x)
-  if (anchor === 'end') return q(x) - width
-  return q(x) - width / 2
+function textLayout(primitive: TextPrimitive): ReturnType<typeof layoutText> {
+  return layoutText(primitive, props.fields)
 }
 
 function down(index: number, event: PointerEvent): void {
@@ -282,8 +272,6 @@ function down(index: number, event: PointerEvent): void {
 
       <template v-else>
         <text
-          :x="q(p.x)"
-          :y="q(p.y)"
           :font-size="p.size * cellPx"
           :text-anchor="p.anchor"
           :fill="screenColor(p.color)"
@@ -292,14 +280,21 @@ function down(index: number, event: PointerEvent): void {
           dominant-baseline="middle"
           :font-style="p.variable && !fields ? 'italic' : undefined"
         >
-          {{ shownText(p) }}
+          <tspan
+            v-for="(line, l) in textLayout(p).lines"
+            :key="l"
+            :x="q(textLayout(p).x)"
+            :y="q(line.y)"
+          >
+            {{ line.text }}
+          </tspan>
         </text>
         <rect
           v-if="interactive"
-          :x="textLeft(p.x, p.anchor, textWidth(shownText(p), p.size))"
-          :y="q(p.y) - (p.size * cellPx) / 2"
-          :width="Math.max(textWidth(shownText(p), p.size), HIT_MIN_PX)"
-          :height="p.size * cellPx"
+          :x="q(p.x)"
+          :y="q(p.y)"
+          :width="q(p.w)"
+          :height="q(p.h)"
           fill="transparent"
         />
       </template>

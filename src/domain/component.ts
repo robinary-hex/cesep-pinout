@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { hexColorSchema } from './color'
 import { isOnBorder, PNG_PX_PER_CELL, QUARTERS_PER_CELL, sizeSchema, type Size } from './grid'
 
-export const COMPONENT_SCHEMA_VERSION = 5
+export const COMPONENT_SCHEMA_VERSION = 6
 
 export const pinKindSchema = z.enum(['in', 'out', 'io', 'power'])
 export type PinKind = z.infer<typeof pinKindSchema>
@@ -94,9 +94,12 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     kind: z.literal('text'),
+    /** Boîte du texte (coin supérieur gauche, taille) : lignes centrées verticalement, alignées selon `anchor`. */
     x: quarterSchema,
     y: quarterSchema,
-    /** Texte affiché, ou nom du champ si le texte est variable. */
+    w: z.number().int().positive(),
+    h: z.number().int().positive(),
+    /** Texte affiché (retours à la ligne permis), ou nom du champ si le texte est variable. */
     text: z.string(),
     /** Hauteur du texte, en cellules. */
     size: z.number().positive(),
@@ -183,6 +186,41 @@ export interface ComponentField {
 }
 
 /** Champs variables d'un composant (textes variables), dans l'ordre du dessin, sans doublon. */
+/** Interligne des textes, en multiple de leur hauteur. */
+export const TEXT_LINE_HEIGHT = 1.2
+
+export interface TextLine {
+  text: string
+  /** Ordonnée du milieu de la ligne, en quarts de cellule. */
+  y: number
+}
+
+/**
+ * Lignes d'un texte dans sa boîte, en quarts de cellule : le bloc est centré verticalement,
+ * chaque ligne s'aligne sur `x` selon `anchor` (gauche, centre ou droite de la boîte).
+ */
+export function layoutText(
+  primitive: TextPrimitive,
+  fields?: FieldValues
+): { x: number; lines: TextLine[] } {
+  const texts = textContent(primitive, fields).split(String.fromCharCode(10))
+  const lineHeight = primitive.size * QUARTERS_PER_CELL * TEXT_LINE_HEIGHT
+  const centerY = primitive.y + primitive.h / 2
+  const x =
+    primitive.anchor === 'start'
+      ? primitive.x
+      : primitive.anchor === 'end'
+        ? primitive.x + primitive.w
+        : primitive.x + primitive.w / 2
+  return {
+    x,
+    lines: texts.map((text, index) => ({
+      text,
+      y: centerY + (index - (texts.length - 1) / 2) * lineHeight
+    }))
+  }
+}
+
 export function componentFields(def: ComponentDefinition): ComponentField[] {
   if (def.visual.kind !== 'drawing') return []
   const seen = new Set<string>()
@@ -253,19 +291,13 @@ export function primitiveBounds(primitive: Primitive): Bounds {
       const ys = primitive.points.map(([, y]) => y)
       return { x1: Math.min(...xs), y1: Math.min(...ys), x2: Math.max(...xs), y2: Math.max(...ys) }
     }
-    case 'text': {
-      // Largeur estimée : 0,6 × hauteur par caractère.
-      const shown = textContent(primitive)
-      const width = Math.ceil(shown.length * primitive.size * QUARTERS_PER_CELL * 0.6)
-      const half = Math.ceil((primitive.size * QUARTERS_PER_CELL) / 2)
-      const x1 =
-        primitive.anchor === 'start'
-          ? primitive.x
-          : primitive.anchor === 'end'
-            ? primitive.x - width
-            : primitive.x - Math.ceil(width / 2)
-      return { x1, y1: primitive.y - half, x2: x1 + width, y2: primitive.y + half }
-    }
+    case 'text':
+      return {
+        x1: primitive.x,
+        y1: primitive.y,
+        x2: primitive.x + primitive.w,
+        y2: primitive.y + primitive.h
+      }
   }
 }
 

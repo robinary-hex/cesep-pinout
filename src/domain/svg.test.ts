@@ -68,6 +68,8 @@ describe('export SVG', () => {
       primitiveSvg(
         {
           kind: 'text',
+          w: 8,
+          h: 2,
           x: 4,
           y: 2,
           text: '<5>',
@@ -81,13 +83,15 @@ describe('export SVG', () => {
         },
         0.1
       )
-    ).toContain('>&lt;5&gt;</text>')
+    ).toContain('>&lt;5&gt;</tspan>')
   })
 
   it('substitue les textes variables et dessine les flèches des lignes', () => {
     const valeur = primitiveSvg(
       {
         kind: 'text',
+        w: 8,
+        h: 2,
         x: 4,
         y: 2,
         text: 'valeur',
@@ -101,11 +105,13 @@ describe('export SVG', () => {
       },
       0.1
     )
-    expect(valeur).toContain('>10 kΩ</text>')
+    expect(valeur).toContain('>10 kΩ</tspan>')
     expect(
       primitiveSvg(
         {
           kind: 'text',
+          w: 8,
+          h: 2,
           x: 4,
           y: 2,
           text: 'valeur',
@@ -120,7 +126,7 @@ describe('export SVG', () => {
         0.1,
         { valeur: '4,7 kΩ' }
       )
-    ).toContain('>4,7 kΩ</text>')
+    ).toContain('>4,7 kΩ</tspan>')
     const arrow = primitiveSvg(
       {
         kind: 'line',

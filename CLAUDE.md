@@ -35,7 +35,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   s'arrêtant à la base des pointes d'extrémité
   (`trimForArrows`), à l'écran comme à l'export. Un texte `variable` a pour contenu le nom du champ ; l'instance
   posée fournit la valeur (`instance.fields`), sinon `defaultValue` s'affiche ; `bold` met le
-  texte en gras, comme sur les étiquettes du montage ; l'`unit` éventuelle suit toujours la valeur (espace
+  texte en gras, comme sur les étiquettes du montage. Un texte occupe une boîte (`x`, `y`, `w`, `h` en
+  quarts) redimensionnable par poignées : lignes (retours à la ligne permis) centrées
+  verticalement, alignées à gauche, au centre ou à droite selon `anchor` (`layoutText`) ; l'`unit` éventuelle suit toujours la valeur (espace
   insécable).
 - PNG de composant : 80 px par cellule (4× la cellule d'affichage de 20 px).
 - Orientation d'une instance : miroir local puis rotation horaire (`transformLocalPoint`,
@@ -76,7 +78,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   l'export par `src/domain/wireEnds.ts` (corps raccourci, pointe sur le bout du fil, queue
   pointillée d'1,5 cellule). Étiquettes d'extrémité (`endLabels`) : point sur le bout libre et
   texte placé à l'opposé du fil, position toujours dérivée de la géométrie, police `endLabelFont` du
-  profil (14 pt par défaut). Arrêter un tracé (Échap, changement d'outil) garde le fil dès qu'il a
+  profil (14 pt par défaut), toujours en gras. Arrêter un tracé (Échap, changement d'outil) garde le fil dès qu'il a
   deux sommets ; un seul point est abandonné (`stopWireDrawing`).
 - Export : `src/domain/svg.ts` construit le SVG autonome (viewBox en cellules, même ordre
   d'empilement que l'éditeur, sans marqueurs d'édition) ; `src/features/export/` le rastérise en
@@ -128,10 +130,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     Maj pendant le tracé d'un rectangle ou d'une ellipse impose un carré ou un cercle. Tailles des
     textes proposées en multiples (×1, ×1,5, ×2) d'une hauteur de référence de 0,5 cellule, comme
     les étiquettes du montage le sont de la taille des repères du profil ; la valeur stockée reste
-    absolue. Les panneaux ne portent pas de texte explicatif : l'aide est dans F1.
+    absolue. Les panneaux ne portent pas de texte explicatif : l'aide est dans F1. L'outil Texte
+    revient à la sélection dès qu'un texte est posé, dans les deux éditeurs.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 5, projet 7, paramètres 5
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 6, projet 8, paramètres 5
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

@@ -386,6 +386,8 @@ describe('montage : élasticité des fils, valeurs, collage', () => {
       primitives: [
         {
           kind: 'text',
+          w: 8,
+          h: 2,
           x: 8,
           y: 4,
           text: 'R',

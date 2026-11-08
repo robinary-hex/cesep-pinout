@@ -2,11 +2,11 @@ import { arrowHeadPoints, middleArrowHead, pointsAttribute, trimForArrows } from
 import { wireEndLabelPlacement, wireRenderParts } from './wireEnds'
 import {
   strokeWidthCells,
-  textContent,
   type ComponentDefinition,
   type FieldValues,
   type Primitive,
-  NO_ARROWS
+  NO_ARROWS,
+  layoutText
 } from './component'
 import { computeConnectivity, projectPins, type FreeEnd } from './connectivity'
 import { crossingPieces } from './crossings'
@@ -106,16 +106,21 @@ export function primitiveSvg(
   fields?: FieldValues
 ): string {
   if (primitive.kind === 'text') {
+    const layout = layoutText(primitive, fields)
+    const spans = layout.lines
+      .map(
+        (line) =>
+          `<tspan ${attrs({ x: q(layout.x), y: q(line.y) })}>${escapeXml(line.text)}</tspan>`
+      )
+      .join('')
     return `<text ${attrs({
-      x: q(primitive.x),
-      y: q(primitive.y),
       'font-size': primitive.size,
       'font-weight': primitive.bold ? 'bold' : undefined,
       'text-anchor': primitive.anchor,
       fill: primitive.color,
       'dominant-baseline': 'middle',
       'font-family': FONT_STACK
-    })}>${escapeXml(textContent(primitive, fields))}</text>`
+    })}>${spans}</text>`
   }
   const width = strokeWidthCells(primitive.style, componentStroke)
   const style = {
@@ -281,6 +286,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
           y: placement.y,
           'font-family': profile.endLabelFont.family,
           'font-size': endFontCells,
+          'font-weight': 'bold',
           'text-anchor': placement.anchor,
           'dominant-baseline': placement.baseline,
           fill: '#1f2328'
