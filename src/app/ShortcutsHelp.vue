@@ -24,6 +24,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['Ctrl+E', 'Exporter en PNG ou SVG'],
       ['0 / 1', 'Ajuster au contenu / zoom 100 %'],
       ['Molette, Espace + glisser', 'Zoom autour du curseur, déplacer la vue'],
+      ['Double-clic molette', 'Ajuster la vue au contenu'],
       ['I', 'Afficher / masquer le panneau de propriétés'],
       ['Clic droit', 'Menu contextuel : composant, fil, étiquette ou vide'],
       [
@@ -43,6 +44,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['Suppr, Échap', 'Supprimer, annuler'],
       ['Ctrl+Z / Y / S / N', 'Annuler / rétablir / enregistrer / nouveau'],
       ['Ctrl+molette', 'Zoom centré sur le curseur'],
+      ['Double-clic molette', 'Ajuster le composant à la fenêtre'],
       ['Ctrl+glisser', 'Saisir la poignée la plus proche de la forme'],
       ['Lasso, Maj+clic', 'Sélectionner plusieurs formes'],
       ['Maj pendant le tracé', 'Carré ou cercle plutôt que rectangle ou ellipse'],

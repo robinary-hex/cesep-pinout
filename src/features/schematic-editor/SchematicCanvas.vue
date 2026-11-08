@@ -110,6 +110,9 @@ type Drag =
 const drag = ref<Drag | null>(null)
 /** Pointeur en cellules (flottant), null hors du canevas. */
 const hover = ref<LocalPoint | null>(null)
+/** Instant du dernier appui du bouton du milieu : deux appuis rapprochés ajustent la vue au contenu. */
+let lastMiddleDown = 0
+const DOUBLE_CLICK_MS = 400
 
 let observer: ResizeObserver | null = null
 
@@ -676,6 +679,15 @@ function onVertexDown(wireId: string, index: number, event: PointerEvent): void 
 }
 
 function onPointerDown(event: PointerEvent): void {
+  if (event.button === 1) {
+    if (event.timeStamp - lastMiddleDown < DOUBLE_CLICK_MS) {
+      lastMiddleDown = 0
+      store.fitToContent()
+      event.preventDefault()
+      return
+    }
+    lastMiddleDown = event.timeStamp
+  }
   if (event.button === 1 || (event.button === 0 && store.panKeyHeld)) {
     drag.value = { kind: 'pan', lastX: event.clientX, lastY: event.clientY }
     capture(event)

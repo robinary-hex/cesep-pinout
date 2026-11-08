@@ -61,7 +61,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     Ctrl+A / D / C / V, Ctrl+Z / Y, Ctrl+S, Ctrl+Maj+S, Ctrl+O, Ctrl+N, Ctrl+E export, F1 aide,
     Ctrl+Page haut/bas
     (Maj pour premier/arrière-plan) = ordre des fils, 0 ajuster au contenu, 1 zoom 100 %,
-    molette = zoom, Espace + glisser ou bouton du milieu = déplacer la vue, E étiquette texte,
+    molette = zoom, Espace + glisser ou bouton du milieu = déplacer la vue, double-clic du bouton
+    du milieu = ajuster au contenu, E étiquette texte,
     Alt+clic sur un croisement = inverser l'ordre à cet endroit seulement, I = panneau de
     propriétés (replié par défaut, ouvert au clic sur un élément si le paramètre
     `autoOpenInspector` est actif), clic droit = menu contextuel (composant, fil, étiquette ou
@@ -126,7 +127,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   SmartScreen au premier lancement, normal). Un `.json` passé en argument s'ouvre au lancement.
   - Éditeur de composants : V sélection, R rectangle, O ellipse, L ligne, P polyligne, E texte,
     B broche, Suppr, Échap, Entrée (termine une polyligne), Ctrl+Z / Ctrl+Y, Ctrl+S, Ctrl+N,
-    Ctrl+molette = zoom centré sur le curseur (boutons −/+/Ajuster dans la barre). La forme
+    Ctrl+molette = zoom centré sur le curseur (boutons −/+/Ajuster dans la barre), double-clic du
+    bouton du milieu = ajuster à la fenêtre. La forme
     sélectionnée montre ses poignées (`src/domain/handles.ts`) ; Ctrl+glisser sur une forme saisit
     la poignée la plus proche. Redimensionner le composant supprime les broches qui ne sont plus sur
     le bord ; les noms numériques des broches suivent toujours leur ordre (`renumberPins`).

@@ -87,6 +87,9 @@ type Preview =
 const drag = ref<Drag | null>(null)
 /** Position du pointeur en cellules (flottant), null hors du canevas. */
 const hover = ref<LocalPoint | null>(null)
+/** Instant du dernier appui du bouton du milieu : deux appuis rapprochés ajustent le composant à la fenêtre. */
+let lastMiddleDown = 0
+const DOUBLE_CLICK_MS = 400
 
 let observer: ResizeObserver | null = null
 
@@ -377,7 +380,23 @@ function onPinDown(id: string, event: PointerEvent): void {
   capture(event)
 }
 
+async function fitAndCenter(): Promise<void> {
+  store.fitToViewport()
+  await nextTick()
+  scroller.value?.scrollTo({ left: 0, top: 0 })
+}
+
 function onPointerDown(event: PointerEvent): void {
+  if (event.button === 1) {
+    event.preventDefault()
+    if (event.timeStamp - lastMiddleDown < DOUBLE_CLICK_MS) {
+      lastMiddleDown = 0
+      void fitAndCenter()
+    } else {
+      lastMiddleDown = event.timeStamp
+    }
+    return
+  }
   if (event.button !== 0) return
   const tool = store.tool
   const cells = pointerCells(event)
