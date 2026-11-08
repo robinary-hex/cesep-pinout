@@ -183,9 +183,10 @@ function setLabelSize(event: Event): void {
         <input type="text" :value="doc.name" @change="setName" />
       </label>
       <p class="hint">
-        Profil « {{ doc.profile.name }} » : {{ doc.profile.cellPx }} px par cellule, fils de
-        {{ doc.profile.wireWidth }} cellule, trait des composants {{ doc.profile.componentStroke }},
-        rayon {{ doc.profile.cornerRadius }}, point de jonction ×{{ doc.profile.junctionScale }}.
+        Profil « {{ store.profile.name }} » : {{ store.profile.cellPx }} px par cellule, fils de
+        {{ store.profile.wireWidth }} cellule, trait des composants
+        {{ store.profile.componentStroke }}, rayon {{ store.profile.cornerRadius }}, point de
+        jonction ×{{ store.profile.junctionScale }}.
       </p>
       <p class="hint">
         {{ doc.components.length }} composant(s), {{ doc.wires.length }} fil(s),

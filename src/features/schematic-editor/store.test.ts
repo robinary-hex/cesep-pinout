@@ -423,3 +423,16 @@ describe('montage : élasticité des fils, valeurs, collage', () => {
     expect(store.doc.components[1]).toMatchObject({ x: 20, y: 10 })
   })
 })
+
+describe('montage : aperçu du profil', () => {
+  it('affiche le profil en cours d’édition à la place de celui du projet, puis revient', () => {
+    const store = useSchematicStore()
+    const base = store.doc.profile.cellPx
+    store.profilePreview = { ...store.doc.profile, cellPx: base * 2 }
+    expect(store.profile.cellPx).toBe(base * 2)
+    expect(store.cellPx).toBe(base * 2 * store.view.zoom)
+    expect(store.doc.profile.cellPx).toBe(base)
+    store.profilePreview = null
+    expect(store.profile.cellPx).toBe(base)
+  })
+})

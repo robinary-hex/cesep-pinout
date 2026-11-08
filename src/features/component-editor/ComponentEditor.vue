@@ -92,6 +92,9 @@ function onKeyDown(event: KeyboardEvent): void {
 
 onMounted(() => window.addEventListener('keydown', onKeyDown))
 onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
+
+// Actions de fichier appelées par le menu Fichier de la barre d'application.
+defineExpose({ save, createNew })
 </script>
 
 <template>

@@ -1,3 +1,5 @@
+import type { IconName } from '@/ui/icons'
+
 export type ToolId = 'select' | 'rect' | 'ellipse' | 'line' | 'polyline' | 'text' | 'pin'
 
 export interface ToolInfo {
@@ -6,6 +8,7 @@ export interface ToolInfo {
   /** Touche (lettre gravée, clavier AZERTY belge). Dans cet éditeur, R = rectangle. */
   key: string
   hint: string
+  icon: IconName
 }
 
 export const TOOLS: readonly ToolInfo[] = [
@@ -13,19 +16,21 @@ export const TOOLS: readonly ToolInfo[] = [
     id: 'select',
     label: 'Sélection',
     key: 'v',
-    hint: 'Cliquer une forme ou une broche ; glisser pour déplacer'
+    hint: 'Cliquer une forme ou une broche ; glisser pour déplacer',
+    icon: 'cursor'
   },
-  { id: 'rect', label: 'Rectangle', key: 'r', hint: 'Glisser pour tracer' },
-  { id: 'ellipse', label: 'Ellipse', key: 'o', hint: 'Glisser pour tracer' },
-  { id: 'line', label: 'Ligne', key: 'l', hint: 'Glisser du départ à l’arrivée' },
+  { id: 'rect', label: 'Rectangle', key: 'r', hint: 'Glisser pour tracer', icon: 'square' },
+  { id: 'ellipse', label: 'Ellipse', key: 'o', hint: 'Glisser pour tracer', icon: 'circle' },
+  { id: 'line', label: 'Ligne', key: 'l', hint: 'Glisser du départ à l’arrivée', icon: 'line' },
   {
     id: 'polyline',
     label: 'Polyligne',
     key: 'p',
-    hint: 'Cliquer chaque sommet ; double-clic ou Entrée pour terminer'
+    hint: 'Cliquer chaque sommet ; double-clic ou Entrée pour terminer',
+    icon: 'polyline'
   },
-  { id: 'text', label: 'Texte', key: 'e', hint: 'Cliquer pour poser un texte' },
-  { id: 'pin', label: 'Broche', key: 'b', hint: 'Cliquer une intersection du bord' }
+  { id: 'text', label: 'Texte', key: 'e', hint: 'Cliquer pour poser un texte', icon: 'type' },
+  { id: 'pin', label: 'Broche', key: 'b', hint: 'Cliquer une intersection du bord', icon: 'pin' }
 ]
 
 export const TOOL_BY_KEY: Readonly<Record<string, ToolId>> = Object.fromEntries(

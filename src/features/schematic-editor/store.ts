@@ -115,6 +115,8 @@ export const useSchematicStore = defineStore('schematic', () => {
   const showUnconnected = ref(true)
   /** Panneau de propriétés à droite : replié par défaut (touche I). */
   const inspectorOpen = ref(false)
+  /** Profil en cours d'édition dans la boîte de dialogue : affiché à la place de celui du projet. */
+  const profilePreview = shallowRef<StyleProfile | null>(null)
   const panKeyHeld = ref(false)
   const shiftHeld = ref(false)
   const hoverWireId = ref<string | null>(null)
@@ -123,7 +125,9 @@ export const useSchematicStore = defineStore('schematic', () => {
   const redoLabel = ref<string | null>(null)
 
   const dirty = computed(() => doc.value !== savedDoc.value)
-  const cellPx = computed(() => doc.value.profile.cellPx * view.value.zoom)
+  /** Profil effectif pour l'affichage : l'aperçu de la boîte de dialogue, sinon celui du projet. */
+  const profile = computed<StyleProfile>(() => profilePreview.value ?? doc.value.profile)
+  const cellPx = computed(() => profile.value.cellPx * view.value.zoom)
   const placed = computed<PlacedInstance[]>(() =>
     doc.value.components.flatMap((instance) => {
       const def = doc.value.embeddedDefs[instance.defId]
@@ -778,7 +782,7 @@ export const useSchematicStore = defineStore('schematic', () => {
       const bounds = wireBounds(wire.points)
       if (bounds) include(bounds)
     }
-    for (const label of data.labels) include(textLabelBounds(label, doc.value.profile.cellPx))
+    for (const label of data.labels) include(textLabelBounds(label, profile.value.cellPx))
     return result
   }
 
@@ -858,7 +862,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     const current = view.value
     const zoom = clampZoom(current.zoom * factor)
     if (zoom === current.zoom) return
-    const base = doc.value.profile.cellPx
+    const base = profile.value.cellPx
     const anchorX = screenX ?? viewport.value.width / 2
     const anchorY = screenY ?? viewport.value.height / 2
     const worldX = (anchorX - current.panX) / (base * current.zoom)
@@ -884,7 +888,7 @@ export const useSchematicStore = defineStore('schematic', () => {
       view.value = { ...DEFAULT_VIEW }
       return
     }
-    const base = doc.value.profile.cellPx
+    const base = profile.value.cellPx
     const width = bounds.width + 2 * FIT_MARGIN_CELLS
     const height = bounds.height + 2 * FIT_MARGIN_CELLS
     const zoom = clampZoom(
@@ -913,6 +917,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     showPins,
     showUnconnected,
     inspectorOpen,
+    profilePreview,
     panKeyHeld,
     shiftHeld,
     hoverWireId,
@@ -920,6 +925,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     undoLabel,
     redoLabel,
     dirty,
+    profile,
     cellPx,
     placed,
     selectedInstances,

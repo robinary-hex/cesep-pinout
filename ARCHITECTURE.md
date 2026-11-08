@@ -39,6 +39,17 @@ Dans le montage, toute commande qui déplace ou réoriente des composants passe 
 la position des broches avant et après et fait suivre les extrémités de fil posées dessus (coude
 ajouté par `dragVertex`) ; le canevas appelle la même fonction pour l'aperçu pendant le glisser.
 
+Le store du montage distingue le profil du projet (`doc.profile`, enregistré) du profil affiché
+(`profile` = `profilePreview` s'il y en a un) : la boîte de profil prévisualise sans toucher à
+l'historique et ne crée qu'une commande à la validation.
+
+## Interface partagée (`src/ui/`)
+
+`ModalDialog` (fond, Échap, compteur `openModals`), `PromptDialog` (saisie d'une valeur),
+`ContextMenu` + `contextMenu.ts` (menu flottant : entrées, titres, séparateurs, pastilles de
+couleur ; sert au clic droit du montage et au menu Fichier de la barre d'application), `Icon` +
+`icons.ts` (pictogrammes SVG inline, un tableau de tracés par nom, testés en rendu).
+
 ## Conventions de coordonnées
 
 - Unité du domaine : la cellule de grille, en entiers. Canevas infini, négatifs permis.

@@ -68,6 +68,15 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Copie de secours : `src/io/autosave.ts` écrit `userData/autosave/` tant que le montage a des
   modifications non enregistrées ; `App.vue` la propose au lancement. La garde à la fermeture est
   dans `electron/main.ts` (le rendu tient `setDirty` à jour, puis répond à `autosave-then-quit`).
+- Barre d'application (`src/app/App.vue`) : menu Fichier (nouveau, ouvrir, récents, enregistrer,
+  exporter, paramètres, raccourcis, quitter) construit avec `ContextMenu` et appelant les actions
+  que `SchematicEditor` / `ComponentEditor` exposent par `defineExpose` selon le mode. Les barres
+  d'outils ne portent plus d'actions de fichier. Pictogrammes : `src/ui/Icon.vue` dessine les
+  tracés de `src/ui/icons.ts` (SVG inline, trait de la couleur courante, pas de police d'icônes).
+- Profil de style : la boîte « Profil de style du montage » prévisualise chaque réglage sur le
+  montage via `profilePreview` (le store expose `profile` = aperçu ou profil du projet) et
+  n'enregistre qu'à « Appliquer », en une commande. Les Paramètres proposent « Appliquer au
+  montage ouvert » pour copier le profil par défaut dans le projet courant.
 - Boîtes de dialogue : `src/ui/ModalDialog.vue` ; tant qu'une est ouverte (`openModals`), les
   éditeurs ignorent leurs raccourcis. `src/ui/PromptDialog.vue` (saisie d'une valeur) et
   `src/ui/ContextMenu.vue` (menu contextuel, entrées décrites dans `contextMenu.ts`) comptent aussi

@@ -56,7 +56,7 @@ const PIN_SNAP_CELLS = 0.5
 
 const cell = computed(() => store.cellPx)
 const view = computed(() => store.view)
-const profile = computed(() => store.doc.profile)
+const profile = computed(() => store.profile)
 const wireWidth = computed(() => profile.value.wireWidth)
 const cornerRadius = computed(() => profile.value.cornerRadius)
 

@@ -460,18 +460,14 @@ onUnmounted(() => {
   store.panKeyHeld = false
   store.shiftHeld = false
 })
+
+// Actions de fichier appelées par le menu Fichier de la barre d'application.
+defineExpose({ createNew, open, openRecent, save, openExport })
 </script>
 
 <template>
   <section class="editor">
-    <SchematicToolbar
-      @create="createNew"
-      @open="open"
-      @open-recent="openRecent"
-      @save="save(false)"
-      @save-as="save(true)"
-      @export-image="openExport"
-    />
+    <SchematicToolbar />
     <div class="editor-body">
       <SchematicCanvas
         ref="canvas"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { styleProfileSchema, type StyleProfile } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import ProfileFields from '@/features/settings/ProfileFields.vue'
@@ -8,6 +8,8 @@ import ModalDialog from '@/ui/ModalDialog.vue'
 import { useSchematicStore } from './store'
 
 // Profil de style du montage courant, et profils nommés réutilisables d'un projet à l'autre.
+// Chaque changement s'affiche aussitôt sur le montage (aperçu) ; « Appliquer » l'enregistre dans
+// le projet en une seule commande, « Annuler » ou Échap remet le profil du projet.
 
 const emit = defineEmits<{ close: [] }>()
 const store = useSchematicStore()
@@ -17,6 +19,19 @@ const draft = ref<StyleProfile>(structuredClone(store.doc.profile))
 const saved = ref<SavedProfile[]>([])
 const message = ref('')
 const failed = ref(false)
+
+watch(
+  draft,
+  (value) => {
+    const parsed = styleProfileSchema.safeParse(value)
+    store.profilePreview = parsed.success ? parsed.data : null
+  },
+  { deep: true }
+)
+
+onUnmounted(() => {
+  store.profilePreview = null
+})
 
 async function refresh(): Promise<void> {
   try {
@@ -50,8 +65,9 @@ function valid(): StyleProfile | null {
 function applyToProject(): void {
   const profile = valid()
   if (!profile) return
+  store.profilePreview = null
   store.setProfile(profile)
-  report(`Profil « ${profile.name} » appliqué au montage.`)
+  emit('close')
 }
 
 async function useAsDefault(): Promise<void> {
@@ -75,7 +91,7 @@ async function saveNamed(): Promise<void> {
 
 function load(entry: SavedProfile): void {
   draft.value = structuredClone(entry.profile)
-  report(`Profil « ${entry.profile.name} » chargé ; applique-le au montage si besoin.`)
+  report(`Profil « ${entry.profile.name} » chargé : le montage le montre, Appliquer le garde.`)
 }
 
 async function remove(entry: SavedProfile): Promise<void> {
@@ -89,8 +105,8 @@ async function remove(entry: SavedProfile): Promise<void> {
   <ModalDialog title="Profil de style du montage" @close="emit('close')">
     <ProfileFields v-model="draft" />
     <p class="hint">
-      Le profil règle l'échelle et le trait ; les composants gardent leur taille en cellules, donc
-      en changer redimensionne le montage sans le casser.
+      Le montage derrière la boîte montre le profil tel que tu le règles. Les composants gardent
+      leur taille en cellules : changer d'échelle ou de trait ne casse rien.
     </p>
 
     <section class="saved">
@@ -100,8 +116,8 @@ async function remove(entry: SavedProfile): Promise<void> {
         <li v-for="entry in saved" :key="entry.path">
           <span class="name">{{ entry.profile.name }}</span>
           <span class="meta"
-            >{{ entry.profile.cellPx }} px · fils {{ entry.profile.wireWidth }} · rayon
-            {{ entry.profile.cornerRadius }}</span
+            >{{ entry.profile.cellPx }} px · fils {{ entry.profile.wireWidth }} · trait
+            {{ entry.profile.componentStroke }} · rayon {{ entry.profile.cornerRadius }}</span
           >
           <button type="button" class="small" @click="load(entry)">Charger</button>
           <button type="button" class="small danger" @click="remove(entry)">✕</button>
@@ -114,7 +130,8 @@ async function remove(entry: SavedProfile): Promise<void> {
     <template #footer>
       <button type="button" @click="saveNamed">Enregistrer sous ce nom</button>
       <button type="button" @click="useAsDefault">Profil par défaut</button>
-      <button type="button" class="primary" @click="applyToProject">Appliquer au montage</button>
+      <button type="button" @click="emit('close')">Annuler</button>
+      <button type="button" class="primary" @click="applyToProject">Appliquer</button>
     </template>
   </ModalDialog>
 </template>

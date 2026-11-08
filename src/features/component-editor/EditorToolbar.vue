@@ -1,6 +1,10 @@
 <script setup lang="ts">
-import { TOOLS } from './tools'
+import Icon from '@/ui/Icon.vue'
 import { useComponentEditorStore } from './store'
+import { TOOLS } from './tools'
+
+// Barre d'outils de l'éditeur de composants : outils de dessin, annuler/rétablir, zoom,
+// nouveau et enregistrer (aussi dans le menu Fichier).
 
 const store = useComponentEditorStore()
 const emit = defineEmits<{ save: []; create: [] }>()
@@ -13,11 +17,12 @@ const emit = defineEmits<{ save: []; create: [] }>()
         v-for="tool in TOOLS"
         :key="tool.id"
         type="button"
-        class="tool"
+        class="tool with-icon"
         :class="{ active: store.tool === tool.id }"
         :title="`${tool.hint} (${tool.key.toUpperCase()})`"
         @click="store.tool = tool.id"
       >
+        <Icon :name="tool.icon" />
         {{ tool.label }}
         <kbd>{{ tool.key.toUpperCase() }}</kbd>
       </button>
@@ -26,34 +31,49 @@ const emit = defineEmits<{ save: []; create: [] }>()
     <div class="group">
       <button
         type="button"
+        class="icon-only"
         :disabled="store.undoLabel === null"
         :title="store.undoLabel ? `Annuler : ${store.undoLabel} (Ctrl+Z)` : 'Rien à annuler'"
         @click="store.undo()"
       >
-        Annuler
+        <Icon name="undo" />
       </button>
       <button
         type="button"
+        class="icon-only"
         :disabled="store.redoLabel === null"
         :title="store.redoLabel ? `Rétablir : ${store.redoLabel} (Ctrl+Y)` : 'Rien à rétablir'"
         @click="store.redo()"
       >
-        Rétablir
+        <Icon name="redo" />
       </button>
     </div>
 
     <div class="group">
-      <button type="button" title="Zoom arrière (Ctrl+molette)" @click="store.zoomBy(1 / 1.25)">
-        −
-      </button>
-      <span class="zoom">{{ store.cellPx }} px</span>
-      <button type="button" title="Zoom avant (Ctrl+molette)" @click="store.zoomBy(1.25)">+</button>
       <button
         type="button"
+        class="icon-only"
+        title="Zoom arrière (Ctrl+molette)"
+        @click="store.zoomBy(1 / 1.25)"
+      >
+        <Icon name="zoom-out" />
+      </button>
+      <span class="zoom">{{ store.cellPx }} px</span>
+      <button
+        type="button"
+        class="icon-only"
+        title="Zoom avant (Ctrl+molette)"
+        @click="store.zoomBy(1.25)"
+      >
+        <Icon name="zoom-in" />
+      </button>
+      <button
+        type="button"
+        class="icon-only"
         title="Ajuster le composant à la fenêtre"
         @click="store.fitToViewport()"
       >
-        Ajuster
+        <Icon name="fit" />
       </button>
     </div>
 
@@ -64,19 +84,24 @@ const emit = defineEmits<{ save: []; create: [] }>()
     </span>
 
     <div class="group">
-      <button type="button" title="Nouveau composant (Ctrl+N)" @click="emit('create')">
-        Nouveau
+      <button
+        type="button"
+        class="with-icon"
+        title="Nouveau composant (Ctrl+N)"
+        @click="emit('create')"
+      >
+        <Icon name="file-plus" /> Nouveau
       </button>
       <button
         type="button"
-        class="primary"
+        class="primary with-icon"
         :disabled="store.hasErrors"
         :title="
           store.hasErrors ? 'Corrige les erreurs avant d’enregistrer' : 'Enregistrer (Ctrl+S)'
         "
         @click="emit('save')"
       >
-        Enregistrer
+        <Icon name="save" /> Enregistrer
       </button>
     </div>
   </div>
@@ -99,7 +124,7 @@ const emit = defineEmits<{ save: []; create: [] }>()
 }
 
 .tool kbd {
-  margin-left: 6px;
+  margin-left: 2px;
   padding: 0 4px;
   font-size: 10px;
   color: #57606a;

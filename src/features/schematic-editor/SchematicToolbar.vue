@@ -2,18 +2,14 @@
 import { computed } from 'vue'
 import { useLibraryStore } from '@/features/library/store'
 import { baseName } from '@/io/paths'
+import Icon from '@/ui/Icon.vue'
 import { useSchematicStore } from './store'
+
+// Barre d'outils du montage : outils, palette, édition, ordre des fils, vue, panneau.
+// Les actions de fichier sont dans le menu Fichier de la barre d'application.
 
 const store = useSchematicStore()
 const library = useLibraryStore()
-const emit = defineEmits<{
-  create: []
-  open: []
-  openRecent: [path: string]
-  save: []
-  saveAs: []
-  exportImage: []
-}>()
 
 const hasTarget = computed(() => store.selection.length > 0 || store.placement !== null)
 const hasWires = computed(() => store.selectedWires.length > 0)
@@ -33,12 +29,6 @@ function pickCustom(event: Event): void {
   store.setCurrentColor(hex)
   void library.rememberCustomColor(hex)
 }
-
-function openRecent(event: Event, path: string): void {
-  const details = (event.currentTarget as HTMLElement).closest('details')
-  if (details) details.removeAttribute('open')
-  emit('openRecent', path)
-}
 </script>
 
 <template>
@@ -46,30 +36,30 @@ function openRecent(event: Event, path: string): void {
     <div class="group">
       <button
         type="button"
-        class="tool"
+        class="tool with-icon"
         :class="{ active: store.tool === 'select' }"
         title="Sélection (V)"
         @click="store.selectTool()"
       >
-        Sélection <kbd>V</kbd>
+        <Icon name="cursor" /> Sélection <kbd>V</kbd>
       </button>
       <button
         type="button"
-        class="tool"
+        class="tool with-icon"
         :class="{ active: store.tool === 'wire' }"
         title="Tracer un fil (W)"
         @click="store.startWireTool()"
       >
-        Fil <kbd>W</kbd>
+        <Icon name="wire" /> Fil <kbd>W</kbd>
       </button>
       <button
         type="button"
-        class="tool"
+        class="tool with-icon"
         :class="{ active: store.tool === 'text' }"
         title="Poser une étiquette texte (E)"
         @click="store.startTextTool()"
       >
-        Texte <kbd>E</kbd>
+        <Icon name="type" /> Texte <kbd>E</kbd>
       </button>
     </div>
 
@@ -94,144 +84,147 @@ function openRecent(event: Event, path: string): void {
     </div>
 
     <div class="group">
-      <button type="button" title="Nouveau montage (Ctrl+N)" @click="emit('create')">
-        Nouveau
-      </button>
-      <button type="button" title="Ouvrir un projet (Ctrl+O)" @click="emit('open')">Ouvrir</button>
-      <details class="recent">
-        <summary title="Projets récents">Récents ▾</summary>
-        <ul>
-          <li v-if="library.recentFiles.length === 0" class="empty">Aucun projet récent</li>
-          <li v-for="path in library.recentFiles" :key="path">
-            <button type="button" :title="path" @click="openRecent($event, path)">
-              {{ baseName(path) }}
-            </button>
-          </li>
-        </ul>
-      </details>
-      <button type="button" class="primary" title="Enregistrer (Ctrl+S)" @click="emit('save')">
-        Enregistrer
-      </button>
-      <button type="button" title="Enregistrer sous… (Ctrl+Maj+S)" @click="emit('saveAs')">
-        Sous…
-      </button>
-      <button type="button" title="Exporter en PNG ou SVG (Ctrl+E)" @click="emit('exportImage')">
-        Exporter…
-      </button>
-    </div>
-
-    <div class="group">
       <button
         type="button"
+        class="icon-only"
         :disabled="store.undoLabel === null"
         :title="store.undoLabel ? `Annuler : ${store.undoLabel} (Ctrl+Z)` : 'Rien à annuler'"
         @click="store.undo()"
       >
-        Annuler
+        <Icon name="undo" />
       </button>
       <button
         type="button"
+        class="icon-only"
         :disabled="store.redoLabel === null"
         :title="store.redoLabel ? `Rétablir : ${store.redoLabel} (Ctrl+Y)` : 'Rien à rétablir'"
         @click="store.redo()"
       >
-        Rétablir
+        <Icon name="redo" />
       </button>
     </div>
 
     <div class="group">
       <button
         type="button"
+        class="icon-only"
         :disabled="!hasTarget"
         title="Rotation antihoraire (Maj+R)"
         @click="store.rotate('ccw')"
       >
-        ⟲
+        <Icon name="rotate-ccw" />
       </button>
       <button
         type="button"
+        class="icon-only"
         :disabled="!hasTarget"
         title="Rotation horaire (R)"
         @click="store.rotate('cw')"
       >
-        ⟳
+        <Icon name="rotate-cw" />
       </button>
       <button
         type="button"
+        class="icon-only"
         :disabled="!hasTarget"
         title="Miroir horizontal (T)"
         @click="store.flip('horizontal')"
       >
-        ↔
+        <Icon name="flip-h" />
       </button>
       <button
         type="button"
+        class="icon-only"
         :disabled="!hasTarget"
         title="Miroir vertical (Maj+T)"
         @click="store.flip('vertical')"
       >
-        ↕
+        <Icon name="flip-v" />
       </button>
       <button
         type="button"
+        class="icon-only"
         :disabled="!store.hasSelection"
         title="Dupliquer (Ctrl+D)"
         @click="store.duplicateSelection()"
       >
-        Dupliquer
+        <Icon name="copy" />
       </button>
       <button
         type="button"
-        class="danger"
+        class="icon-only danger"
         :disabled="!store.hasSelection"
         title="Supprimer (Suppr)"
         @click="store.removeSelection()"
       >
-        Supprimer
+        <Icon name="trash" />
       </button>
     </div>
 
     <div class="group" title="Ordre d’empilement des fils sélectionnés">
       <button
         type="button"
+        class="icon-only"
         :disabled="!hasWires"
         title="Reculer (Ctrl+Page bas)"
         @click="store.reorderWires('down')"
       >
-        ▽
+        <Icon name="arrow-down" />
       </button>
       <button
         type="button"
+        class="icon-only"
         :disabled="!hasWires"
         title="Avancer (Ctrl+Page haut)"
         @click="store.reorderWires('up')"
       >
-        △
+        <Icon name="arrow-up" />
       </button>
       <button
         type="button"
+        class="icon-only"
         :disabled="!hasWires"
         title="Arrière-plan (Ctrl+Maj+Page bas)"
         @click="store.reorderWires('bottom')"
       >
-        ⤓
+        <Icon name="arrow-down-line" />
       </button>
       <button
         type="button"
+        class="icon-only"
         :disabled="!hasWires"
         title="Premier plan (Ctrl+Maj+Page haut)"
         @click="store.reorderWires('top')"
       >
-        ⤒
+        <Icon name="arrow-up-line" />
       </button>
     </div>
 
     <div class="group">
-      <button type="button" title="Zoom arrière" @click="store.zoomAround(1 / 1.25)">−</button>
+      <button
+        type="button"
+        class="icon-only"
+        title="Zoom arrière (molette)"
+        @click="store.zoomAround(1 / 1.25)"
+      >
+        <Icon name="zoom-out" />
+      </button>
       <span class="zoom">{{ Math.round(store.view.zoom * 100) }} %</span>
-      <button type="button" title="Zoom avant" @click="store.zoomAround(1.25)">+</button>
-      <button type="button" title="Ajuster au contenu (0)" @click="store.fitToContent()">
-        Ajuster
+      <button
+        type="button"
+        class="icon-only"
+        title="Zoom avant (molette)"
+        @click="store.zoomAround(1.25)"
+      >
+        <Icon name="zoom-in" />
+      </button>
+      <button
+        type="button"
+        class="icon-only"
+        title="Ajuster au contenu (0)"
+        @click="store.fitToContent()"
+      >
+        <Icon name="fit" />
       </button>
       <button type="button" title="Zoom 100 % (1)" @click="store.resetZoom()">100 %</button>
       <label class="check" title="Afficher les broches des composants">
@@ -247,12 +240,12 @@ function openRecent(event: Event, path: string): void {
     <div class="group">
       <button
         type="button"
-        class="tool"
+        class="tool with-icon"
         :class="{ active: store.inspectorOpen }"
         title="Afficher ou masquer le panneau de propriétés (I)"
         @click="store.inspectorOpen = !store.inspectorOpen"
       >
-        Panneau <kbd>I</kbd>
+        <Icon name="panel" /> <kbd>I</kbd>
       </button>
     </div>
 
@@ -283,7 +276,7 @@ function openRecent(event: Event, path: string): void {
 }
 
 .tool kbd {
-  margin-left: 4px;
+  margin-left: 2px;
   padding: 0 4px;
   font-size: 10px;
   color: #57606a;
@@ -332,57 +325,6 @@ function openRecent(event: Event, path: string): void {
   inset: 0;
   opacity: 0;
   cursor: pointer;
-}
-
-.recent {
-  position: relative;
-}
-
-.recent summary {
-  list-style: none;
-  padding: 5px 10px;
-  border: 1px solid #d0d7de;
-  border-radius: 6px;
-  background: #f6f8fa;
-  cursor: pointer;
-  user-select: none;
-}
-
-.recent summary::-webkit-details-marker {
-  display: none;
-}
-
-.recent ul {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 20;
-  min-width: 240px;
-  margin: 0;
-  padding: 4px 0;
-  list-style: none;
-  background: #ffffff;
-  border: 1px solid #d0d7de;
-  border-radius: 6px;
-  box-shadow: 0 6px 20px rgba(31, 35, 40, 0.15);
-}
-
-.recent li button {
-  width: 100%;
-  text-align: left;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  padding: 5px 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.recent li.empty {
-  padding: 5px 12px;
-  font-size: 12px;
-  color: #57606a;
 }
 
 .zoom {

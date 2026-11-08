@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref } from 'vue'
 import type { MenuItem } from './contextMenu'
+import Icon from './Icon.vue'
 import { openModals } from './modalState'
 
 // Menu contextuel flottant, ancré à la position du clic et ramené dans la fenêtre au besoin.
@@ -106,7 +107,10 @@ onUnmounted(() => {
           role="menuitem"
           @click="run(entry)"
         >
-          <span class="check">{{ entry.checked ? '✓' : '' }}</span>
+          <span class="check">
+            <Icon v-if="entry.checked" name="check" :size="13" class="checked" />
+            <Icon v-else-if="entry.icon" :name="entry.icon" :size="15" />
+          </span>
           <span class="label">{{ entry.label }}</span>
           <kbd v-if="entry.hint">{{ entry.hint }}</kbd>
         </button>
@@ -180,9 +184,15 @@ onUnmounted(() => {
 }
 
 .check {
-  width: 12px;
+  width: 16px;
   flex: none;
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #57606a;
+}
+
+.check .checked {
   color: #1f6feb;
 }
 

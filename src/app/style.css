@@ -70,7 +70,8 @@ body,
   border-color: rgba(255, 255, 255, 0.35);
 }
 
-.topbar button.ghost:hover {
+.topbar button.ghost:hover,
+.topbar button.ghost.open {
   background: rgba(255, 255, 255, 0.12);
 }
 
@@ -121,6 +122,19 @@ button.danger:hover:not(:disabled) {
 button.small {
   padding: 2px 7px;
   font-size: 12px;
+}
+
+button.with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+button.icon-only {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 6px;
 }
 
 kbd {

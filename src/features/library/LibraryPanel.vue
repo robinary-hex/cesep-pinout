@@ -5,6 +5,7 @@ import { useSchematicStore } from '@/features/schematic-editor/store'
 import { deleteComponent, type LibraryEntry } from '@/io/library'
 import { baseName } from '@/io/paths'
 import ComponentThumbnail from '@/render/ComponentThumbnail.vue'
+import Icon from '@/ui/Icon.vue'
 import { useLibraryStore } from './store'
 
 // Panneau de gauche : la bibliothèque de composants sur disque.
@@ -71,11 +72,11 @@ async function remove(entry: LibraryEntry): Promise<void> {
         <button
           v-if="mode === 'edit'"
           type="button"
-          class="primary"
+          class="primary with-icon"
           title="Nouveau composant (Ctrl+N)"
           @click="createNew"
         >
-          Nouveau
+          <Icon name="file-plus" /> Nouveau
         </button>
       </div>
       <div class="dir-row" :title="library.libraryDir">
