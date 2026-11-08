@@ -11,7 +11,14 @@ import {
 import { computeConnectivity, projectPins, type FreeEnd } from './connectivity'
 import { crossingPieces } from './crossings'
 import { QUARTERS_PER_CELL, type LocalPoint } from './grid'
-import { instanceBounds, instanceMatrix, matrixToSvg, projectBounds, unionRects } from './placement'
+import {
+  instanceBounds,
+  instanceMatrix,
+  matrixToSvg,
+  projectBounds,
+  unionRects,
+  layoutLabel
+} from './placement'
 import type { Project } from './project'
 import type { ExportSettings } from './settings'
 import { wirePathData } from './wires'
@@ -118,7 +125,6 @@ export function primitiveSvg(
       'font-weight': primitive.bold ? 'bold' : undefined,
       'text-anchor': primitive.anchor,
       fill: primitive.color,
-      'dominant-baseline': 'middle',
       'font-family': FONT_STACK
     })}>${spans}</text>`
   }
@@ -359,10 +365,15 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
   if (labelParts.length > 0) parts.push(`<g class="labels">${labelParts.join('')}</g>`)
 
   if (project.labels.length > 0) {
-    const textParts = project.labels.map(
-      (label) =>
-        `<text ${attrs({ x: label.x, y: label.y, 'font-size': label.size / profile.cellPx, 'font-weight': label.bold ? 'bold' : undefined, fill: '#1f2328' })}>${escapeXml(label.text)}</text>`
-    )
+    const textParts = project.labels.map((label) => {
+      const layout = layoutLabel(label, profile.cellPx)
+      const spans = layout.lines
+        .map(
+          (line) => `<tspan ${attrs({ x: layout.x, y: line.y })}>${escapeXml(line.text)}</tspan>`
+        )
+        .join('')
+      return `<text ${attrs({ 'font-size': label.size / profile.cellPx, 'font-weight': label.bold ? 'bold' : undefined, 'text-anchor': label.anchor, fill: '#1f2328' })}>${spans}</text>`
+    })
     parts.push(`<g class="texts">${textParts.join('')}</g>`)
   }
 

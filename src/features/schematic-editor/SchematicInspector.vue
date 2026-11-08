@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { componentFields, ROTATIONS, TEXT_SCALES, type FreeEndStyle, type Rotation } from '@/domain'
+import {
+  componentFields,
+  ROTATIONS,
+  TEXT_SCALES,
+  type FreeEndStyle,
+  type Rotation,
+  type TextAnchor
+} from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import Icon from '@/ui/Icon.vue'
 import { useSchematicStore } from './store'
@@ -150,6 +157,26 @@ function setEndLabel(endIndex: number, event: Event): void {
 function setLabelText(event: Event): void {
   const label = singleLabel.value
   if (label) store.setLabelText(label.id, inputValue(event))
+}
+
+const BOX_FIELDS = [
+  { key: 'x', label: 'X' },
+  { key: 'y', label: 'Y' },
+  { key: 'w', label: 'Largeur' },
+  { key: 'h', label: 'Hauteur' }
+] as const
+
+function setLabelAnchor(event: Event): void {
+  const label = singleLabel.value
+  if (label) store.setLabelAnchor(label.id, inputValue(event) as TextAnchor)
+}
+
+function setLabelBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
+  const label = singleLabel.value
+  if (!label) return
+  const value = numberValue(event)
+  if (!Number.isFinite(value)) return
+  store.setLabelBox(label.id, { x: label.x, y: label.y, w: label.w, h: label.h, [key]: value })
 }
 
 function setLabelBold(event: Event): void {
@@ -447,9 +474,17 @@ function setLabelSize(event: Event): void {
       <h3>Étiquette</h3>
       <label class="field">
         <span>Texte</span>
-        <input type="text" :value="singleLabel.text" @change="setLabelText" />
+        <textarea rows="3" :value="singleLabel.text" @change="setLabelText" />
       </label>
       <div class="row">
+        <label class="field">
+          <span>Alignement</span>
+          <select :value="singleLabel.anchor" @change="setLabelAnchor">
+            <option value="start">Gauche</option>
+            <option value="middle">Centre</option>
+            <option value="end">Droite</option>
+          </select>
+        </label>
         <label class="field">
           <span>Taille</span>
           <select :value="singleLabel.size" @change="setLabelSize">
@@ -461,6 +496,18 @@ function setLabelSize(event: Event): void {
         <label class="check">
           <input type="checkbox" :checked="singleLabel.bold" @change="setLabelBold" />
           <span>Gras</span>
+        </label>
+      </div>
+      <div class="row">
+        <label v-for="side in BOX_FIELDS" :key="side.key" class="field">
+          <span>{{ side.label }}</span>
+          <input
+            type="number"
+            step="1"
+            :min="side.key === 'w' || side.key === 'h' ? 1 : undefined"
+            :value="singleLabel[side.key]"
+            @change="setLabelBox(side.key, $event)"
+          />
         </label>
       </div>
       <div class="row">
@@ -574,7 +621,8 @@ function setLabelSize(event: Event): void {
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
   font: inherit;
   font-size: 13px;
   color: var(--text);

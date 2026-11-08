@@ -55,7 +55,11 @@ export const NO_ARROWS: Arrows = { start: false, middle: false, end: false }
 
 /** Hauteur de référence des textes d'un composant (cellules) ; l'inspecteur propose des multiples. */
 export const TEXT_BASE_SIZE_CELLS = 0.5
-export const TEXT_SCALES = [1, 1.5, 2] as const
+export const TEXT_SCALES = [1, 1.5, 2, 2.5, 3] as const
+
+/** Alignement horizontal d'un texte dans sa boîte. */
+export const textAnchorSchema = z.enum(['start', 'middle', 'end'])
+export type TextAnchor = z.infer<typeof textAnchorSchema>
 
 /** Formes du mini-éditeur de composants, rendues en SVG natif. */
 export const primitiveSchema = z.discriminatedUnion('kind', [
@@ -103,7 +107,7 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
     text: z.string(),
     /** Hauteur du texte, en cellules. */
     size: z.number().positive(),
-    anchor: z.enum(['start', 'middle', 'end']),
+    anchor: textAnchorSchema,
     color: hexColorSchema,
     /** Texte variable : chaque composant posé donne sa propre valeur au champ nommé `text`. */
     variable: z.boolean(),
@@ -195,30 +199,46 @@ export interface TextLine {
   y: number
 }
 
+/** Demi-hauteur des capitales sous le milieu de la ligne : place la ligne de base pour centrer un texte. */
+export const CAP_CENTER = 0.35
+
+export interface TextBoxLayout {
+  /** Abscisse des lignes (gauche, centre ou droite de la boîte selon l'alignement). */
+  x: number
+  lines: TextLine[]
+}
+
 /**
- * Lignes d'un texte dans sa boîte, en quarts de cellule : le bloc est centré verticalement,
- * chaque ligne s'aligne sur `x` selon `anchor` (gauche, centre ou droite de la boîte).
+ * Lignes d'un bloc de texte dans une boîte, dans l'unité de la boîte : bloc centré verticalement,
+ * capitales centrées sur chaque ligne (`y` = ligne de base), alignement selon `anchor`.
  */
-export function layoutText(
-  primitive: TextPrimitive,
-  fields?: FieldValues
-): { x: number; lines: TextLine[] } {
-  const texts = textContent(primitive, fields).split(String.fromCharCode(10))
-  const lineHeight = primitive.size * QUARTERS_PER_CELL * TEXT_LINE_HEIGHT
-  const centerY = primitive.y + primitive.h / 2
-  const x =
-    primitive.anchor === 'start'
-      ? primitive.x
-      : primitive.anchor === 'end'
-        ? primitive.x + primitive.w
-        : primitive.x + primitive.w / 2
+export function layoutTextBox(
+  box: { x: number; y: number; w: number; h: number },
+  text: string,
+  fontHeight: number,
+  anchor: TextAnchor
+): TextBoxLayout {
+  const texts = text.split(String.fromCharCode(10))
+  const lineHeight = fontHeight * TEXT_LINE_HEIGHT
+  const centerY = box.y + box.h / 2
+  const x = anchor === 'start' ? box.x : anchor === 'end' ? box.x + box.w : box.x + box.w / 2
   return {
     x,
-    lines: texts.map((text, index) => ({
-      text,
-      y: centerY + (index - (texts.length - 1) / 2) * lineHeight
+    lines: texts.map((line, index) => ({
+      text: line,
+      y: centerY + (index - (texts.length - 1) / 2) * lineHeight + CAP_CENTER * fontHeight
     }))
   }
+}
+
+/** Lignes d'un texte de composant dans sa boîte, en quarts de cellule. */
+export function layoutText(primitive: TextPrimitive, fields?: FieldValues): TextBoxLayout {
+  return layoutTextBox(
+    primitive,
+    textContent(primitive, fields),
+    primitive.size * QUARTERS_PER_CELL,
+    primitive.anchor
+  )
 }
 
 export function componentFields(def: ComponentDefinition): ComponentField[] {

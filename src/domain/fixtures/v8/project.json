@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 8,
+  "name": "Étiquettes",
+  "profile": {
+    "name": "Standard",
+    "cellPx": 20,
+    "wireWidth": 0.15,
+    "cornerRadius": 0.4,
+    "componentStroke": 0.1,
+    "junctionScale": 2,
+    "junctionColor": "wire",
+    "labelFont": { "family": "Segoe UI", "size": 11 },
+    "endLabelFont": { "family": "Segoe UI", "size": 14 }
+  },
+  "components": [],
+  "wires": [],
+  "crossingOverrides": [],
+  "labels": [{ "id": "t1", "x": 2, "y": 0, "text": "Exemple", "size": 11, "bold": false }],
+  "embeddedDefs": {}
+}

@@ -37,7 +37,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   posée fournit la valeur (`instance.fields`), sinon `defaultValue` s'affiche ; `bold` met le
   texte en gras, comme sur les étiquettes du montage. Un texte occupe une boîte (`x`, `y`, `w`, `h` en
   quarts) redimensionnable par poignées : lignes (retours à la ligne permis) centrées
-  verticalement, alignées à gauche, au centre ou à droite selon `anchor` (`layoutText`) ; l'`unit` éventuelle suit toujours la valeur (espace
+  verticalement, alignées à gauche, au centre ou à droite selon `anchor` (`layoutTextBox`, ligne de base
+  placée pour centrer les capitales). Les étiquettes texte du montage suivent le même modèle,
+  en cellules (`x`, `y`, `w`, `h`, `anchor`), avec poignées sur le canevas et tailles en multiples
+  de la police des repères (×1 à ×3) ; l'`unit` éventuelle suit toujours la valeur (espace
   insécable).
 - PNG de composant : 80 px par cellule (4× la cellule d'affichage de 20 px).
 - Orientation d'une instance : miroir local puis rotation horaire (`transformLocalPoint`,
@@ -134,7 +137,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     revient à la sélection dès qu'un texte est posé, dans les deux éditeurs.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 6, projet 8, paramètres 5
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 6, projet 9, paramètres 5
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

@@ -1,6 +1,11 @@
 import { z } from 'zod'
 import { hexColorSchema } from './color'
-import { componentDefinitionSchema, type ComponentDefinition, type Pin } from './component'
+import {
+  componentDefinitionSchema,
+  textAnchorSchema,
+  type ComponentDefinition,
+  type Pin
+} from './component'
 import {
   gridCoordSchema,
   gridPointSchema,
@@ -12,7 +17,7 @@ import {
 import { styleProfileSchema, type StyleProfile } from './profile'
 import { isUTurn } from './wires'
 
-export const PROJECT_SCHEMA_VERSION = 8
+export const PROJECT_SCHEMA_VERSION = 9
 
 /** Composant posé sur le montage ; (x, y) = coin supérieur gauche de sa boîte, en grille. */
 export const componentInstanceSchema = z.object({
@@ -80,10 +85,15 @@ export const crossingOverrideSchema = z.object({
 })
 export type CrossingOverride = z.infer<typeof crossingOverrideSchema>
 
+/** Étiquette texte du montage : une boîte en cellules, texte centré verticalement, aligné selon `anchor`. */
 export const textLabelSchema = z.object({
   id: z.string().min(1),
   x: gridCoordSchema,
   y: gridCoordSchema,
+  w: z.number().int().positive(),
+  h: z.number().int().positive(),
+  anchor: textAnchorSchema,
+  /** Texte, retours à la ligne permis. */
   text: z.string(),
   /** Taille de police en points ; par défaut celle du profil. */
   size: z.number().positive(),

@@ -1,4 +1,4 @@
-import type { ComponentDefinition } from './component'
+import { layoutTextBox, type ComponentDefinition, type TextBoxLayout } from './component'
 import {
   rotateClockwise,
   rotateCounterClockwise,
@@ -6,7 +6,7 @@ import {
   type LocalPoint,
   type Rotation
 } from './grid'
-import type { ComponentInstance, Project } from './project'
+import type { ComponentInstance, Project, TextLabel } from './project'
 import { wireEndLabelBounds, wireEndLabelPlacement } from './wireEnds'
 
 /** Rectangle en cellules, coin supérieur gauche + taille. */
@@ -44,14 +44,14 @@ export function unionRects(a: GridRect, b: GridRect): GridRect {
   return { x: x1, y: y1, width: x2 - x1, height: y2 - y1 }
 }
 
-/** Encombrement approché d'une étiquette texte, arrondi à la cellule (hauteur = taille en points / cellPx). */
-export function textLabelBounds(
-  label: { x: number; y: number; text: string; size: number },
-  cellPx: number
-): GridRect {
-  const height = label.size / cellPx
-  const width = Math.max(1, Math.ceil(label.text.length * 0.6 * height))
-  return { x: label.x, y: Math.floor(label.y - height), width, height: Math.ceil(height) }
+/** Boîte d'une étiquette texte du montage, en cellules. */
+export function textLabelBounds(label: { x: number; y: number; w: number; h: number }): GridRect {
+  return { x: label.x, y: label.y, width: label.w, height: label.h }
+}
+
+/** Lignes d'une étiquette du montage dans sa boîte, en cellules (police en points / cellPx). */
+export function layoutLabel(label: TextLabel, cellPx: number): TextBoxLayout {
+  return layoutTextBox(label, label.text, label.size / cellPx, label.anchor)
 }
 
 /** Union des boîtes des composants, des sommets de fils et des étiquettes ; null si tout est vide. */
@@ -73,7 +73,7 @@ export function projectBounds(project: Project): GridRect | null {
       if (placement) include(wireEndLabelBounds(text, placement, fontCells))
     }
   }
-  for (const label of project.labels) include(textLabelBounds(label, project.profile.cellPx))
+  for (const label of project.labels) include(textLabelBounds(label))
   return result
 }
 

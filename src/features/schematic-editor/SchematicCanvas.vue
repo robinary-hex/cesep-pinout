@@ -2,15 +2,18 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
   absolutePinPosition,
+  boxHandles,
   dragVertex,
   instanceBounds,
   instanceMatrix,
+  layoutTextBox,
   locateOnWire,
   matrixToSvg,
   moveSegment,
   nearestSegmentIndex,
   pointsAttribute,
   rectsIntersect,
+  resizeBox,
   rotatedSize,
   routeLAuto,
   textLabelBounds,
@@ -19,6 +22,7 @@ import {
   wirePathData,
   wireRenderParts,
   wiresFollowingPins,
+  type Box,
   type ComponentInstance,
   type GridPoint,
   type GridRect,
@@ -85,6 +89,7 @@ type Drag =
       duplicate: boolean
     }
   | { kind: 'band'; start: LocalPoint; current: LocalPoint; additive: boolean }
+  | { kind: 'label-handle'; id: string; handleId: string; original: Box; preview: Box }
   | {
       kind: 'wire-segment'
       wireId: string
@@ -252,7 +257,12 @@ const ghostCopies = computed(() => {
         color: wire.color,
         d: wirePathData(wire.points, cornerRadius.value)
       })),
-    labels: store.doc.labels.filter((label) => labelIds.has(label.id))
+    labels: store.doc.labels
+      .filter((label) => labelIds.has(label.id))
+      .map((label) => ({
+        label,
+        layout: layoutTextBox(label, label.text, label.size / profile.value.cellPx, label.anchor)
+      }))
   }
 })
 
@@ -297,20 +307,44 @@ const pins = computed(() => {
 
 // Étiquettes texte
 
+/** Boîte d'une étiquette telle qu'affichée : aperçu de poignée, sinon décalage de déplacement. */
+function labelBox(label: TextLabel): Box {
+  const current = drag.value
+  if (current?.kind === 'label-handle' && current.id === label.id) return current.preview
+  const { dx, dy } = labelOffsetOf(label.id)
+  return { x: label.x + dx, y: label.y + dy, w: label.w, h: label.h }
+}
+
 const labels = computed(() =>
   store.doc.labels.map((label) => {
-    const { dx, dy } = labelOffsetOf(label.id)
-    const bounds = textLabelBounds(label, profile.value.cellPx)
+    const box = labelBox(label)
+    const fontCells = label.size / profile.value.cellPx
     return {
       label,
-      x: label.x + dx,
-      y: label.y + dy,
-      fontCells: label.size / profile.value.cellPx,
-      box: { ...bounds, x: bounds.x + dx, y: bounds.y + dy },
+      fontCells,
+      box,
+      layout: layoutTextBox(box, label.text, fontCells, label.anchor),
       selected: selectedLabelSet.value.has(label.id)
     }
   })
 )
+
+/** Poignées de la boîte d'une étiquette seule sélectionnée, hors déplacement. */
+const labelHandles = computed(() => {
+  const id = store.selectedLabels[0]
+  if (
+    id === undefined ||
+    store.selectedLabels.length !== 1 ||
+    store.selection.length > 0 ||
+    store.selectedWires.length > 0 ||
+    drag.value?.kind === 'move'
+  ) {
+    return []
+  }
+  const label = store.doc.labels.find((candidate) => candidate.id === id)
+  if (!label) return []
+  return boxHandles(labelBox(label)).map((handle) => ({ ...handle, labelId: label.id }))
+})
 
 // Fils
 
@@ -593,6 +627,16 @@ function onWireDown(wireId: string, event: PointerEvent): void {
   capture(event)
 }
 
+function onLabelHandleDown(labelId: string, handleId: string, event: PointerEvent): void {
+  if (event.button !== 0 || store.panKeyHeld || store.tool !== 'select') return
+  event.stopPropagation()
+  const label = store.doc.labels.find((candidate) => candidate.id === labelId)
+  if (!label) return
+  const box: Box = { x: label.x, y: label.y, w: label.w, h: label.h }
+  drag.value = { kind: 'label-handle', id: labelId, handleId, original: box, preview: box }
+  capture(event)
+}
+
 function onVertexDown(wireId: string, index: number, event: PointerEvent): void {
   if (event.button !== 0 || store.panKeyHeld || store.tool !== 'select') return
   event.stopPropagation()
@@ -682,6 +726,9 @@ function onPointerMove(event: PointerEvent): void {
     case 'wire-vertex':
       current.preview = dragVertex(current.original, current.index, snapGrid(world))
       break
+    case 'label-handle':
+      current.preview = resizeBox(current.original, current.handleId, snapGrid(world))
+      break
   }
 }
 
@@ -708,7 +755,7 @@ function onPointerUp(event: PointerEvent): void {
         .filter((wire) => wireIntersectsRect(wire.points, rect))
         .map((wire) => wire.id)
       const texts = store.doc.labels
-        .filter((label) => rectsIntersect(textLabelBounds(label, profile.value.cellPx), rect))
+        .filter((label) => rectsIntersect(textLabelBounds(label), rect))
         .map((label) => label.id)
       store.selection = current.additive
         ? [...new Set([...store.selection, ...instances])]
@@ -724,6 +771,9 @@ function onPointerUp(event: PointerEvent): void {
     if (!samePoints(current.original, current.preview)) {
       store.setWirePoints(current.wireId, current.preview)
     }
+  } else if (current.kind === 'label-handle') {
+    const { original: a, preview: b } = current
+    if (a.x !== b.x || a.y !== b.y || a.w !== b.w || a.h !== b.h) store.setLabelBox(current.id, b)
   }
   if (svg.value?.hasPointerCapture(event.pointerId))
     svg.value.releasePointerCapture(event.pointerId)
@@ -1015,20 +1065,26 @@ const cursorClass = computed(() => {
               @contextmenu="onContextMenu($event, { kind: 'label', id: entry.label.id })"
             >
               <text
-                :x="entry.x"
-                :y="entry.y"
                 :font-size="entry.fontCells"
                 :font-family="profile.labelFont.family"
                 :font-weight="entry.label.bold ? 'bold' : undefined"
+                :text-anchor="entry.label.anchor"
               >
-                {{ entry.label.text }}
+                <tspan
+                  v-for="(line, l) in entry.layout.lines"
+                  :key="l"
+                  :x="entry.layout.x"
+                  :y="line.y"
+                >
+                  {{ line.text }}
+                </tspan>
               </text>
               <rect
                 class="hit"
                 :x="entry.box.x"
                 :y="entry.box.y"
-                :width="entry.box.width"
-                :height="entry.box.height"
+                :width="entry.box.w"
+                :height="entry.box.h"
                 fill="transparent"
               />
               <rect
@@ -1036,8 +1092,8 @@ const cursorClass = computed(() => {
                 class="selection"
                 :x="entry.box.x - 0.15"
                 :y="entry.box.y - 0.15"
-                :width="entry.box.width + 0.3"
-                :height="entry.box.height + 0.3"
+                :width="entry.box.w + 0.3"
+                :height="entry.box.h + 0.3"
                 vector-effect="non-scaling-stroke"
               />
             </g>
@@ -1123,6 +1179,17 @@ const cursorClass = computed(() => {
               @pointerdown="onVertexDown(handle.wireId, handle.index, $event)"
               @contextmenu="onContextMenu($event, { kind: 'wire', id: handle.wireId })"
             />
+            <rect
+              v-for="handle in labelHandles"
+              :key="`label:${handle.id}`"
+              class="box-handle"
+              :x="handle.x - 4 / cell"
+              :y="handle.y - 4 / cell"
+              :width="8 / cell"
+              :height="8 / cell"
+              vector-effect="non-scaling-stroke"
+              @pointerdown="onLabelHandleDown(handle.labelId, handle.id, $event)"
+            />
           </g>
 
           <g v-if="ghostCopies" class="ghost" :transform="ghostCopies.transform">
@@ -1147,16 +1214,22 @@ const cursorClass = computed(() => {
               />
             </g>
             <text
-              v-for="label in ghostCopies.labels"
-              :key="label.id"
+              v-for="entry in ghostCopies.labels"
+              :key="entry.label.id"
               class="ghost-text"
-              :x="label.x"
-              :y="label.y"
-              :font-size="label.size / profile.cellPx"
+              :font-size="entry.label.size / profile.cellPx"
               :font-family="profile.labelFont.family"
-              :font-weight="label.bold ? 'bold' : undefined"
+              :font-weight="entry.label.bold ? 'bold' : undefined"
+              :text-anchor="entry.label.anchor"
             >
-              {{ label.text }}
+              <tspan
+                v-for="(line, l) in entry.layout.lines"
+                :key="l"
+                :x="entry.layout.x"
+                :y="line.y"
+              >
+                {{ line.text }}
+              </tspan>
             </text>
           </g>
 
@@ -1371,6 +1444,13 @@ const cursorClass = computed(() => {
   stroke: #1f6feb;
   stroke-width: 1.5;
   cursor: move;
+}
+
+.box-handle {
+  fill: #ffffff;
+  stroke: #1f6feb;
+  stroke-width: 1.5;
+  cursor: nwse-resize;
 }
 
 .ghost {

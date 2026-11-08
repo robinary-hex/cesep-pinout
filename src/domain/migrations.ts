@@ -239,6 +239,28 @@ function migrateProjectV4(raw: RawRecord): RawRecord {
   })
 }
 
+// Projet v8 → v9 : les étiquettes texte occupent une boîte en cellules, déduite de la ligne de base.
+
+function migrateProjectV8(raw: RawRecord): RawRecord {
+  const profile = isRecord(raw['profile']) ? raw['profile'] : {}
+  const cellPx =
+    typeof profile['cellPx'] === 'number' && profile['cellPx'] > 0 ? profile['cellPx'] : 20
+  const labels = Array.isArray(raw['labels']) ? raw['labels'] : []
+  return {
+    ...raw,
+    labels: labels.map((label) => {
+      if (!isRecord(label)) return label
+      const size = typeof label['size'] === 'number' ? label['size'] : 11
+      const text = typeof label['text'] === 'string' ? label['text'] : ''
+      const fontCells = size / cellPx
+      const h = Math.max(1, Math.ceil(fontCells))
+      const w = Math.max(1, Math.ceil(Math.max(1, text.length) * 0.6 * fontCells))
+      const y = typeof label['y'] === 'number' ? label['y'] : 0
+      return { anchor: 'start', w, h, ...label, y: y - h }
+    })
+  }
+}
+
 export const projectMigrations: MigrationTable = {
   current: PROJECT_SCHEMA_VERSION,
   steps: {
@@ -251,7 +273,8 @@ export const projectMigrations: MigrationTable = {
     // Projet v6 → v7 : police des étiquettes d'extrémité dans le profil.
     6: (raw) => ({ ...raw, profile: completeProfile(raw['profile']) }),
     // Projet v7 → v8 : définitions embarquées migrées (boîtes de texte).
-    7: migrateEmbeddedDefs
+    7: migrateEmbeddedDefs,
+    8: migrateProjectV8
   }
 }
 

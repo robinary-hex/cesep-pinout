@@ -277,7 +277,6 @@ function down(index: number, event: PointerEvent): void {
           :fill="screenColor(p.color)"
           :font-weight="p.bold ? 'bold' : undefined"
           font-family="'Segoe UI', sans-serif"
-          dominant-baseline="middle"
           :font-style="p.variable && !fields ? 'italic' : undefined"
         >
           <tspan

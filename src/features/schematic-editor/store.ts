@@ -33,6 +33,7 @@ import {
   type RotateDirection,
   type Rotation,
   type StyleProfile,
+  type TextAnchor,
   type TextLabel,
   type Wire
 } from '@/domain'
@@ -430,7 +431,18 @@ export const useSchematicStore = defineStore('schematic', () => {
     )
     const size = doc.value.profile.labelFont.size
     apply('Ajouter une étiquette', (draft) => {
-      draft.labels.push({ id, x, y, text: 'Texte', size, bold: false })
+      // Boîte de 4 × 1 cellules dont le bord haut est centré sur le clic.
+      draft.labels.push({
+        id,
+        x: x - 2,
+        y,
+        w: 4,
+        h: 1,
+        anchor: 'middle',
+        text: 'Texte',
+        size,
+        bold: false
+      })
     })
     selection.value = []
     selectedWires.value = []
@@ -449,6 +461,24 @@ export const useSchematicStore = defineStore('schematic', () => {
     apply('Taille de l’étiquette', (draft) => {
       const label = draft.labels.find((candidate) => candidate.id === id)
       if (label) label.size = size
+    })
+  }
+
+  function setLabelBox(id: string, box: { x: number; y: number; w: number; h: number }): void {
+    apply('Cadre de l’étiquette', (draft) => {
+      const label = draft.labels.find((candidate) => candidate.id === id)
+      if (!label) return
+      label.x = box.x
+      label.y = box.y
+      label.w = Math.max(1, box.w)
+      label.h = Math.max(1, box.h)
+    })
+  }
+
+  function setLabelAnchor(id: string, anchor: TextAnchor): void {
+    apply('Alignement de l’étiquette', (draft) => {
+      const label = draft.labels.find((candidate) => candidate.id === id)
+      if (label) label.anchor = anchor
     })
   }
 
@@ -835,7 +865,7 @@ export const useSchematicStore = defineStore('schematic', () => {
       const bounds = wireBounds(wire.points)
       if (bounds) include(bounds)
     }
-    for (const label of data.labels) include(textLabelBounds(label, profile.value.cellPx))
+    for (const label of data.labels) include(textLabelBounds(label))
     return result
   }
 
@@ -1014,6 +1044,8 @@ export const useSchematicStore = defineStore('schematic', () => {
     setLabelText,
     setLabelSize,
     setLabelBold,
+    setLabelBox,
+    setLabelAnchor,
     addWire,
     beginWire,
     appendWirePoints,

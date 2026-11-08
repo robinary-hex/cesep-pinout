@@ -31,7 +31,7 @@ describe('export SVG', () => {
     expect(result.svg).toContain('<image href="data:image/png;base64,')
     expect(result.svg).toContain('>U1</text>')
     expect(result.svg).toContain('>R1</text>')
-    expect(result.svg).toContain('>Exemple</text>')
+    expect(result.svg).toContain('>Exemple</tspan>')
     expect(result.svg).not.toContain('free-end')
   })
 
