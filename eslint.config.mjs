@@ -55,11 +55,13 @@ export default defineConfig(
                 '@/app/*',
                 '@/features/*',
                 '@/io/*',
+                '@/render/*',
                 '@/state/*',
                 '@/ui/*',
                 '**/app/*',
                 '**/features/*',
                 '**/io/*',
+                '**/render/*',
                 '**/state/*',
                 '**/ui/*'
               ],

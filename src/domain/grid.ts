@@ -89,3 +89,37 @@ export function isOnBorder(point: LocalPoint, size: Size): boolean {
   const inside = x >= 0 && x <= size.widthCells && y >= 0 && y <= size.heightCells
   return inside && (x === 0 || x === size.widthCells || y === 0 || y === size.heightCells)
 }
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+/**
+ * Intersection du bord la plus proche d'un point quelconque (en cellules, non entier),
+ * avec la distance en cellules. Sert à poser et déplacer les broches.
+ */
+export function nearestBorderPoint(
+  point: LocalPoint,
+  size: Size
+): { point: LocalPoint; distance: number } {
+  const w = size.widthCells
+  const h = size.heightCells
+  const cx = clamp(Math.round(point.x), 0, w)
+  const cy = clamp(Math.round(point.y), 0, h)
+  const candidates: LocalPoint[] = [
+    { x: 0, y: cy },
+    { x: w, y: cy },
+    { x: cx, y: 0 },
+    { x: cx, y: h }
+  ]
+  let best = candidates[0] ?? { x: 0, y: 0 }
+  let bestDistance = Number.POSITIVE_INFINITY
+  for (const candidate of candidates) {
+    const distance = Math.hypot(candidate.x - point.x, candidate.y - point.y)
+    if (distance < bestDistance) {
+      best = candidate
+      bestDistance = distance
+    }
+  }
+  return { point: best, distance: bestDistance }
+}

@@ -6,6 +6,7 @@ export const COMPONENT_SCHEMA_VERSION = 1
 
 export const pinKindSchema = z.enum(['in', 'out', 'io', 'power'])
 export type PinKind = z.infer<typeof pinKindSchema>
+export const PIN_KINDS: readonly PinKind[] = ['in', 'out', 'io', 'power']
 export const PIN_KIND_LABELS: Readonly<Record<PinKind, string>> = {
   in: 'Entrée',
   out: 'Sortie',
@@ -26,6 +27,7 @@ export type Pin = z.infer<typeof pinSchema>
 /** Coordonnée en quarts de cellule (entier), repère local du composant. */
 const quarterSchema = z.number().int()
 const quarterPointSchema = z.tuple([quarterSchema, quarterSchema])
+export type QuarterPoint = z.infer<typeof quarterPointSchema>
 
 export const shapeStyleSchema = z.object({
   stroke: z.union([hexColorSchema, z.literal('none')]),
@@ -81,6 +83,8 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
   })
 ])
 export type Primitive = z.infer<typeof primitiveSchema>
+export type PrimitiveKind = Primitive['kind']
+export type StyledPrimitive = Exclude<Primitive, { kind: 'text' }>
 
 export const visualSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -88,7 +92,7 @@ export const visualSchema = z.discriminatedUnion('kind', [
     /** Nom du fichier à côté de component.json dans la bibliothèque. */
     file: z.string().min(1),
     pxPerCell: z.number().int().positive(),
-    /** Copie embarquée de l'image (dans un projet) ; absent dans la bibliothèque. */
+    /** Copie embarquée de l'image (dans un projet ou en mémoire) ; absent dans la bibliothèque. */
     dataUrl: z.string().startsWith('data:image/png;base64,').optional()
   }),
   z.object({
@@ -112,32 +116,108 @@ const componentShape = z.object({
 })
 export type ComponentDefinition = z.infer<typeof componentShape>
 
+export const DEFAULT_CATEGORY = 'Divers'
+
+export function createEmptyComponent(id: string, name: string): ComponentDefinition {
+  return {
+    schemaVersion: COMPONENT_SCHEMA_VERSION,
+    id,
+    name,
+    category: DEFAULT_CATEGORY,
+    description: '',
+    labelPrefix: '',
+    size: { widthCells: 4, heightCells: 2 },
+    visual: { kind: 'drawing', primitives: [] },
+    pins: []
+  }
+}
+
 export interface ComponentIssue {
   level: 'error' | 'warning'
   message: string
   pinId?: string
 }
 
-function primitiveWithin(primitive: Primitive, maxX: number, maxY: number): boolean {
-  const inBox = (x: number, y: number): boolean => x >= 0 && x <= maxX && y >= 0 && y <= maxY
+/** Boîte englobante d'une forme, en quarts de cellule (approchée pour un texte). */
+export interface Bounds {
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+}
+
+export function primitiveBounds(primitive: Primitive): Bounds {
   switch (primitive.kind) {
     case 'rect':
-      return (
-        inBox(primitive.x, primitive.y) &&
-        inBox(primitive.x + primitive.w, primitive.y + primitive.h)
-      )
+      return {
+        x1: primitive.x,
+        y1: primitive.y,
+        x2: primitive.x + primitive.w,
+        y2: primitive.y + primitive.h
+      }
     case 'ellipse':
-      return (
-        inBox(primitive.cx - primitive.rx, primitive.cy - primitive.ry) &&
-        inBox(primitive.cx + primitive.rx, primitive.cy + primitive.ry)
-      )
+      return {
+        x1: primitive.cx - primitive.rx,
+        y1: primitive.cy - primitive.ry,
+        x2: primitive.cx + primitive.rx,
+        y2: primitive.cy + primitive.ry
+      }
     case 'line':
-      return inBox(primitive.x1, primitive.y1) && inBox(primitive.x2, primitive.y2)
-    case 'polyline':
-      return primitive.points.every(([x, y]) => inBox(x, y))
-    case 'text':
-      return inBox(primitive.x, primitive.y)
+      return {
+        x1: Math.min(primitive.x1, primitive.x2),
+        y1: Math.min(primitive.y1, primitive.y2),
+        x2: Math.max(primitive.x1, primitive.x2),
+        y2: Math.max(primitive.y1, primitive.y2)
+      }
+    case 'polyline': {
+      const xs = primitive.points.map(([x]) => x)
+      const ys = primitive.points.map(([, y]) => y)
+      return { x1: Math.min(...xs), y1: Math.min(...ys), x2: Math.max(...xs), y2: Math.max(...ys) }
+    }
+    case 'text': {
+      // Largeur estimée : 0,6 × hauteur par caractère.
+      const width = Math.ceil(primitive.text.length * primitive.size * QUARTERS_PER_CELL * 0.6)
+      const half = Math.ceil((primitive.size * QUARTERS_PER_CELL) / 2)
+      const x1 =
+        primitive.anchor === 'start'
+          ? primitive.x
+          : primitive.anchor === 'end'
+            ? primitive.x - width
+            : primitive.x - Math.ceil(width / 2)
+      return { x1, y1: primitive.y - half, x2: x1 + width, y2: primitive.y + half }
+    }
   }
+}
+
+/** Même forme décalée de (dx, dy) quarts de cellule. */
+export function translatePrimitive(primitive: Primitive, dx: number, dy: number): Primitive {
+  switch (primitive.kind) {
+    case 'rect':
+    case 'text':
+      return { ...primitive, x: primitive.x + dx, y: primitive.y + dy }
+    case 'ellipse':
+      return { ...primitive, cx: primitive.cx + dx, cy: primitive.cy + dy }
+    case 'line':
+      return {
+        ...primitive,
+        x1: primitive.x1 + dx,
+        y1: primitive.y1 + dy,
+        x2: primitive.x2 + dx,
+        y2: primitive.y2 + dy
+      }
+    case 'polyline':
+      return {
+        ...primitive,
+        points: primitive.points.map(([x, y]): QuarterPoint => [x + dx, y + dy])
+      }
+  }
+}
+
+function primitiveWithin(primitive: Primitive, maxX: number, maxY: number): boolean {
+  const inBox = (x: number, y: number): boolean => x >= 0 && x <= maxX && y >= 0 && y <= maxY
+  if (primitive.kind === 'text') return inBox(primitive.x, primitive.y)
+  const bounds = primitiveBounds(primitive)
+  return inBox(bounds.x1, bounds.y1) && inBox(bounds.x2, bounds.y2)
 }
 
 /**

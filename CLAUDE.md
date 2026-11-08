@@ -15,12 +15,13 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 
 - `src/domain/` : TypeScript pur, zéro Vue, Pinia, Electron ou Node (règle ESLint). Géométrie,
   schémas Zod, migrations, nets : tout y vit et s'y teste sans fenêtre.
-- Sens des dépendances : app → features → state → domain ; `io` est appelé par features et app ;
-  le domaine n'importe rien d'autre.
-- Toute modification du document passe par une commande nommée (`state/commands`) qui produit
-  des patches Immer : c'est ce qui donne undo/redo.
+- Sens des dépendances : app → features → state → domain ; `io` et `render` sont appelés par
+  features et app ; le domaine n'importe rien d'autre.
+- Toute modification d'un document passe par une commande nommée du store de l'éditeur, qui
+  produit des patches Immer via `src/state/history.ts` : c'est ce qui donne undo/redo.
 - `electron/main.ts` est le seul code qui touche Node. Le rendu passe par le pont IPC typé
   (`electron/api.ts`, exposé par `electron/preload.ts`), contextIsolation activé, sandbox activé.
+  Dans les tests, `setBridge()` de `src/io/bridge.ts` remplace le pont par une fausse implémentation.
 
 ## Conventions
 
@@ -30,9 +31,12 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - PNG de composant : 80 px par cellule (4× la cellule d'affichage de 20 px).
 - Jonctions : dérivées de la géométrie (une extrémité de fil sur un autre fil), jamais stockées ;
   un croisement en milieu de segment ne connecte pas.
-- Raccourcis définis par la lettre (`KeyboardEvent.key`), clavier AZERTY belge : V sélection,
-  W fil, E texte, R / Maj+R rotation, T / Maj+T miroir, Ctrl+Page haut/bas ordre des fils.
-  Jamais de crochets ni de touches AltGr.
+- Raccourcis définis par la lettre (`KeyboardEvent.key`), clavier AZERTY belge, jamais de crochets
+  ni de touches AltGr.
+  - Montage : V sélection, W fil, E texte, R / Maj+R rotation, T / Maj+T miroir,
+    Ctrl+Page haut/bas ordre des fils.
+  - Éditeur de composants : V sélection, R rectangle, O ellipse, L ligne, P polyligne, E texte,
+    B broche, Suppr, Échap, Entrée (termine une polyligne), Ctrl+Z / Ctrl+Y, Ctrl+S, Ctrl+N.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
   par version dans `src/domain/fixtures/`.

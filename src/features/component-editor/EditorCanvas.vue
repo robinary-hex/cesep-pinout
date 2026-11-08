@@ -1,0 +1,586 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import {
+  DEFAULT_SHAPE_STYLE,
+  nearestBorderPoint,
+  primitiveBounds,
+  QUARTERS_PER_CELL,
+  type LocalPoint,
+  type Pin,
+  type PinKind
+} from '@/domain'
+import ComponentGraphic from '@/render/ComponentGraphic.vue'
+import { useComponentEditorStore } from './store'
+
+// Canevas SVG de l'éditeur de composants : grille, formes, broches, aperçus de tracé.
+// Les coordonnées souris sont converties en cellules puis en quarts de cellule ;
+// le domaine ne reçoit que des entiers.
+
+const store = useComponentEditorStore()
+const svg = ref<SVGSVGElement | null>(null)
+
+const MARGIN_CELLS = 1
+const PIN_SNAP_CELLS = 0.75
+const PIN_COLORS: Record<PinKind, string> = {
+  in: '#15803d',
+  out: '#ea580c',
+  io: '#1d4ed8',
+  power: '#d62828'
+}
+
+const cell = computed(() => store.cellPx)
+const quarter = computed(() => cell.value / QUARTERS_PER_CELL)
+const origin = computed(() => MARGIN_CELLS * cell.value)
+const size = computed(() => store.doc.size)
+const boxWidth = computed(() => size.value.widthCells * cell.value)
+const boxHeight = computed(() => size.value.heightCells * cell.value)
+const svgWidth = computed(() => boxWidth.value + 2 * origin.value)
+const svgHeight = computed(() => boxHeight.value + 2 * origin.value)
+
+interface QPoint {
+  x: number
+  y: number
+}
+
+type Drag =
+  | { kind: 'box'; tool: 'rect' | 'ellipse' | 'line'; start: QPoint; current: QPoint }
+  | { kind: 'polyline'; points: QPoint[]; current: QPoint }
+  | { kind: 'move-primitive'; index: number; start: QPoint; current: QPoint }
+  | { kind: 'move-pin'; id: string; current: LocalPoint }
+
+type Preview =
+  | { kind: 'rect'; x: number; y: number; width: number; height: number }
+  | { kind: 'ellipse'; cx: number; cy: number; rx: number; ry: number }
+  | { kind: 'line'; x1: number; y1: number; x2: number; y2: number }
+  | { kind: 'polyline'; points: string }
+
+const drag = ref<Drag | null>(null)
+/** Position du pointeur en cellules (flottant), null hors du canevas. */
+const hover = ref<LocalPoint | null>(null)
+
+function pointerCells(event: PointerEvent): LocalPoint {
+  const element = svg.value
+  if (!element) return { x: 0, y: 0 }
+  const rect = element.getBoundingClientRect()
+  return {
+    x: (event.clientX - rect.left - origin.value) / cell.value,
+    y: (event.clientY - rect.top - origin.value) / cell.value
+  }
+}
+
+function toQuarters(point: LocalPoint): QPoint {
+  return {
+    x: Math.round(point.x * QUARTERS_PER_CELL),
+    y: Math.round(point.y * QUARTERS_PER_CELL)
+  }
+}
+
+const px = (quarters: number): number => quarters * quarter.value
+
+const quarterDots = computed(() => {
+  const dots: LocalPoint[] = []
+  for (let i = 0; i < QUARTERS_PER_CELL; i++) {
+    for (let j = 0; j < QUARTERS_PER_CELL; j++) {
+      if (i !== 0 || j !== 0) dots.push({ x: i * quarter.value, y: j * quarter.value })
+    }
+  }
+  return dots
+})
+
+const borderTargets = computed<LocalPoint[]>(() => {
+  const w = size.value.widthCells
+  const h = size.value.heightCells
+  const points: LocalPoint[] = []
+  for (let x = 0; x <= w; x++) points.push({ x, y: 0 }, { x, y: h })
+  for (let y = 1; y < h; y++) points.push({ x: 0, y }, { x: w, y })
+  return points
+})
+
+const pinTarget = computed<LocalPoint | null>(() => {
+  if (store.tool !== 'pin' || !hover.value) return null
+  const nearest = nearestBorderPoint(hover.value, size.value)
+  return nearest.distance <= PIN_SNAP_CELLS ? nearest.point : null
+})
+
+function isSelectedPin(id: string): boolean {
+  return store.selection?.kind === 'pin' && store.selection.id === id
+}
+
+function pinPosition(pin: Pin): LocalPoint {
+  const current = drag.value
+  return current?.kind === 'move-pin' && current.id === pin.id
+    ? current.current
+    : { x: pin.x, y: pin.y }
+}
+
+function pinLabel(pin: Pin): { dx: number; dy: number; anchor: 'start' | 'middle' | 'end' } {
+  const { x, y } = pinPosition(pin)
+  const inside = y > 0 && y < size.value.heightCells
+  if (x === 0 && inside) return { dx: -12, dy: 0, anchor: 'end' }
+  if (x === size.value.widthCells && inside) return { dx: 12, dy: 0, anchor: 'start' }
+  if (y === 0) return { dx: 0, dy: -14, anchor: 'middle' }
+  return { dx: 0, dy: 16, anchor: 'middle' }
+}
+
+const moving = computed(() => {
+  const current = drag.value
+  return current?.kind === 'move-primitive'
+    ? {
+        index: current.index,
+        dx: current.current.x - current.start.x,
+        dy: current.current.y - current.start.y
+      }
+    : null
+})
+
+const selectionBox = computed(() => {
+  const primitive = store.selectedPrimitive
+  const selected = store.selection
+  if (!primitive || selected?.kind !== 'primitive') return null
+  const bounds = primitiveBounds(primitive)
+  const offset =
+    moving.value && moving.value.index === selected.index ? moving.value : { dx: 0, dy: 0 }
+  return {
+    x: px(bounds.x1 + offset.dx) - 4,
+    y: px(bounds.y1 + offset.dy) - 4,
+    width: px(bounds.x2 - bounds.x1) + 8,
+    height: px(bounds.y2 - bounds.y1) + 8
+  }
+})
+
+const preview = computed<Preview | null>(() => {
+  const current = drag.value
+  if (!current) return null
+  if (current.kind === 'polyline') {
+    return {
+      kind: 'polyline',
+      points: [...current.points, current.current].map((p) => `${px(p.x)},${px(p.y)}`).join(' ')
+    }
+  }
+  if (current.kind !== 'box') return null
+  if (current.tool === 'line') {
+    return {
+      kind: 'line',
+      x1: px(current.start.x),
+      y1: px(current.start.y),
+      x2: px(current.current.x),
+      y2: px(current.current.y)
+    }
+  }
+  const x1 = Math.min(current.start.x, current.current.x)
+  const y1 = Math.min(current.start.y, current.current.y)
+  const x2 = Math.max(current.start.x, current.current.x)
+  const y2 = Math.max(current.start.y, current.current.y)
+  if (current.tool === 'rect') {
+    return { kind: 'rect', x: px(x1), y: px(y1), width: px(x2 - x1), height: px(y2 - y1) }
+  }
+  return {
+    kind: 'ellipse',
+    cx: px((x1 + x2) / 2),
+    cy: px((y1 + y2) / 2),
+    rx: px((x2 - x1) / 2),
+    ry: px((y2 - y1) / 2)
+  }
+})
+
+const hoverText = computed(() =>
+  hover.value ? `x ${hover.value.x.toFixed(2)}   y ${hover.value.y.toFixed(2)}` : ''
+)
+
+// Interactions
+
+function capture(event: PointerEvent): void {
+  svg.value?.setPointerCapture(event.pointerId)
+}
+
+function onPrimitiveDown(index: number, event: PointerEvent): void {
+  if (store.tool !== 'select' || event.button !== 0) return
+  event.stopPropagation()
+  store.selection = { kind: 'primitive', index }
+  const start = toQuarters(pointerCells(event))
+  drag.value = { kind: 'move-primitive', index, start, current: start }
+  capture(event)
+}
+
+function onPinDown(id: string, event: PointerEvent): void {
+  if (store.tool !== 'select' || event.button !== 0) return
+  event.stopPropagation()
+  const pin = store.doc.pins.find((candidate) => candidate.id === id)
+  if (!pin) return
+  store.selection = { kind: 'pin', id }
+  drag.value = { kind: 'move-pin', id, current: { x: pin.x, y: pin.y } }
+  capture(event)
+}
+
+function onPointerDown(event: PointerEvent): void {
+  if (event.button !== 0) return
+  const tool = store.tool
+  const cells = pointerCells(event)
+  const q = toQuarters(cells)
+
+  switch (tool) {
+    case 'select':
+      store.selection = null
+      break
+    case 'rect':
+    case 'ellipse':
+    case 'line':
+      drag.value = { kind: 'box', tool, start: q, current: q }
+      capture(event)
+      break
+    case 'polyline': {
+      const current = drag.value
+      if (current?.kind === 'polyline') {
+        const last = current.points.at(-1)
+        if (!last || last.x !== q.x || last.y !== q.y) current.points.push(q)
+      } else {
+        drag.value = { kind: 'polyline', points: [q], current: q }
+      }
+      break
+    }
+    case 'text':
+      store.addPrimitive(
+        {
+          kind: 'text',
+          x: q.x,
+          y: q.y,
+          text: 'Texte',
+          size: 0.5,
+          anchor: 'middle',
+          color: '#000000'
+        },
+        'Ajouter un texte'
+      )
+      break
+    case 'pin': {
+      const nearest = nearestBorderPoint(cells, size.value)
+      if (nearest.distance > PIN_SNAP_CELLS) {
+        store.status = 'Clique une intersection du bord du composant.'
+        break
+      }
+      const taken = store.doc.pins.some(
+        (pin) => pin.x === nearest.point.x && pin.y === nearest.point.y
+      )
+      if (taken) {
+        store.status = 'Il y a déjà une broche sur cette intersection.'
+        break
+      }
+      store.addPin(nearest.point)
+      break
+    }
+  }
+}
+
+function onPointerMove(event: PointerEvent): void {
+  const cells = pointerCells(event)
+  hover.value = cells
+  const current = drag.value
+  if (!current) return
+  if (current.kind === 'move-pin') current.current = nearestBorderPoint(cells, size.value).point
+  else current.current = toQuarters(cells)
+}
+
+function commitBox(box: Extract<Drag, { kind: 'box' }>): void {
+  const style = { ...DEFAULT_SHAPE_STYLE }
+  if (box.tool === 'line') {
+    if (box.start.x === box.current.x && box.start.y === box.current.y) return
+    store.addPrimitive(
+      {
+        kind: 'line',
+        x1: box.start.x,
+        y1: box.start.y,
+        x2: box.current.x,
+        y2: box.current.y,
+        style
+      },
+      'Ajouter une ligne'
+    )
+    return
+  }
+  const x1 = Math.min(box.start.x, box.current.x)
+  const y1 = Math.min(box.start.y, box.current.y)
+  const w = Math.abs(box.current.x - box.start.x)
+  const h = Math.abs(box.current.y - box.start.y)
+  if (w === 0 || h === 0) return
+  if (box.tool === 'rect') {
+    store.addPrimitive({ kind: 'rect', x: x1, y: y1, w, h, rx: 0, style }, 'Ajouter un rectangle')
+    return
+  }
+  const rx = Math.max(1, Math.round(w / 2))
+  const ry = Math.max(1, Math.round(h / 2))
+  store.addPrimitive(
+    { kind: 'ellipse', cx: x1 + rx, cy: y1 + ry, rx, ry, style },
+    'Ajouter une ellipse'
+  )
+}
+
+function onPointerUp(event: PointerEvent): void {
+  const current = drag.value
+  if (!current || current.kind === 'polyline') return
+  drag.value = null
+  if (current.kind === 'box') {
+    commitBox(current)
+  } else if (current.kind === 'move-primitive') {
+    store.movePrimitive(
+      current.index,
+      current.current.x - current.start.x,
+      current.current.y - current.start.y
+    )
+  } else {
+    store.movePin(current.id, { x: current.current.x, y: current.current.y })
+  }
+  if (svg.value?.hasPointerCapture(event.pointerId))
+    svg.value.releasePointerCapture(event.pointerId)
+}
+
+function finishPolyline(): void {
+  const current = drag.value
+  if (current?.kind !== 'polyline') return
+  drag.value = null
+  if (current.points.length < 2) return
+  store.addPrimitive(
+    {
+      kind: 'polyline',
+      points: current.points.map((p): [number, number] => [p.x, p.y]),
+      closed: false,
+      style: { ...DEFAULT_SHAPE_STYLE }
+    },
+    'Ajouter une polyligne'
+  )
+}
+
+/** Annule le tracé ou le déplacement en cours ; vrai s'il y en avait un. */
+function cancel(): boolean {
+  if (!drag.value) return false
+  drag.value = null
+  return true
+}
+
+defineExpose({ cancel, finishPolyline })
+</script>
+
+<template>
+  <div class="canvas-wrap">
+    <div class="canvas-scroll">
+      <svg
+        ref="svg"
+        class="canvas"
+        :class="`tool-${store.tool}`"
+        :width="svgWidth"
+        :height="svgHeight"
+        @pointerdown="onPointerDown"
+        @pointermove="onPointerMove"
+        @pointerup="onPointerUp"
+        @pointerleave="hover = null"
+        @dblclick="finishPolyline"
+        @contextmenu.prevent
+      >
+        <defs>
+          <pattern id="cell-grid" :width="cell" :height="cell" patternUnits="userSpaceOnUse">
+            <path
+              :d="`M ${cell} 0 L 0 0 0 ${cell}`"
+              fill="none"
+              stroke="#c9d1d9"
+              stroke-width="1"
+            />
+            <circle
+              v-for="(dot, i) in quarterDots"
+              :key="i"
+              :cx="dot.x"
+              :cy="dot.y"
+              r="1"
+              fill="#b6bec7"
+            />
+          </pattern>
+        </defs>
+
+        <g :transform="`translate(${origin} ${origin})`">
+          <rect :width="boxWidth" :height="boxHeight" fill="url(#cell-grid)" />
+          <rect
+            :width="boxWidth"
+            :height="boxHeight"
+            fill="none"
+            stroke="#57606a"
+            stroke-width="1.5"
+          />
+
+          <ComponentGraphic
+            :def="store.doc"
+            :cell-px="cell"
+            interactive
+            :moving="moving"
+            @primitive-down="onPrimitiveDown"
+          />
+
+          <rect v-if="selectionBox" class="selection-box" v-bind="selectionBox" />
+
+          <g v-if="store.tool === 'pin'" class="pin-targets">
+            <circle
+              v-for="target in borderTargets"
+              :key="`${target.x},${target.y}`"
+              :cx="target.x * cell"
+              :cy="target.y * cell"
+              r="4"
+            />
+            <circle
+              v-if="pinTarget"
+              class="pin-target-active"
+              :cx="pinTarget.x * cell"
+              :cy="pinTarget.y * cell"
+              r="9"
+            />
+          </g>
+
+          <g
+            v-for="pin in store.doc.pins"
+            :key="pin.id"
+            class="pin"
+            :class="{ selected: isSelectedPin(pin.id) }"
+            :transform="`translate(${pinPosition(pin).x * cell} ${pinPosition(pin).y * cell})`"
+            @pointerdown="onPinDown(pin.id, $event)"
+          >
+            <circle r="12" fill="transparent" />
+            <circle
+              v-if="isSelectedPin(pin.id)"
+              r="10"
+              fill="none"
+              stroke="#1f6feb"
+              stroke-width="2"
+            />
+            <circle r="6" :fill="PIN_COLORS[pin.kind]" stroke="#ffffff" stroke-width="2" />
+            <text
+              :x="pinLabel(pin).dx"
+              :y="pinLabel(pin).dy"
+              :text-anchor="pinLabel(pin).anchor"
+              dominant-baseline="middle"
+              font-size="11"
+              fill="#1f2328"
+            >
+              {{ pin.name }}
+            </text>
+          </g>
+
+          <g v-if="preview" class="preview">
+            <rect
+              v-if="preview.kind === 'rect'"
+              :x="preview.x"
+              :y="preview.y"
+              :width="preview.width"
+              :height="preview.height"
+            />
+            <ellipse
+              v-else-if="preview.kind === 'ellipse'"
+              :cx="preview.cx"
+              :cy="preview.cy"
+              :rx="preview.rx"
+              :ry="preview.ry"
+            />
+            <line
+              v-else-if="preview.kind === 'line'"
+              :x1="preview.x1"
+              :y1="preview.y1"
+              :x2="preview.x2"
+              :y2="preview.y2"
+            />
+            <polyline v-else :points="preview.points" />
+          </g>
+        </g>
+      </svg>
+    </div>
+    <footer class="canvas-status">
+      <span class="coords">{{ hoverText }}</span>
+      <span class="message">{{ store.status }}</span>
+    </footer>
+  </div>
+</template>
+
+<style scoped>
+.canvas-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: #f0f2f5;
+}
+
+.canvas-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 24px;
+}
+
+.canvas {
+  display: block;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(31, 35, 40, 0.15);
+  touch-action: none;
+  user-select: none;
+}
+
+.canvas.tool-select {
+  cursor: default;
+}
+
+.canvas:not(.tool-select) {
+  cursor: crosshair;
+}
+
+.selection-box {
+  fill: none;
+  stroke: #1f6feb;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 3;
+  pointer-events: none;
+}
+
+.pin-targets circle {
+  fill: none;
+  stroke: #1f6feb;
+  stroke-opacity: 0.45;
+  pointer-events: none;
+}
+
+.pin-targets .pin-target-active {
+  fill: #1f6feb;
+  fill-opacity: 0.2;
+  stroke-opacity: 1;
+}
+
+.pin {
+  cursor: pointer;
+}
+
+.pin text {
+  pointer-events: none;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+.preview > * {
+  fill: rgba(31, 111, 235, 0.08);
+  stroke: #1f6feb;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 3;
+  pointer-events: none;
+}
+
+.preview line,
+.preview polyline {
+  fill: none;
+}
+
+.canvas-status {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: #57606a;
+  background: #ffffff;
+  border-top: 1px solid #d0d7de;
+}
+
+.coords {
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+}
+</style>
