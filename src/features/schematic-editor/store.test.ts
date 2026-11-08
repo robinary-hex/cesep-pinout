@@ -394,7 +394,8 @@ describe('montage : élasticité des fils, valeurs, collage', () => {
           color: '#000000',
           variable: true,
           defaultValue: '10 kΩ',
-          unit: ''
+          unit: '',
+          bold: false
         }
       ]
     }

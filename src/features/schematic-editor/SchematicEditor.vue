@@ -311,6 +311,10 @@ function openMenu(request: MenuRequest): void {
     if (!multi) {
       items.push(
         item('Modifier le texte…', () => editLabelText(label.id), { icon: 'edit' }),
+        item('Gras', () => store.setLabelBold(label.id, !label.bold), {
+          checked: label.bold,
+          icon: 'bold'
+        }),
         SEPARATOR
       )
     }

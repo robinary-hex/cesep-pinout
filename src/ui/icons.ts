@@ -102,7 +102,8 @@ export const ICONS = {
     'M19.07 4.93l-1.41 1.41'
   ],
   moon: ['M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z'],
-  dots: ['M5 12h.01', 'M12 12h.01', 'M19 12h.01']
+  dots: ['M5 12h.01', 'M12 12h.01', 'M19 12h.01'],
+  bold: ['M6 4h8a4 4 0 0 1 0 8H6z', 'M6 12h9a4 4 0 0 1 0 8H6z']
 } as const satisfies Record<string, readonly string[]>
 
 export type IconName = keyof typeof ICONS

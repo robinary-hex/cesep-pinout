@@ -400,7 +400,8 @@ function onPointerDown(event: PointerEvent): void {
           color: '#000000',
           variable: false,
           defaultValue: '',
-          unit: ''
+          unit: '',
+          bold: false
         },
         'Ajouter un texte'
       )

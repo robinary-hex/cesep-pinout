@@ -76,7 +76,8 @@ describe('export SVG', () => {
           color: '#000000',
           variable: false,
           defaultValue: '',
-          unit: ''
+          unit: '',
+          bold: false
         },
         0.1
       )
@@ -95,7 +96,8 @@ describe('export SVG', () => {
         color: '#000000',
         variable: true,
         defaultValue: '10 kΩ',
-        unit: ''
+        unit: '',
+        bold: false
       },
       0.1
     )
@@ -112,7 +114,8 @@ describe('export SVG', () => {
           color: '#000000',
           variable: true,
           defaultValue: '10 kΩ',
-          unit: ''
+          unit: '',
+          bold: false
         },
         0.1,
         { valeur: '4,7 kΩ' }

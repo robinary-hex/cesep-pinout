@@ -429,7 +429,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     )
     const size = doc.value.profile.labelFont.size
     apply('Ajouter une étiquette', (draft) => {
-      draft.labels.push({ id, x, y, text: 'Texte', size })
+      draft.labels.push({ id, x, y, text: 'Texte', size, bold: false })
     })
     selection.value = []
     selectedWires.value = []
@@ -448,6 +448,13 @@ export const useSchematicStore = defineStore('schematic', () => {
     apply('Taille de l’étiquette', (draft) => {
       const label = draft.labels.find((candidate) => candidate.id === id)
       if (label) label.size = size
+    })
+  }
+
+  function setLabelBold(id: string, bold: boolean): void {
+    apply(bold ? 'Étiquette en gras' : 'Étiquette normale', (draft) => {
+      const label = draft.labels.find((candidate) => candidate.id === id)
+      if (label) label.bold = bold
     })
   }
 
@@ -999,6 +1006,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     addLabel,
     setLabelText,
     setLabelSize,
+    setLabelBold,
     addWire,
     beginWire,
     appendWirePoints,

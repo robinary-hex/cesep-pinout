@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { hexColorSchema } from './color'
 import { isOnBorder, PNG_PX_PER_CELL, QUARTERS_PER_CELL, sizeSchema, type Size } from './grid'
 
-export const COMPONENT_SCHEMA_VERSION = 3
+export const COMPONENT_SCHEMA_VERSION = 4
 
 export const pinKindSchema = z.enum(['in', 'out', 'io', 'power'])
 export type PinKind = z.infer<typeof pinKindSchema>
@@ -101,7 +101,8 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
     variable: z.boolean(),
     defaultValue: z.string(),
     /** Unité affichée à droite de la valeur d'un texte variable (kΩ, V, mA…) ; vide sinon. */
-    unit: z.string()
+    unit: z.string(),
+    bold: z.boolean()
   })
 ])
 export type Primitive = z.infer<typeof primitiveSchema>

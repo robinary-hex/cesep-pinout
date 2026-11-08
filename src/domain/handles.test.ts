@@ -36,7 +36,8 @@ describe('poignées des formes', () => {
         color: '#000000',
         variable: false,
         defaultValue: '',
-        unit: ''
+        unit: '',
+        bold: false
       })
     ).toEqual([])
   })

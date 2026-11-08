@@ -91,9 +91,9 @@ function migrateComponentV1(raw: RawRecord): RawRecord {
   return result
 }
 
-// Composant v2 → v3 : unité des textes variables.
+// Composant v2 → v3 : unité des textes variables ; v3 → v4 : graisse des textes.
 
-function migrateComponentV2(raw: RawRecord): RawRecord {
+function withTextDefaults(raw: RawRecord, defaults: RawRecord): RawRecord {
   const visual = raw['visual']
   if (!isRecord(visual) || visual['kind'] !== 'drawing' || !Array.isArray(visual['primitives'])) {
     return raw
@@ -103,15 +103,20 @@ function migrateComponentV2(raw: RawRecord): RawRecord {
     visual: {
       ...visual,
       primitives: visual['primitives'].map((primitive) =>
-        isRecord(primitive) && primitive['kind'] === 'text' ? { unit: '', ...primitive } : primitive
+        isRecord(primitive) && primitive['kind'] === 'text'
+          ? { ...defaults, ...primitive }
+          : primitive
       )
     }
   }
 }
 
+const migrateComponentV2: Migration = (raw) => withTextDefaults(raw, { unit: '' })
+const migrateComponentV3: Migration = (raw) => withTextDefaults(raw, { bold: false })
+
 export const componentMigrations: MigrationTable = {
   current: COMPONENT_SCHEMA_VERSION,
-  steps: { 1: migrateComponentV1, 2: migrateComponentV2 }
+  steps: { 1: migrateComponentV1, 2: migrateComponentV2, 3: migrateComponentV3 }
 }
 
 /** Les définitions embarquées d'un projet suivent les migrations des composants. */
@@ -157,9 +162,24 @@ function migrateProjectV3(raw: RawRecord): RawRecord {
   }
 }
 
+// Projet v4 → v5 : graisse des étiquettes texte, définitions embarquées migrées (graisse des textes).
+
+function migrateProjectV4(raw: RawRecord): RawRecord {
+  const labels = Array.isArray(raw['labels']) ? raw['labels'] : []
+  return migrateEmbeddedDefs({
+    ...raw,
+    labels: labels.map((label) => (isRecord(label) ? { bold: false, ...label } : label))
+  })
+}
+
 export const projectMigrations: MigrationTable = {
   current: PROJECT_SCHEMA_VERSION,
-  steps: { 1: migrateProjectV1, 2: migrateEmbeddedDefs, 3: migrateProjectV3 }
+  steps: {
+    1: migrateProjectV1,
+    2: migrateEmbeddedDefs,
+    3: migrateProjectV3,
+    4: migrateProjectV4
+  }
 }
 
 // Paramètres v1 → v2 : export et copie de secours ; v2 → v3 : trait des composants du profil ;

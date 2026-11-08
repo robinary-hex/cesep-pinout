@@ -22,7 +22,8 @@ describe('ComponentGraphic', () => {
           color: '#000000',
           variable: false,
           defaultValue: '',
-          unit: ''
+          unit: '',
+          bold: false
         }
       ]
     }
@@ -60,7 +61,8 @@ describe('ComponentGraphic', () => {
           color: '#000000',
           variable: true,
           defaultValue: '10 kΩ',
-          unit: ''
+          unit: '',
+          bold: false
         }
       ]
     }

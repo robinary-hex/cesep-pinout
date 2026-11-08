@@ -118,12 +118,13 @@ describe('textes variables', () => {
       text: 'R',
       variable: true,
       defaultValue: '10',
-      unit: 'kΩ'
+      unit: 'kΩ',
+      bold: false
     }
     const nbsp = String.fromCharCode(0xa0)
     expect(textContent(base, { R: '4,7' })).toBe(`4,7${nbsp}kΩ`)
     expect(textContent(base, {})).toBe(`10${nbsp}kΩ`)
-    expect(textContent({ ...base, defaultValue: '', unit: '' })).toBe('{R}')
+    expect(textContent({ ...base, defaultValue: '', unit: '', bold: false })).toBe('{R}')
     expect(textContent({ ...base, variable: false })).toBe('R')
     expect(
       componentFields({

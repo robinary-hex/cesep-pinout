@@ -169,6 +169,11 @@ function setLabelText(event: Event): void {
   if (label) store.setLabelText(label.id, inputValue(event))
 }
 
+function setLabelBold(event: Event): void {
+  const label = singleLabel.value
+  if (label) store.setLabelBold(label.id, (event.target as HTMLInputElement).checked)
+}
+
 function setLabelSize(event: Event): void {
   const label = singleLabel.value
   if (label) store.setLabelSize(label.id, Math.max(4, numberValue(event)))
@@ -457,10 +462,16 @@ function setLabelSize(event: Event): void {
         <span>Texte</span>
         <input type="text" :value="singleLabel.text" @change="setLabelText" />
       </label>
-      <label class="field">
-        <span>Taille (pt)</span>
-        <input type="number" min="4" step="1" :value="singleLabel.size" @change="setLabelSize" />
-      </label>
+      <div class="row">
+        <label class="field">
+          <span>Taille (pt)</span>
+          <input type="number" min="4" step="1" :value="singleLabel.size" @change="setLabelSize" />
+        </label>
+        <label class="check">
+          <input type="checkbox" :checked="singleLabel.bold" @change="setLabelBold" />
+          <span>Gras</span>
+        </label>
+      </div>
       <p class="hint">
         Position : ({{ singleLabel.x }}, {{ singleLabel.y }}). Glisse-la pour la déplacer.
       </p>

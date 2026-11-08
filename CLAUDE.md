@@ -32,7 +32,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   par défaut) : un montage change d'épaisseur avec son profil. Lignes et polylignes ouvertes portent
   des flèches optionnelles (`arrows`), le trait s'arrêtant à la base de la pointe
   (`trimForArrows`), à l'écran comme à l'export. Un texte `variable` a pour contenu le nom du champ ; l'instance
-  posée fournit la valeur (`instance.fields`), sinon `defaultValue` s'affiche ; l'`unit` éventuelle suit toujours la valeur (espace
+  posée fournit la valeur (`instance.fields`), sinon `defaultValue` s'affiche ; `bold` met le
+  texte en gras, comme sur les étiquettes du montage ; l'`unit` éventuelle suit toujours la valeur (espace
   insécable).
 - PNG de composant : 80 px par cellule (4× la cellule d'affichage de 20 px).
 - Orientation d'une instance : miroir local puis rotation horaire (`transformLocalPoint`,
@@ -90,7 +91,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   `data-theme` sur `<html>` et toutes les couleurs de l'interface passent par les variables CSS de
   `src/app/style.css`, jamais en dur dans les styles ; les surfaces de dessin (`--paper`) sont blanches en clair et
   gris bleuté en sombre (grille et textes sur papier via `--grid-*` et `--paper-text`) ; l'export
-  garde ses propres couleurs.
+  garde ses propres couleurs. Le noir pur (`#000000`) des composants et des fils s'affiche dans
+  l'encre du thème (`--ink`, via `screenColor` de `src/render/ink.ts`), blanc cassé en sombre ;
+  l'export reste noir. Les surbrillances (net survolé, fils sélectionnés) sont des groupes à
+  opacité unique : deux fils qui se chevauchent ne s'additionnent pas.
 - Profil de style : la boîte « Profil de style du montage » prévisualise chaque réglage sur le
   montage via `profilePreview` (le store expose `profile` = aperçu ou profil du projet) et
   n'enregistre qu'à « Appliquer », en une commande. Les Paramètres proposent « Appliquer au
@@ -116,7 +120,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     sélectionné (forme, formes ou broche), sinon le composant.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 3, projet 4, paramètres 4
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 4, projet 5, paramètres 4
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

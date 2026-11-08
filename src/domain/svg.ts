@@ -103,6 +103,7 @@ export function primitiveSvg(
       x: q(primitive.x),
       y: q(primitive.y),
       'font-size': primitive.size,
+      'font-weight': primitive.bold ? 'bold' : undefined,
       'text-anchor': primitive.anchor,
       fill: primitive.color,
       'dominant-baseline': 'middle',
@@ -347,7 +348,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
   if (project.labels.length > 0) {
     const textParts = project.labels.map(
       (label) =>
-        `<text ${attrs({ x: label.x, y: label.y, 'font-size': label.size / profile.cellPx, fill: '#1f2328' })}>${escapeXml(label.text)}</text>`
+        `<text ${attrs({ x: label.x, y: label.y, 'font-size': label.size / profile.cellPx, 'font-weight': label.bold ? 'bold' : undefined, fill: '#1f2328' })}>${escapeXml(label.text)}</text>`
     )
     parts.push(`<g class="texts">${textParts.join('')}</g>`)
   }

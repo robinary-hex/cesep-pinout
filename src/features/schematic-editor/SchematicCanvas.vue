@@ -30,6 +30,7 @@ import {
   type WireEndFlags
 } from '@/domain'
 import ComponentGraphic from '@/render/ComponentGraphic.vue'
+import { screenColor } from '@/render/ink'
 import type { MenuRequest, MenuTarget } from './menu'
 import { useSchematicStore, type PlacedInstance } from './store'
 
@@ -886,25 +887,24 @@ const cursorClass = computed(() => {
         </g>
 
         <g :transform="`translate(${view.panX} ${view.panY}) scale(${cell})`">
+          <g class="net-glows">
+            <template v-for="item in renderedWires" :key="item.wire.id">
+              <path v-if="item.inHoverNet" :d="item.d" :stroke-width="wireWidth * 3" />
+            </template>
+          </g>
+          <g class="wire-selections">
+            <template v-for="item in renderedWires" :key="item.wire.id">
+              <path v-if="item.selected" :d="item.d" :stroke-width="wireWidth + 6 / cell" />
+            </template>
+          </g>
+
           <g class="wires">
             <template v-for="item in renderedWires" :key="item.wire.id">
-              <path
-                v-if="item.inHoverNet"
-                class="net-glow"
-                :d="item.d"
-                :stroke-width="wireWidth * 4"
-              />
-              <path
-                v-if="item.selected"
-                class="wire-selected"
-                :d="item.d"
-                :stroke-width="wireWidth + 6 / cell"
-              />
               <path
                 v-if="item.body"
                 class="wire"
                 :d="item.body"
-                :stroke="item.wire.color"
+                :stroke="screenColor(item.wire.color)"
                 :stroke-width="wireWidth"
               />
               <path
@@ -912,7 +912,7 @@ const cursorClass = computed(() => {
                 :key="`tail${t}`"
                 class="wire wire-dotted"
                 :d="tail"
-                :stroke="item.wire.color"
+                :stroke="screenColor(item.wire.color)"
                 :stroke-width="wireWidth"
                 :stroke-dasharray="`0 ${wireWidth * 2}`"
               />
@@ -921,7 +921,7 @@ const cursorClass = computed(() => {
                 :key="`head${h}`"
                 class="wire-head"
                 :points="head"
-                :fill="item.wire.color"
+                :fill="screenColor(item.wire.color)"
               />
               <path
                 class="wire-hit"
@@ -950,7 +950,7 @@ const cursorClass = computed(() => {
                 :y1="mark.y1"
                 :x2="mark.x2"
                 :y2="mark.y2"
-                :stroke="mark.color"
+                :stroke="screenColor(mark.color)"
                 :stroke-width="wireWidth"
               />
             </template>
@@ -963,7 +963,7 @@ const cursorClass = computed(() => {
               :cx="dot.x"
               :cy="dot.y"
               :r="dot.r"
-              :fill="dot.fill"
+              :fill="screenColor(dot.fill)"
             />
           </g>
 
@@ -1017,6 +1017,7 @@ const cursorClass = computed(() => {
                 :y="entry.y"
                 :font-size="entry.fontCells"
                 :font-family="profile.labelFont.family"
+                :font-weight="entry.label.bold ? 'bold' : undefined"
               >
                 {{ entry.label.text }}
               </text>
@@ -1047,7 +1048,12 @@ const cursorClass = computed(() => {
               class="end-label"
               @dblclick="onEndLabelDoubleClick(entry.wireId, entry.endIndex, $event)"
             >
-              <circle :cx="entry.dotX" :cy="entry.dotY" :r="wireWidth" :fill="entry.color" />
+              <circle
+                :cx="entry.dotX"
+                :cy="entry.dotY"
+                :r="wireWidth"
+                :fill="screenColor(entry.color)"
+              />
               <text
                 :x="entry.x"
                 :y="entry.y"
@@ -1122,7 +1128,7 @@ const cursorClass = computed(() => {
               :key="wire.id"
               class="ghost-wire"
               :d="wire.d"
-              :stroke="wire.color"
+              :stroke="screenColor(wire.color)"
               :stroke-width="wireWidth"
             />
             <g
@@ -1145,6 +1151,7 @@ const cursorClass = computed(() => {
               :y="label.y"
               :font-size="label.size / profile.cellPx"
               :font-family="profile.labelFont.family"
+              :font-weight="label.bold ? 'bold' : undefined"
             >
               {{ label.text }}
             </text>
@@ -1169,7 +1176,7 @@ const cursorClass = computed(() => {
             <path
               class="committed"
               :d="drawingPreview.committed"
-              :stroke="store.currentColor"
+              :stroke="screenColor(store.currentColor)"
               :stroke-width="wireWidth"
             />
             <circle
@@ -1267,16 +1274,32 @@ const cursorClass = computed(() => {
   cursor: pointer;
 }
 
-.wire-selected {
-  stroke: #1f6feb;
-  stroke-opacity: 0.35;
+.net-glows,
+.wire-selections {
   pointer-events: none;
 }
 
-.net-glow {
+.net-glows {
+  opacity: 0.22;
+}
+
+.wire-selections {
+  opacity: 0.35;
+}
+
+.net-glows path,
+.wire-selections path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.net-glows path {
   stroke: #ffd33d;
-  stroke-opacity: 0.45;
-  pointer-events: none;
+}
+
+.wire-selections path {
+  stroke: #1f6feb;
 }
 
 .crossings line {

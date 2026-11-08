@@ -42,6 +42,7 @@
   --grid-dot: #b6bec7;
   --checker-a: #ffffff;
   --checker-b: #e6e9ed;
+  --ink: #000000;
 }
 
 :root[data-theme='dark'] {
@@ -82,6 +83,8 @@
   --grid-dot: #6b778a;
   --checker-a: #2a2f36;
   --checker-b: #343a43;
+  /* Le noir pur des composants et des fils s'affiche dans cette encre ; l'export reste noir. */
+  --ink: #e6edf3;
 }
 
 * {

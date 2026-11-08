@@ -12,7 +12,7 @@ import {
 import { styleProfileSchema, type StyleProfile } from './profile'
 import { isUTurn } from './wires'
 
-export const PROJECT_SCHEMA_VERSION = 4
+export const PROJECT_SCHEMA_VERSION = 5
 
 /** Composant posé sur le montage ; (x, y) = coin supérieur gauche de sa boîte, en grille. */
 export const componentInstanceSchema = z.object({
@@ -86,7 +86,8 @@ export const textLabelSchema = z.object({
   y: gridCoordSchema,
   text: z.string(),
   /** Taille de police en points ; par défaut celle du profil. */
-  size: z.number().positive()
+  size: z.number().positive(),
+  bold: z.boolean()
 })
 export type TextLabel = z.infer<typeof textLabelSchema>
 

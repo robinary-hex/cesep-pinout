@@ -32,12 +32,6 @@ const pinRadius = computed(() => Math.max(1.5, Math.min(3, cellPx.value / 4)))
 <template>
   <svg :width="size" :height="size" :viewBox="`0 0 ${size} ${size}`" class="thumbnail">
     <g :transform="`translate(${offset.x} ${offset.y})`">
-      <rect
-        :width="def.size.widthCells * cellPx"
-        :height="def.size.heightCells * cellPx"
-        fill="#ffffff"
-        stroke="#d0d7de"
-      />
       <ComponentGraphic :def="def" :cell-px="cellPx" :stroke-base="strokeBase" />
       <circle
         v-for="pin in def.pins"
@@ -54,7 +48,5 @@ const pinRadius = computed(() => Math.max(1.5, Math.min(3, cellPx.value / 4)))
 <style scoped>
 .thumbnail {
   display: block;
-  border-radius: 4px;
-  background: var(--surface-2);
 }
 </style>

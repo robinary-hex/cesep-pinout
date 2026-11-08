@@ -223,6 +223,13 @@ function setTextColor(event: Event): void {
   })
 }
 
+function setBold(event: Event): void {
+  const bold = checked(event)
+  store.updatePrimitive(primitiveIndex.value, bold ? 'Texte en gras' : 'Texte normal', (p) => {
+    if (p.kind === 'text') p.bold = bold
+  })
+}
+
 function setRectRadius(event: Event): void {
   const rx = Math.max(0, Math.round(numberValue(event)))
   store.updatePrimitive(primitiveIndex.value, 'Arrondi du rectangle', (p) => {
@@ -304,10 +311,16 @@ function setClosed(event: Event): void {
             </select>
           </label>
         </div>
-        <label class="field">
-          <span>Couleur</span>
-          <input type="color" :value="primitive.color" @change="setTextColor" />
-        </label>
+        <div class="row">
+          <label class="field">
+            <span>Couleur</span>
+            <input type="color" :value="primitive.color" @change="setTextColor" />
+          </label>
+          <label class="check">
+            <input type="checkbox" :checked="primitive.bold" @change="setBold" />
+            <span>Gras</span>
+          </label>
+        </div>
       </template>
 
       <template v-else-if="shapeStyle">

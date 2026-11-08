@@ -16,6 +16,7 @@ import {
   type ShapeStyle,
   type TextPrimitive
 } from '@/domain'
+import { screenColor } from './ink'
 
 // Dessin d'un composant (PNG ou primitives) dans un <g> SVG, à une taille de cellule donnée.
 // Sans état : partagé par l'éditeur de composants, les vignettes et le montage.
@@ -62,9 +63,9 @@ function strokePx(style: ShapeStyle): number {
 
 function shapeAttrs(style: ShapeStyle): Record<string, string | number> {
   return {
-    stroke: style.stroke,
+    stroke: screenColor(style.stroke),
     'stroke-width': strokePx(style),
-    fill: style.fill,
+    fill: screenColor(style.fill),
     'stroke-linecap': 'round',
     'stroke-linejoin': 'round'
   }
@@ -243,7 +244,7 @@ function down(index: number, event: PointerEvent): void {
           v-for="(head, h) in arrowHeads(p)"
           :key="h"
           :points="head"
-          :fill="p.style.stroke"
+          :fill="screenColor(p.style.stroke)"
         />
         <line
           v-if="interactive"
@@ -263,7 +264,7 @@ function down(index: number, event: PointerEvent): void {
           v-for="(head, h) in arrowHeads(p)"
           :key="h"
           :points="head"
-          :fill="p.style.stroke"
+          :fill="screenColor(p.style.stroke)"
         />
         <polyline
           v-if="interactive"
@@ -280,7 +281,8 @@ function down(index: number, event: PointerEvent): void {
           :y="q(p.y)"
           :font-size="p.size * cellPx"
           :text-anchor="p.anchor"
-          :fill="p.color"
+          :fill="screenColor(p.color)"
+          :font-weight="p.bold ? 'bold' : undefined"
           font-family="'Segoe UI', sans-serif"
           dominant-baseline="middle"
           :font-style="p.variable && !fields ? 'italic' : undefined"

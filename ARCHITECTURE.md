@@ -106,8 +106,8 @@ il demande confirmation, puis le rendu écrit la copie de secours avant de confi
 
 Tous en JSON indenté, avec `schemaVersion`, validés par Zod à l'ouverture, migrés étape par étape
 (`src/domain/migrations.ts`). Un fichier d'exemple par version dans `src/domain/fixtures/`.
-Versions courantes : composant 3 (épaisseur en multiplicateur, flèches, textes variables avec
-unité, plus de `labelPrefix`), projet 4 (étiquettes d'extrémité des fils, `componentStroke` dans le profil, `fields` par instance,
+Versions courantes : composant 4 (graisse des textes, épaisseur en multiplicateur, flèches, textes variables avec
+unité, plus de `labelPrefix`), projet 5 (graisse des étiquettes, étiquettes d'extrémité des fils, `componentStroke` dans le profil, `fields` par instance,
 définitions embarquées migrées à chaque version des composants), paramètres 4 (`componentStroke`
 du profil par défaut, thème).
 
