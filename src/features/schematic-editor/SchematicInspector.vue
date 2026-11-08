@@ -9,15 +9,18 @@ import {
   type Rotation
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
+import Icon from '@/ui/Icon.vue'
 import { useSchematicStore } from './store'
 
-// Panneau de droite du montage (replié par défaut, touche I) : projet, puis composant(s),
-// fil(s) ou étiquette(s) sélectionné(s).
+// Panneau de droite du montage (replié par défaut, touche I). Toujours : le projet, avec
+// enregistrer et exporter. Sans sélection : le profil et le contenu du montage. Avec une
+// sélection : seulement les propriétés de l'élément (composant, fil(s), étiquette, groupe).
 
-const emit = defineEmits<{ editProfile: [] }>()
+const emit = defineEmits<{ editProfile: []; save: []; exportImage: [] }>()
 const store = useSchematicStore()
 const library = useLibraryStore()
 const doc = computed(() => store.doc)
+const profile = computed(() => store.profile)
 
 const onlyInstances = computed(
   () => store.selectedWires.length === 0 && store.selectedLabels.length === 0
@@ -62,15 +65,20 @@ const singleLabel = computed(() =>
 const mixedCount = computed(
   () => store.selection.length + store.selectedWires.length + store.selectedLabels.length
 )
-const showGroup = computed(
-  () =>
-    store.hasSelection &&
-    !single.value &&
-    !singleWire.value &&
-    !wiresOnly.value &&
-    !singleLabel.value
-)
 const rotatable = computed(() => store.selection.length > 0 && onlyInstances.value)
+
+/** Contenu du montage, pour le bloc « Éléments ». */
+const inventory = computed(() => {
+  const nets = new Set(store.connectivity.wireNet.values()).size
+  const unconnected = store.connectivity.unconnectedPinKeys.size
+  return [
+    `${doc.value.components.length} composant(s)`,
+    `${doc.value.wires.length} fil(s), ${nets} net(s)`,
+    `${doc.value.labels.length} étiquette(s)`,
+    `${store.connectivity.junctions.length} jonction(s), ${doc.value.crossingOverrides.length} exception(s) de croisement`,
+    `${unconnected} broche(s) reliée(s) à rien`
+  ]
+})
 
 const swatches = computed(() => [
   ...library.palette.map((color) => ({ hex: color.hex, name: color.name })),
@@ -179,25 +187,63 @@ function setLabelSize(event: Event): void {
     <section class="block">
       <h3>Projet</h3>
       <label class="field">
-        <span>Nom</span>
+        <span>Nom du montage</span>
         <input type="text" :value="doc.name" @change="setName" />
       </label>
-      <p class="hint">
-        Profil « {{ store.profile.name }} » : {{ store.profile.cellPx }} px par cellule, fils de
-        {{ store.profile.wireWidth }} cellule, trait des composants
-        {{ store.profile.componentStroke }}, rayon {{ store.profile.cornerRadius }}, point de
-        jonction ×{{ store.profile.junctionScale }}.
-      </p>
-      <p class="hint">
-        {{ doc.components.length }} composant(s), {{ doc.wires.length }} fil(s),
-        {{ doc.labels.length }} étiquette(s), {{ doc.crossingOverrides.length }} exception(s) de
-        croisement.
-      </p>
-      <p v-if="store.filePath" class="hint">Fichier : {{ store.filePath }}</p>
-      <button type="button" class="small" @click="emit('editProfile')">Modifier le profil…</button>
+      <div class="row">
+        <button
+          type="button"
+          class="primary with-icon"
+          title="Enregistrer (Ctrl+S)"
+          @click="emit('save')"
+        >
+          <Icon name="save" /> Enregistrer
+        </button>
+        <button
+          type="button"
+          class="with-icon"
+          title="Exporter en PNG ou SVG (Ctrl+E)"
+          @click="emit('exportImage')"
+        >
+          <Icon name="export" /> Exporter…
+        </button>
+      </div>
+      <p v-if="store.filePath" class="hint path">{{ store.filePath }}</p>
+      <p v-else class="hint">Pas encore enregistré.</p>
     </section>
 
-    <section v-if="single" class="block">
+    <template v-if="!store.hasSelection">
+      <section class="block">
+        <h3>Profil de style</h3>
+        <ul class="facts">
+          <li>Profil « {{ profile.name }} »</li>
+          <li>Cellule : {{ profile.cellPx }} px à l’écran</li>
+          <li>Fils : {{ profile.wireWidth }} cellule, coins de rayon {{ profile.cornerRadius }}</li>
+          <li>Trait des composants : {{ profile.componentStroke }} cellule</li>
+          <li>
+            Point de jonction : ×{{ profile.junctionScale }},
+            {{
+              profile.junctionColor === 'wire'
+                ? 'couleur du fil porteur'
+                : `couleur ${profile.junctionColor}`
+            }}
+          </li>
+          <li>Repères : {{ profile.labelFont.family }} {{ profile.labelFont.size }} pt</li>
+        </ul>
+        <button type="button" class="small" @click="emit('editProfile')">
+          Modifier le profil…
+        </button>
+      </section>
+
+      <section class="block">
+        <h3>Éléments</h3>
+        <ul class="facts">
+          <li v-for="line in inventory" :key="line">{{ line }}</li>
+        </ul>
+      </section>
+    </template>
+
+    <section v-else-if="single" class="block">
       <h3>{{ single.def.name }}</h3>
       <label class="field">
         <span>Repère</span>
@@ -266,11 +312,41 @@ function setLabelSize(event: Event): void {
         </button>
       </div>
       <div class="row">
-        <button type="button" @click="store.rotate('ccw')">⟲</button>
-        <button type="button" @click="store.rotate('cw')">⟳</button>
-        <button type="button" @click="store.flip('horizontal')">↔</button>
-        <button type="button" @click="store.flip('vertical')">↕</button>
-        <button type="button" class="danger" @click="store.removeSelection()">Supprimer</button>
+        <button
+          type="button"
+          class="icon-only"
+          title="Rotation antihoraire (Maj+R)"
+          @click="store.rotate('ccw')"
+        >
+          <Icon name="rotate-ccw" />
+        </button>
+        <button
+          type="button"
+          class="icon-only"
+          title="Rotation horaire (R)"
+          @click="store.rotate('cw')"
+        >
+          <Icon name="rotate-cw" />
+        </button>
+        <button
+          type="button"
+          class="icon-only"
+          title="Miroir horizontal (T)"
+          @click="store.flip('horizontal')"
+        >
+          <Icon name="flip-h" />
+        </button>
+        <button
+          type="button"
+          class="icon-only"
+          title="Miroir vertical (Maj+T)"
+          @click="store.flip('vertical')"
+        >
+          <Icon name="flip-v" />
+        </button>
+        <button type="button" class="danger with-icon" @click="store.removeSelection()">
+          <Icon name="trash" /> Supprimer
+        </button>
       </div>
     </section>
 
@@ -317,11 +393,31 @@ function setLabelSize(event: Event): void {
         </p>
       </template>
       <div class="row">
-        <button type="button" title="Reculer" @click="store.reorderWires('down')">▽</button>
-        <button type="button" title="Avancer" @click="store.reorderWires('up')">△</button>
-        <button type="button" title="Arrière-plan" @click="store.reorderWires('bottom')">⤓</button>
-        <button type="button" title="Premier plan" @click="store.reorderWires('top')">⤒</button>
-        <button type="button" class="danger" @click="store.removeSelection()">Supprimer</button>
+        <button type="button" class="icon-only" title="Reculer" @click="store.reorderWires('down')">
+          <Icon name="arrow-down" />
+        </button>
+        <button type="button" class="icon-only" title="Avancer" @click="store.reorderWires('up')">
+          <Icon name="arrow-up" />
+        </button>
+        <button
+          type="button"
+          class="icon-only"
+          title="Arrière-plan"
+          @click="store.reorderWires('bottom')"
+        >
+          <Icon name="arrow-down-line" />
+        </button>
+        <button
+          type="button"
+          class="icon-only"
+          title="Premier plan"
+          @click="store.reorderWires('top')"
+        >
+          <Icon name="arrow-up-line" />
+        </button>
+        <button type="button" class="danger with-icon" @click="store.removeSelection()">
+          <Icon name="trash" /> Supprimer
+        </button>
       </div>
     </section>
 
@@ -339,42 +435,66 @@ function setLabelSize(event: Event): void {
         Position : ({{ singleLabel.x }}, {{ singleLabel.y }}). Glisse-la pour la déplacer.
       </p>
       <div class="row">
-        <button type="button" @click="store.duplicateSelection()">Dupliquer</button>
-        <button type="button" class="danger" @click="store.removeSelection()">Supprimer</button>
+        <button type="button" class="with-icon" @click="store.duplicateSelection()">
+          <Icon name="duplicate" /> Dupliquer
+        </button>
+        <button type="button" class="danger with-icon" @click="store.removeSelection()">
+          <Icon name="trash" /> Supprimer
+        </button>
       </div>
     </section>
 
-    <section v-else-if="showGroup" class="block">
+    <section v-else class="block">
       <h3>{{ mixedCount }} élément(s) sélectionné(s)</h3>
       <p class="hint">
         {{ store.selection.length }} composant(s), {{ store.selectedWires.length }} fil(s),
         {{ store.selectedLabels.length }} étiquette(s).
       </p>
       <div class="row">
-        <button type="button" :disabled="!rotatable" @click="store.rotate('ccw')">⟲</button>
-        <button type="button" :disabled="!rotatable" @click="store.rotate('cw')">⟳</button>
-        <button type="button" :disabled="!rotatable" @click="store.flip('horizontal')">↔</button>
-        <button type="button" :disabled="!rotatable" @click="store.flip('vertical')">↕</button>
-        <button type="button" @click="store.duplicateSelection()">Dupliquer</button>
-        <button type="button" class="danger" @click="store.removeSelection()">Supprimer</button>
+        <button
+          type="button"
+          class="icon-only"
+          :disabled="!rotatable"
+          title="Rotation antihoraire"
+          @click="store.rotate('ccw')"
+        >
+          <Icon name="rotate-ccw" />
+        </button>
+        <button
+          type="button"
+          class="icon-only"
+          :disabled="!rotatable"
+          title="Rotation horaire"
+          @click="store.rotate('cw')"
+        >
+          <Icon name="rotate-cw" />
+        </button>
+        <button
+          type="button"
+          class="icon-only"
+          :disabled="!rotatable"
+          title="Miroir horizontal"
+          @click="store.flip('horizontal')"
+        >
+          <Icon name="flip-h" />
+        </button>
+        <button
+          type="button"
+          class="icon-only"
+          :disabled="!rotatable"
+          title="Miroir vertical"
+          @click="store.flip('vertical')"
+        >
+          <Icon name="flip-v" />
+        </button>
+        <button type="button" class="with-icon" @click="store.duplicateSelection()">
+          <Icon name="duplicate" /> Dupliquer
+        </button>
+        <button type="button" class="danger with-icon" @click="store.removeSelection()">
+          <Icon name="trash" /> Supprimer
+        </button>
       </div>
       <p v-if="!rotatable" class="hint">Rotation et miroir s’appliquent aux composants seuls.</p>
-    </section>
-
-    <section v-else class="block">
-      <h3>Sélection</h3>
-      <p class="hint">
-        Clique un composant de la bibliothèque pour le poser, puis clique sur le montage. W trace un
-        fil : départ sur une broche ou une intersection, un clic par coude (l’axe dominant d’abord,
-        Maj inverse), double-clic ou Entrée pour finir ; finir sur une broche ou un fil crée la
-        connexion. E pose une étiquette texte. Clic droit : menu contextuel ; double-clic sur un
-        composant : sa valeur.
-      </p>
-      <p class="hint">
-        Les fils posés sur les broches suivent les composants qu’on déplace, tourne ou retourne.
-        Carrés rouges : extrémités de fil reliées à rien. Cercles rouges : broches reliées à rien.
-        Survoler un fil éclaire tout son net. Alt+clic sur un croisement choisit le fil du dessus.
-      </p>
     </section>
   </aside>
 </template>
@@ -458,11 +578,26 @@ function setLabelSize(event: Event): void {
   padding-bottom: 6px;
 }
 
+.facts {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.facts li {
+  margin: 2px 0;
+}
+
 .hint {
   margin: 4px 0;
   font-size: 12px;
   color: var(--text-muted);
   word-break: break-word;
+}
+
+.path {
+  word-break: break-all;
 }
 
 .notice {

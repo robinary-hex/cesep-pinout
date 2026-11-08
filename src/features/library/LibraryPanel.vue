@@ -37,6 +37,30 @@ function pick(entry: LibraryEntry): void {
   editor.open(entry.def, entry.folder)
 }
 
+// Glisser-déposer vers le montage : la pose démarre au début du glisser, le canevas pose au dépôt.
+// L'image de glisser du navigateur est remplacée par le fantôme du canevas (image vide ici).
+const EMPTY_DRAG_IMAGE = new Image()
+EMPTY_DRAG_IMAGE.src =
+  'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+
+function onDragStart(entry: LibraryEntry, event: DragEvent): void {
+  if (props.mode !== 'place' || !entry.def) {
+    event.preventDefault()
+    return
+  }
+  schematic.startPlacing(entry.def)
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'copy'
+    event.dataTransfer.setData('text/plain', entry.def.id)
+    event.dataTransfer.setDragImage(EMPTY_DRAG_IMAGE, 0, 0)
+  }
+}
+
+/** Lâché hors du montage : la pose s'arrête ; sur le montage, le canevas a déjà posé. */
+function onDragEnd(): void {
+  schematic.stopPlacing()
+}
+
 function duplicate(entry: LibraryEntry): void {
   if (!entry.def || !editor.confirmDiscard()) return
   const copy = structuredClone(entry.def)
@@ -106,6 +130,9 @@ async function remove(entry: LibraryEntry): Promise<void> {
           :key="entry.folder"
           class="item"
           :class="{ current: isCurrent(entry) || isPlacing(entry), broken: !entry.def }"
+          :draggable="mode === 'place' && entry.def !== null"
+          @dragstart="onDragStart(entry, $event)"
+          @dragend="onDragEnd"
         >
           <button
             type="button"
@@ -114,7 +141,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
             :title="
               entry.def
                 ? mode === 'place'
-                  ? `Poser ${entry.def.name}`
+                  ? `Poser ${entry.def.name} : clic puis clic sur le montage, ou glisser-déposer`
                   : `Ouvrir ${entry.def.name}`
                 : (entry.problem ?? '')
             "

@@ -18,7 +18,9 @@ import {
 import { History } from '@/state/history'
 import type { ToolId } from './tools'
 
-export type Selection = { kind: 'primitive'; index: number } | { kind: 'pin'; id: string } | null
+/** Sélection : une ou plusieurs formes (indices, triés), ou une broche. */
+export type Selection =
+  { kind: 'primitives'; indexes: number[] } | { kind: 'pin'; id: string } | null
 
 const MIN_CELL_PX = 8
 const MAX_CELL_PX = 200
@@ -58,10 +60,17 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   const dirty = computed(() => doc.value !== savedDoc.value)
   const issues = computed(() => componentIssues(doc.value))
   const hasErrors = computed(() => issues.value.some((issue) => issue.level === 'error'))
+  const selectedIndexes = computed<readonly number[]>(() =>
+    selection.value?.kind === 'primitives' ? selection.value.indexes : []
+  )
+  /** La forme sélectionnée quand il y en a exactement une. */
   const selectedPrimitive = computed<Primitive | null>(() => {
-    const current = selection.value
-    if (current?.kind !== 'primitive' || doc.value.visual.kind !== 'drawing') return null
-    return doc.value.visual.primitives[current.index] ?? null
+    const indexes = selectedIndexes.value
+    const index = indexes[0]
+    if (indexes.length !== 1 || index === undefined || doc.value.visual.kind !== 'drawing') {
+      return null
+    }
+    return doc.value.visual.primitives[index] ?? null
   })
   const selectedPin = computed<Pin | null>(() => {
     const current = selection.value
@@ -74,11 +83,13 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     undoLabel.value = history.undoLabel
     redoLabel.value = history.redoLabel
     const current = selection.value
-    if (
-      current?.kind === 'primitive' &&
-      (doc.value.visual.kind !== 'drawing' || current.index >= doc.value.visual.primitives.length)
-    ) {
-      selection.value = null
+    if (current?.kind === 'primitives') {
+      const count = doc.value.visual.kind === 'drawing' ? doc.value.visual.primitives.length : 0
+      const kept = current.indexes.filter((index) => index < count)
+      if (kept.length === 0) selection.value = null
+      else if (kept.length !== current.indexes.length) {
+        selection.value = { kind: 'primitives', indexes: kept }
+      }
     }
     if (current?.kind === 'pin' && !doc.value.pins.some((pin) => pin.id === current.id)) {
       selection.value = null
@@ -129,6 +140,20 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
 
   function drawing(draft: Draft<ComponentDefinition>): Draft<Primitive>[] | null {
     return draft.visual.kind === 'drawing' ? draft.visual.primitives : null
+  }
+
+  // Sélection
+
+  function selectPrimitives(indexes: readonly number[]): void {
+    const unique = [...new Set(indexes)].sort((a, b) => a - b)
+    selection.value = unique.length > 0 ? { kind: 'primitives', indexes: unique } : null
+  }
+
+  function togglePrimitive(index: number): void {
+    const current = selectedIndexes.value
+    selectPrimitives(
+      current.includes(index) ? current.filter((other) => other !== index) : [...current, index]
+    )
   }
 
   // Commandes du composant
@@ -187,7 +212,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
       list.push(castDraft(primitive))
       index = list.length - 1
     })
-    if (index >= 0) selection.value = { kind: 'primitive', index }
+    if (index >= 0) selectPrimitives([index])
     return index
   }
 
@@ -216,18 +241,25 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     })
   }
 
-  function movePrimitive(index: number, dx: number, dy: number): void {
-    if (dx === 0 && dy === 0) return
-    apply('Déplacer la forme', (draft) => {
+  /** Déplace plusieurs formes d'un même vecteur, en quarts de cellule. */
+  function movePrimitives(indexes: readonly number[], dx: number, dy: number): void {
+    if ((dx === 0 && dy === 0) || indexes.length === 0) return
+    apply(indexes.length > 1 ? 'Déplacer les formes' : 'Déplacer la forme', (draft) => {
       const list = drawing(draft)
-      const primitive = list?.[index]
-      if (list && primitive) list[index] = castDraft(translatePrimitive(primitive, dx, dy))
+      if (!list) return
+      for (const index of indexes) {
+        const primitive = list[index]
+        if (primitive) list[index] = castDraft(translatePrimitive(primitive, dx, dy))
+      }
     })
   }
 
-  function removePrimitive(index: number): void {
-    apply('Supprimer la forme', (draft) => {
-      drawing(draft)?.splice(index, 1)
+  function removePrimitives(indexes: readonly number[]): void {
+    if (indexes.length === 0) return
+    apply(indexes.length > 1 ? 'Supprimer les formes' : 'Supprimer la forme', (draft) => {
+      const list = drawing(draft)
+      if (!list) return
+      for (const index of [...indexes].sort((a, b) => b - a)) list.splice(index, 1)
     })
     selection.value = null
   }
@@ -277,7 +309,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
 
   function removeSelection(): void {
     const current = selection.value
-    if (current?.kind === 'primitive') removePrimitive(current.index)
+    if (current?.kind === 'primitives') removePrimitives(current.indexes)
     else if (current?.kind === 'pin') removePin(current.id)
   }
 
@@ -317,6 +349,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     dirty,
     issues,
     hasErrors,
+    selectedIndexes,
     selectedPrimitive,
     selectedPin,
     undo,
@@ -324,6 +357,8 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     open,
     markSaved,
     confirmDiscard,
+    selectPrimitives,
+    togglePrimitive,
     setMeta,
     setId,
     setSize,
@@ -333,8 +368,8 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     updatePrimitive,
     setPrimitive,
     updateStyle,
-    movePrimitive,
-    removePrimitive,
+    movePrimitives,
+    removePrimitives,
     addPin,
     updatePin,
     movePin,

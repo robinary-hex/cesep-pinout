@@ -80,7 +80,7 @@ const emit = defineEmits<{ save: []; create: [] }>()
     <div class="spacer" />
 
     <span class="doc-name" :title="store.folder ?? 'Pas encore enregistré'">
-      {{ store.doc.name }}<span v-if="store.dirty"> •</span>
+      {{ store.doc.name }}<span v-if="store.dirty" class="dirty"> · modifié</span>
     </span>
 
     <div class="group">
@@ -152,5 +152,10 @@ const emit = defineEmits<{ save: []; create: [] }>()
 .doc-name {
   font-weight: 600;
   color: var(--text);
+}
+
+.dirty {
+  font-weight: 400;
+  color: var(--text-muted);
 }
 </style>

@@ -71,3 +71,38 @@ describe('éditeur de composants : formes et zoom', () => {
     expect(store.cellPx).toBe(100)
   })
 })
+
+describe('éditeur de composants : sélection multiple', () => {
+  it('sélectionne plusieurs formes, les déplace ensemble et les supprime', () => {
+    const store = useComponentEditorStore()
+    const style = { stroke: '#000000', weight: 1, fill: 'none' }
+    store.addPrimitive({ kind: 'rect', x: 0, y: 0, w: 4, h: 4, rx: 0, style }, 'r')
+    store.addPrimitive({ kind: 'rect', x: 8, y: 0, w: 4, h: 4, rx: 0, style }, 'r')
+    store.addPrimitive({ kind: 'rect', x: 0, y: 8, w: 4, h: 4, rx: 0, style }, 'r')
+    expect(store.selectedIndexes).toEqual([2])
+
+    store.selectPrimitives([2, 0])
+    expect(store.selectedIndexes).toEqual([0, 2])
+    expect(store.selectedPrimitive).toBeNull()
+    store.togglePrimitive(1)
+    expect(store.selectedIndexes).toEqual([0, 1, 2])
+    store.togglePrimitive(1)
+    expect(store.selectedIndexes).toEqual([0, 2])
+
+    store.movePrimitives(store.selectedIndexes, 1, 2)
+    if (store.doc.visual.kind !== 'drawing') throw new Error('dessin attendu')
+    expect(store.doc.visual.primitives.map((p) => (p.kind === 'rect' ? [p.x, p.y] : null))).toEqual(
+      [
+        [1, 2],
+        [8, 0],
+        [1, 10]
+      ]
+    )
+
+    store.removeSelection()
+    expect(store.doc.visual.primitives).toHaveLength(1)
+    expect(store.selection).toBeNull()
+    store.undo()
+    expect(store.doc.visual.primitives).toHaveLength(3)
+  })
+})

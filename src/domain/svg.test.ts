@@ -129,6 +129,8 @@ describe('export SVG', () => {
       0.1
     )
     expect(arrow).toContain('stroke-width="0.2"')
+    // Le trait s'arrête à la base de la pointe (0,7 cellule avant le bout) pour ne pas la couvrir.
+    expect(arrow).toContain('x2="1.3"')
     expect(arrow).toContain('<polygon points="2,1 1.3,1.28 1.3,0.72" fill="#000000"/>')
   })
 })

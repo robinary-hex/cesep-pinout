@@ -2,12 +2,16 @@
 import { computed } from 'vue'
 import {
   arrowHeadPoints,
+  NO_ARROWS,
   pointsAttribute,
   QUARTERS_PER_CELL,
   strokeWidthCells,
   textContent,
+  trimForArrows,
+  type Arrows,
   type ComponentDefinition,
   type FieldValues,
+  type LocalPoint,
   type Primitive,
   type ShapeStyle,
   type TextPrimitive
@@ -26,8 +30,8 @@ const props = withDefaults(
     fields?: FieldValues
     /** Formes cliquables (éditeur) : elles émettent primitive-down avec leur index. */
     interactive?: boolean
-    /** Décalage d'aperçu d'une forme pendant un glisser, en quarts de cellule. */
-    moving?: { index: number; dx: number; dy: number } | null
+    /** Décalage d'aperçu des formes en cours de glisser, en quarts de cellule. */
+    moving?: { indexes: readonly number[]; dx: number; dy: number } | null
     /** Forme remplacée pendant une modification par poignée. */
     preview?: { index: number; primitive: Primitive } | null
   }>(),
@@ -35,6 +39,8 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{ primitiveDown: [index: number, event: PointerEvent] }>()
+
+type Stroked = Extract<Primitive, { kind: 'line' | 'polyline' }>
 
 const q = (value: number): number => (value * props.cellPx) / QUARTERS_PER_CELL
 const widthPx = computed(() => props.def.size.widthCells * props.cellPx)
@@ -70,39 +76,63 @@ function hitWidth(style: ShapeStyle): number {
 
 function transformFor(index: number): string | undefined {
   const m = props.moving
-  return m && m.index === index ? `translate(${q(m.dx)} ${q(m.dy)})` : undefined
+  return m && m.indexes.includes(index) ? `translate(${q(m.dx)} ${q(m.dy)})` : undefined
 }
 
 function polyPoints(points: ReadonlyArray<readonly [number, number]>): string {
   return points.map(([x, y]) => `${q(x)},${q(y)}`).join(' ')
 }
 
+/** Sommets d'une ligne ou polyligne en cellules. */
+function strokeCells(primitive: Stroked): LocalPoint[] {
+  return primitive.kind === 'line'
+    ? [
+        { x: primitive.x1 / QUARTERS_PER_CELL, y: primitive.y1 / QUARTERS_PER_CELL },
+        { x: primitive.x2 / QUARTERS_PER_CELL, y: primitive.y2 / QUARTERS_PER_CELL }
+      ]
+    : primitive.points.map(([x, y]) => ({ x: x / QUARTERS_PER_CELL, y: y / QUARTERS_PER_CELL }))
+}
+
+/** Flèches effectivement dessinées : aucune sans trait ni sur un polygone fermé. */
+function shownArrows(primitive: Stroked): Arrows {
+  if (primitive.style.stroke === 'none') return NO_ARROWS
+  if (primitive.kind === 'polyline' && primitive.closed) return NO_ARROWS
+  return primitive.arrows
+}
+
+/** Sommets du trait en pixels, raccourcis à la base des flèches pour ne pas les recouvrir. */
+function strokePoints(primitive: Stroked): LocalPoint[] {
+  const width = strokeWidthCells(primitive.style, props.strokeBase)
+  return trimForArrows(strokeCells(primitive), shownArrows(primitive), width).map((point) => ({
+    x: point.x * props.cellPx,
+    y: point.y * props.cellPx
+  }))
+}
+
+function lineAttrs(primitive: Stroked): Record<string, number> {
+  const [a, b] = strokePoints(primitive)
+  return { x1: a?.x ?? 0, y1: a?.y ?? 0, x2: b?.x ?? 0, y2: b?.y ?? 0 }
+}
+
 /** Pointes de flèche en pixels d'une ligne ou d'une polyligne ouverte. */
-function arrowHeads(primitive: Extract<Primitive, { kind: 'line' | 'polyline' }>): string[] {
-  if (primitive.style.stroke === 'none') return []
-  if (primitive.kind === 'polyline' && primitive.closed) return []
-  const cells =
-    primitive.kind === 'line'
-      ? [
-          { x: primitive.x1 / QUARTERS_PER_CELL, y: primitive.y1 / QUARTERS_PER_CELL },
-          { x: primitive.x2 / QUARTERS_PER_CELL, y: primitive.y2 / QUARTERS_PER_CELL }
-        ]
-      : primitive.points.map(([x, y]) => ({ x: x / QUARTERS_PER_CELL, y: y / QUARTERS_PER_CELL }))
+function arrowHeads(primitive: Stroked): string[] {
+  const arrows = shownArrows(primitive)
+  const cells = strokeCells(primitive)
   const width = strokeWidthCells(primitive.style, props.strokeBase)
   const heads: string[] = []
   const first = cells[0]
   const second = cells[1]
   const last = cells.at(-1)
   const beforeLast = cells.at(-2)
-  const scaled = (points: { x: number; y: number }[]): string =>
+  const scaled = (points: LocalPoint[]): string =>
     pointsAttribute(
       points.map((point) => ({ x: point.x * props.cellPx, y: point.y * props.cellPx }))
     )
-  if (primitive.arrows.end && last && beforeLast) {
+  if (arrows.end && last && beforeLast) {
     const head = arrowHeadPoints(beforeLast, last, width)
     if (head) heads.push(scaled(head))
   }
-  if (primitive.arrows.start && first && second) {
+  if (arrows.start && first && second) {
     const head = arrowHeadPoints(second, first, width)
     if (head) heads.push(scaled(head))
   }
@@ -208,13 +238,7 @@ function down(index: number, event: PointerEvent): void {
       </template>
 
       <template v-else-if="p.kind === 'line'">
-        <line
-          :x1="q(p.x1)"
-          :y1="q(p.y1)"
-          :x2="q(p.x2)"
-          :y2="q(p.y2)"
-          v-bind="shapeAttrs(p.style)"
-        />
+        <line v-bind="{ ...lineAttrs(p), ...shapeAttrs(p.style) }" />
         <polygon
           v-for="(head, h) in arrowHeads(p)"
           :key="h"
@@ -234,7 +258,7 @@ function down(index: number, event: PointerEvent): void {
 
       <template v-else-if="p.kind === 'polyline'">
         <polygon v-if="p.closed" :points="polyPoints(p.points)" v-bind="shapeAttrs(p.style)" />
-        <polyline v-else :points="polyPoints(p.points)" v-bind="shapeAttrs(p.style)" />
+        <polyline v-else :points="pointsAttribute(strokePoints(p))" v-bind="shapeAttrs(p.style)" />
         <polygon
           v-for="(head, h) in arrowHeads(p)"
           :key="h"

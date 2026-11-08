@@ -319,7 +319,7 @@ export const useSchematicStore = defineStore('schematic', () => {
 
   /** Remplace la définition embarquée par celle de la bibliothèque (même identifiant). */
   function updateDefinition(def: ComponentDefinition): void {
-    apply(`Mettre à jour ${def.name}`, (draft) => {
+    applyWithElasticWires(`Mettre à jour ${def.name}`, (draft) => {
       draft.embeddedDefs[def.id] = castDraft(structuredClone(def))
     })
   }
@@ -399,10 +399,12 @@ export const useSchematicStore = defineStore('schematic', () => {
       'c',
       doc.value.components.map((instance) => instance.id)
     )
-    apply(`Poser ${def.name}`, (draft) => {
-      if (!Object.hasOwn(draft.embeddedDefs, def.id)) {
-        draft.embeddedDefs[def.id] = castDraft(structuredClone(def))
-      }
+    // La définition posée fait foi : si la bibliothèque a changé depuis la dernière pose, la copie
+    // embarquée est remplacée et tous les exemplaires du montage suivent (fils compris).
+    const embedded = doc.value.embeddedDefs[def.id]
+    const refresh = !embedded || JSON.stringify(embedded) !== JSON.stringify(def)
+    applyWithElasticWires(`Poser ${def.name}`, (draft) => {
+      if (refresh) draft.embeddedDefs[def.id] = castDraft(structuredClone(def))
       draft.components.push({
         id,
         defId: def.id,
@@ -414,7 +416,7 @@ export const useSchematicStore = defineStore('schematic', () => {
         fields: {}
       })
     })
-    status.value = `${def.name} posé. Échap pour arrêter.`
+    status.value = `${def.name} posé.`
     return id
   }
 

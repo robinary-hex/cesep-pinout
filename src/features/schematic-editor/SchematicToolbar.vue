@@ -143,8 +143,8 @@ function pickCustom(event: Event): void {
     <div class="spacer" />
 
     <span class="doc-name" :title="store.filePath ?? 'Pas encore enregistré'">
-      {{ store.doc.name }}<span v-if="store.dirty"> •</span>
-      <span class="file">{{ fileLabel }}</span>
+      {{ store.doc.name }}
+      <span class="file">{{ fileLabel }}{{ store.dirty ? ' · modifié' : '' }}</span>
     </span>
 
     <button

@@ -38,6 +38,8 @@ Dans le montage, toute commande qui déplace ou réoriente des composants passe 
 `applyWithElasticWires` : après la recette, `wiresFollowingPins` (`src/domain/elastic.ts`) compare
 la position des broches avant et après et fait suivre les extrémités de fil posées dessus (coude
 ajouté par `dragVertex`) ; le canevas appelle la même fonction pour l'aperçu pendant le glisser.
+Poser un composant depuis la bibliothèque remplace la copie embarquée de sa définition si elle a
+changé (même commande élastique) : un projet suit la dernière version posée et garde son autonomie.
 
 Le store du montage distingue le profil du projet (`doc.profile`, enregistré) du profil affiché
 (`profile` = `profilePreview` s'il y en a un) : la boîte de profil prévisualise sans toucher à

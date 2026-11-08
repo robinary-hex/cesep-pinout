@@ -18,9 +18,9 @@ import { useLibraryStore } from '@/features/library/store'
 import ComponentGraphic from '@/render/ComponentGraphic.vue'
 import { useComponentEditorStore } from './store'
 
-// Canevas SVG de l'éditeur de composants : grille, formes, broches, poignées, aperçus de tracé.
-// Les coordonnées souris sont converties en cellules puis en quarts de cellule ;
-// le domaine ne reçoit que des entiers.
+// Canevas SVG de l'éditeur de composants : grille, formes, broches, poignées, lasso, aperçus de
+// tracé. Les coordonnées souris sont converties en cellules puis en quarts de cellule ; le domaine
+// ne reçoit que des entiers.
 
 const store = useComponentEditorStore()
 const library = useLibraryStore()
@@ -31,6 +31,7 @@ const MARGIN_CELLS = 1
 const SCROLL_PADDING_PX = 24
 const PIN_SNAP_CELLS = 0.75
 const ZOOM_STEP = 1.1
+const BAND_MIN_CELLS = 0.05
 const PIN_COLORS: Record<PinKind, string> = {
   in: '#15803d',
   out: '#ea580c',
@@ -56,9 +57,10 @@ interface QPoint {
 type Drag =
   | { kind: 'box'; tool: 'rect' | 'ellipse' | 'line'; start: QPoint; current: QPoint }
   | { kind: 'polyline'; points: QPoint[]; current: QPoint }
-  | { kind: 'move-primitive'; index: number; start: QPoint; current: QPoint }
+  | { kind: 'move-primitives'; indexes: number[]; start: QPoint; current: QPoint }
   | { kind: 'move-pin'; id: string; current: LocalPoint }
   | { kind: 'handle'; index: number; handleId: string; original: Primitive; preview: Primitive }
+  | { kind: 'band'; start: LocalPoint; current: LocalPoint; base: number[] }
 
 type Preview =
   | { kind: 'rect'; x: number; y: number; width: number; height: number }
@@ -151,9 +153,9 @@ function pinLabel(pin: Pin): { dx: number; dy: number; anchor: 'start' | 'middle
 
 const moving = computed(() => {
   const current = drag.value
-  return current?.kind === 'move-primitive'
+  return current?.kind === 'move-primitives'
     ? {
-        index: current.index,
+        indexes: current.indexes,
         dx: current.current.x - current.start.x,
         dy: current.current.y - current.start.y
       }
@@ -165,33 +167,47 @@ const handlePreview = computed(() => {
   return current?.kind === 'handle' ? { index: current.index, primitive: current.preview } : null
 })
 
-/** La forme sélectionnée telle qu'affichée (aperçu de poignée compris). */
-const shownSelected = computed<Primitive | null>(() => {
-  const selected = store.selection
-  if (selected?.kind !== 'primitive') return null
+function primitiveAt(index: number): Primitive | null {
+  return store.doc.visual.kind === 'drawing' ? (store.doc.visual.primitives[index] ?? null) : null
+}
+
+/** Une forme telle qu'affichée (aperçu de poignée compris). */
+function shownPrimitive(index: number): Primitive | null {
   const preview = handlePreview.value
-  if (preview && preview.index === selected.index) return preview.primitive
-  return store.selectedPrimitive
+  if (preview && preview.index === index) return preview.primitive
+  return primitiveAt(index)
+}
+
+/** Cadres en pointillés des formes sélectionnées, décalés pendant un déplacement. */
+const selectionBoxes = computed(() => {
+  const offset = moving.value
+  return store.selectedIndexes.flatMap((index) => {
+    const primitive = shownPrimitive(index)
+    if (!primitive) return []
+    const bounds = primitiveBounds(primitive)
+    const dx = offset && offset.indexes.includes(index) ? offset.dx : 0
+    const dy = offset && offset.indexes.includes(index) ? offset.dy : 0
+    return [
+      {
+        index,
+        x: px(bounds.x1 + dx) - 4,
+        y: px(bounds.y1 + dy) - 4,
+        width: px(bounds.x2 - bounds.x1) + 8,
+        height: px(bounds.y2 - bounds.y1) + 8
+      }
+    ]
+  })
 })
 
-const selectionBox = computed(() => {
-  const primitive = shownSelected.value
-  const selected = store.selection
-  if (!primitive || selected?.kind !== 'primitive') return null
-  const bounds = primitiveBounds(primitive)
-  const offset =
-    moving.value && moving.value.index === selected.index ? moving.value : { dx: 0, dy: 0 }
-  return {
-    x: px(bounds.x1 + offset.dx) - 4,
-    y: px(bounds.y1 + offset.dy) - 4,
-    width: px(bounds.x2 - bounds.x1) + 8,
-    height: px(bounds.y2 - bounds.y1) + 8
-  }
-})
-
+/** Poignées : seulement pour une forme seule, hors déplacement. */
 const handles = computed(() => {
-  const primitive = shownSelected.value
-  if (!primitive || store.tool !== 'select' || moving.value) return []
+  const indexes = store.selectedIndexes
+  const index = indexes[0]
+  if (indexes.length !== 1 || index === undefined || store.tool !== 'select' || moving.value) {
+    return []
+  }
+  const primitive = shownPrimitive(index)
+  if (!primitive) return []
   return primitiveHandles(primitive).map((handle) => ({
     ...handle,
     px: px(handle.x),
@@ -234,6 +250,22 @@ const preview = computed<Preview | null>(() => {
   }
 })
 
+/** Rectangle du lasso, en pixels du repère du composant. */
+const band = computed(() => {
+  const current = drag.value
+  if (current?.kind !== 'band') return null
+  const x1 = Math.min(current.start.x, current.current.x)
+  const y1 = Math.min(current.start.y, current.current.y)
+  const x2 = Math.max(current.start.x, current.current.x)
+  const y2 = Math.max(current.start.y, current.current.y)
+  return {
+    x: x1 * cell.value,
+    y: y1 * cell.value,
+    width: (x2 - x1) * cell.value,
+    height: (y2 - y1) * cell.value
+  }
+})
+
 const hoverText = computed(() =>
   hover.value ? `x ${hover.value.x.toFixed(2)}   y ${hover.value.y.toFixed(2)}` : ''
 )
@@ -244,14 +276,10 @@ function capture(event: PointerEvent): void {
   svg.value?.setPointerCapture(event.pointerId)
 }
 
-function primitiveAt(index: number): Primitive | null {
-  return store.doc.visual.kind === 'drawing' ? (store.doc.visual.primitives[index] ?? null) : null
-}
-
 function startHandleDrag(index: number, handleId: string, event: PointerEvent): void {
   const primitive = primitiveAt(index)
   if (!primitive) return
-  store.selection = { kind: 'primitive', index }
+  store.selectPrimitives([index])
   drag.value = { kind: 'handle', index, handleId, original: primitive, preview: primitive }
   capture(event)
 }
@@ -271,16 +299,26 @@ function onPrimitiveDown(index: number, event: PointerEvent): void {
       return
     }
   }
-  store.selection = { kind: 'primitive', index }
+  if (event.shiftKey) {
+    store.togglePrimitive(index)
+    return
+  }
+  if (!store.selectedIndexes.includes(index)) store.selectPrimitives([index])
   const start = toQuarters(pointerCells(event))
-  drag.value = { kind: 'move-primitive', index, start, current: start }
+  drag.value = {
+    kind: 'move-primitives',
+    indexes: [...store.selectedIndexes],
+    start,
+    current: start
+  }
   capture(event)
 }
 
 function onHandleDown(handleId: string, event: PointerEvent): void {
-  if (event.button !== 0 || store.selection?.kind !== 'primitive') return
+  const index = store.selectedIndexes[0]
+  if (event.button !== 0 || index === undefined || store.selectedIndexes.length !== 1) return
   event.stopPropagation()
-  startHandleDrag(store.selection.index, handleId, event)
+  startHandleDrag(index, handleId, event)
 }
 
 function onPinDown(id: string, event: PointerEvent): void {
@@ -300,9 +338,14 @@ function onPointerDown(event: PointerEvent): void {
   const q = toQuarters(cells)
 
   switch (tool) {
-    case 'select':
-      store.selection = null
+    case 'select': {
+      // Clic dans le vide : lasso ; Maj garde la sélection et y ajoute.
+      const base = event.shiftKey ? [...store.selectedIndexes] : []
+      if (!event.shiftKey) store.selection = null
+      drag.value = { kind: 'band', start: cells, current: cells, base }
+      capture(event)
       break
+    }
     case 'rect':
     case 'ellipse':
     case 'line':
@@ -360,13 +403,20 @@ function onPointerMove(event: PointerEvent): void {
   hover.value = cells
   const current = drag.value
   if (!current) return
-  if (current.kind === 'move-pin') {
-    current.current = nearestBorderPoint(cells, size.value).point
-  } else if (current.kind === 'handle') {
-    const q = toQuarters(cells)
-    current.preview = dragHandle(current.original, current.handleId, [q.x, q.y])
-  } else {
-    current.current = toQuarters(cells)
+  switch (current.kind) {
+    case 'move-pin':
+      current.current = nearestBorderPoint(cells, size.value).point
+      break
+    case 'handle': {
+      const q = toQuarters(cells)
+      current.preview = dragHandle(current.original, current.handleId, [q.x, q.y])
+      break
+    }
+    case 'band':
+      current.current = cells
+      break
+    default:
+      current.current = toQuarters(cells)
   }
 }
 
@@ -405,6 +455,19 @@ function commitBox(box: Extract<Drag, { kind: 'box' }>): void {
   )
 }
 
+/** Formes dont la boîte touche le lasso (lasso en cellules, boîtes en quarts). */
+function primitivesInBand(bandDrag: Extract<Drag, { kind: 'band' }>): number[] {
+  if (store.doc.visual.kind !== 'drawing') return []
+  const x1 = Math.min(bandDrag.start.x, bandDrag.current.x) * QUARTERS_PER_CELL
+  const y1 = Math.min(bandDrag.start.y, bandDrag.current.y) * QUARTERS_PER_CELL
+  const x2 = Math.max(bandDrag.start.x, bandDrag.current.x) * QUARTERS_PER_CELL
+  const y2 = Math.max(bandDrag.start.y, bandDrag.current.y) * QUARTERS_PER_CELL
+  return store.doc.visual.primitives.flatMap((primitive, index) => {
+    const b = primitiveBounds(primitive)
+    return b.x1 <= x2 && x1 <= b.x2 && b.y1 <= y2 && y1 <= b.y2 ? [index] : []
+  })
+}
+
 function samePrimitive(a: Primitive, b: Primitive): boolean {
   return JSON.stringify(a) === JSON.stringify(b)
 }
@@ -413,18 +476,31 @@ function onPointerUp(event: PointerEvent): void {
   const current = drag.value
   if (!current || current.kind === 'polyline') return
   drag.value = null
-  if (current.kind === 'box') {
-    commitBox(current)
-  } else if (current.kind === 'move-primitive') {
-    store.movePrimitive(
-      current.index,
-      current.current.x - current.start.x,
-      current.current.y - current.start.y
-    )
-  } else if (current.kind === 'move-pin') {
-    store.movePin(current.id, { x: current.current.x, y: current.current.y })
-  } else if (!samePrimitive(current.original, current.preview)) {
-    store.setPrimitive(current.index, current.preview, 'Modifier la forme')
+  switch (current.kind) {
+    case 'box':
+      commitBox(current)
+      break
+    case 'move-primitives':
+      store.movePrimitives(
+        current.indexes,
+        current.current.x - current.start.x,
+        current.current.y - current.start.y
+      )
+      break
+    case 'move-pin':
+      store.movePin(current.id, { x: current.current.x, y: current.current.y })
+      break
+    case 'handle':
+      if (!samePrimitive(current.original, current.preview)) {
+        store.setPrimitive(current.index, current.preview, 'Modifier la forme')
+      }
+      break
+    case 'band': {
+      const wide = Math.abs(current.current.x - current.start.x) > BAND_MIN_CELLS
+      const tall = Math.abs(current.current.y - current.start.y) > BAND_MIN_CELLS
+      if (wide || tall) store.selectPrimitives([...current.base, ...primitivesInBand(current)])
+      break
+    }
   }
   if (svg.value?.hasPointerCapture(event.pointerId))
     svg.value.releasePointerCapture(event.pointerId)
@@ -531,7 +607,15 @@ defineExpose({ cancel, finishPolyline })
             @primitive-down="onPrimitiveDown"
           />
 
-          <rect v-if="selectionBox" class="selection-box" v-bind="selectionBox" />
+          <rect
+            v-for="box in selectionBoxes"
+            :key="box.index"
+            class="selection-box"
+            :x="box.x"
+            :y="box.y"
+            :width="box.width"
+            :height="box.height"
+          />
 
           <g v-if="store.tool === 'pin'" class="pin-targets">
             <circle
@@ -618,6 +702,15 @@ defineExpose({ cancel, finishPolyline })
             />
             <polyline v-else :points="preview.points" />
           </g>
+
+          <rect
+            v-if="band"
+            class="band"
+            :x="band.x"
+            :y="band.y"
+            :width="band.width"
+            :height="band.height"
+          />
         </g>
       </svg>
     </div>
@@ -707,6 +800,14 @@ defineExpose({ cancel, finishPolyline })
 .preview line,
 .preview polyline {
   fill: none;
+}
+
+.band {
+  fill: rgba(31, 111, 235, 0.08);
+  stroke: #1f6feb;
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
 }
 
 .canvas-status {

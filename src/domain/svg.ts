@@ -1,10 +1,11 @@
-import { arrowHeadPoints, pointsAttribute } from './arrows'
+import { arrowHeadPoints, pointsAttribute, trimForArrows } from './arrows'
 import {
   strokeWidthCells,
   textContent,
   type ComponentDefinition,
   type FieldValues,
-  type Primitive
+  type Primitive,
+  NO_ARROWS
 } from './component'
 import { computeConnectivity, projectPins, type FreeEnd } from './connectivity'
 import { crossingPieces } from './crossings'
@@ -120,13 +121,28 @@ export function primitiveSvg(
       return `<rect ${attrs({ x: q(primitive.x), y: q(primitive.y), width: q(primitive.w), height: q(primitive.h), rx: q(primitive.rx), ...style })}/>`
     case 'ellipse':
       return `<ellipse ${attrs({ cx: q(primitive.cx), cy: q(primitive.cy), rx: q(primitive.rx), ry: q(primitive.ry), ...style })}/>`
-    case 'line':
+    case 'line': {
+      // Le trait s'arrête à la base des pointes de flèche pour ne pas les recouvrir.
+      const heads = primitive.style.stroke === 'none' ? NO_ARROWS : primitive.arrows
+      const [a, b] = trimForArrows(
+        [
+          { x: q(primitive.x1), y: q(primitive.y1) },
+          { x: q(primitive.x2), y: q(primitive.y2) }
+        ],
+        heads,
+        width
+      )
+      if (!a || !b) return ''
       return (
-        `<line ${attrs({ x1: q(primitive.x1), y1: q(primitive.y1), x2: q(primitive.x2), y2: q(primitive.y2), ...style })}/>` +
+        `<line ${attrs({ x1: fmt(a.x), y1: fmt(a.y), x2: fmt(b.x), y2: fmt(b.y), ...style })}/>` +
         arrowsSvg(primitive, width)
       )
+    }
     case 'polyline': {
-      const points = primitive.points.map(([x, y]) => `${fmt(q(x))},${fmt(q(y))}`).join(' ')
+      const cells: LocalPoint[] = primitive.points.map(([x, y]) => ({ x: q(x), y: q(y) }))
+      const heads =
+        primitive.closed || primitive.style.stroke === 'none' ? NO_ARROWS : primitive.arrows
+      const points = pointsAttribute(trimForArrows(cells, heads, width))
       const tag = primitive.closed ? 'polygon' : 'polyline'
       return `<${tag} ${attrs({ points, ...style })}/>` + arrowsSvg(primitive, width)
     }

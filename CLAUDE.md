@@ -30,7 +30,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Primitives du mini-éditeur : entiers en quarts de cellule. Épaisseur d'une forme = `weight`
   (multiplicateur, choix dans `STROKE_WEIGHTS`) × `componentStroke` du profil de style (0,1 cellule
   par défaut) : un montage change d'épaisseur avec son profil. Lignes et polylignes ouvertes portent
-  des flèches optionnelles (`arrows`). Un texte `variable` a pour contenu le nom du champ ; l'instance
+  des flèches optionnelles (`arrows`), le trait s'arrêtant à la base de la pointe
+  (`trimForArrows`), à l'écran comme à l'export. Un texte `variable` a pour contenu le nom du champ ; l'instance
   posée fournit la valeur (`instance.fields`), sinon `defaultValue` s'affiche ; l'`unit` éventuelle suit toujours la valeur (espace
   insécable).
 - PNG de composant : 80 px par cellule (4× la cellule d'affichage de 20 px).
@@ -52,7 +53,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     Alt+clic sur un croisement = inverser l'ordre à cet endroit seulement, I = panneau de
     propriétés (replié par défaut), clic droit = menu contextuel (composant, fil, étiquette ou
     vide ; termine un fil en cours, arrête une pose), double-clic = valeur d'un composant ou texte
-    d'une étiquette.
+    d'une étiquette. Pose d'un composant : clic dans le panneau puis clic sur le montage, ou
+    glisser-déposer ; une pose = un composant (la pose s'arrête, le composant posé est sélectionné).
+    Poser un composant remplace la copie embarquée de sa définition par celle de la bibliothèque
+    si elle a changé, pour tout le montage (fils élastiques compris).
 - Fils : la géométrie pure est dans `src/domain/wires.ts` (tracé, coins arrondis, édition de
   segments et de sommets), la connectivité dérivée dans `src/domain/connectivity.ts` (jonctions,
   extrémités libres, nets par union-find). Un fil garde ses extrémités fixes quand on déplace un
@@ -99,6 +103,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     sélectionnée montre ses poignées (`src/domain/handles.ts`) ; Ctrl+glisser sur une forme saisit
     la poignée la plus proche. Redimensionner le composant supprime les broches qui ne sont plus sur
     le bord ; les noms numériques des broches suivent toujours leur ordre (`renumberPins`).
+    Sélection multiple : lasso dans le vide, Maj+clic ajoute ou retire une forme, glisser déplace
+    toutes les formes sélectionnées ; le panneau de droite ne montre que l'élément sélectionné
+    (forme, formes ou broche), sinon le composant.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
   par version dans `src/domain/fixtures/`. Versions courantes : composant 3, projet 3, paramètres 4

@@ -532,8 +532,7 @@ function onPointerDown(event: PointerEvent): void {
   const world = toWorld(screenPoint(event))
 
   if (store.tool === 'place') {
-    const current = ghost.value
-    if (current) store.placeAt(current.instance.x, current.instance.y)
+    placeGhost()
     return
   }
 
@@ -641,6 +640,33 @@ function onPointerUp(event: PointerEvent): void {
     svg.value.releasePointerCapture(event.pointerId)
 }
 
+/** Pose le fantôme, puis arrête la pose : un clic ou un dépôt = un composant, sélectionné. */
+function placeGhost(): void {
+  const current = ghost.value
+  if (!current) return
+  const id = store.placeAt(current.instance.x, current.instance.y)
+  store.stopPlacing()
+  if (id) {
+    store.clearSelection()
+    store.selection = [id]
+  }
+}
+
+/** Glisser-déposer depuis le panneau des composants : le fantôme suit le pointeur. */
+function onDragOver(event: DragEvent): void {
+  if (!store.placement) return
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+  hover.value = toWorld(screenPoint(event))
+}
+
+function onDrop(event: DragEvent): void {
+  if (!store.placement) return
+  event.preventDefault()
+  hover.value = toWorld(screenPoint(event))
+  placeGhost()
+}
+
 function onDoubleClick(): void {
   if (store.tool === 'wire') store.finishWire()
 }
@@ -730,6 +756,9 @@ const cursorClass = computed(() => {
         @pointerup="onPointerUp"
         @pointerleave="hover = null"
         @dblclick="onDoubleClick"
+        @dragover="onDragOver"
+        @drop="onDrop"
+        @dragleave="hover = null"
         @wheel.prevent="onWheel"
         @contextmenu="onContextMenu($event, { kind: 'empty' })"
       >

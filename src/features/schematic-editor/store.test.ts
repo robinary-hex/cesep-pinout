@@ -437,3 +437,36 @@ describe('montage : aperçu du profil', () => {
     expect(store.profile.cellPx).toBe(base)
   })
 })
+
+describe('montage : pose depuis la bibliothèque', () => {
+  it('reposer un composant modifié met à jour la copie embarquée et fait suivre les fils', () => {
+    const store = useSchematicStore()
+    const v1 = resistor()
+    store.startPlacing(v1)
+    const first = store.placeAt(0, 0) // broche b en (4,1)
+    store.stopPlacing()
+    if (!first) throw new Error('pose refusée')
+    store.addWire([
+      [4, 1],
+      [8, 1]
+    ])
+
+    const v2 = resistor()
+    v2.description = 'Version revue'
+    v2.pins = [
+      { id: 'a', name: '1', kind: 'io', x: 0, y: 0 },
+      { id: 'b', name: '2', kind: 'io', x: 4, y: 0 }
+    ]
+    store.startPlacing(v2)
+    store.placeAt(0, 10)
+    store.stopPlacing()
+
+    expect(store.doc.embeddedDefs['resistor']?.description).toBe('Version revue')
+    expect(store.doc.components).toHaveLength(2)
+    // Le fil posé sur l'ancienne broche (4,1) suit la nouvelle (4,0).
+    expect(store.doc.wires[0]?.points[0]).toEqual([4, 0])
+    expect(store.connectivity.pinNet.get(`${first}:b`)).toBe(
+      store.connectivity.wireNet.get(store.doc.wires[0]?.id ?? '')
+    )
+  })
+})

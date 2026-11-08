@@ -10,10 +10,12 @@ import {
   type PngFit
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
+import Icon from '@/ui/Icon.vue'
 import { pickPng, resizePng } from './pngImport'
 import { useComponentEditorStore } from './store'
 
-// Panneau de droite : propriétés du composant, liste des broches, forme sélectionnée, contrôles.
+// Panneau de droite. Sans sélection : le composant (propriétés, broches, visuel). Avec une
+// sélection : seulement l'élément sélectionné (forme, formes, broche). Les contrôles restent en bas.
 // Les champs valident au changement (pas à chaque touche), donc une modification = une commande.
 
 const store = useComponentEditorStore()
@@ -87,7 +89,10 @@ async function acceptResize(): Promise<void> {
 
 // Broches
 
-const selectedPinId = computed(() => (store.selection?.kind === 'pin' ? store.selection.id : null))
+const selectedPin = computed(() => store.selectedPin)
+const selectedPinOrdinal = computed(() =>
+  selectedPin.value ? doc.value.pins.findIndex((pin) => pin.id === selectedPin.value?.id) + 1 : 0
+)
 
 function selectPin(id: string): void {
   store.selection = { kind: 'pin', id }
@@ -106,12 +111,11 @@ function setPinKind(id: string, event: Event): void {
   store.updatePin(id, { kind: inputValue(event) as PinKind })
 }
 
-// Forme sélectionnée
+// Forme(s) sélectionnée(s)
 
 const primitive = computed(() => store.selectedPrimitive)
-const primitiveIndex = computed(() =>
-  store.selection?.kind === 'primitive' ? store.selection.index : -1
-)
+const primitiveIndex = computed(() => store.selectedIndexes[0] ?? -1)
+const multiCount = computed(() => store.selectedIndexes.length)
 const shapeStyle = computed(() =>
   primitive.value && primitive.value.kind !== 'text' ? primitive.value.style : null
 )
@@ -240,126 +244,19 @@ function setClosed(event: Event): void {
 
 <template>
   <aside class="inspector">
-    <section class="block">
-      <h3>Composant</h3>
-      <label class="field">
-        <span>Nom</span>
-        <input type="text" :value="doc.name" @change="setName" />
-      </label>
-      <label class="field">
-        <span>Catégorie</span>
-        <input
-          type="text"
-          :value="doc.category"
-          @change="store.setMeta({ category: inputValue($event) })"
-        />
-      </label>
-      <label class="field">
-        <span>Description</span>
-        <textarea
-          rows="2"
-          :value="doc.description"
-          @change="store.setMeta({ description: inputValue($event) })"
-        />
-      </label>
-      <div class="row">
-        <label class="field">
-          <span>Largeur (cellules)</span>
-          <input
-            type="number"
-            min="1"
-            step="1"
-            :value="doc.size.widthCells"
-            @change="setSize('widthCells', $event)"
-          />
-        </label>
-        <label class="field">
-          <span>Hauteur (cellules)</span>
-          <input
-            type="number"
-            min="1"
-            step="1"
-            :value="doc.size.heightCells"
-            @change="setSize('heightCells', $event)"
-          />
-        </label>
-      </div>
-      <p v-if="store.folder" class="hint">Dossier : {{ store.folder }}</p>
-      <p v-else class="hint">Pas encore enregistré ; l’identifiant sera dérivé du nom.</p>
-    </section>
-
-    <section class="block">
-      <h3>Broches</h3>
-      <p v-if="doc.pins.length === 0" class="hint">
-        Aucune broche. Outil Broche (B), puis clic sur une intersection du bord.
-      </p>
-      <div
-        v-for="(pin, index) in doc.pins"
-        :key="pin.id"
-        class="pin-row"
-        :class="{ selected: selectedPinId === pin.id }"
-        @pointerenter="store.hoverPinId = pin.id"
-        @pointerleave="store.hoverPinId = null"
-        @click="selectPin(pin.id)"
-      >
-        <span class="ordinal">{{ index + 1 }}</span>
-        <input
-          type="text"
-          :value="pin.name"
-          title="Nom de la broche"
-          @change="setPinName(pin.id, $event)"
-        />
-        <select :value="pin.kind" title="Type" @change="setPinKind(pin.id, $event)">
-          <option v-for="kind in PIN_KINDS" :key="kind" :value="kind">
-            {{ PIN_KIND_LABELS[kind] }}
-          </option>
-        </select>
+    <!-- Une forme seule -->
+    <section v-if="primitive" class="block">
+      <div class="head-row">
+        <h3>{{ KIND_LABELS[primitive.kind] }}</h3>
         <button
           type="button"
-          class="small danger"
-          title="Supprimer la broche"
-          @click.stop="store.removePin(pin.id)"
+          class="small"
+          title="Revenir au composant (Échap)"
+          @click="store.selection = null"
         >
-          ✕
+          <Icon name="chevron-down" :size="12" /> Composant
         </button>
       </div>
-      <p v-if="doc.pins.length > 0" class="hint">
-        Les noms numériques suivent l’ordre ; glisse une broche le long du bord pour la déplacer.
-      </p>
-    </section>
-
-    <section class="block">
-      <h3>Visuel</h3>
-      <p v-if="doc.visual.kind === 'drawing'">
-        Dessin : {{ doc.visual.primitives.length }} forme(s), trait de base {{ strokeBase }} cellule
-        (profil de style).
-      </p>
-      <p v-else>Image PNG à {{ doc.visual.pxPerCell }} px par cellule.</p>
-      <div class="row">
-        <button type="button" @click="importPng">Importer un PNG…</button>
-        <button v-if="doc.visual.kind === 'png'" type="button" @click="store.setVisualDrawing()">
-          Revenir au dessin
-        </button>
-      </div>
-      <div v-if="pending" class="notice">
-        <p>
-          Le PNG fait {{ pending.width }} × {{ pending.height }} px, soit
-          {{ (pending.width / 80).toFixed(2) }} × {{ (pending.height / 80).toFixed(2) }} cellules.
-          Le redimensionner en {{ pending.fit.targetWidth }} × {{ pending.fit.targetHeight }} px ({{
-            pending.fit.widthCells
-          }}
-          × {{ pending.fit.heightCells }} cellules) ?
-        </p>
-        <div class="row">
-          <button type="button" class="primary" @click="acceptResize">Redimensionner</button>
-          <button type="button" @click="pending = null">Annuler</button>
-        </div>
-      </div>
-      <p v-if="importError" class="error">{{ importError }}</p>
-    </section>
-
-    <section v-if="primitive" class="block">
-      <h3>{{ KIND_LABELS[primitive.kind] }}</h3>
 
       <template v-if="primitive.kind === 'text'">
         <label class="check">
@@ -370,19 +267,23 @@ function setClosed(event: Event): void {
           <span>{{ primitive.variable ? 'Nom du champ' : 'Texte' }}</span>
           <input type="text" :value="primitive.text" @change="setText" />
         </label>
-        <label v-if="primitive.variable" class="field">
-          <span>Valeur par défaut</span>
-          <input
-            type="text"
-            :value="primitive.defaultValue"
-            placeholder="4,7"
-            @change="setDefaultValue"
-          />
-        </label>
-        <label v-if="primitive.variable" class="field">
-          <span>Unité (toujours affichée à droite de la valeur)</span>
-          <input type="text" :value="primitive.unit" placeholder="kΩ" @change="setUnit" />
-        </label>
+        <template v-if="primitive.variable">
+          <div class="row">
+            <label class="field">
+              <span>Valeur par défaut</span>
+              <input
+                type="text"
+                :value="primitive.defaultValue"
+                placeholder="4,7"
+                @change="setDefaultValue"
+              />
+            </label>
+            <label class="field">
+              <span>Unité (à droite)</span>
+              <input type="text" :value="primitive.unit" placeholder="kΩ" @change="setUnit" />
+            </label>
+          </div>
+        </template>
         <div class="row">
           <label class="field">
             <span>Hauteur (cellules)</span>
@@ -496,10 +397,194 @@ function setClosed(event: Event): void {
         </p>
       </template>
 
-      <button type="button" class="danger" @click="store.removePrimitive(primitiveIndex)">
-        Supprimer la forme
+      <button type="button" class="danger with-icon" @click="store.removeSelection()">
+        <Icon name="trash" /> Supprimer la forme
       </button>
     </section>
+
+    <!-- Plusieurs formes -->
+    <section v-else-if="multiCount > 1" class="block">
+      <div class="head-row">
+        <h3>{{ multiCount }} formes sélectionnées</h3>
+        <button
+          type="button"
+          class="small"
+          title="Revenir au composant (Échap)"
+          @click="store.selection = null"
+        >
+          <Icon name="chevron-down" :size="12" /> Composant
+        </button>
+      </div>
+      <p class="hint">
+        Glisse l’une d’elles pour les déplacer ensemble. Maj+clic ajoute ou retire une forme ; un
+        lasso dans le vide en sélectionne plusieurs.
+      </p>
+      <button type="button" class="danger with-icon" @click="store.removeSelection()">
+        <Icon name="trash" /> Supprimer les formes
+      </button>
+    </section>
+
+    <!-- Une broche -->
+    <section v-else-if="selectedPin" class="block">
+      <div class="head-row">
+        <h3>Broche {{ selectedPinOrdinal }}</h3>
+        <button
+          type="button"
+          class="small"
+          title="Revenir au composant (Échap)"
+          @click="store.selection = null"
+        >
+          <Icon name="chevron-down" :size="12" /> Composant
+        </button>
+      </div>
+      <div class="row">
+        <label class="field">
+          <span>Nom</span>
+          <input
+            type="text"
+            :value="selectedPin.name"
+            @change="setPinName(selectedPin.id, $event)"
+          />
+        </label>
+        <label class="field">
+          <span>Type</span>
+          <select :value="selectedPin.kind" @change="setPinKind(selectedPin.id, $event)">
+            <option v-for="kind in PIN_KINDS" :key="kind" :value="kind">
+              {{ PIN_KIND_LABELS[kind] }}
+            </option>
+          </select>
+        </label>
+      </div>
+      <p class="hint">
+        Sur le bord en ({{ selectedPin.x }}, {{ selectedPin.y }}). Glisse-la le long du bord pour la
+        déplacer ; les noms numériques suivent l’ordre des broches.
+      </p>
+      <button type="button" class="danger with-icon" @click="store.removePin(selectedPin.id)">
+        <Icon name="trash" /> Supprimer la broche
+      </button>
+    </section>
+
+    <!-- Rien de sélectionné : le composant -->
+    <template v-else>
+      <section class="block">
+        <h3>Composant</h3>
+        <label class="field">
+          <span>Nom</span>
+          <input type="text" :value="doc.name" @change="setName" />
+        </label>
+        <label class="field">
+          <span>Catégorie</span>
+          <input
+            type="text"
+            :value="doc.category"
+            @change="store.setMeta({ category: inputValue($event) })"
+          />
+        </label>
+        <label class="field">
+          <span>Description</span>
+          <textarea
+            rows="2"
+            :value="doc.description"
+            @change="store.setMeta({ description: inputValue($event) })"
+          />
+        </label>
+        <div class="row">
+          <label class="field">
+            <span>Largeur (cellules)</span>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              :value="doc.size.widthCells"
+              @change="setSize('widthCells', $event)"
+            />
+          </label>
+          <label class="field">
+            <span>Hauteur (cellules)</span>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              :value="doc.size.heightCells"
+              @change="setSize('heightCells', $event)"
+            />
+          </label>
+        </div>
+        <p v-if="store.folder" class="hint">Dossier : {{ store.folder }}</p>
+        <p v-else class="hint">Pas encore enregistré ; l’identifiant sera dérivé du nom.</p>
+      </section>
+
+      <section class="block">
+        <h3>Broches</h3>
+        <p v-if="doc.pins.length === 0" class="hint">
+          Aucune broche. Outil Broche (B), puis clic sur une intersection du bord.
+        </p>
+        <div
+          v-for="(pin, index) in doc.pins"
+          :key="pin.id"
+          class="pin-row"
+          @pointerenter="store.hoverPinId = pin.id"
+          @pointerleave="store.hoverPinId = null"
+          @click="selectPin(pin.id)"
+        >
+          <span class="ordinal">{{ index + 1 }}</span>
+          <input
+            type="text"
+            :value="pin.name"
+            title="Nom de la broche"
+            @click.stop
+            @change="setPinName(pin.id, $event)"
+          />
+          <select :value="pin.kind" title="Type" @click.stop @change="setPinKind(pin.id, $event)">
+            <option v-for="kind in PIN_KINDS" :key="kind" :value="kind">
+              {{ PIN_KIND_LABELS[kind] }}
+            </option>
+          </select>
+          <button
+            type="button"
+            class="small danger"
+            title="Supprimer la broche"
+            @click.stop="store.removePin(pin.id)"
+          >
+            ✕
+          </button>
+        </div>
+        <p v-if="doc.pins.length > 0" class="hint">
+          Les noms numériques suivent l’ordre ; glisse une broche le long du bord pour la déplacer.
+        </p>
+      </section>
+
+      <section class="block">
+        <h3>Visuel</h3>
+        <p v-if="doc.visual.kind === 'drawing'" class="hint">
+          Dessin : {{ doc.visual.primitives.length }} forme(s), trait de base
+          {{ strokeBase }} cellule (profil de style). Clique une forme pour ses réglages, glisse un
+          lasso pour en prendre plusieurs.
+        </p>
+        <p v-else class="hint">Image PNG à {{ doc.visual.pxPerCell }} px par cellule.</p>
+        <div class="row">
+          <button type="button" class="with-icon" @click="importPng">
+            <Icon name="image" /> Importer un PNG…
+          </button>
+          <button v-if="doc.visual.kind === 'png'" type="button" @click="store.setVisualDrawing()">
+            Revenir au dessin
+          </button>
+        </div>
+        <div v-if="pending" class="notice">
+          <p>
+            Le PNG fait {{ pending.width }} × {{ pending.height }} px, soit
+            {{ (pending.width / 80).toFixed(2) }} × {{ (pending.height / 80).toFixed(2) }} cellules.
+            Le redimensionner en {{ pending.fit.targetWidth }} × {{ pending.fit.targetHeight }} px
+            ({{ pending.fit.widthCells }} × {{ pending.fit.heightCells }} cellules) ?
+          </p>
+          <div class="row">
+            <button type="button" class="primary" @click="acceptResize">Redimensionner</button>
+            <button type="button" @click="pending = null">Annuler</button>
+          </div>
+        </div>
+        <p v-if="importError" class="error">{{ importError }}</p>
+      </section>
+    </template>
 
     <section class="block">
       <h3>Contrôles</h3>
@@ -533,6 +618,28 @@ function setClosed(event: Event): void {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
+}
+
+.head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.head-row h3 {
+  margin: 0;
+}
+
+.head-row button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.head-row .icon {
+  transform: rotate(90deg);
 }
 
 .field {
@@ -598,10 +705,6 @@ function setClosed(event: Event): void {
   background: var(--surface-3);
 }
 
-.pin-row.selected {
-  background: var(--accent-soft);
-}
-
 .pin-row .ordinal {
   font-size: 12px;
   font-weight: 600;
@@ -618,13 +721,14 @@ function setClosed(event: Event): void {
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--surface);
+  color: var(--text);
 }
 
 .hint {
-  margin: 4px 0 0;
+  margin: 4px 0 8px;
   font-size: 12px;
   color: var(--text-muted);
-  word-break: break-all;
+  word-break: break-word;
 }
 
 .notice {

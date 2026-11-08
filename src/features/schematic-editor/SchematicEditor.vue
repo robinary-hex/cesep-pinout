@@ -503,7 +503,12 @@ defineExpose({ createNew, open, openRecent, save, openExport })
         @edit-instance="editInstance"
         @edit-label="editLabelText"
       />
-      <SchematicInspector v-if="store.inspectorOpen" @edit-profile="showProfile = true" />
+      <SchematicInspector
+        v-if="store.inspectorOpen"
+        @edit-profile="showProfile = true"
+        @save="save(false)"
+        @export-image="openExport"
+      />
     </div>
     <ExportDialog v-if="showExport" @close="showExport = false" />
     <ProfileDialog v-if="showProfile" @close="showProfile = false" />
