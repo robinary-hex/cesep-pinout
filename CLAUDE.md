@@ -27,7 +27,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 
 - Coordonnées du domaine : entiers en unités de grille. Les composants occupent des cellules ;
   broches et fils vivent sur les intersections ; broches uniquement sur le bord du composant.
-- Primitives du mini-éditeur : entiers en quarts de cellule.
+- Primitives du mini-éditeur : entiers en quarts de cellule. Épaisseur d'une forme = `weight`
+  (multiplicateur, choix dans `STROKE_WEIGHTS`) × `componentStroke` du profil de style (0,1 cellule
+  par défaut) : un montage change d'épaisseur avec son profil. Lignes et polylignes ouvertes portent
+  des flèches optionnelles (`arrows`). Un texte `variable` a pour contenu le nom du champ ; l'instance
+  posée fournit la valeur (`instance.fields`), sinon `defaultValue` s'affiche.
 - PNG de composant : 80 px par cellule (4× la cellule d'affichage de 20 px).
 - Orientation d'une instance : miroir local puis rotation horaire (`transformLocalPoint`,
   `instanceMatrix`). Un miroir à l'écran bascule `mirror` et inverse la rotation
@@ -66,10 +70,16 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   produit l'installeur NSIS et l'exe portable dans `release/` (non signés : avertissement
   SmartScreen au premier lancement, normal). Un `.json` passé en argument s'ouvre au lancement.
   - Éditeur de composants : V sélection, R rectangle, O ellipse, L ligne, P polyligne, E texte,
-    B broche, Suppr, Échap, Entrée (termine une polyligne), Ctrl+Z / Ctrl+Y, Ctrl+S, Ctrl+N.
+    B broche, Suppr, Échap, Entrée (termine une polyligne), Ctrl+Z / Ctrl+Y, Ctrl+S, Ctrl+N,
+    Ctrl+molette = zoom centré sur le curseur (boutons −/+/Ajuster dans la barre). La forme
+    sélectionnée montre ses poignées (`src/domain/handles.ts`) ; Ctrl+glisser sur une forme saisit
+    la poignée la plus proche. Redimensionner le composant supprime les broches qui ne sont plus sur
+    le bord ; les noms numériques des broches suivent toujours leur ordre (`renumberPins`).
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`.
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 2, projet 2, paramètres 3
+  (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
+  supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.
 
 ## Git

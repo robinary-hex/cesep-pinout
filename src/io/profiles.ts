@@ -1,4 +1,4 @@
-import { slugify, styleProfileSchema, type StyleProfile } from '@/domain'
+import { DEFAULT_COMPONENT_STROKE, slugify, styleProfileSchema, type StyleProfile } from '@/domain'
 import { bridge } from './bridge'
 import { joinPath } from './paths'
 
@@ -24,7 +24,13 @@ export async function listProfiles(): Promise<SavedProfile[]> {
     if (entry.isDirectory || !entry.name.toLowerCase().endsWith('.json')) continue
     const path = joinPath(dir, entry.name)
     try {
-      const parsed = styleProfileSchema.safeParse(JSON.parse(await bridge().readTextFile(path)))
+      const raw: unknown = JSON.parse(await bridge().readTextFile(path))
+      // Les profils enregistrés avant le trait des composants reçoivent la valeur par défaut.
+      const candidate =
+        typeof raw === 'object' && raw !== null
+          ? { componentStroke: DEFAULT_COMPONENT_STROKE, ...raw }
+          : raw
+      const parsed = styleProfileSchema.safeParse(candidate)
       if (parsed.success) result.push({ path, profile: parsed.data })
     } catch {
       // Un fichier illisible n'empêche pas de lister les autres.

@@ -43,9 +43,18 @@ const emit = defineEmits<{ save: []; create: [] }>()
     </div>
 
     <div class="group">
-      <button type="button" title="Zoom arrière" @click="store.zoom(-1)">−</button>
+      <button type="button" title="Zoom arrière (Ctrl+molette)" @click="store.zoomBy(1 / 1.25)">
+        −
+      </button>
       <span class="zoom">{{ store.cellPx }} px</span>
-      <button type="button" title="Zoom avant" @click="store.zoom(1)">+</button>
+      <button type="button" title="Zoom avant (Ctrl+molette)" @click="store.zoomBy(1.25)">+</button>
+      <button
+        type="button"
+        title="Ajuster le composant à la fenêtre"
+        @click="store.fitToViewport()"
+      >
+        Ajuster
+      </button>
     </div>
 
     <div class="spacer" />
@@ -105,7 +114,7 @@ const emit = defineEmits<{ save: []; create: [] }>()
 }
 
 .zoom {
-  min-width: 44px;
+  min-width: 48px;
   text-align: center;
   font-variant-numeric: tabular-nums;
   color: #57606a;

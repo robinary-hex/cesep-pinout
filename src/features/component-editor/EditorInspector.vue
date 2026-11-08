@@ -1,15 +1,25 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { fitPngToCells, PIN_KIND_LABELS, PIN_KINDS, type PinKind, type PngFit } from '@/domain'
+import {
+  fitPngToCells,
+  PIN_KIND_LABELS,
+  PIN_KINDS,
+  STROKE_WEIGHTS,
+  strokeWidthCells,
+  type PinKind,
+  type PngFit
+} from '@/domain'
+import { useLibraryStore } from '@/features/library/store'
 import { pickPng, resizePng } from './pngImport'
 import { useComponentEditorStore } from './store'
 
-// Panneau de droite : propriétés du composant, de la forme ou de la broche sélectionnée,
-// liste des problèmes. Les champs valident au changement (pas à chaque touche), donc
-// une modification = une commande annulable.
+// Panneau de droite : propriétés du composant, liste des broches, forme sélectionnée, contrôles.
+// Les champs valident au changement (pas à chaque touche), donc une modification = une commande.
 
 const store = useComponentEditorStore()
+const library = useLibraryStore()
 const doc = computed(() => store.doc)
+const strokeBase = computed(() => library.defaultProfile.componentStroke)
 
 function inputValue(event: Event): string {
   return (event.target as HTMLInputElement).value
@@ -75,6 +85,27 @@ async function acceptResize(): Promise<void> {
   }
 }
 
+// Broches
+
+const selectedPinId = computed(() => (store.selection?.kind === 'pin' ? store.selection.id : null))
+
+function selectPin(id: string): void {
+  store.selection = { kind: 'pin', id }
+}
+
+function setPinName(id: string, event: Event): void {
+  const name = inputValue(event).trim()
+  if (name.length === 0) {
+    store.status = 'Le nom de la broche ne peut pas être vide.'
+    return
+  }
+  store.updatePin(id, { name })
+}
+
+function setPinKind(id: string, event: Event): void {
+  store.updatePin(id, { kind: inputValue(event) as PinKind })
+}
+
 // Forme sélectionnée
 
 const primitive = computed(() => store.selectedPrimitive)
@@ -84,6 +115,12 @@ const primitiveIndex = computed(() =>
 const shapeStyle = computed(() =>
   primitive.value && primitive.value.kind !== 'text' ? primitive.value.style : null
 )
+const weightChoices = computed(() => {
+  const current = shapeStyle.value?.weight
+  const list: number[] = [...STROKE_WEIGHTS]
+  if (current !== undefined && !list.includes(current)) list.push(current)
+  return list.sort((a, b) => a - b)
+})
 
 const KIND_LABELS: Record<string, string> = {
   rect: 'Rectangle',
@@ -101,8 +138,8 @@ function toggleStroke(event: Event): void {
   store.updateStyle(primitiveIndex.value, { stroke: checked(event) ? 'none' : '#000000' })
 }
 
-function setStrokeWidth(event: Event): void {
-  store.updateStyle(primitiveIndex.value, { strokeWidth: Math.max(0, numberValue(event)) })
+function setWeight(event: Event): void {
+  store.updateStyle(primitiveIndex.value, { weight: Math.max(0, numberValue(event)) })
 }
 
 function setFill(event: Event): void {
@@ -113,10 +150,44 @@ function toggleFill(event: Event): void {
   store.updateStyle(primitiveIndex.value, { fill: checked(event) ? 'none' : '#ffffff' })
 }
 
+function setArrow(end: 'start' | 'end', event: Event): void {
+  const on = checked(event)
+  store.updatePrimitive(
+    primitiveIndex.value,
+    on ? 'Ajouter une flèche' : 'Retirer la flèche',
+    (p) => {
+      if (p.kind === 'line' || p.kind === 'polyline') p.arrows[end] = on
+    }
+  )
+}
+
 function setText(event: Event): void {
   const text = inputValue(event)
   store.updatePrimitive(primitiveIndex.value, 'Modifier le texte', (p) => {
     if (p.kind === 'text') p.text = text
+  })
+}
+
+function setVariable(event: Event): void {
+  const variable = checked(event)
+  store.updatePrimitive(primitiveIndex.value, variable ? 'Texte variable' : 'Texte fixe', (p) => {
+    if (p.kind !== 'text') return
+    if (variable && !p.variable) {
+      // Le texte saisi devient la valeur par défaut ; le nom du champ reste à donner.
+      p.defaultValue = p.text
+      p.text = 'valeur'
+    } else if (!variable && p.variable) {
+      p.text = p.defaultValue.length > 0 ? p.defaultValue : p.text
+      p.defaultValue = ''
+    }
+    p.variable = variable
+  })
+}
+
+function setDefaultValue(event: Event): void {
+  const value = inputValue(event)
+  store.updatePrimitive(primitiveIndex.value, 'Valeur par défaut', (p) => {
+    if (p.kind === 'text') p.defaultValue = value
   })
 }
 
@@ -158,24 +229,6 @@ function setClosed(event: Event): void {
     }
   )
 }
-
-// Broche sélectionnée
-
-const pin = computed(() => store.selectedPin)
-
-function setPinName(event: Event): void {
-  const name = inputValue(event).trim()
-  if (!pin.value) return
-  if (name.length === 0) {
-    store.status = 'Le nom de la broche ne peut pas être vide.'
-    return
-  }
-  store.updatePin(pin.value.id, { name })
-}
-
-function setPinKind(event: Event): void {
-  if (pin.value) store.updatePin(pin.value.id, { kind: inputValue(event) as PinKind })
-}
 </script>
 
 <template>
@@ -192,15 +245,6 @@ function setPinKind(event: Event): void {
           type="text"
           :value="doc.category"
           @change="store.setMeta({ category: inputValue($event) })"
-        />
-      </label>
-      <label class="field">
-        <span>Préfixe de repère</span>
-        <input
-          type="text"
-          :value="doc.labelPrefix"
-          placeholder="R, C, U…"
-          @change="store.setMeta({ labelPrefix: inputValue($event).trim() })"
         />
       </label>
       <label class="field">
@@ -238,10 +282,50 @@ function setPinKind(event: Event): void {
     </section>
 
     <section class="block">
+      <h3>Broches</h3>
+      <p v-if="doc.pins.length === 0" class="hint">
+        Aucune broche. Outil Broche (B), puis clic sur une intersection du bord.
+      </p>
+      <div
+        v-for="(pin, index) in doc.pins"
+        :key="pin.id"
+        class="pin-row"
+        :class="{ selected: selectedPinId === pin.id }"
+        @pointerenter="store.hoverPinId = pin.id"
+        @pointerleave="store.hoverPinId = null"
+        @click="selectPin(pin.id)"
+      >
+        <span class="ordinal">{{ index + 1 }}</span>
+        <input
+          type="text"
+          :value="pin.name"
+          title="Nom de la broche"
+          @change="setPinName(pin.id, $event)"
+        />
+        <select :value="pin.kind" title="Type" @change="setPinKind(pin.id, $event)">
+          <option v-for="kind in PIN_KINDS" :key="kind" :value="kind">
+            {{ PIN_KIND_LABELS[kind] }}
+          </option>
+        </select>
+        <button
+          type="button"
+          class="small danger"
+          title="Supprimer la broche"
+          @click.stop="store.removePin(pin.id)"
+        >
+          ✕
+        </button>
+      </div>
+      <p v-if="doc.pins.length > 0" class="hint">
+        Les noms numériques suivent l’ordre ; glisse une broche le long du bord pour la déplacer.
+      </p>
+    </section>
+
+    <section class="block">
       <h3>Visuel</h3>
       <p v-if="doc.visual.kind === 'drawing'">
-        Dessin : {{ doc.visual.primitives.length }} forme(s). Les formes se posent sur des quarts de
-        cellule.
+        Dessin : {{ doc.visual.primitives.length }} forme(s), trait de base {{ strokeBase }} cellule
+        (profil de style).
       </p>
       <p v-else>Image PNG à {{ doc.visual.pxPerCell }} px par cellule.</p>
       <div class="row">
@@ -271,9 +355,22 @@ function setPinKind(event: Event): void {
       <h3>{{ KIND_LABELS[primitive.kind] }}</h3>
 
       <template v-if="primitive.kind === 'text'">
+        <label class="check">
+          <input type="checkbox" :checked="primitive.variable" @change="setVariable" />
+          <span>Texte variable (valeur propre à chaque composant posé)</span>
+        </label>
         <label class="field">
-          <span>Texte</span>
+          <span>{{ primitive.variable ? 'Nom du champ' : 'Texte' }}</span>
           <input type="text" :value="primitive.text" @change="setText" />
+        </label>
+        <label v-if="primitive.variable" class="field">
+          <span>Valeur par défaut</span>
+          <input
+            type="text"
+            :value="primitive.defaultValue"
+            placeholder="10 kΩ"
+            @change="setDefaultValue"
+          />
         </label>
         <div class="row">
           <label class="field">
@@ -318,14 +415,24 @@ function setPinKind(event: Event): void {
           </label>
         </div>
         <label class="field">
-          <span>Épaisseur (cellules)</span>
-          <input
-            type="number"
-            min="0"
-            step="0.05"
-            :value="shapeStyle.strokeWidth"
-            @change="setStrokeWidth"
-          />
+          <span
+            >Épaisseur (× trait de base =
+            {{ strokeWidthCells(shapeStyle, strokeBase).toFixed(2) }} cellule)</span
+          >
+          <select :value="shapeStyle.weight" @change="setWeight">
+            <option v-for="weight in weightChoices" :key="weight" :value="weight">
+              ×{{ weight
+              }}{{
+                weight === 0.5
+                  ? ' (fin)'
+                  : weight === 1
+                    ? ' (normal)'
+                    : weight === 2
+                      ? ' (gras)'
+                      : ''
+              }}
+            </option>
+          </select>
         </label>
         <div class="row">
           <label class="field">
@@ -342,6 +449,28 @@ function setPinKind(event: Event): void {
             <span>Sans remplissage</span>
           </label>
         </div>
+        <template
+          v-if="primitive.kind === 'line' || (primitive.kind === 'polyline' && !primitive.closed)"
+        >
+          <div class="row">
+            <label class="check">
+              <input
+                type="checkbox"
+                :checked="primitive.arrows.start"
+                @change="setArrow('start', $event)"
+              />
+              <span>Flèche au début</span>
+            </label>
+            <label class="check">
+              <input
+                type="checkbox"
+                :checked="primitive.arrows.end"
+                @change="setArrow('end', $event)"
+              />
+              <span>Flèche à la fin</span>
+            </label>
+          </div>
+        </template>
         <label v-if="primitive.kind === 'rect'" class="field">
           <span>Arrondi des coins (quarts de cellule)</span>
           <input type="number" min="0" step="1" :value="primitive.rx" @change="setRectRadius" />
@@ -350,32 +479,14 @@ function setPinKind(event: Event): void {
           <input type="checkbox" :checked="primitive.closed" @change="setClosed" />
           <span>Fermée (polygone)</span>
         </label>
+        <p class="hint">
+          Poignées sur la forme pour la redimensionner ; Ctrl+glisser saisit la poignée la plus
+          proche.
+        </p>
       </template>
 
       <button type="button" class="danger" @click="store.removePrimitive(primitiveIndex)">
         Supprimer la forme
-      </button>
-    </section>
-
-    <section v-if="pin" class="block">
-      <h3>Broche</h3>
-      <label class="field">
-        <span>Nom</span>
-        <input type="text" :value="pin.name" @change="setPinName" />
-      </label>
-      <label class="field">
-        <span>Type</span>
-        <select :value="pin.kind" @change="setPinKind">
-          <option v-for="kind in PIN_KINDS" :key="kind" :value="kind">
-            {{ PIN_KIND_LABELS[kind] }}
-          </option>
-        </select>
-      </label>
-      <p class="hint">
-        Position : ({{ pin.x }}, {{ pin.y }}). Glisse-la le long du bord pour la déplacer.
-      </p>
-      <button type="button" class="danger" @click="store.removePin(pin.id)">
-        Supprimer la broche
       </button>
     </section>
 
@@ -459,6 +570,43 @@ function setPinKind(event: Event): void {
   margin-bottom: 8px;
   font-size: 12px;
   color: #57606a;
+}
+
+.pin-row {
+  display: grid;
+  grid-template-columns: 22px 1fr 1fr 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  margin: 0 -4px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.pin-row:hover {
+  background: #f0f3f6;
+}
+
+.pin-row.selected {
+  background: #ddf4ff;
+}
+
+.pin-row .ordinal {
+  font-size: 12px;
+  font-weight: 600;
+  color: #57606a;
+  text-align: right;
+}
+
+.pin-row input,
+.pin-row select {
+  font: inherit;
+  font-size: 12px;
+  min-width: 0;
+  padding: 3px 5px;
+  border: 1px solid #d0d7de;
+  border-radius: 4px;
+  background: #ffffff;
 }
 
 .hint {

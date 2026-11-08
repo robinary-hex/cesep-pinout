@@ -5,9 +5,10 @@ import ComponentGraphic from './ComponentGraphic.vue'
 
 // Vignette carrée d'un composant, broches comprises, pour la bibliothèque.
 
-const props = withDefaults(defineProps<{ def: ComponentDefinition; size?: number }>(), {
-  size: 72
-})
+const props = withDefaults(
+  defineProps<{ def: ComponentDefinition; size?: number; strokeBase?: number }>(),
+  { size: 72, strokeBase: 0.1 }
+)
 
 const PADDING = 8
 const PIN_COLORS: Record<PinKind, string> = {
@@ -37,7 +38,7 @@ const pinRadius = computed(() => Math.max(1.5, Math.min(3, cellPx.value / 4)))
         fill="#ffffff"
         stroke="#d0d7de"
       />
-      <ComponentGraphic :def="def" :cell-px="cellPx" />
+      <ComponentGraphic :def="def" :cell-px="cellPx" :stroke-base="strokeBase" />
       <circle
         v-for="pin in def.pins"
         :key="pin.id"

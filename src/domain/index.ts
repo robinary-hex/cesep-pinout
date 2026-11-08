@@ -1,9 +1,11 @@
 // Domaine : TypeScript pur, sans Vue, Pinia, Electron ni Node. Voir ARCHITECTURE.md.
+export * from './arrows'
 export * from './color'
 export * from './component'
 export * from './connectivity'
 export * from './crossings'
 export * from './grid'
+export * from './handles'
 export * from './migrations'
 export * from './placement'
 export * from './png'

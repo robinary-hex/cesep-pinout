@@ -11,6 +11,9 @@ export const junctionScaleSchema = z.union([
   z.literal(2.5)
 ])
 
+/** Trait de base des composants dessinés, en cellules ; les formes le multiplient. */
+export const DEFAULT_COMPONENT_STROKE = 0.1
+
 /**
  * Profil de style : l'échelle et le trait, partagés entre projets.
  * Un projet en garde une copie. Changer de profil redimensionne un montage sans le casser,
@@ -24,6 +27,8 @@ export const styleProfileSchema = z.object({
   wireWidth: z.number().positive(),
   /** Rayon des coins arrondis, en cellules (borné au rendu à la moitié du plus court segment). */
   cornerRadius: z.number().nonnegative(),
+  /** Trait de base des composants dessinés, en cellules (multiplié par le poids de chaque forme). */
+  componentStroke: z.number().positive(),
   /** Diamètre du point de jonction = wireWidth × junctionScale. */
   junctionScale: junctionScaleSchema,
   /** 'wire' = couleur du fil porteur ; sinon une couleur fixe. */
@@ -40,6 +45,7 @@ export const DEFAULT_PROFILE: StyleProfile = {
   cellPx: 20,
   wireWidth: 0.15,
   cornerRadius: 0.4,
+  componentStroke: DEFAULT_COMPONENT_STROKE,
   junctionScale: 2,
   junctionColor: 'wire',
   labelFont: { family: 'Segoe UI', size: 11 }

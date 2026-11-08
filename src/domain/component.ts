@@ -1,8 +1,8 @@
 import { z } from 'zod'
 import { hexColorSchema } from './color'
-import { isOnBorder, PNG_PX_PER_CELL, QUARTERS_PER_CELL, sizeSchema } from './grid'
+import { isOnBorder, PNG_PX_PER_CELL, QUARTERS_PER_CELL, sizeSchema, type Size } from './grid'
 
-export const COMPONENT_SCHEMA_VERSION = 1
+export const COMPONENT_SCHEMA_VERSION = 2
 
 export const pinKindSchema = z.enum(['in', 'out', 'io', 'power'])
 export type PinKind = z.infer<typeof pinKindSchema>
@@ -29,14 +29,28 @@ const quarterSchema = z.number().int()
 const quarterPointSchema = z.tuple([quarterSchema, quarterSchema])
 export type QuarterPoint = z.infer<typeof quarterPointSchema>
 
+/**
+ * Style d'une forme. L'épaisseur est un multiplicateur du « trait des composants » du profil de
+ * style (`componentStroke`, en cellules) : changer le profil change tous les composants d'un coup,
+ * chaque forme gardant sa nuance (fin, normal, gras).
+ */
 export const shapeStyleSchema = z.object({
   stroke: z.union([hexColorSchema, z.literal('none')]),
-  /** Épaisseur du trait, en cellules. */
-  strokeWidth: z.number().nonnegative(),
+  weight: z.number().nonnegative(),
   fill: z.union([hexColorSchema, z.literal('none')])
 })
 export type ShapeStyle = z.infer<typeof shapeStyleSchema>
-export const DEFAULT_SHAPE_STYLE: ShapeStyle = { stroke: '#000000', strokeWidth: 0.1, fill: 'none' }
+export const DEFAULT_SHAPE_STYLE: ShapeStyle = { stroke: '#000000', weight: 1, fill: 'none' }
+/** Nuances proposées par l'interface ; le schéma accepte tout multiplicateur positif. */
+export const STROKE_WEIGHTS = [0.5, 1, 1.5, 2, 3] as const
+
+export function strokeWidthCells(style: ShapeStyle, componentStroke: number): number {
+  return style.weight * componentStroke
+}
+
+export const arrowsSchema = z.object({ start: z.boolean(), end: z.boolean() })
+export type Arrows = z.infer<typeof arrowsSchema>
+export const NO_ARROWS: Arrows = { start: false, end: false }
 
 /** Formes du mini-éditeur de composants, rendues en SVG natif. */
 export const primitiveSchema = z.discriminatedUnion('kind', [
@@ -63,28 +77,46 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
     y1: quarterSchema,
     x2: quarterSchema,
     y2: quarterSchema,
+    arrows: arrowsSchema,
     style: shapeStyleSchema
   }),
   z.object({
     kind: z.literal('polyline'),
     points: z.array(quarterPointSchema).min(2),
     closed: z.boolean(),
+    arrows: arrowsSchema,
     style: shapeStyleSchema
   }),
   z.object({
     kind: z.literal('text'),
     x: quarterSchema,
     y: quarterSchema,
+    /** Texte affiché, ou nom du champ si le texte est variable. */
     text: z.string(),
     /** Hauteur du texte, en cellules. */
     size: z.number().positive(),
     anchor: z.enum(['start', 'middle', 'end']),
-    color: hexColorSchema
+    color: hexColorSchema,
+    /** Texte variable : chaque composant posé donne sa propre valeur au champ nommé `text`. */
+    variable: z.boolean(),
+    defaultValue: z.string()
   })
 ])
 export type Primitive = z.infer<typeof primitiveSchema>
 export type PrimitiveKind = Primitive['kind']
+export type TextPrimitive = Extract<Primitive, { kind: 'text' }>
 export type StyledPrimitive = Exclude<Primitive, { kind: 'text' }>
+
+/** Valeurs des champs variables d'un composant posé : nom du champ → valeur. */
+export type FieldValues = Readonly<Record<string, string>>
+
+/** Texte effectivement affiché : la valeur du champ, sinon la valeur par défaut, sinon {nom}. */
+export function textContent(primitive: TextPrimitive, fields?: FieldValues): string {
+  if (!primitive.variable) return primitive.text
+  const value = fields?.[primitive.text]
+  if (value !== undefined && value.length > 0) return value
+  return primitive.defaultValue.length > 0 ? primitive.defaultValue : `{${primitive.text}}`
+}
 
 export const visualSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -108,8 +140,6 @@ const componentShape = z.object({
   name: z.string().min(1),
   category: z.string(),
   description: z.string(),
-  /** Préfixe de repère proposé au montage : R, C, U… */
-  labelPrefix: z.string(),
   size: sizeSchema,
   visual: visualSchema,
   pins: z.array(pinSchema)
@@ -125,11 +155,40 @@ export function createEmptyComponent(id: string, name: string): ComponentDefinit
     name,
     category: DEFAULT_CATEGORY,
     description: '',
-    labelPrefix: '',
     size: { widthCells: 4, heightCells: 2 },
     visual: { kind: 'drawing', primitives: [] },
     pins: []
   }
+}
+
+export interface ComponentField {
+  name: string
+  defaultValue: string
+}
+
+/** Champs variables d'un composant (textes variables), dans l'ordre du dessin, sans doublon. */
+export function componentFields(def: ComponentDefinition): ComponentField[] {
+  if (def.visual.kind !== 'drawing') return []
+  const seen = new Set<string>()
+  const fields: ComponentField[] = []
+  for (const primitive of def.visual.primitives) {
+    if (primitive.kind !== 'text' || !primitive.variable || seen.has(primitive.text)) continue
+    seen.add(primitive.text)
+    fields.push({ name: primitive.text, defaultValue: primitive.defaultValue })
+  }
+  return fields
+}
+
+/** Broches encore sur le bord d'une boîte donnée (après redimensionnement). */
+export function pinsOnBorder(pins: readonly Pin[], size: Size): Pin[] {
+  return pins.filter((pin) => isOnBorder(pin, size))
+}
+
+/** Les noms purement numériques suivent l'ordre des broches ; les autres ne bougent pas. */
+export function renumberPins(pins: readonly Pin[]): Pin[] {
+  return pins.map((pin, index) =>
+    /^\d+$/.test(pin.name) ? { ...pin, name: String(index + 1) } : pin
+  )
 }
 
 export interface ComponentIssue {
@@ -176,7 +235,8 @@ export function primitiveBounds(primitive: Primitive): Bounds {
     }
     case 'text': {
       // Largeur estimée : 0,6 × hauteur par caractère.
-      const width = Math.ceil(primitive.text.length * primitive.size * QUARTERS_PER_CELL * 0.6)
+      const shown = textContent(primitive)
+      const width = Math.ceil(shown.length * primitive.size * QUARTERS_PER_CELL * 0.6)
       const half = Math.ceil((primitive.size * QUARTERS_PER_CELL) / 2)
       const x1 =
         primitive.anchor === 'start'
@@ -289,6 +349,12 @@ export function componentIssues(def: ComponentDefinition): ComponentIssue[] {
     const maxY = def.size.heightCells * QUARTERS_PER_CELL
     if (def.visual.primitives.some((primitive) => !primitiveWithin(primitive, maxX, maxY))) {
       issues.push({ level: 'warning', message: 'Une forme dépasse la boîte du composant' })
+    }
+    const emptyField = def.visual.primitives.find(
+      (primitive) => primitive.kind === 'text' && primitive.variable && primitive.text.trim() === ''
+    )
+    if (emptyField) {
+      issues.push({ level: 'error', message: 'Un texte variable doit avoir un nom de champ' })
     }
   }
 

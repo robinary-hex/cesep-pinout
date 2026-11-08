@@ -8,7 +8,6 @@ import {
   crossingPieces,
   flippedInstance,
   nearestCrossing,
-  nextLabel,
   nextNumberedId,
   normalizePoints,
   projectBounds,
@@ -324,7 +323,8 @@ export const useSchematicStore = defineStore('schematic', () => {
       y: 0,
       rotation: current.rotation,
       mirror: current.mirror,
-      label: ''
+      label: '',
+      fields: {}
     }
   }
 
@@ -351,10 +351,6 @@ export const useSchematicStore = defineStore('schematic', () => {
       'c',
       doc.value.components.map((instance) => instance.id)
     )
-    const label = nextLabel(
-      def.labelPrefix,
-      doc.value.components.map((instance) => instance.label)
-    )
     apply(`Poser ${def.name}`, (draft) => {
       if (!Object.hasOwn(draft.embeddedDefs, def.id)) {
         draft.embeddedDefs[def.id] = castDraft(structuredClone(def))
@@ -366,10 +362,11 @@ export const useSchematicStore = defineStore('schematic', () => {
         y,
         rotation: current.rotation,
         mirror: current.mirror,
-        label
+        label: '',
+        fields: {}
       })
     })
-    status.value = `${def.name} posé${label ? ` (${label})` : ''}. Échap pour arrêter.`
+    status.value = `${def.name} posé. Échap pour arrêter.`
     return id
   }
 
@@ -675,20 +672,14 @@ export const useSchematicStore = defineStore('schematic', () => {
   function insertCopies(data: ClipboardData, dx: number, dy: number, label: string): void {
     if (data.items.length === 0 && data.wires.length === 0 && data.labels.length === 0) return
     const instanceIds = doc.value.components.map((instance) => instance.id)
-    const labels = doc.value.components.map((instance) => instance.label)
     const copies: ClipboardItem[] = []
     for (const item of data.items) {
       const id = nextNumberedId('c', [...instanceIds, ...copies.map((copy) => copy.instance.id)])
-      const copyLabel = nextLabel(item.def.labelPrefix, [
-        ...labels,
-        ...copies.map((copy) => copy.instance.label)
-      ])
       copies.push({
         def: item.def,
         instance: {
           ...item.instance,
           id,
-          label: copyLabel,
           x: item.instance.x + dx,
           y: item.instance.y + dy
         }

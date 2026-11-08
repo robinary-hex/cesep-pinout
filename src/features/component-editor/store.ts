@@ -4,7 +4,9 @@ import { computed, ref, shallowRef } from 'vue'
 import {
   componentIssues,
   createEmptyComponent,
+  pinsOnBorder,
   PNG_PX_PER_CELL,
+  renumberPins,
   translatePrimitive,
   type ComponentDefinition,
   type LocalPoint,
@@ -18,7 +20,9 @@ import type { ToolId } from './tools'
 
 export type Selection = { kind: 'primitive'; index: number } | { kind: 'pin'; id: string } | null
 
-const ZOOM_LEVELS = [20, 30, 40, 60, 80]
+const MIN_CELL_PX = 8
+const MAX_CELL_PX = 200
+const FIT_PADDING_PX = 48
 
 function nextPinId(pins: ReadonlyArray<Pin>): string {
   const taken = new Set(pins.map((pin) => pin.id))
@@ -43,7 +47,10 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   const folder = ref<string | null>(null)
   const selection = ref<Selection>(null)
   const tool = ref<ToolId>('select')
+  /** Pixels par cellule dans l'éditeur (zoom), continu. */
   const cellPx = ref(40)
+  const viewport = ref({ width: 800, height: 600 })
+  const hoverPinId = ref<string | null>(null)
   const status = ref('')
   const undoLabel = ref<string | null>(null)
   const redoLabel = ref<string | null>(null)
@@ -127,7 +134,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   // Commandes du composant
 
   function setMeta(
-    patch: Partial<Pick<ComponentDefinition, 'name' | 'category' | 'description' | 'labelPrefix'>>
+    patch: Partial<Pick<ComponentDefinition, 'name' | 'category' | 'description'>>
   ): void {
     apply('Modifier les propriétés', (draft) => {
       Object.assign(draft, patch)
@@ -140,16 +147,25 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     })
   }
 
+  /** Redimensionne ; les broches qui ne sont plus sur le bord disparaissent, les autres sont renumérotées. */
   function setSize(size: Size): void {
+    const kept = pinsOnBorder(doc.value.pins, size)
+    const removed = doc.value.pins.length - kept.length
     apply('Redimensionner', (draft) => {
       draft.size = { widthCells: size.widthCells, heightCells: size.heightCells }
+      if (removed > 0) draft.pins = castDraft(renumberPins(kept))
     })
+    if (removed > 0) {
+      status.value = `${removed} broche(s) hors du nouveau bord supprimée(s).`
+    }
   }
 
   function setVisualPng(dataUrl: string, size: Size): void {
+    const kept = pinsOnBorder(doc.value.pins, size)
     apply('Importer un PNG', (draft) => {
       draft.visual = { kind: 'png', file: 'image.png', pxPerCell: PNG_PX_PER_CELL, dataUrl }
       draft.size = { widthCells: size.widthCells, heightCells: size.heightCells }
+      if (kept.length !== draft.pins.length) draft.pins = castDraft(renumberPins(kept))
     })
     selection.value = null
   }
@@ -183,6 +199,14 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     apply(label, (draft) => {
       const primitive = drawing(draft)?.[index]
       if (primitive) mutate(primitive)
+    })
+  }
+
+  /** Remplace une forme entière (fin d'un glisser de poignée). */
+  function setPrimitive(index: number, primitive: Primitive, label: string): void {
+    apply(label, (draft) => {
+      const list = drawing(draft)
+      if (list && index < list.length) list[index] = castDraft(primitive)
     })
   }
 
@@ -242,9 +266,11 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     })
   }
 
+  /** Supprime une broche ; les noms numériques des autres suivent leur nouvel ordre. */
   function removePin(id: string): void {
+    const remaining = doc.value.pins.filter((pin) => pin.id !== id)
     apply('Supprimer la broche', (draft) => {
-      draft.pins = draft.pins.filter((pin) => pin.id !== id)
+      draft.pins = castDraft(renumberPins(remaining))
     })
     selection.value = null
   }
@@ -257,10 +283,24 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
 
   // Affichage
 
-  function zoom(direction: 1 | -1): void {
-    const position = ZOOM_LEVELS.indexOf(cellPx.value)
-    const next = ZOOM_LEVELS[position + direction]
-    if (next !== undefined) cellPx.value = next
+  function setCellPx(value: number): void {
+    cellPx.value = Math.round(Math.min(MAX_CELL_PX, Math.max(MIN_CELL_PX, value)))
+  }
+
+  function zoomBy(factor: number): void {
+    setCellPx(cellPx.value * factor)
+  }
+
+  /** Taille de cellule qui fait tenir le composant, avec sa marge, dans la zone visible. */
+  function fitToViewport(): void {
+    const columns = doc.value.size.widthCells + 2
+    const rows = doc.value.size.heightCells + 2
+    setCellPx(
+      Math.min(
+        (viewport.value.width - FIT_PADDING_PX) / columns,
+        (viewport.value.height - FIT_PADDING_PX) / rows
+      )
+    )
   }
 
   return {
@@ -269,6 +309,8 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     selection,
     tool,
     cellPx,
+    viewport,
+    hoverPinId,
     status,
     undoLabel,
     redoLabel,
@@ -289,6 +331,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     setVisualDrawing,
     addPrimitive,
     updatePrimitive,
+    setPrimitive,
     updateStyle,
     movePrimitive,
     removePrimitive,
@@ -297,6 +340,8 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     movePin,
     removePin,
     removeSelection,
-    zoom
+    setCellPx,
+    zoomBy,
+    fitToViewport
   }
 })

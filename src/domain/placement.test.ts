@@ -33,7 +33,8 @@ const base: ComponentInstance = {
   y: 20,
   rotation: 0,
   mirror: false,
-  label: 'U1'
+  label: 'U1',
+  fields: {}
 }
 
 describe('boîtes et matrices des instances', () => {

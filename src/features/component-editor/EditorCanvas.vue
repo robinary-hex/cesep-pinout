@@ -1,26 +1,36 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import {
   DEFAULT_SHAPE_STYLE,
+  dragHandle,
   nearestBorderPoint,
+  nearestHandle,
+  NO_ARROWS,
   primitiveBounds,
+  primitiveHandles,
   QUARTERS_PER_CELL,
   type LocalPoint,
   type Pin,
-  type PinKind
+  type PinKind,
+  type Primitive
 } from '@/domain'
+import { useLibraryStore } from '@/features/library/store'
 import ComponentGraphic from '@/render/ComponentGraphic.vue'
 import { useComponentEditorStore } from './store'
 
-// Canevas SVG de l'éditeur de composants : grille, formes, broches, aperçus de tracé.
+// Canevas SVG de l'éditeur de composants : grille, formes, broches, poignées, aperçus de tracé.
 // Les coordonnées souris sont converties en cellules puis en quarts de cellule ;
 // le domaine ne reçoit que des entiers.
 
 const store = useComponentEditorStore()
+const library = useLibraryStore()
 const svg = ref<SVGSVGElement | null>(null)
+const scroller = ref<HTMLDivElement | null>(null)
 
 const MARGIN_CELLS = 1
+const SCROLL_PADDING_PX = 24
 const PIN_SNAP_CELLS = 0.75
+const ZOOM_STEP = 1.1
 const PIN_COLORS: Record<PinKind, string> = {
   in: '#15803d',
   out: '#ea580c',
@@ -36,6 +46,7 @@ const boxWidth = computed(() => size.value.widthCells * cell.value)
 const boxHeight = computed(() => size.value.heightCells * cell.value)
 const svgWidth = computed(() => boxWidth.value + 2 * origin.value)
 const svgHeight = computed(() => boxHeight.value + 2 * origin.value)
+const strokeBase = computed(() => library.defaultProfile.componentStroke)
 
 interface QPoint {
   x: number
@@ -47,6 +58,7 @@ type Drag =
   | { kind: 'polyline'; points: QPoint[]; current: QPoint }
   | { kind: 'move-primitive'; index: number; start: QPoint; current: QPoint }
   | { kind: 'move-pin'; id: string; current: LocalPoint }
+  | { kind: 'handle'; index: number; handleId: string; original: Primitive; preview: Primitive }
 
 type Preview =
   | { kind: 'rect'; x: number; y: number; width: number; height: number }
@@ -58,7 +70,22 @@ const drag = ref<Drag | null>(null)
 /** Position du pointeur en cellules (flottant), null hors du canevas. */
 const hover = ref<LocalPoint | null>(null)
 
-function pointerCells(event: PointerEvent): LocalPoint {
+let observer: ResizeObserver | null = null
+
+onMounted(() => {
+  const element = scroller.value
+  if (!element) return
+  const update = (): void => {
+    store.viewport = { width: element.clientWidth, height: element.clientHeight }
+  }
+  update()
+  observer = new ResizeObserver(update)
+  observer.observe(element)
+})
+
+onUnmounted(() => observer?.disconnect())
+
+function pointerCells(event: PointerEvent | WheelEvent): LocalPoint {
   const element = svg.value
   if (!element) return { x: 0, y: 0 }
   const rect = element.getBoundingClientRect()
@@ -133,8 +160,22 @@ const moving = computed(() => {
     : null
 })
 
+const handlePreview = computed(() => {
+  const current = drag.value
+  return current?.kind === 'handle' ? { index: current.index, primitive: current.preview } : null
+})
+
+/** La forme sélectionnée telle qu'affichée (aperçu de poignée compris). */
+const shownSelected = computed<Primitive | null>(() => {
+  const selected = store.selection
+  if (selected?.kind !== 'primitive') return null
+  const preview = handlePreview.value
+  if (preview && preview.index === selected.index) return preview.primitive
+  return store.selectedPrimitive
+})
+
 const selectionBox = computed(() => {
-  const primitive = store.selectedPrimitive
+  const primitive = shownSelected.value
   const selected = store.selection
   if (!primitive || selected?.kind !== 'primitive') return null
   const bounds = primitiveBounds(primitive)
@@ -146,6 +187,16 @@ const selectionBox = computed(() => {
     width: px(bounds.x2 - bounds.x1) + 8,
     height: px(bounds.y2 - bounds.y1) + 8
   }
+})
+
+const handles = computed(() => {
+  const primitive = shownSelected.value
+  if (!primitive || store.tool !== 'select' || moving.value) return []
+  return primitiveHandles(primitive).map((handle) => ({
+    ...handle,
+    px: px(handle.x),
+    py: px(handle.y)
+  }))
 })
 
 const preview = computed<Preview | null>(() => {
@@ -193,13 +244,43 @@ function capture(event: PointerEvent): void {
   svg.value?.setPointerCapture(event.pointerId)
 }
 
+function primitiveAt(index: number): Primitive | null {
+  return store.doc.visual.kind === 'drawing' ? (store.doc.visual.primitives[index] ?? null) : null
+}
+
+function startHandleDrag(index: number, handleId: string, event: PointerEvent): void {
+  const primitive = primitiveAt(index)
+  if (!primitive) return
+  store.selection = { kind: 'primitive', index }
+  drag.value = { kind: 'handle', index, handleId, original: primitive, preview: primitive }
+  capture(event)
+}
+
 function onPrimitiveDown(index: number, event: PointerEvent): void {
   if (store.tool !== 'select' || event.button !== 0) return
   event.stopPropagation()
+  if (event.ctrlKey) {
+    // Ctrl+glisser : on saisit la poignée la plus proche du point cliqué.
+    const primitive = primitiveAt(index)
+    const cells = pointerCells(event)
+    const handle = primitive
+      ? nearestHandle(primitive, cells.x * QUARTERS_PER_CELL, cells.y * QUARTERS_PER_CELL)
+      : null
+    if (handle) {
+      startHandleDrag(index, handle.id, event)
+      return
+    }
+  }
   store.selection = { kind: 'primitive', index }
   const start = toQuarters(pointerCells(event))
   drag.value = { kind: 'move-primitive', index, start, current: start }
   capture(event)
+}
+
+function onHandleDown(handleId: string, event: PointerEvent): void {
+  if (event.button !== 0 || store.selection?.kind !== 'primitive') return
+  event.stopPropagation()
+  startHandleDrag(store.selection.index, handleId, event)
 }
 
 function onPinDown(id: string, event: PointerEvent): void {
@@ -247,7 +328,9 @@ function onPointerDown(event: PointerEvent): void {
           text: 'Texte',
           size: 0.5,
           anchor: 'middle',
-          color: '#000000'
+          color: '#000000',
+          variable: false,
+          defaultValue: ''
         },
         'Ajouter un texte'
       )
@@ -276,8 +359,14 @@ function onPointerMove(event: PointerEvent): void {
   hover.value = cells
   const current = drag.value
   if (!current) return
-  if (current.kind === 'move-pin') current.current = nearestBorderPoint(cells, size.value).point
-  else current.current = toQuarters(cells)
+  if (current.kind === 'move-pin') {
+    current.current = nearestBorderPoint(cells, size.value).point
+  } else if (current.kind === 'handle') {
+    const q = toQuarters(cells)
+    current.preview = dragHandle(current.original, current.handleId, [q.x, q.y])
+  } else {
+    current.current = toQuarters(cells)
+  }
 }
 
 function commitBox(box: Extract<Drag, { kind: 'box' }>): void {
@@ -291,6 +380,7 @@ function commitBox(box: Extract<Drag, { kind: 'box' }>): void {
         y1: box.start.y,
         x2: box.current.x,
         y2: box.current.y,
+        arrows: { ...NO_ARROWS },
         style
       },
       'Ajouter une ligne'
@@ -314,6 +404,10 @@ function commitBox(box: Extract<Drag, { kind: 'box' }>): void {
   )
 }
 
+function samePrimitive(a: Primitive, b: Primitive): boolean {
+  return JSON.stringify(a) === JSON.stringify(b)
+}
+
 function onPointerUp(event: PointerEvent): void {
   const current = drag.value
   if (!current || current.kind === 'polyline') return
@@ -326,8 +420,10 @@ function onPointerUp(event: PointerEvent): void {
       current.current.x - current.start.x,
       current.current.y - current.start.y
     )
-  } else {
+  } else if (current.kind === 'move-pin') {
     store.movePin(current.id, { x: current.current.x, y: current.current.y })
+  } else if (!samePrimitive(current.original, current.preview)) {
+    store.setPrimitive(current.index, current.preview, 'Modifier la forme')
   }
   if (svg.value?.hasPointerCapture(event.pointerId))
     svg.value.releasePointerCapture(event.pointerId)
@@ -343,6 +439,7 @@ function finishPolyline(): void {
       kind: 'polyline',
       points: current.points.map((p): [number, number] => [p.x, p.y]),
       closed: false,
+      arrows: { ...NO_ARROWS },
       style: { ...DEFAULT_SHAPE_STYLE }
     },
     'Ajouter une polyligne'
@@ -356,12 +453,31 @@ function cancel(): boolean {
   return true
 }
 
+/** Ctrl+molette : zoom centré sur le curseur ; la molette seule fait défiler. */
+async function onWheel(event: WheelEvent): Promise<void> {
+  if (!event.ctrlKey) return
+  event.preventDefault()
+  const element = svg.value
+  const container = scroller.value
+  if (!element || !container) return
+  const containerRect = container.getBoundingClientRect()
+  const world = pointerCells(event)
+  const before = cell.value
+  store.zoomBy(event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP)
+  if (cell.value === before) return
+  await nextTick()
+  const newX = world.x * cell.value + origin.value
+  const newY = world.y * cell.value + origin.value
+  container.scrollLeft = containerRect.left + SCROLL_PADDING_PX - event.clientX + newX
+  container.scrollTop = containerRect.top + SCROLL_PADDING_PX - event.clientY + newY
+}
+
 defineExpose({ cancel, finishPolyline })
 </script>
 
 <template>
   <div class="canvas-wrap">
-    <div class="canvas-scroll">
+    <div ref="scroller" class="canvas-scroll" @wheel="onWheel">
       <svg
         ref="svg"
         class="canvas"
@@ -407,8 +523,10 @@ defineExpose({ cancel, finishPolyline })
           <ComponentGraphic
             :def="store.doc"
             :cell-px="cell"
+            :stroke-base="strokeBase"
             interactive
             :moving="moving"
+            :preview="handlePreview"
             @primitive-down="onPrimitiveDown"
           />
 
@@ -432,16 +550,18 @@ defineExpose({ cancel, finishPolyline })
           </g>
 
           <g
-            v-for="pin in store.doc.pins"
+            v-for="(pin, index) in store.doc.pins"
             :key="pin.id"
             class="pin"
-            :class="{ selected: isSelectedPin(pin.id) }"
+            :class="{ selected: isSelectedPin(pin.id), hovered: store.hoverPinId === pin.id }"
             :transform="`translate(${pinPosition(pin).x * cell} ${pinPosition(pin).y * cell})`"
             @pointerdown="onPinDown(pin.id, $event)"
+            @pointerenter="store.hoverPinId = pin.id"
+            @pointerleave="store.hoverPinId = null"
           >
             <circle r="12" fill="transparent" />
             <circle
-              v-if="isSelectedPin(pin.id)"
+              v-if="isSelectedPin(pin.id) || store.hoverPinId === pin.id"
               r="10"
               fill="none"
               stroke="#1f6feb"
@@ -456,8 +576,21 @@ defineExpose({ cancel, finishPolyline })
               font-size="11"
               fill="#1f2328"
             >
-              {{ pin.name }}
+              {{ index + 1 }}{{ pin.name !== String(index + 1) ? ` · ${pin.name}` : '' }}
             </text>
+          </g>
+
+          <g class="handles">
+            <rect
+              v-for="handle in handles"
+              :key="handle.id"
+              class="handle"
+              :x="handle.px - 4"
+              :y="handle.py - 4"
+              width="8"
+              height="8"
+              @pointerdown="onHandleDown(handle.id, $event)"
+            />
           </g>
 
           <g v-if="preview" class="preview">
@@ -531,6 +664,13 @@ defineExpose({ cancel, finishPolyline })
   stroke-width: 1.5;
   stroke-dasharray: 5 3;
   pointer-events: none;
+}
+
+.handle {
+  fill: #ffffff;
+  stroke: #1f6feb;
+  stroke-width: 1.5;
+  cursor: move;
 }
 
 .pin-targets circle {

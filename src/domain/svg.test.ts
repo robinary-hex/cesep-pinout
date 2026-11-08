@@ -63,15 +63,69 @@ describe('export SVG', () => {
     ).toBeNull()
     expect(escapeXml('R < 10 & "ok"')).toBe('R &lt; 10 &amp; &quot;ok&quot;')
     expect(
-      primitiveSvg({
+      primitiveSvg(
+        {
+          kind: 'text',
+          x: 4,
+          y: 2,
+          text: '<5>',
+          size: 0.5,
+          anchor: 'start',
+          color: '#000000',
+          variable: false,
+          defaultValue: ''
+        },
+        0.1
+      )
+    ).toContain('>&lt;5&gt;</text>')
+  })
+
+  it('substitue les textes variables et dessine les flèches des lignes', () => {
+    const valeur = primitiveSvg(
+      {
         kind: 'text',
         x: 4,
         y: 2,
-        text: '<5>',
+        text: 'valeur',
         size: 0.5,
         anchor: 'start',
-        color: '#000000'
-      })
-    ).toContain('>&lt;5&gt;</text>')
+        color: '#000000',
+        variable: true,
+        defaultValue: '10 kΩ'
+      },
+      0.1
+    )
+    expect(valeur).toContain('>10 kΩ</text>')
+    expect(
+      primitiveSvg(
+        {
+          kind: 'text',
+          x: 4,
+          y: 2,
+          text: 'valeur',
+          size: 0.5,
+          anchor: 'start',
+          color: '#000000',
+          variable: true,
+          defaultValue: '10 kΩ'
+        },
+        0.1,
+        { valeur: '4,7 kΩ' }
+      )
+    ).toContain('>4,7 kΩ</text>')
+    const arrow = primitiveSvg(
+      {
+        kind: 'line',
+        x1: 0,
+        y1: 4,
+        x2: 8,
+        y2: 4,
+        arrows: { start: false, end: true },
+        style: { stroke: '#000000', weight: 2, fill: 'none' }
+      },
+      0.1
+    )
+    expect(arrow).toContain('stroke-width="0.2"')
+    expect(arrow).toContain('<polygon points="2,1 1.3,1.28 1.3,0.72" fill="#000000"/>')
   })
 })

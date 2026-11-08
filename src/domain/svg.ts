@@ -1,7 +1,14 @@
-import type { ComponentDefinition, Primitive } from './component'
+import { arrowHeadPoints, pointsAttribute } from './arrows'
+import {
+  strokeWidthCells,
+  textContent,
+  type ComponentDefinition,
+  type FieldValues,
+  type Primitive
+} from './component'
 import { computeConnectivity, projectPins, type FreeEnd } from './connectivity'
 import { crossingPieces } from './crossings'
-import { QUARTERS_PER_CELL, type GridPoint } from './grid'
+import { QUARTERS_PER_CELL, type GridPoint, type LocalPoint } from './grid'
 import { instanceBounds, instanceMatrix, matrixToSvg, projectBounds, unionRects } from './placement'
 import type { Project } from './project'
 import type { ExportSettings } from './settings'
@@ -47,8 +54,48 @@ const q = (quarters: number): number => quarters / QUARTERS_PER_CELL
 
 const FONT_STACK = "'Segoe UI', sans-serif"
 
+/** Pointes de flèche d'une ligne ou d'une polyligne ouverte, en unités de cellule. */
+function arrowsSvg(
+  primitive: Extract<Primitive, { kind: 'line' | 'polyline' }>,
+  width: number
+): string {
+  if (primitive.style.stroke === 'none') return ''
+  if (primitive.kind === 'polyline' && primitive.closed) return ''
+  const points: LocalPoint[] =
+    primitive.kind === 'line'
+      ? [
+          { x: q(primitive.x1), y: q(primitive.y1) },
+          { x: q(primitive.x2), y: q(primitive.y2) }
+        ]
+      : primitive.points.map(([x, y]) => ({ x: q(x), y: q(y) }))
+  const first = points[0]
+  const second = points[1]
+  const last = points.at(-1)
+  const beforeLast = points.at(-2)
+  const heads: string[] = []
+  if (primitive.arrows.end && last && beforeLast) {
+    const head = arrowHeadPoints(beforeLast, last, width)
+    if (head)
+      heads.push(
+        `<polygon ${attrs({ points: pointsAttribute(head), fill: primitive.style.stroke })}/>`
+      )
+  }
+  if (primitive.arrows.start && first && second) {
+    const head = arrowHeadPoints(second, first, width)
+    if (head)
+      heads.push(
+        `<polygon ${attrs({ points: pointsAttribute(head), fill: primitive.style.stroke })}/>`
+      )
+  }
+  return heads.join('')
+}
+
 /** Une forme du mini-éditeur, en unités de cellule. */
-export function primitiveSvg(primitive: Primitive): string {
+export function primitiveSvg(
+  primitive: Primitive,
+  componentStroke: number,
+  fields?: FieldValues
+): string {
   if (primitive.kind === 'text') {
     return `<text ${attrs({
       x: q(primitive.x),
@@ -58,11 +105,12 @@ export function primitiveSvg(primitive: Primitive): string {
       fill: primitive.color,
       'dominant-baseline': 'middle',
       'font-family': FONT_STACK
-    })}>${escapeXml(primitive.text)}</text>`
+    })}>${escapeXml(textContent(primitive, fields))}</text>`
   }
+  const width = strokeWidthCells(primitive.style, componentStroke)
   const style = {
     stroke: primitive.style.stroke,
-    'stroke-width': primitive.style.strokeWidth,
+    'stroke-width': width,
     fill: primitive.style.fill,
     'stroke-linecap': 'round',
     'stroke-linejoin': 'round'
@@ -73,19 +121,30 @@ export function primitiveSvg(primitive: Primitive): string {
     case 'ellipse':
       return `<ellipse ${attrs({ cx: q(primitive.cx), cy: q(primitive.cy), rx: q(primitive.rx), ry: q(primitive.ry), ...style })}/>`
     case 'line':
-      return `<line ${attrs({ x1: q(primitive.x1), y1: q(primitive.y1), x2: q(primitive.x2), y2: q(primitive.y2), ...style })}/>`
+      return (
+        `<line ${attrs({ x1: q(primitive.x1), y1: q(primitive.y1), x2: q(primitive.x2), y2: q(primitive.y2), ...style })}/>` +
+        arrowsSvg(primitive, width)
+      )
     case 'polyline': {
       const points = primitive.points.map(([x, y]) => `${fmt(q(x))},${fmt(q(y))}`).join(' ')
       const tag = primitive.closed ? 'polygon' : 'polyline'
-      return `<${tag} ${attrs({ points, ...style })}/>`
+      return `<${tag} ${attrs({ points, ...style })}/>` + arrowsSvg(primitive, width)
     }
   }
 }
 
 /** Contenu d'un composant dans son repère local (cellules), PNG ou formes. */
-export function componentSvg(def: ComponentDefinition): string {
+export function componentSvg(
+  def: ComponentDefinition,
+  componentStroke: number,
+  fields?: FieldValues
+): string {
   const { widthCells, heightCells } = def.size
-  if (def.visual.kind === 'drawing') return def.visual.primitives.map(primitiveSvg).join('')
+  if (def.visual.kind === 'drawing') {
+    return def.visual.primitives
+      .map((primitive) => primitiveSvg(primitive, componentStroke, fields))
+      .join('')
+  }
   if (!def.visual.dataUrl) {
     return `<rect ${attrs({ width: widthCells, height: heightCells, fill: '#eef1f4', stroke: '#8c959f', 'stroke-width': 0.05 })}/>`
   }
@@ -242,7 +301,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
     const def = project.embeddedDefs[instance.defId]
     if (!def) continue
     instanceParts.push(
-      `<g ${attrs({ transform: matrixToSvg(instanceMatrix(instance, def)) })}>${componentSvg(def)}</g>`
+      `<g ${attrs({ transform: matrixToSvg(instanceMatrix(instance, def)) })}>${componentSvg(def, profile.componentStroke, instance.fields)}</g>`
     )
     if (options.labels && instance.label.length > 0) {
       const box = instanceBounds(instance, def)

@@ -3,6 +3,7 @@ import {
   componentIssues,
   createEmptyComponent,
   DEFAULT_SHAPE_STYLE,
+  NO_ARROWS,
   primitiveBounds,
   translatePrimitive,
   type Primitive
@@ -25,7 +26,9 @@ describe('formes du mini-éditeur', () => {
       x2: 11,
       y2: 6
     })
-    expect(primitiveBounds({ kind: 'line', x1: 10, y1: 1, x2: 2, y2: 5, style })).toEqual({
+    expect(
+      primitiveBounds({ kind: 'line', x1: 10, y1: 1, x2: 2, y2: 5, arrows: NO_ARROWS, style })
+    ).toEqual({
       x1: 2,
       y1: 1,
       x2: 10,
@@ -40,13 +43,14 @@ describe('formes du mini-éditeur', () => {
           [2, 3]
         ],
         closed: false,
+        arrows: NO_ARROWS,
         style
       })
     ).toEqual({ x1: 0, y1: 0, x2: 4, y2: 6 })
   })
 
   it('déplace une forme sans en changer la nature', () => {
-    const line: Primitive = { kind: 'line', x1: 0, y1: 0, x2: 4, y2: 0, style }
+    const line: Primitive = { kind: 'line', x1: 0, y1: 0, x2: 4, y2: 0, arrows: NO_ARROWS, style }
     expect(translatePrimitive(line, 2, 3)).toEqual({ ...line, x1: 2, y1: 3, x2: 6, y2: 3 })
     const poly: Primitive = {
       kind: 'polyline',
@@ -55,6 +59,7 @@ describe('formes du mini-éditeur', () => {
         [1, 1]
       ],
       closed: true,
+      arrows: NO_ARROWS,
       style
     }
     expect(

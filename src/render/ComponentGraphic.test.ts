@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import { createEmptyComponent, DEFAULT_SHAPE_STYLE } from '@/domain'
+import { createEmptyComponent, DEFAULT_SHAPE_STYLE, NO_ARROWS } from '@/domain'
 import ComponentGraphic from './ComponentGraphic.vue'
 
 describe('ComponentGraphic', () => {
@@ -11,8 +11,18 @@ describe('ComponentGraphic', () => {
       kind: 'drawing',
       primitives: [
         { kind: 'rect', x: 4, y: 2, w: 8, h: 4, rx: 0, style: DEFAULT_SHAPE_STYLE },
-        { kind: 'line', x1: 0, y1: 4, x2: 4, y2: 4, style: DEFAULT_SHAPE_STYLE },
-        { kind: 'text', x: 8, y: 1, text: 'R', size: 0.5, anchor: 'middle', color: '#000000' }
+        { kind: 'line', x1: 0, y1: 4, x2: 4, y2: 4, arrows: NO_ARROWS, style: DEFAULT_SHAPE_STYLE },
+        {
+          kind: 'text',
+          x: 8,
+          y: 1,
+          text: 'R',
+          size: 0.5,
+          anchor: 'middle',
+          color: '#000000',
+          variable: false,
+          defaultValue: ''
+        }
       ]
     }
     const wrapper = mount(ComponentGraphic, { props: { def, cellPx: 40 } })
@@ -23,6 +33,44 @@ describe('ComponentGraphic', () => {
     expect(wrapper.find('line').attributes('x2')).toBe('40')
     expect(wrapper.find('text').text()).toBe('R')
     expect(wrapper.find('text').attributes('font-size')).toBe('20')
+  })
+
+  it('applique le trait de base du profil, les flèches et les valeurs des champs', () => {
+    const def = createEmptyComponent('r', 'R')
+    def.visual = {
+      kind: 'drawing',
+      primitives: [
+        {
+          kind: 'line',
+          x1: 0,
+          y1: 4,
+          x2: 8,
+          y2: 4,
+          arrows: { start: false, end: true },
+          style: { stroke: '#000000', weight: 2, fill: 'none' }
+        },
+        {
+          kind: 'text',
+          x: 8,
+          y: 1,
+          text: 'valeur',
+          size: 0.5,
+          anchor: 'middle',
+          color: '#000000',
+          variable: true,
+          defaultValue: '10 kΩ'
+        }
+      ]
+    }
+    const plain = mount(ComponentGraphic, { props: { def, cellPx: 20, strokeBase: 0.2 } })
+    expect(plain.find('line').attributes('stroke-width')).toBe('8')
+    expect(plain.findAll('polygon')).toHaveLength(1)
+    expect(plain.find('text').text()).toBe('10 kΩ')
+
+    const placed = mount(ComponentGraphic, {
+      props: { def, cellPx: 20, fields: { valeur: '4,7 kΩ' } }
+    })
+    expect(placed.find('text').text()).toBe('4,7 kΩ')
   })
 
   it('affiche un PNG embarqué à la taille du composant', () => {

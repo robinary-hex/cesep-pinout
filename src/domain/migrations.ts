@@ -1,4 +1,5 @@
 import { COMPONENT_SCHEMA_VERSION } from './component'
+import { DEFAULT_COMPONENT_STROKE } from './profile'
 import { PROJECT_SCHEMA_VERSION } from './project'
 import { DEFAULT_AUTOSAVE_SECONDS, DEFAULT_EXPORT, SETTINGS_SCHEMA_VERSION } from './settings'
 
@@ -23,18 +24,8 @@ export interface MigrationTable {
   steps: Readonly<Record<number, Migration>>
 }
 
-export const projectMigrations: MigrationTable = { current: PROJECT_SCHEMA_VERSION, steps: {} }
-export const componentMigrations: MigrationTable = { current: COMPONENT_SCHEMA_VERSION, steps: {} }
-export const settingsMigrations: MigrationTable = {
-  current: SETTINGS_SCHEMA_VERSION,
-  steps: {
-    // v1 → v2 : réglages d'export et intervalle de copie de secours.
-    1: (raw) => ({
-      ...raw,
-      export: { ...DEFAULT_EXPORT },
-      autosaveSeconds: DEFAULT_AUTOSAVE_SECONDS
-    })
-  }
+function isRecord(value: unknown): value is RawRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /**
@@ -42,10 +33,10 @@ export const settingsMigrations: MigrationTable = {
  * Un fichier plus récent que l'application est refusé plutôt que deviné.
  */
 export function migrateRaw(raw: unknown, table: MigrationTable, what: string): RawRecord {
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+  if (!isRecord(raw)) {
     throw new FileFormatError(`${what} : un objet JSON est attendu`)
   }
-  let data = raw as RawRecord
+  let data = raw
   const version = data['schemaVersion']
   if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) {
     throw new FileFormatError(`${what} : schemaVersion manquant ou invalide`)
@@ -63,4 +54,91 @@ export function migrateRaw(raw: unknown, table: MigrationTable, what: string): R
     data = { ...step(data), schemaVersion: v + 1 }
   }
   return data
+}
+
+// Composant v1 → v2 : épaisseur absolue (cellules) devenue multiplicateur du trait de base,
+// flèches sur lignes et polylignes, textes variables, préfixe de repère retiré.
+
+function migratePrimitiveV1(raw: unknown): unknown {
+  if (!isRecord(raw)) return raw
+  const result: RawRecord = { ...raw }
+  const style = raw['style']
+  if (isRecord(style)) {
+    const { strokeWidth, ...rest } = style
+    const width = typeof strokeWidth === 'number' ? strokeWidth : DEFAULT_COMPONENT_STROKE
+    result['style'] = {
+      ...rest,
+      weight: Math.round((width / DEFAULT_COMPONENT_STROKE) * 100) / 100
+    }
+  }
+  if (raw['kind'] === 'line' || raw['kind'] === 'polyline') {
+    result['arrows'] = { start: false, end: false }
+  }
+  if (raw['kind'] === 'text') {
+    result['variable'] = false
+    result['defaultValue'] = ''
+  }
+  return result
+}
+
+function migrateComponentV1(raw: RawRecord): RawRecord {
+  const result: RawRecord = { ...raw }
+  delete result['labelPrefix']
+  const visual = raw['visual']
+  if (isRecord(visual) && visual['kind'] === 'drawing' && Array.isArray(visual['primitives'])) {
+    result['visual'] = { ...visual, primitives: visual['primitives'].map(migratePrimitiveV1) }
+  }
+  return result
+}
+
+export const componentMigrations: MigrationTable = {
+  current: COMPONENT_SCHEMA_VERSION,
+  steps: { 1: migrateComponentV1 }
+}
+
+// Projet v1 → v2 : trait des composants dans le profil, champs variables par instance,
+// définitions embarquées migrées à leur tour.
+
+function migrateProjectV1(raw: RawRecord): RawRecord {
+  const profile = isRecord(raw['profile']) ? raw['profile'] : {}
+  const components = Array.isArray(raw['components']) ? raw['components'] : []
+  const defs = isRecord(raw['embeddedDefs']) ? raw['embeddedDefs'] : {}
+  return {
+    ...raw,
+    profile: { componentStroke: DEFAULT_COMPONENT_STROKE, ...profile },
+    components: components.map((instance) =>
+      isRecord(instance) ? { fields: {}, ...instance } : instance
+    ),
+    embeddedDefs: Object.fromEntries(
+      Object.entries(defs).map(([id, def]) => [
+        id,
+        migrateRaw(def, componentMigrations, `Composant embarqué ${id}`)
+      ])
+    )
+  }
+}
+
+export const projectMigrations: MigrationTable = {
+  current: PROJECT_SCHEMA_VERSION,
+  steps: { 1: migrateProjectV1 }
+}
+
+// Paramètres v1 → v2 : export et copie de secours ; v2 → v3 : trait des composants du profil.
+
+export const settingsMigrations: MigrationTable = {
+  current: SETTINGS_SCHEMA_VERSION,
+  steps: {
+    1: (raw) => ({
+      ...raw,
+      export: { ...DEFAULT_EXPORT },
+      autosaveSeconds: DEFAULT_AUTOSAVE_SECONDS
+    }),
+    2: (raw) => ({
+      ...raw,
+      defaultProfile: {
+        componentStroke: DEFAULT_COMPONENT_STROKE,
+        ...(isRecord(raw['defaultProfile']) ? raw['defaultProfile'] : {})
+      }
+    })
+  }
 }

@@ -12,7 +12,7 @@ import {
 import { styleProfileSchema, type StyleProfile } from './profile'
 import { isUTurn } from './wires'
 
-export const PROJECT_SCHEMA_VERSION = 1
+export const PROJECT_SCHEMA_VERSION = 2
 
 /** Composant posé sur le montage ; (x, y) = coin supérieur gauche de sa boîte, en grille. */
 export const componentInstanceSchema = z.object({
@@ -22,8 +22,10 @@ export const componentInstanceSchema = z.object({
   y: gridCoordSchema,
   rotation: rotationSchema,
   mirror: z.boolean(),
-  /** Repère affiché : R1, U2… */
-  label: z.string()
+  /** Repère affiché : R1, U2… (libre, vide par défaut). */
+  label: z.string(),
+  /** Valeurs des textes variables de la définition : nom du champ → valeur. */
+  fields: z.record(z.string(), z.string())
 })
 export type ComponentInstance = z.infer<typeof componentInstanceSchema>
 

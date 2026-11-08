@@ -63,6 +63,18 @@ function number(event: Event, fallback: number): number {
         />
       </label>
       <label class="field">
+        <span>Trait des composants (cellules)</span>
+        <input
+          type="number"
+          min="0.02"
+          step="0.01"
+          :value="profile.componentStroke"
+          @change="
+            patch({ componentStroke: Math.max(0.02, number($event, profile.componentStroke)) })
+          "
+        />
+      </label>
+      <label class="field">
         <span>Point de jonction (× épaisseur)</span>
         <select
           :value="profile.junctionScale"

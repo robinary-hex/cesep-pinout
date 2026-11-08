@@ -369,7 +369,8 @@ const ghost = computed(() => {
     y: Math.round(point.y - size.heightCells / 2),
     rotation: current.rotation,
     mirror: current.mirror,
-    label: ''
+    label: '',
+    fields: {}
   }
   return {
     instance,
@@ -751,7 +752,12 @@ const cursorClass = computed(() => {
             :transform="transformOf(item)"
             @pointerdown="onInstanceDown(item.instance.id, $event)"
           >
-            <ComponentGraphic :def="item.def" :cell-px="1" />
+            <ComponentGraphic
+              :def="item.def"
+              :cell-px="1"
+              :stroke-base="profile.componentStroke"
+              :fields="item.instance.fields"
+            />
             <rect
               class="hit"
               :width="item.def.size.widthCells"
@@ -863,7 +869,11 @@ const cursorClass = computed(() => {
           </g>
 
           <g v-if="ghost" class="ghost" :transform="ghost.transform">
-            <ComponentGraphic :def="ghost.def" :cell-px="1" />
+            <ComponentGraphic
+              :def="ghost.def"
+              :cell-px="1"
+              :stroke-base="profile.componentStroke"
+            />
             <rect
               class="ghost-box"
               :width="ghost.def.size.widthCells"

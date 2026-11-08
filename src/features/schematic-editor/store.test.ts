@@ -11,7 +11,6 @@ import { useSchematicStore } from './store'
 
 function resistor(): ComponentDefinition {
   const def = createEmptyComponent('resistor', 'Résistance')
-  def.labelPrefix = 'R'
   def.pins = [
     { id: 'a', name: '1', kind: 'io', x: 0, y: 1 },
     { id: 'b', name: '2', kind: 'io', x: 4, y: 1 }
@@ -24,12 +23,15 @@ beforeEach(() => {
 })
 
 describe('montage : poser, déplacer, orienter', () => {
-  it('pose des composants avec repères numérotés et une seule définition embarquée', () => {
+  it('pose des composants sans repère automatique et une seule définition embarquée', () => {
     const store = useSchematicStore()
     store.startPlacing(resistor())
     store.placeAt(2, 3)
     store.placeAt(10, 3)
-    expect(store.doc.components.map((c) => c.label)).toEqual(['R1', 'R2'])
+    expect(store.doc.components.map((c) => [c.label, c.fields])).toEqual([
+      ['', {}],
+      ['', {}]
+    ])
     expect(Object.keys(store.doc.embeddedDefs)).toEqual(['resistor'])
     expect(store.dirty).toBe(true)
   })
@@ -60,8 +62,8 @@ describe('montage : poser, déplacer, orienter', () => {
     store.selection = id ? [id] : []
     store.duplicateSelection()
     expect(store.doc.components.map((c) => [c.label, c.x, c.y])).toEqual([
-      ['R1', 0, 0],
-      ['R2', 1, 1]
+      ['', 0, 0],
+      ['', 1, 1]
     ])
     expect(store.selection).toEqual(['c2'])
 

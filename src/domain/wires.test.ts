@@ -295,7 +295,7 @@ describe('jonctions et nets', () => {
     ]
     project.embeddedDefs = { r: def }
     project.components = [
-      { id: 'r1', defId: 'r', x: 10, y: 10, rotation: 0, mirror: false, label: 'R1' }
+      { id: 'r1', defId: 'r', x: 10, y: 10, rotation: 0, mirror: false, label: 'R1', fields: {} }
     ]
     const pins = projectPins(project)
     expect(pins.map((pin) => pin.point)).toEqual([

@@ -124,7 +124,12 @@ async function remove(entry: LibraryEntry): Promise<void> {
             "
             @click="pick(entry)"
           >
-            <ComponentThumbnail v-if="entry.def" :def="entry.def" :size="56" />
+            <ComponentThumbnail
+              v-if="entry.def"
+              :def="entry.def"
+              :size="56"
+              :stroke-base="library.defaultProfile.componentStroke"
+            />
             <span v-else class="thumb-missing">?</span>
             <span class="text">
               <span class="name">{{ entry.def?.name ?? baseName(entry.folder) }}</span>

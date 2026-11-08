@@ -44,7 +44,12 @@ pas à chaque touche, donc une saisie = une commande.
   coin supérieur gauche de la boîte à l'origine (`transformLocalPoint`). Le miroir vertical de
   l'interface = miroir horizontal + 180°.
 - Primitives du mini-éditeur : entiers en quarts de cellule, repère local du composant ;
-  épaisseurs de trait et hauteurs de texte en cellules.
+  hauteurs de texte en cellules. L'épaisseur d'un trait n'est pas stockée en cellules mais comme
+  multiplicateur (`weight`) du trait de base du profil de style (`componentStroke`) : changer de
+  profil change l'épaisseur de tous les composants du montage. Les poignées de redimensionnement
+  (`handles.ts`) et les pointes de flèche (`arrows.ts`) sont de la géométrie pure du domaine.
+- Textes variables : un texte marqué `variable` porte le nom d'un champ ; chaque instance posée
+  garde ses valeurs dans `fields` (nom → texte), la définition fournit `defaultValue`.
 - PNG : 80 px par cellule. Un PNG d'une autre taille est rééchantillonné sur confirmation.
   Le profil de style (`cellPx`, par défaut 20) ne règle que l'affichage.
 
@@ -80,6 +85,9 @@ il demande confirmation, puis le rendu écrit la copie de secours avant de confi
 
 Tous en JSON indenté, avec `schemaVersion`, validés par Zod à l'ouverture, migrés étape par étape
 (`src/domain/migrations.ts`). Un fichier d'exemple par version dans `src/domain/fixtures/`.
+Versions courantes : composant 2 (épaisseur en multiplicateur, flèches, textes variables, plus de
+`labelPrefix`), projet 2 (`componentStroke` dans le profil, `fields` par instance, définitions
+embarquées migrées), paramètres 3 (`componentStroke` du profil par défaut).
 
 | Donnée                  | Schéma                      | Emplacement                                                             |
 | ----------------------- | --------------------------- | ----------------------------------------------------------------------- |
