@@ -231,7 +231,17 @@ export const useSchematicStore = defineStore('schematic', () => {
 
   // Fichier
 
+  /** Couleur des prochains fils : celle du dernier fil du montage, sinon celle des paramètres. */
+  function syncCurrentColor(): void {
+    const last = history.value.wires.reduce<Wire | null>(
+      (best, wire) => (best === null || wire.stack > best.stack ? wire : best),
+      null
+    )
+    currentColor.value = last?.color ?? library.defaultWireColor
+  }
+
   function resetEditing(): void {
+    syncCurrentColor()
     clearSelection()
     placement.value = null
     drawing.value = null
@@ -945,6 +955,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     restoreProject,
     markSaved,
     confirmDiscard,
+    syncCurrentColor,
     setProjectName,
     setProfile,
     updateDefinition,

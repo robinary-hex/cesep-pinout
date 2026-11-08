@@ -140,7 +140,7 @@ async function remove(entry: SavedProfile): Promise<void> {
 .hint {
   margin: 8px 0;
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .saved h3 {
@@ -148,7 +148,7 @@ async function remove(entry: SavedProfile): Promise<void> {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .saved ul {
@@ -162,7 +162,7 @@ async function remove(entry: SavedProfile): Promise<void> {
   align-items: center;
   gap: 8px;
   padding: 4px 0;
-  border-top: 1px solid #eaeef2;
+  border-top: 1px solid var(--border-soft);
 }
 
 .name {
@@ -172,16 +172,16 @@ async function remove(entry: SavedProfile): Promise<void> {
 .meta {
   flex: 1;
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .message {
   margin: 10px 0 0;
   font-size: 12px;
-  color: #1a7f37;
+  color: var(--success);
 }
 
 .message.failed {
-  color: #a40e26;
+  color: var(--danger);
 }
 </style>

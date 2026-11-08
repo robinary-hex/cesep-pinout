@@ -13,6 +13,7 @@ import { useLibraryStore } from './store'
 // sur le montage.
 
 const props = defineProps<{ mode: 'edit' | 'place' }>()
+const emit = defineEmits<{ create: [] }>()
 
 const library = useLibraryStore()
 const editor = useComponentEditorStore()
@@ -34,11 +35,6 @@ function pick(entry: LibraryEntry): void {
   }
   if (isCurrent(entry) || !editor.confirmDiscard()) return
   editor.open(entry.def, entry.folder)
-}
-
-function createNew(): void {
-  if (!editor.confirmDiscard()) return
-  editor.open(createEmptyComponent('nouveau-composant', 'Nouveau composant'), null)
 }
 
 function duplicate(entry: LibraryEntry): void {
@@ -68,13 +64,12 @@ async function remove(entry: LibraryEntry): Promise<void> {
   <aside class="library">
     <header class="library-head">
       <div class="title-row">
-        <h2>{{ mode === 'place' ? 'Composants à poser' : 'Bibliothèque' }}</h2>
+        <h2>Composants</h2>
         <button
-          v-if="mode === 'edit'"
           type="button"
           class="primary with-icon"
           title="Nouveau composant (Ctrl+N)"
-          @click="createNew"
+          @click="emit('create')"
         >
           <Icon name="file-plus" /> Nouveau
         </button>
@@ -166,13 +161,13 @@ async function remove(entry: LibraryEntry): Promise<void> {
   flex: none;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
-  border-right: 1px solid #d0d7de;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
 }
 
 .library-head {
   padding: 10px 12px;
-  border-bottom: 1px solid #eaeef2;
+  border-bottom: 1px solid var(--border-soft);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -193,7 +188,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
 
 .dir {
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -202,7 +197,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
 .search {
   font: inherit;
   padding: 5px 8px;
-  border: 1px solid #d0d7de;
+  border: 1px solid var(--border);
   border-radius: 4px;
 }
 
@@ -210,8 +205,8 @@ async function remove(entry: LibraryEntry): Promise<void> {
   margin: 8px 12px 0;
   padding: 6px 8px;
   font-size: 12px;
-  color: #a40e26;
-  background: #ffebe9;
+  color: var(--danger);
+  background: var(--danger-soft);
   border-radius: 4px;
 }
 
@@ -224,7 +219,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
 .hint {
   margin: 8px 12px;
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .group h3 {
@@ -232,7 +227,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .item {
@@ -242,11 +237,11 @@ async function remove(entry: LibraryEntry): Promise<void> {
 }
 
 .item.current {
-  background: #ddf4ff;
+  background: var(--accent-soft);
 }
 
 .item.broken .name {
-  color: #a40e26;
+  color: var(--danger);
 }
 
 .open {
@@ -264,7 +259,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
 }
 
 .open:hover:not(:disabled) {
-  background: #f0f3f6;
+  background: var(--surface-3);
 }
 
 .open:disabled {
@@ -276,8 +271,8 @@ async function remove(entry: LibraryEntry): Promise<void> {
   height: 56px;
   display: grid;
   place-items: center;
-  background: #ffebe9;
-  color: #a40e26;
+  background: var(--danger-soft);
+  color: var(--danger);
   border-radius: 4px;
   font-weight: 600;
 }
@@ -297,7 +292,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
 
 .meta {
   font-size: 11px;
-  color: #57606a;
+  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -5,14 +5,13 @@ import { baseName } from '@/io/paths'
 import Icon from '@/ui/Icon.vue'
 import { useSchematicStore } from './store'
 
-// Barre d'outils du montage : outils, palette, édition, ordre des fils, vue, panneau.
-// Les actions de fichier sont dans le menu Fichier de la barre d'application.
+// Barre d'outils du montage : outils, palette, annuler/rétablir, vue, et tout à droite le
+// panneau de propriétés. Rotation, miroir, duplication, suppression et ordre des fils passent
+// par le menu contextuel et le clavier ; les actions de fichier par le menu Fichier.
 
 const store = useSchematicStore()
 const library = useLibraryStore()
 
-const hasTarget = computed(() => store.selection.length > 0 || store.placement !== null)
-const hasWires = computed(() => store.selectedWires.length > 0)
 const fileLabel = computed(() => (store.filePath ? baseName(store.filePath) : 'Non enregistré'))
 
 const swatches = computed(() => [
@@ -108,102 +107,6 @@ function pickCustom(event: Event): void {
       <button
         type="button"
         class="icon-only"
-        :disabled="!hasTarget"
-        title="Rotation antihoraire (Maj+R)"
-        @click="store.rotate('ccw')"
-      >
-        <Icon name="rotate-ccw" />
-      </button>
-      <button
-        type="button"
-        class="icon-only"
-        :disabled="!hasTarget"
-        title="Rotation horaire (R)"
-        @click="store.rotate('cw')"
-      >
-        <Icon name="rotate-cw" />
-      </button>
-      <button
-        type="button"
-        class="icon-only"
-        :disabled="!hasTarget"
-        title="Miroir horizontal (T)"
-        @click="store.flip('horizontal')"
-      >
-        <Icon name="flip-h" />
-      </button>
-      <button
-        type="button"
-        class="icon-only"
-        :disabled="!hasTarget"
-        title="Miroir vertical (Maj+T)"
-        @click="store.flip('vertical')"
-      >
-        <Icon name="flip-v" />
-      </button>
-      <button
-        type="button"
-        class="icon-only"
-        :disabled="!store.hasSelection"
-        title="Dupliquer (Ctrl+D)"
-        @click="store.duplicateSelection()"
-      >
-        <Icon name="copy" />
-      </button>
-      <button
-        type="button"
-        class="icon-only danger"
-        :disabled="!store.hasSelection"
-        title="Supprimer (Suppr)"
-        @click="store.removeSelection()"
-      >
-        <Icon name="trash" />
-      </button>
-    </div>
-
-    <div class="group" title="Ordre d’empilement des fils sélectionnés">
-      <button
-        type="button"
-        class="icon-only"
-        :disabled="!hasWires"
-        title="Reculer (Ctrl+Page bas)"
-        @click="store.reorderWires('down')"
-      >
-        <Icon name="arrow-down" />
-      </button>
-      <button
-        type="button"
-        class="icon-only"
-        :disabled="!hasWires"
-        title="Avancer (Ctrl+Page haut)"
-        @click="store.reorderWires('up')"
-      >
-        <Icon name="arrow-up" />
-      </button>
-      <button
-        type="button"
-        class="icon-only"
-        :disabled="!hasWires"
-        title="Arrière-plan (Ctrl+Maj+Page bas)"
-        @click="store.reorderWires('bottom')"
-      >
-        <Icon name="arrow-down-line" />
-      </button>
-      <button
-        type="button"
-        class="icon-only"
-        :disabled="!hasWires"
-        title="Premier plan (Ctrl+Maj+Page haut)"
-        @click="store.reorderWires('top')"
-      >
-        <Icon name="arrow-up-line" />
-      </button>
-    </div>
-
-    <div class="group">
-      <button
-        type="button"
-        class="icon-only"
         title="Zoom arrière (molette)"
         @click="store.zoomAround(1 / 1.25)"
       >
@@ -237,24 +140,22 @@ function pickCustom(event: Event): void {
       </label>
     </div>
 
-    <div class="group">
-      <button
-        type="button"
-        class="tool with-icon"
-        :class="{ active: store.inspectorOpen }"
-        title="Afficher ou masquer le panneau de propriétés (I)"
-        @click="store.inspectorOpen = !store.inspectorOpen"
-      >
-        <Icon name="panel" /> <kbd>I</kbd>
-      </button>
-    </div>
-
     <div class="spacer" />
 
     <span class="doc-name" :title="store.filePath ?? 'Pas encore enregistré'">
       {{ store.doc.name }}<span v-if="store.dirty"> •</span>
       <span class="file">{{ fileLabel }}</span>
     </span>
+
+    <button
+      type="button"
+      class="tool with-icon"
+      :class="{ active: store.inspectorOpen }"
+      title="Afficher ou masquer le panneau de propriétés (I)"
+      @click="store.inspectorOpen = !store.inspectorOpen"
+    >
+      <Icon name="panel" /> <kbd>I</kbd>
+    </button>
   </div>
 </template>
 
@@ -264,8 +165,8 @@ function pickCustom(event: Event): void {
   align-items: center;
   gap: 14px;
   padding: 6px 12px;
-  background: #ffffff;
-  border-bottom: 1px solid #d0d7de;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
 }
 
@@ -279,15 +180,15 @@ function pickCustom(event: Event): void {
   margin-left: 2px;
   padding: 0 4px;
   font-size: 10px;
-  color: #57606a;
-  border: 1px solid #d0d7de;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
   border-radius: 3px;
-  background: #f6f8fa;
+  background: var(--surface-2);
 }
 
 .tool.active {
-  background: #ddf4ff;
-  border-color: #54aeff;
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
 }
 
 .palette {
@@ -298,13 +199,13 @@ function pickCustom(event: Event): void {
   width: 18px;
   height: 18px;
   padding: 0;
-  border: 2px solid #ffffff;
+  border: 2px solid var(--surface);
   border-radius: 50%;
-  box-shadow: 0 0 0 1px #d0d7de;
+  box-shadow: 0 0 0 1px var(--border);
 }
 
 .swatch.current {
-  box-shadow: 0 0 0 2px #1f6feb;
+  box-shadow: 0 0 0 2px var(--accent);
 }
 
 .custom {
@@ -314,9 +215,9 @@ function pickCustom(event: Event): void {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  border: 1px dashed #8c959f;
+  border: 1px dashed var(--text-faint);
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
   cursor: pointer;
 }
 
@@ -331,7 +232,7 @@ function pickCustom(event: Event): void {
   min-width: 44px;
   text-align: center;
   font-variant-numeric: tabular-nums;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .check {
@@ -340,7 +241,7 @@ function pickCustom(event: Event): void {
   gap: 4px;
   margin-left: 6px;
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .spacer {
@@ -358,6 +259,6 @@ function pickCustom(event: Event): void {
 .file {
   font-weight: 400;
   font-size: 11px;
-  color: #57606a;
+  color: var(--text-muted);
 }
 </style>

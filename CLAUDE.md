@@ -31,7 +31,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   (multiplicateur, choix dans `STROKE_WEIGHTS`) × `componentStroke` du profil de style (0,1 cellule
   par défaut) : un montage change d'épaisseur avec son profil. Lignes et polylignes ouvertes portent
   des flèches optionnelles (`arrows`). Un texte `variable` a pour contenu le nom du champ ; l'instance
-  posée fournit la valeur (`instance.fields`), sinon `defaultValue` s'affiche.
+  posée fournit la valeur (`instance.fields`), sinon `defaultValue` s'affiche ; l'`unit` éventuelle suit toujours la valeur (espace
+  insécable).
 - PNG de composant : 80 px par cellule (4× la cellule d'affichage de 20 px).
 - Orientation d'une instance : miroir local puis rotation horaire (`transformLocalPoint`,
   `instanceMatrix`). Un miroir à l'écran bascule `mirror` et inverse la rotation
@@ -59,7 +60,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   permis ; les demi-tours et les sommets confondus sont refusés. Le L d'un tracé suit l'axe
   dominant (Maj inverse). Élasticité (`src/domain/elastic.ts`) : les extrémités posées sur une
   broche suivent le composant déplacé, tourné ou retourné ; un fil déplacé en bloc garde ses
-  extrémités sur les broches immobiles.
+  extrémités sur les broches immobiles. Un nouveau fil prend la couleur du dernier fil tracé ou
+  recoloré (`currentColor`, recalée sur le dernier fil du projet à l'ouverture).
 - Export : `src/domain/svg.ts` construit le SVG autonome (viewBox en cellules, même ordre
   d'empilement que l'éditeur, sans marqueurs d'édition) ; `src/features/export/` le rastérise en
   PNG via un canvas et le copie dans le presse-papiers. Les réglages d'export, la palette, le profil
@@ -71,8 +73,13 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Barre d'application (`src/app/App.vue`) : menu Fichier (nouveau, ouvrir, récents, enregistrer,
   exporter, paramètres, raccourcis, quitter) construit avec `ContextMenu` et appelant les actions
   que `SchematicEditor` / `ComponentEditor` exposent par `defineExpose` selon le mode. Les barres
-  d'outils ne portent plus d'actions de fichier. Pictogrammes : `src/ui/Icon.vue` dessine les
+  d'outils ne portent plus d'actions de fichier ; dans le montage, rotation, miroir, duplication,
+  suppression et ordre des fils ne sont accessibles que par le menu contextuel et le clavier. Pictogrammes : `src/ui/Icon.vue` dessine les
   tracés de `src/ui/icons.ts` (SVG inline, trait de la couleur courante, pas de police d'icônes).
+- Thème clair ou sombre choisi dans les paramètres (`theme`) : `src/ui/theme.ts` pose
+  `data-theme` sur `<html>` et toutes les couleurs de l'interface passent par les variables CSS de
+  `src/app/style.css`, jamais en dur dans les styles ; les surfaces de dessin (`--paper`) restent
+  claires pour que composants et fils gardent leurs couleurs d'export.
 - Profil de style : la boîte « Profil de style du montage » prévisualise chaque réglage sur le
   montage via `profilePreview` (le store expose `profile` = aperçu ou profil du projet) et
   n'enregistre qu'à « Appliquer », en une commande. Les Paramètres proposent « Appliquer au
@@ -94,7 +101,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     le bord ; les noms numériques des broches suivent toujours leur ordre (`renumberPins`).
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 2, projet 2, paramètres 3
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 3, projet 3, paramètres 4
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

@@ -50,7 +50,7 @@ onUnmounted(() => {
   z-index: 50;
   display: grid;
   place-items: center;
-  background: rgba(31, 35, 40, 0.45);
+  background: var(--backdrop);
 }
 
 .dialog {
@@ -58,9 +58,9 @@ onUnmounted(() => {
   max-height: calc(100vh - 48px);
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: var(--surface);
   border-radius: 8px;
-  box-shadow: 0 12px 40px rgba(31, 35, 40, 0.35);
+  box-shadow: 0 12px 40px var(--shadow-strong);
 }
 
 .dialog.wide {
@@ -72,7 +72,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-bottom: 1px solid #d0d7de;
+  border-bottom: 1px solid var(--border);
 }
 
 .head h2 {
@@ -94,6 +94,6 @@ onUnmounted(() => {
   justify-content: flex-end;
   gap: 8px;
   padding: 10px 16px;
-  border-top: 1px solid #d0d7de;
+  border-top: 1px solid var(--border);
 }
 </style>

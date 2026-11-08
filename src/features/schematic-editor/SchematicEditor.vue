@@ -4,6 +4,7 @@ import {
   componentFields,
   FileFormatError,
   type ComponentDefinition,
+  type ComponentField,
   type ComponentInstance
 } from '@/domain'
 import ExportDialog from '@/features/export/ExportDialog.vue'
@@ -101,19 +102,24 @@ function instanceTitle(instance: ComponentInstance, def: ComponentDefinition): s
   return instance.label.length > 0 ? `${def.name} · ${instance.label}` : def.name
 }
 
-function editField(id: string, name: string, defaultValue: string): void {
+function withUnit(value: string, unit: string): string {
+  return unit.length > 0 ? `${value} ${unit}` : value
+}
+
+function editField(id: string, field: ComponentField): void {
   const found = instanceOf(id)
   if (!found) return
+  const unitLabel = field.unit.length > 0 ? ` (${field.unit})` : ''
   prompt.value = {
     title: instanceTitle(found.instance, found.def),
-    label: `Valeur de « ${name} »`,
-    value: found.instance.fields[name] ?? '',
-    placeholder: defaultValue,
+    label: `Valeur de « ${field.name} »${unitLabel}`,
+    value: found.instance.fields[field.name] ?? '',
+    placeholder: field.defaultValue,
     hint:
-      defaultValue.length > 0
-        ? `Vide : valeur par défaut « ${defaultValue} ».`
+      field.defaultValue.length > 0
+        ? `Vide : valeur par défaut « ${withUnit(field.defaultValue, field.unit)} ».`
         : 'Vide : le nom du champ s’affiche.',
-    onSubmit: (value) => store.setInstanceField(id, name, value)
+    onSubmit: (value) => store.setInstanceField(id, field.name, value)
   }
 }
 
@@ -146,7 +152,7 @@ function editInstance(id: string): void {
   if (!found) return
   const fields = componentFields(found.def)
   const only = fields[0]
-  if (fields.length === 1 && only) editField(id, only.name, only.defaultValue)
+  if (fields.length === 1 && only) editField(id, only)
   else if (fields.length > 1) store.inspectorOpen = true
   else editInstanceLabel(id)
 }
@@ -171,17 +177,21 @@ function swatchItem(current: string | null): MenuItem {
 
 function commonItems(): MenuItem[] {
   return [
-    item('Dupliquer', () => store.duplicateSelection(), { hint: 'Ctrl+D' }),
-    item('Copier', () => store.copySelection(), { hint: 'Ctrl+C' }),
+    item('Dupliquer', () => store.duplicateSelection(), { hint: 'Ctrl+D', icon: 'duplicate' }),
+    item('Copier', () => store.copySelection(), { hint: 'Ctrl+C', icon: 'copy' }),
     item(
       'Propriétés',
       () => {
         store.inspectorOpen = true
       },
-      { hint: 'I' }
+      { hint: 'I', icon: 'panel' }
     ),
     SEPARATOR,
-    item('Supprimer', () => store.removeSelection(), { hint: 'Suppr', danger: true })
+    item('Supprimer', () => store.removeSelection(), {
+      hint: 'Suppr',
+      icon: 'trash',
+      danger: true
+    })
   ]
 }
 
@@ -199,26 +209,30 @@ function openMenu(request: MenuRequest): void {
     if (!multi) {
       for (const field of componentFields(def)) {
         const shown = instance.fields[field.name] ?? field.defaultValue
+        const text = shown.length > 0 ? withUnit(shown, field.unit) : '(vide)'
         items.push(
-          item(`${field.name} : ${shown.length > 0 ? shown : '(vide)'}…`, () =>
-            editField(instance.id, field.name, field.defaultValue)
-          )
+          item(`${field.name} : ${text}…`, () => editField(instance.id, field), { icon: 'edit' })
         )
       }
-      items.push(item('Repère…', () => editInstanceLabel(instance.id)))
+      items.push(item('Repère…', () => editInstanceLabel(instance.id), { icon: 'tag' }))
       const newer = store.newerLibraryDefinition(def.id)
       if (newer) {
         items.push(
-          item('Mettre à jour depuis la bibliothèque', () => store.updateDefinition(newer))
+          item('Mettre à jour depuis la bibliothèque', () => store.updateDefinition(newer), {
+            icon: 'refresh'
+          })
         )
       }
       items.push(SEPARATOR)
     }
     items.push(
-      item('Rotation horaire', () => store.rotate('cw'), { hint: 'R' }),
-      item('Rotation antihoraire', () => store.rotate('ccw'), { hint: 'Maj+R' }),
-      item('Miroir horizontal', () => store.flip('horizontal'), { hint: 'T' }),
-      item('Miroir vertical', () => store.flip('vertical'), { hint: 'Maj+T' }),
+      item('Rotation horaire', () => store.rotate('cw'), { hint: 'R', icon: 'rotate-cw' }),
+      item('Rotation antihoraire', () => store.rotate('ccw'), {
+        hint: 'Maj+R',
+        icon: 'rotate-ccw'
+      }),
+      item('Miroir horizontal', () => store.flip('horizontal'), { hint: 'T', icon: 'flip-h' }),
+      item('Miroir vertical', () => store.flip('vertical'), { hint: 'Maj+T', icon: 'flip-v' }),
       SEPARATOR,
       ...commonItems()
     )
@@ -233,16 +247,28 @@ function openMenu(request: MenuRequest): void {
         item(
           'Extrémités libres prolongées d’une flèche',
           () => store.setWireFreeEnds(wire.id, wire.freeEnds === 'arrow' ? 'flat' : 'arrow'),
-          { checked: wire.freeEnds === 'arrow' }
+          { checked: wire.freeEnds === 'arrow', icon: 'arrow-right' }
         )
       )
     }
     items.push(
       SEPARATOR,
-      item('Avancer', () => store.reorderWires('up'), { hint: 'Ctrl+Page haut' }),
-      item('Reculer', () => store.reorderWires('down'), { hint: 'Ctrl+Page bas' }),
-      item('Premier plan', () => store.reorderWires('top'), { hint: 'Ctrl+Maj+Page haut' }),
-      item('Arrière-plan', () => store.reorderWires('bottom'), { hint: 'Ctrl+Maj+Page bas' }),
+      item('Avancer', () => store.reorderWires('up'), {
+        hint: 'Ctrl+Page haut',
+        icon: 'arrow-up'
+      }),
+      item('Reculer', () => store.reorderWires('down'), {
+        hint: 'Ctrl+Page bas',
+        icon: 'arrow-down'
+      }),
+      item('Premier plan', () => store.reorderWires('top'), {
+        hint: 'Ctrl+Maj+Page haut',
+        icon: 'arrow-up-line'
+      }),
+      item('Arrière-plan', () => store.reorderWires('bottom'), {
+        hint: 'Ctrl+Maj+Page bas',
+        icon: 'arrow-down-line'
+      }),
       SEPARATOR,
       ...commonItems()
     )
@@ -250,39 +276,41 @@ function openMenu(request: MenuRequest): void {
     const label = store.doc.labels.find((candidate) => candidate.id === target.id)
     if (!label) return
     items.push(heading(multi ? `${count} éléments` : 'Étiquette'))
-    if (!multi)
+    if (!multi) {
       items.push(
-        item('Modifier le texte…', () => editLabelText(label.id)),
+        item('Modifier le texte…', () => editLabelText(label.id), { icon: 'edit' }),
         SEPARATOR
       )
+    }
     items.push(...commonItems())
   } else {
     const [x, y] = request.cell
     items.push(
       item('Coller ici', () => store.pasteClipboardAt(x, y), {
         hint: 'Ctrl+V',
+        icon: 'clipboard',
         disabled: store.clipboardEmpty
       }),
-      item('Tout sélectionner', () => store.selectAll(), { hint: 'Ctrl+A' }),
+      item('Tout sélectionner', () => store.selectAll(), { hint: 'Ctrl+A', icon: 'select-all' }),
       SEPARATOR,
-      item('Tracer un fil', () => store.startWireTool(), { hint: 'W' }),
+      item('Tracer un fil', () => store.startWireTool(), { hint: 'W', icon: 'wire' }),
       item(
         'Poser une étiquette ici',
         () => {
           store.addLabel(x, y)
         },
-        { hint: 'E' }
+        { hint: 'E', icon: 'type' }
       ),
       SEPARATOR,
-      item('Ajuster au contenu', () => store.fitToContent(), { hint: '0' }),
-      item('Zoom 100 %', () => store.resetZoom(), { hint: '1' }),
+      item('Ajuster au contenu', () => store.fitToContent(), { hint: '0', icon: 'fit' }),
+      item('Zoom 100 %', () => store.resetZoom(), { hint: '1', icon: 'zoom-in' }),
       SEPARATOR,
       item(
         'Panneau de propriétés',
         () => {
           store.inspectorOpen = !store.inspectorOpen
         },
-        { hint: 'I', checked: store.inspectorOpen }
+        { hint: 'I', icon: 'panel', checked: store.inspectorOpen }
       )
     )
   }

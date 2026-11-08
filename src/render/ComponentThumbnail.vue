@@ -55,6 +55,6 @@ const pinRadius = computed(() => Math.max(1.5, Math.min(3, cellPx.value / 4)))
 .thumbnail {
   display: block;
   border-radius: 4px;
-  background: #f6f8fa;
+  background: var(--surface-2);
 }
 </style>

@@ -80,7 +80,28 @@ export const ICONS = {
     'M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
     'M8 9a1 1 0 1 0 2 0a1 1 0 1 0-2 0',
     'M21 16l-5-5-9 9'
-  ]
+  ],
+  duplicate: ['M8 8h12v12H8z', 'M16 8V4H4v12h4', 'M14 11v6', 'M11 14h6'],
+  tag: [
+    'M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z',
+    'M7 7h.01'
+  ],
+  edit: ['M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z'],
+  refresh: ['M21 12a9 9 0 1 1-2.64-6.36', 'M21 3v6h-6'],
+  'arrow-right': ['M5 12h14', 'M12 5l7 7-7 7'],
+  'select-all': ['M4 4h16v16H4z', 'M9 9h6v6H9z'],
+  sun: [
+    'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
+    'M12 2v2',
+    'M12 20v2',
+    'M4.93 4.93l1.41 1.41',
+    'M17.66 17.66l1.41 1.41',
+    'M2 12h2',
+    'M20 12h2',
+    'M6.34 17.66l-1.41 1.41',
+    'M19.07 4.93l-1.41 1.41'
+  ],
+  moon: ['M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z']
 } as const satisfies Record<string, readonly string[]>
 
 export type IconName = keyof typeof ICONS

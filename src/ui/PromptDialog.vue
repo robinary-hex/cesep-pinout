@@ -49,21 +49,21 @@ function submit(): void {
   flex-direction: column;
   gap: 4px;
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .field input {
   font: inherit;
   font-size: 14px;
-  color: #1f2328;
+  color: var(--text);
   padding: 6px 8px;
-  border: 1px solid #d0d7de;
+  border: 1px solid var(--border);
   border-radius: 4px;
 }
 
 .hint {
   margin: 8px 0 0;
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
 }
 </style>

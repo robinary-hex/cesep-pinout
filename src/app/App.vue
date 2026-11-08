@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
+import { createEmptyComponent } from '@/domain'
 import ComponentEditor from '@/features/component-editor/ComponentEditor.vue'
 import { useComponentEditorStore } from '@/features/component-editor/store'
 import LibraryPanel from '@/features/library/LibraryPanel.vue'
@@ -14,11 +15,12 @@ import ContextMenu from '@/ui/ContextMenu.vue'
 import { heading, item, SEPARATOR, type MenuItem } from '@/ui/contextMenu'
 import Icon from '@/ui/Icon.vue'
 import { openModals } from '@/ui/modalState'
+import { applyTheme } from '@/ui/theme'
 import ShortcutsHelp from './ShortcutsHelp.vue'
 
-// Coque applicative : menu Fichier, bascule entre les deux modes, paramètres, aide, copie de
-// secours et garde à la fermeture. Un seul éditeur est monté à la fois, donc un seul jeu de
-// raccourcis ; le menu Fichier appelle les actions exposées par l'éditeur visible.
+// Coque applicative : menu Fichier, bascule entre les deux modes, thème, paramètres, aide,
+// copie de secours et garde à la fermeture. Un seul éditeur est monté à la fois, donc un seul
+// jeu de raccourcis ; le menu Fichier appelle les actions exposées par l'éditeur visible.
 
 type Mode = 'components' | 'schematic'
 
@@ -45,6 +47,15 @@ watch(
   },
   { immediate: true }
 )
+
+watch(() => library.theme, applyTheme, { immediate: true })
+
+/** Bouton « Nouveau » du panneau des composants : ouvre un composant vierge dans l'éditeur. */
+function createComponent(): void {
+  if (!editor.confirmDiscard()) return
+  editor.open(createEmptyComponent('nouveau-composant', 'Nouveau composant'), null)
+  mode.value = 'components'
+}
 
 // Menu Fichier
 
@@ -181,6 +192,8 @@ onMounted(async () => {
     })()
   })
   await library.init()
+  // Les paramètres sont lus : la couleur des prochains fils part de la couleur par défaut.
+  schematic.syncCurrentColor()
   await proposeRecovery()
   const launch = await bridge().getLaunchFile()
   if (launch && (!schematic.dirty || schematic.confirmDiscard())) {
@@ -207,7 +220,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 <template>
   <div class="shell">
     <header class="topbar">
-      <h1>Pinout</h1>
       <button
         ref="fileButton"
         type="button"
@@ -231,20 +243,27 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
         </button>
       </nav>
       <div class="spacer" />
-      <button
-        type="button"
-        class="ghost icon-only"
-        title="Raccourcis clavier (F1)"
-        @click="showHelp = true"
-      >
-        <Icon name="help" :size="18" />
-      </button>
-      <button type="button" class="ghost icon-only" title="Paramètres" @click="showSettings = true">
-        <Icon name="settings" :size="18" />
-      </button>
+      <div class="group">
+        <button
+          type="button"
+          class="ghost icon-only"
+          title="Raccourcis clavier (F1)"
+          @click="showHelp = true"
+        >
+          <Icon name="help" :size="18" />
+        </button>
+        <button
+          type="button"
+          class="ghost icon-only"
+          title="Paramètres"
+          @click="showSettings = true"
+        >
+          <Icon name="settings" :size="18" />
+        </button>
+      </div>
     </header>
     <main class="workspace">
-      <LibraryPanel :mode="mode === 'components' ? 'edit' : 'place'" />
+      <LibraryPanel :mode="mode === 'components' ? 'edit' : 'place'" @create="createComponent" />
       <ComponentEditor v-if="mode === 'components'" ref="componentEditor" />
       <SchematicEditor v-else ref="schematicEditor" />
     </main>

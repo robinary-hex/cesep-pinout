@@ -210,7 +210,7 @@ function setLabelSize(event: Event): void {
       </label>
       <template v-if="fields.length > 0">
         <label v-for="field in fields" :key="field.name" class="field">
-          <span>{{ field.name }}</span>
+          <span>{{ field.name }}{{ field.unit.length > 0 ? ` (${field.unit})` : '' }}</span>
           <input
             type="text"
             :value="single.instance.fields[field.name] ?? ''"
@@ -384,8 +384,8 @@ function setLabelSize(event: Event): void {
   width: 300px;
   flex: none;
   overflow-y: auto;
-  background: #ffffff;
-  border-left: 1px solid #d0d7de;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
 }
 
 .panel-head {
@@ -397,14 +397,14 @@ function setLabelSize(event: Event): void {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #57606a;
-  border-bottom: 1px solid #eaeef2;
-  background: #f6f8fa;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--surface-2);
 }
 
 .block {
   padding: 12px 14px;
-  border-bottom: 1px solid #eaeef2;
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .block h3 {
@@ -412,7 +412,7 @@ function setLabelSize(event: Event): void {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .field {
@@ -421,18 +421,18 @@ function setLabelSize(event: Event): void {
   gap: 3px;
   margin-bottom: 8px;
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .field input,
 .field select {
   font: inherit;
   font-size: 13px;
-  color: #1f2328;
+  color: var(--text);
   padding: 4px 6px;
-  border: 1px solid #d0d7de;
+  border: 1px solid var(--border);
   border-radius: 4px;
-  background: #ffffff;
+  background: var(--surface);
 }
 
 .row {
@@ -454,23 +454,23 @@ function setLabelSize(event: Event): void {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
   padding-bottom: 6px;
 }
 
 .hint {
   margin: 4px 0;
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
   word-break: break-word;
 }
 
 .notice {
   margin: 8px 0;
   padding: 8px;
-  border: 1px solid #d4a72c;
+  border: 1px solid var(--warning-border);
   border-radius: 4px;
-  background: #fff8c5;
+  background: var(--warning-bg);
   font-size: 12px;
 }
 
@@ -489,13 +489,13 @@ function setLabelSize(event: Event): void {
   width: 20px;
   height: 20px;
   padding: 0;
-  border: 2px solid #ffffff;
+  border: 2px solid var(--surface);
   border-radius: 50%;
-  box-shadow: 0 0 0 1px #d0d7de;
+  box-shadow: 0 0 0 1px var(--border);
 }
 
 .swatch.current {
-  box-shadow: 0 0 0 2px #1f6feb;
+  box-shadow: 0 0 0 2px var(--accent);
 }
 
 .custom {
@@ -505,9 +505,9 @@ function setLabelSize(event: Event): void {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  border: 1px dashed #8c959f;
+  border: 1px dashed var(--text-faint);
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
   cursor: pointer;
 }
 

@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  componentFields,
   componentIssues,
   createEmptyComponent,
   DEFAULT_SHAPE_STYLE,
   NO_ARROWS,
   primitiveBounds,
+  textContent,
   translatePrimitive,
   type Primitive
 } from './component'
@@ -101,5 +103,33 @@ describe('accrochage des broches au bord', () => {
   it('donne une distance utile pour refuser un clic trop loin', () => {
     expect(nearestBorderPoint({ x: 2, y: 1 }, size).distance).toBeCloseTo(1)
     expect(nearestBorderPoint({ x: 8, y: 1 }, size).distance).toBeCloseTo(4)
+  })
+})
+
+describe('textes variables', () => {
+  it('affiche la valeur, sinon la valeur par défaut, et colle l’unité à droite', () => {
+    const base = {
+      kind: 'text' as const,
+      x: 0,
+      y: 0,
+      size: 0.5,
+      anchor: 'middle' as const,
+      color: '#000000',
+      text: 'R',
+      variable: true,
+      defaultValue: '10',
+      unit: 'kΩ'
+    }
+    const nbsp = String.fromCharCode(0xa0)
+    expect(textContent(base, { R: '4,7' })).toBe(`4,7${nbsp}kΩ`)
+    expect(textContent(base, {})).toBe(`10${nbsp}kΩ`)
+    expect(textContent({ ...base, defaultValue: '', unit: '' })).toBe('{R}')
+    expect(textContent({ ...base, variable: false })).toBe('R')
+    expect(
+      componentFields({
+        ...createEmptyComponent('x', 'X'),
+        visual: { kind: 'drawing', primitives: [base] }
+      })
+    ).toEqual([{ name: 'R', defaultValue: '10', unit: 'kΩ' }])
   })
 })

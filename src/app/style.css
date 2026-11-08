@@ -2,8 +2,69 @@
   color-scheme: light;
   font-family: 'Segoe UI', system-ui, sans-serif;
   font-size: 13px;
-  color: #1f2328;
-  background: #f6f7f9;
+  color: var(--text);
+  background: var(--bg);
+
+  /* Thème clair. Les surfaces de dessin (--paper) restent claires dans les deux thèmes :
+     les couleurs des composants et des fils sont celles de l'export. */
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f6f8fa;
+  --surface-3: #f0f3f6;
+  --surface-hover: #eaeef2;
+  --border: #d0d7de;
+  --border-soft: #eaeef2;
+  --text: #1f2328;
+  --text-muted: #57606a;
+  --text-faint: #8c959f;
+  --accent: #1f6feb;
+  --accent-hover: #0969da;
+  --accent-soft: #ddf4ff;
+  --accent-border: #54aeff;
+  --danger: #a40e26;
+  --danger-soft: #ffebe9;
+  --success: #1a7f37;
+  --warning-border: #d4a72c;
+  --warning-bg: #fff8c5;
+  --warning-text: #9a6700;
+  --topbar: #24292f;
+  --topbar-text: #ffffff;
+  --shadow: rgba(31, 35, 40, 0.15);
+  --shadow-strong: rgba(31, 35, 40, 0.35);
+  --backdrop: rgba(31, 35, 40, 0.45);
+  --paper: #ffffff;
+  --paper-margin: #f0f2f5;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface-2: #21262d;
+  --surface-3: #1f242c;
+  --surface-hover: #30363d;
+  --border: #30363d;
+  --border-soft: #21262d;
+  --text: #e6edf3;
+  --text-muted: #9da7b3;
+  --text-faint: #6e7681;
+  --accent: #4493f8;
+  --accent-hover: #58a6ff;
+  --accent-soft: #1f3a5f;
+  --accent-border: #388bfd;
+  --danger: #ff7b72;
+  --danger-soft: #3d1f22;
+  --success: #3fb950;
+  --warning-border: #9e6a03;
+  --warning-bg: #2d2306;
+  --warning-text: #d29922;
+  --topbar: #010409;
+  --topbar-text: #e6edf3;
+  --shadow: rgba(0, 0, 0, 0.45);
+  --shadow-strong: rgba(0, 0, 0, 0.65);
+  --backdrop: rgba(0, 0, 0, 0.6);
+  --paper: #ffffff;
+  --paper-margin: #2a2f36;
 }
 
 * {
@@ -29,15 +90,15 @@ body,
   align-items: center;
   gap: 24px;
   padding: 6px 16px;
-  background: #24292f;
-  color: #ffffff;
+  background: var(--topbar);
+  color: var(--topbar-text);
   flex: none;
 }
 
-.topbar h1 {
-  margin: 0;
-  font-size: 16px;
-  letter-spacing: 0.02em;
+.topbar .group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .modes {
@@ -46,14 +107,14 @@ body,
 }
 
 .modes button {
-  color: #ffffff;
+  color: var(--topbar-text);
   background: transparent;
   border-color: transparent;
 }
 
 .modes button.active {
-  background: #ffffff;
-  color: #24292f;
+  background: var(--topbar-text);
+  color: var(--topbar);
 }
 
 .modes button:disabled {
@@ -65,14 +126,14 @@ body,
 }
 
 .topbar button.ghost {
-  color: #ffffff;
+  color: var(--topbar-text);
   background: transparent;
-  border-color: rgba(255, 255, 255, 0.35);
+  border-color: rgba(128, 128, 128, 0.45);
 }
 
 .topbar button.ghost:hover,
 .topbar button.ghost.open {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(128, 128, 128, 0.22);
 }
 
 .workspace {
@@ -84,16 +145,16 @@ body,
 button {
   font: inherit;
   padding: 5px 10px;
-  border: 1px solid #d0d7de;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: #f6f8fa;
-  color: #1f2328;
+  background: var(--surface-2);
+  color: var(--text);
   cursor: pointer;
   line-height: 1.3;
 }
 
 button:hover:not(:disabled) {
-  background: #eaeef2;
+  background: var(--surface-hover);
 }
 
 button:disabled {
@@ -102,21 +163,21 @@ button:disabled {
 }
 
 button.primary {
-  background: #1f6feb;
-  border-color: #1f6feb;
+  background: var(--accent);
+  border-color: var(--accent);
   color: #ffffff;
 }
 
 button.primary:hover:not(:disabled) {
-  background: #0969da;
+  background: var(--accent-hover);
 }
 
 button.danger {
-  color: #a40e26;
+  color: var(--danger);
 }
 
 button.danger:hover:not(:disabled) {
-  background: #ffebe9;
+  background: var(--danger-soft);
 }
 
 button.small {
@@ -140,4 +201,3 @@ button.icon-only {
 kbd {
   font-family: inherit;
 }
-</style>

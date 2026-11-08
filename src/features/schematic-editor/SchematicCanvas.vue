@@ -1003,7 +1003,7 @@ const cursorClass = computed(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: var(--paper);
 }
 
 .canvas-area {
@@ -1181,9 +1181,9 @@ const cursorClass = computed(() => {
   gap: 16px;
   padding: 4px 12px;
   font-size: 12px;
-  color: #57606a;
-  background: #ffffff;
-  border-top: 1px solid #d0d7de;
+  color: var(--text-muted);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
 }
 
 .coords {

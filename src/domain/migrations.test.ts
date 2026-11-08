@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import componentV1 from './fixtures/v1/component-drawing.json?raw'
 import projectV1 from './fixtures/v1/project.json?raw'
 import settingsV1 from './fixtures/v1/settings.json?raw'
+import componentV2 from './fixtures/v2/component-drawing.json?raw'
+import projectV2 from './fixtures/v2/project.json?raw'
+import settingsV3 from './fixtures/v3/settings.json?raw'
 import {
   componentMigrations,
   FileFormatError,
@@ -62,17 +65,17 @@ describe('migrations', () => {
   })
 })
 
-describe('composant v1 → v2', () => {
-  it('convertit les épaisseurs en multiplicateurs, ajoute flèches et textes variables, retire le préfixe', () => {
+describe('composant v1 → v3', () => {
+  it('convertit les épaisseurs en multiplicateurs, ajoute flèches, textes variables et unité, retire le préfixe', () => {
     const def = parseComponentDefinition(componentV1)
-    expect(def.schemaVersion).toBe(2)
+    expect(def.schemaVersion).toBe(3)
     expect('labelPrefix' in def).toBe(false)
     if (def.visual.kind !== 'drawing') throw new Error('dessin attendu')
     const [line, rect, , text] = def.visual.primitives
     expect(line).toMatchObject({ kind: 'line', arrows: { start: false, end: false } })
     expect(line?.kind === 'line' && line.style.weight).toBe(1)
     expect(rect?.kind === 'rect' && rect.style.weight).toBe(1)
-    expect(text).toMatchObject({ kind: 'text', variable: false, defaultValue: '' })
+    expect(text).toMatchObject({ kind: 'text', variable: false, defaultValue: '', unit: '' })
   })
 
   it('les épaisseurs non standard deviennent des multiplicateurs proportionnels', () => {
@@ -89,24 +92,61 @@ describe('composant v1 → v2', () => {
   })
 })
 
-describe('projet v1 → v2', () => {
+describe('composant v2 → v3', () => {
+  it('ajoute une unité vide aux textes et garde le reste', () => {
+    const def = parseComponentDefinition(componentV2)
+    expect(def.schemaVersion).toBe(3)
+    if (def.visual.kind !== 'drawing') throw new Error('dessin attendu')
+    const text = def.visual.primitives[3]
+    expect(text).toMatchObject({ kind: 'text', variable: true, defaultValue: '10 kΩ', unit: '' })
+    const arrowLine = def.visual.primitives[2]
+    expect(arrowLine).toMatchObject({ kind: 'line', arrows: { start: false, end: true } })
+    expect(arrowLine?.kind === 'line' && arrowLine.style.weight).toBe(1.5)
+  })
+})
+
+describe('projet v1 → v3', () => {
   it('ajoute le trait des composants au profil, les champs aux instances, et migre les définitions', () => {
     const project = parseProject(projectV1)
-    expect(project.schemaVersion).toBe(2)
+    expect(project.schemaVersion).toBe(3)
     expect(project.profile.componentStroke).toBe(0.1)
     expect(project.components.every((instance) => instance.fields !== undefined)).toBe(true)
     for (const def of Object.values(project.embeddedDefs)) {
-      expect(def.schemaVersion).toBe(2)
+      expect(def.schemaVersion).toBe(3)
       expect('labelPrefix' in def).toBe(false)
     }
   })
 })
 
-describe('paramètres v1 → v3', () => {
-  it('ajoute export, copie de secours et trait des composants', () => {
+describe('projet v2 → v3', () => {
+  it('migre les définitions embarquées et garde les valeurs des instances', () => {
+    const project = parseProject(projectV2)
+    expect(project.schemaVersion).toBe(3)
+    expect(project.components[0]?.fields).toEqual({ R: '4,7 kΩ' })
+    const def = project.embeddedDefs['resistor']
+    expect(def?.schemaVersion).toBe(3)
+    if (def?.visual.kind !== 'drawing') throw new Error('dessin attendu')
+    expect(def.visual.primitives[1]).toMatchObject({ kind: 'text', unit: '' })
+    expect(project.wires[0]?.color).toBe('#d62828')
+  })
+})
+
+describe('paramètres v1 → v4', () => {
+  it('ajoute export, copie de secours, trait des composants et thème', () => {
     const settings = parseSettings(settingsV1)
-    expect(settings.schemaVersion).toBe(3)
+    expect(settings.schemaVersion).toBe(4)
     expect(settings.defaultProfile.componentStroke).toBe(0.1)
     expect(settings.export.scale).toBe(2)
+    expect(settings.theme).toBe('light')
+  })
+})
+
+describe('paramètres v3 → v4', () => {
+  it('ajoute le thème clair et garde le reste', () => {
+    const settings = parseSettings(settingsV3)
+    expect(settings.schemaVersion).toBe(4)
+    expect(settings.theme).toBe('light')
+    expect(settings.recentFiles).toEqual(['D:/Documents/diviseur.pinout.json'])
+    expect(settings.autosaveSeconds).toBe(60)
   })
 })

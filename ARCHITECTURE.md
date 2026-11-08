@@ -49,6 +49,9 @@ l'historique et ne crée qu'une commande à la validation.
 `ContextMenu` + `contextMenu.ts` (menu flottant : entrées, titres, séparateurs, pastilles de
 couleur ; sert au clic droit du montage et au menu Fichier de la barre d'application), `Icon` +
 `icons.ts` (pictogrammes SVG inline, un tableau de tracés par nom, testés en rendu).
+`theme.ts` applique le thème choisi dans les paramètres ; les styles n'emploient que les variables
+CSS déclarées dans `src/app/style.css` (jeux clair et sombre), sauf les surfaces de dessin, qui
+restent claires.
 
 ## Conventions de coordonnées
 
@@ -101,9 +104,10 @@ il demande confirmation, puis le rendu écrit la copie de secours avant de confi
 
 Tous en JSON indenté, avec `schemaVersion`, validés par Zod à l'ouverture, migrés étape par étape
 (`src/domain/migrations.ts`). Un fichier d'exemple par version dans `src/domain/fixtures/`.
-Versions courantes : composant 2 (épaisseur en multiplicateur, flèches, textes variables, plus de
-`labelPrefix`), projet 2 (`componentStroke` dans le profil, `fields` par instance, définitions
-embarquées migrées), paramètres 3 (`componentStroke` du profil par défaut).
+Versions courantes : composant 3 (épaisseur en multiplicateur, flèches, textes variables avec
+unité, plus de `labelPrefix`), projet 3 (`componentStroke` dans le profil, `fields` par instance,
+définitions embarquées migrées à chaque version des composants), paramètres 4 (`componentStroke`
+du profil par défaut, thème).
 
 | Donnée                  | Schéma                      | Emplacement                                                             |
 | ----------------------- | --------------------------- | ----------------------------------------------------------------------- |

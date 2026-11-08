@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 3,
+  "libraryDir": "",
+  "palette": [
+    { "name": "Noir", "hex": "#000000" },
+    { "name": "Rouge", "hex": "#d62828" }
+  ],
+  "customColors": [],
+  "defaultWireColor": "#000000",
+  "defaultProfile": {
+    "name": "Standard",
+    "cellPx": 20,
+    "wireWidth": 0.15,
+    "cornerRadius": 0.4,
+    "componentStroke": 0.1,
+    "junctionScale": 2,
+    "junctionColor": "wire",
+    "labelFont": { "family": "Segoe UI", "size": 11 }
+  },
+  "recentFiles": ["D:/Documents/diviseur.pinout.json"],
+  "export": { "scale": 2, "background": "white", "marginCells": 1, "labels": true, "grid": false },
+  "autosaveSeconds": 60
+}

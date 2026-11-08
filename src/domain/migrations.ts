@@ -91,24 +91,34 @@ function migrateComponentV1(raw: RawRecord): RawRecord {
   return result
 }
 
-export const componentMigrations: MigrationTable = {
-  current: COMPONENT_SCHEMA_VERSION,
-  steps: { 1: migrateComponentV1 }
+// Composant v2 → v3 : unité des textes variables.
+
+function migrateComponentV2(raw: RawRecord): RawRecord {
+  const visual = raw['visual']
+  if (!isRecord(visual) || visual['kind'] !== 'drawing' || !Array.isArray(visual['primitives'])) {
+    return raw
+  }
+  return {
+    ...raw,
+    visual: {
+      ...visual,
+      primitives: visual['primitives'].map((primitive) =>
+        isRecord(primitive) && primitive['kind'] === 'text' ? { unit: '', ...primitive } : primitive
+      )
+    }
+  }
 }
 
-// Projet v1 → v2 : trait des composants dans le profil, champs variables par instance,
-// définitions embarquées migrées à leur tour.
+export const componentMigrations: MigrationTable = {
+  current: COMPONENT_SCHEMA_VERSION,
+  steps: { 1: migrateComponentV1, 2: migrateComponentV2 }
+}
 
-function migrateProjectV1(raw: RawRecord): RawRecord {
-  const profile = isRecord(raw['profile']) ? raw['profile'] : {}
-  const components = Array.isArray(raw['components']) ? raw['components'] : []
+/** Les définitions embarquées d'un projet suivent les migrations des composants. */
+function migrateEmbeddedDefs(raw: RawRecord): RawRecord {
   const defs = isRecord(raw['embeddedDefs']) ? raw['embeddedDefs'] : {}
   return {
     ...raw,
-    profile: { componentStroke: DEFAULT_COMPONENT_STROKE, ...profile },
-    components: components.map((instance) =>
-      isRecord(instance) ? { fields: {}, ...instance } : instance
-    ),
     embeddedDefs: Object.fromEntries(
       Object.entries(defs).map(([id, def]) => [
         id,
@@ -118,12 +128,30 @@ function migrateProjectV1(raw: RawRecord): RawRecord {
   }
 }
 
-export const projectMigrations: MigrationTable = {
-  current: PROJECT_SCHEMA_VERSION,
-  steps: { 1: migrateProjectV1 }
+// Projet v1 → v2 : trait des composants dans le profil, champs variables par instance,
+// définitions embarquées migrées à leur tour.
+
+function migrateProjectV1(raw: RawRecord): RawRecord {
+  const profile = isRecord(raw['profile']) ? raw['profile'] : {}
+  const components = Array.isArray(raw['components']) ? raw['components'] : []
+  return migrateEmbeddedDefs({
+    ...raw,
+    profile: { componentStroke: DEFAULT_COMPONENT_STROKE, ...profile },
+    components: components.map((instance) =>
+      isRecord(instance) ? { fields: {}, ...instance } : instance
+    )
+  })
 }
 
-// Paramètres v1 → v2 : export et copie de secours ; v2 → v3 : trait des composants du profil.
+// Projet v2 → v3 : définitions embarquées migrées (unité des textes variables).
+
+export const projectMigrations: MigrationTable = {
+  current: PROJECT_SCHEMA_VERSION,
+  steps: { 1: migrateProjectV1, 2: migrateEmbeddedDefs }
+}
+
+// Paramètres v1 → v2 : export et copie de secours ; v2 → v3 : trait des composants du profil ;
+// v3 → v4 : thème de l'interface.
 
 export const settingsMigrations: MigrationTable = {
   current: SETTINGS_SCHEMA_VERSION,
@@ -139,6 +167,7 @@ export const settingsMigrations: MigrationTable = {
         componentStroke: DEFAULT_COMPONENT_STROKE,
         ...(isRecord(raw['defaultProfile']) ? raw['defaultProfile'] : {})
       }
-    })
+    }),
+    3: (raw) => ({ ...raw, theme: 'light' })
   }
 }

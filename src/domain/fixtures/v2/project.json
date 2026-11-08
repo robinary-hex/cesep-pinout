@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 2,
+  "name": "Diviseur",
+  "profile": {
+    "name": "Standard",
+    "cellPx": 20,
+    "wireWidth": 0.15,
+    "cornerRadius": 0.4,
+    "componentStroke": 0.1,
+    "junctionScale": 2,
+    "junctionColor": "wire",
+    "labelFont": { "family": "Segoe UI", "size": 11 }
+  },
+  "components": [
+    {
+      "id": "c1",
+      "defId": "resistor",
+      "x": 2,
+      "y": 2,
+      "rotation": 0,
+      "mirror": false,
+      "label": "R1",
+      "fields": { "R": "4,7 kΩ" }
+    },
+    {
+      "id": "c2",
+      "defId": "resistor",
+      "x": 10,
+      "y": 2,
+      "rotation": 0,
+      "mirror": false,
+      "label": "",
+      "fields": {}
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "color": "#d62828",
+      "points": [
+        [6, 3],
+        [10, 3]
+      ],
+      "stack": 0,
+      "freeEnds": "flat"
+    }
+  ],
+  "crossingOverrides": [],
+  "labels": [],
+  "embeddedDefs": {
+    "resistor": {
+      "schemaVersion": 2,
+      "id": "resistor",
+      "name": "Résistance",
+      "category": "Passifs",
+      "description": "",
+      "size": { "widthCells": 4, "heightCells": 2 },
+      "visual": {
+        "kind": "drawing",
+        "primitives": [
+          {
+            "kind": "rect",
+            "x": 4,
+            "y": 2,
+            "w": 8,
+            "h": 4,
+            "rx": 0,
+            "style": { "stroke": "#000000", "weight": 1, "fill": "none" }
+          },
+          {
+            "kind": "text",
+            "x": 8,
+            "y": 1,
+            "text": "R",
+            "size": 0.5,
+            "anchor": "middle",
+            "color": "#000000",
+            "variable": true,
+            "defaultValue": "10 kΩ"
+          }
+        ]
+      },
+      "pins": [
+        { "id": "a", "name": "1", "kind": "io", "x": 0, "y": 1 },
+        { "id": "b", "name": "2", "kind": "io", "x": 4, "y": 1 }
+      ]
+    }
+  }
+}

@@ -9,6 +9,7 @@ import {
   type ExportSettings,
   type PaletteColor,
   type Settings,
+  type Theme,
   type StyleProfile
 } from '@/domain'
 import { bridge } from '@/io/bridge'
@@ -52,6 +53,8 @@ export const useLibraryStore = defineStore('library', () => {
   const autosaveSeconds = computed(
     () => settings.value?.autosaveSeconds ?? DEFAULT_AUTOSAVE_SECONDS
   )
+
+  const theme = computed<Theme>(() => settings.value?.theme ?? 'light')
 
   const filtered = computed(() => {
     const needle = search.value.trim().toLowerCase()
@@ -175,6 +178,7 @@ export const useLibraryStore = defineStore('library', () => {
     recentFiles,
     exportDefaults,
     autosaveSeconds,
+    theme,
     loading,
     problem,
     search,

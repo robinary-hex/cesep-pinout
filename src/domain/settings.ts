@@ -2,13 +2,17 @@ import { z } from 'zod'
 import { hexColorSchema } from './color'
 import { DEFAULT_PROFILE, styleProfileSchema } from './profile'
 
-export const SETTINGS_SCHEMA_VERSION = 3
+export const SETTINGS_SCHEMA_VERSION = 4
 
 export const paletteColorSchema = z.object({
   name: z.string().min(1),
   hex: hexColorSchema
 })
 export type PaletteColor = z.infer<typeof paletteColorSchema>
+
+/** Thème de l'interface ; les surfaces de dessin restent claires dans les deux cas. */
+export const themeSchema = z.enum(['light', 'dark'])
+export type Theme = z.infer<typeof themeSchema>
 
 /** Palette de départ : dix couleurs de fils, sans blanc. Modifiable dans les paramètres. */
 export const DEFAULT_PALETTE: readonly PaletteColor[] = [
@@ -64,7 +68,8 @@ export const settingsSchema = z.object({
   recentFiles: z.array(z.string()),
   export: exportSettingsSchema,
   /** Intervalle de la copie de secours, en secondes. */
-  autosaveSeconds: z.number().int().positive()
+  autosaveSeconds: z.number().int().positive(),
+  theme: themeSchema
 })
 export type Settings = z.infer<typeof settingsSchema>
 
@@ -77,5 +82,6 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultProfile: structuredClone(DEFAULT_PROFILE),
   recentFiles: [],
   export: { ...DEFAULT_EXPORT },
-  autosaveSeconds: DEFAULT_AUTOSAVE_SECONDS
+  autosaveSeconds: DEFAULT_AUTOSAVE_SECONDS,
+  theme: 'light'
 }

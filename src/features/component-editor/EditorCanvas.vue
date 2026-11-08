@@ -330,7 +330,8 @@ function onPointerDown(event: PointerEvent): void {
           anchor: 'middle',
           color: '#000000',
           variable: false,
-          defaultValue: ''
+          defaultValue: '',
+          unit: ''
         },
         'Ajouter un texte'
       )
@@ -633,7 +634,7 @@ defineExpose({ cancel, finishPolyline })
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: #f0f2f5;
+  background: var(--paper-margin);
 }
 
 .canvas-scroll {
@@ -644,8 +645,8 @@ defineExpose({ cancel, finishPolyline })
 
 .canvas {
   display: block;
-  background: #ffffff;
-  box-shadow: 0 1px 4px rgba(31, 35, 40, 0.15);
+  background: var(--paper);
+  box-shadow: 0 1px 4px var(--shadow);
   touch-action: none;
   user-select: none;
 }
@@ -714,9 +715,9 @@ defineExpose({ cancel, finishPolyline })
   gap: 16px;
   padding: 4px 12px;
   font-size: 12px;
-  color: #57606a;
-  background: #ffffff;
-  border-top: 1px solid #d0d7de;
+  color: var(--text-muted);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
 }
 
 .coords {

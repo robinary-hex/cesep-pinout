@@ -126,10 +126,10 @@ onUnmounted(() => {
   min-width: 220px;
   max-width: 320px;
   padding: 4px 0;
-  background: #ffffff;
-  border: 1px solid #d0d7de;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(31, 35, 40, 0.18);
+  box-shadow: 0 8px 24px var(--shadow);
   font-size: 13px;
   user-select: none;
 }
@@ -140,7 +140,7 @@ onUnmounted(() => {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #57606a;
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -149,7 +149,7 @@ onUnmounted(() => {
 .separator {
   height: 1px;
   margin: 4px 0;
-  background: #eaeef2;
+  background: var(--surface-hover);
 }
 
 .entry {
@@ -161,26 +161,26 @@ onUnmounted(() => {
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #1f2328;
+  color: var(--text);
   text-align: left;
   cursor: pointer;
 }
 
 .entry:hover:not(:disabled) {
-  background: #f0f3f6;
+  background: var(--surface-3);
 }
 
 .entry:disabled {
-  color: #8c959f;
+  color: var(--text-faint);
   cursor: default;
 }
 
 .entry.danger:not(:disabled) {
-  color: #a40e26;
+  color: var(--danger);
 }
 
 .entry.danger:hover:not(:disabled) {
-  background: #ffebe9;
+  background: var(--danger-soft);
 }
 
 .check {
@@ -189,11 +189,11 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .check .checked {
-  color: #1f6feb;
+  color: var(--accent);
 }
 
 .label {
@@ -207,10 +207,10 @@ onUnmounted(() => {
   flex: none;
   padding: 0 5px;
   font-size: 11px;
-  color: #57606a;
-  border: 1px solid #d0d7de;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
   border-radius: 3px;
-  background: #f6f8fa;
+  background: var(--surface-2);
 }
 
 .swatches {
@@ -224,12 +224,12 @@ onUnmounted(() => {
   width: 18px;
   height: 18px;
   padding: 0;
-  border: 2px solid #ffffff;
+  border: 2px solid var(--surface);
   border-radius: 50%;
-  box-shadow: 0 0 0 1px #d0d7de;
+  box-shadow: 0 0 0 1px var(--border);
 }
 
 .swatch.current {
-  box-shadow: 0 0 0 2px #1f6feb;
+  box-shadow: 0 0 0 2px var(--accent);
 }
 </style>

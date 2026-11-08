@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { hexColorSchema } from './color'
 import { isOnBorder, PNG_PX_PER_CELL, QUARTERS_PER_CELL, sizeSchema, type Size } from './grid'
 
-export const COMPONENT_SCHEMA_VERSION = 2
+export const COMPONENT_SCHEMA_VERSION = 3
 
 export const pinKindSchema = z.enum(['in', 'out', 'io', 'power'])
 export type PinKind = z.infer<typeof pinKindSchema>
@@ -99,7 +99,9 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
     color: hexColorSchema,
     /** Texte variable : chaque composant posé donne sa propre valeur au champ nommé `text`. */
     variable: z.boolean(),
-    defaultValue: z.string()
+    defaultValue: z.string(),
+    /** Unité affichée à droite de la valeur d'un texte variable (kΩ, V, mA…) ; vide sinon. */
+    unit: z.string()
   })
 ])
 export type Primitive = z.infer<typeof primitiveSchema>
@@ -114,8 +116,15 @@ export type FieldValues = Readonly<Record<string, string>>
 export function textContent(primitive: TextPrimitive, fields?: FieldValues): string {
   if (!primitive.variable) return primitive.text
   const value = fields?.[primitive.text]
-  if (value !== undefined && value.length > 0) return value
-  return primitive.defaultValue.length > 0 ? primitive.defaultValue : `{${primitive.text}}`
+  const shown =
+    value !== undefined && value.length > 0
+      ? value
+      : primitive.defaultValue.length > 0
+        ? primitive.defaultValue
+        : `{${primitive.text}}`
+  const NO_BREAK_SPACE = String.fromCharCode(0xa0)
+  // L'unité suit la valeur, séparée par une espace insécable.
+  return primitive.unit.length > 0 ? `${shown}${NO_BREAK_SPACE}${primitive.unit}` : shown
 }
 
 export const visualSchema = z.discriminatedUnion('kind', [
@@ -164,6 +173,7 @@ export function createEmptyComponent(id: string, name: string): ComponentDefinit
 export interface ComponentField {
   name: string
   defaultValue: string
+  unit: string
 }
 
 /** Champs variables d'un composant (textes variables), dans l'ordre du dessin, sans doublon. */
@@ -174,7 +184,11 @@ export function componentFields(def: ComponentDefinition): ComponentField[] {
   for (const primitive of def.visual.primitives) {
     if (primitive.kind !== 'text' || !primitive.variable || seen.has(primitive.text)) continue
     seen.add(primitive.text)
-    fields.push({ name: primitive.text, defaultValue: primitive.defaultValue })
+    fields.push({
+      name: primitive.text,
+      defaultValue: primitive.defaultValue,
+      unit: primitive.unit
+    })
   }
   return fields
 }

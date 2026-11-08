@@ -205,14 +205,14 @@ function setMargin(event: Event): void {
 fieldset {
   margin: 0;
   padding: 6px 10px 8px;
-  border: 1px solid #d0d7de;
+  border: 1px solid var(--border);
   border-radius: 6px;
 }
 
 legend {
   padding: 0 4px;
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .radio,
@@ -229,20 +229,20 @@ legend {
   flex-direction: column;
   gap: 3px;
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .field input {
   font: inherit;
   padding: 4px 6px;
-  border: 1px solid #d0d7de;
+  border: 1px solid var(--border);
   border-radius: 4px;
 }
 
 .hint {
   margin: 4px 0 0;
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .preview {
@@ -251,9 +251,9 @@ legend {
   display: grid;
   place-items: center;
   overflow: auto;
-  border: 1px solid #d0d7de;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: #f6f7f9;
+  background: var(--bg);
 }
 
 .preview.transparent {
@@ -279,10 +279,10 @@ legend {
 .message {
   margin: 10px 0 0;
   font-size: 12px;
-  color: #1a7f37;
+  color: var(--success);
 }
 
 .message.failed {
-  color: #a40e26;
+  color: var(--danger);
 }
 </style>

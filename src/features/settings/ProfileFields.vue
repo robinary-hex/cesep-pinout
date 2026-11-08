@@ -169,18 +169,18 @@ function number(event: Event, fallback: number): number {
   flex-direction: column;
   gap: 3px;
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .field input,
 .field select {
   font: inherit;
   font-size: 13px;
-  color: #1f2328;
+  color: var(--text);
   padding: 4px 6px;
-  border: 1px solid #d0d7de;
+  border: 1px solid var(--border);
   border-radius: 4px;
-  background: #ffffff;
+  background: var(--surface);
 }
 
 .field input[type='color'] {
@@ -194,7 +194,7 @@ function number(event: Event, fallback: number): number {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
   padding-bottom: 6px;
 }
 </style>

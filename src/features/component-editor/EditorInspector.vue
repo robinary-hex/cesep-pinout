@@ -191,6 +191,13 @@ function setDefaultValue(event: Event): void {
   })
 }
 
+function setUnit(event: Event): void {
+  const unit = inputValue(event).trim()
+  store.updatePrimitive(primitiveIndex.value, 'Unité du texte', (p) => {
+    if (p.kind === 'text') p.unit = unit
+  })
+}
+
 function setTextSize(event: Event): void {
   const size = Math.max(0.1, numberValue(event))
   store.updatePrimitive(primitiveIndex.value, 'Taille du texte', (p) => {
@@ -368,9 +375,13 @@ function setClosed(event: Event): void {
           <input
             type="text"
             :value="primitive.defaultValue"
-            placeholder="10 kΩ"
+            placeholder="4,7"
             @change="setDefaultValue"
           />
+        </label>
+        <label v-if="primitive.variable" class="field">
+          <span>Unité (toujours affichée à droite de la valeur)</span>
+          <input type="text" :value="primitive.unit" placeholder="kΩ" @change="setUnit" />
         </label>
         <div class="row">
           <label class="field">
@@ -507,13 +518,13 @@ function setClosed(event: Event): void {
   width: 300px;
   flex: none;
   overflow-y: auto;
-  background: #ffffff;
-  border-left: 1px solid #d0d7de;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
 }
 
 .block {
   padding: 12px 14px;
-  border-bottom: 1px solid #eaeef2;
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .block h3 {
@@ -521,7 +532,7 @@ function setClosed(event: Event): void {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .field {
@@ -530,7 +541,7 @@ function setClosed(event: Event): void {
   gap: 3px;
   margin-bottom: 8px;
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .field input,
@@ -538,11 +549,11 @@ function setClosed(event: Event): void {
 .field textarea {
   font: inherit;
   font-size: 13px;
-  color: #1f2328;
+  color: var(--text);
   padding: 4px 6px;
-  border: 1px solid #d0d7de;
+  border: 1px solid var(--border);
   border-radius: 4px;
-  background: #ffffff;
+  background: var(--surface);
 }
 
 .field input[type='color'] {
@@ -569,7 +580,7 @@ function setClosed(event: Event): void {
   gap: 6px;
   margin-bottom: 8px;
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .pin-row {
@@ -584,17 +595,17 @@ function setClosed(event: Event): void {
 }
 
 .pin-row:hover {
-  background: #f0f3f6;
+  background: var(--surface-3);
 }
 
 .pin-row.selected {
-  background: #ddf4ff;
+  background: var(--accent-soft);
 }
 
 .pin-row .ordinal {
   font-size: 12px;
   font-weight: 600;
-  color: #57606a;
+  color: var(--text-muted);
   text-align: right;
 }
 
@@ -604,24 +615,24 @@ function setClosed(event: Event): void {
   font-size: 12px;
   min-width: 0;
   padding: 3px 5px;
-  border: 1px solid #d0d7de;
+  border: 1px solid var(--border);
   border-radius: 4px;
-  background: #ffffff;
+  background: var(--surface);
 }
 
 .hint {
   margin: 4px 0 0;
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
   word-break: break-all;
 }
 
 .notice {
   margin-top: 8px;
   padding: 8px;
-  border: 1px solid #d4a72c;
+  border: 1px solid var(--warning-border);
   border-radius: 4px;
-  background: #fff8c5;
+  background: var(--warning-bg);
   font-size: 12px;
 }
 
@@ -630,13 +641,13 @@ function setClosed(event: Event): void {
 }
 
 .error {
-  color: #a40e26;
+  color: var(--danger);
   font-size: 12px;
 }
 
 .ok {
   margin: 0;
-  color: #1a7f37;
+  color: var(--success);
   font-size: 12px;
 }
 
@@ -647,10 +658,10 @@ function setClosed(event: Event): void {
 }
 
 .issues .error {
-  color: #a40e26;
+  color: var(--danger);
 }
 
 .issues .warning {
-  color: #9a6700;
+  color: var(--warning-text);
 }
 </style>

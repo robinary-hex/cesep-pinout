@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import {
   DEFAULT_SETTINGS,
   EXPORT_SCALES,
@@ -8,12 +8,14 @@ import {
   type ExportScale,
   type PaletteColor,
   type Settings,
-  type StyleProfile
+  type StyleProfile,
+  type Theme
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import { useSchematicStore } from '@/features/schematic-editor/store'
 import Icon from '@/ui/Icon.vue'
 import ModalDialog from '@/ui/ModalDialog.vue'
+import { applyTheme } from '@/ui/theme'
 import ProfileFields from './ProfileFields.vue'
 
 // Paramètres de l'application : bibliothèque, palette, copie de secours à gauche ; profil par
@@ -88,6 +90,14 @@ function setExportScale(scale: ExportScale): void {
   draft.value = { ...draft.value, export: { ...draft.value.export, scale } }
 }
 
+/** Le thème s'essaie tout de suite ; fermer sans enregistrer remet celui des paramètres. */
+function setTheme(theme: Theme): void {
+  draft.value = { ...draft.value, theme }
+  applyTheme(theme)
+}
+
+onUnmounted(() => applyTheme(library.theme))
+
 async function save(): Promise<void> {
   const parsed = settingsSchema.safeParse(draft.value)
   if (!parsed.success) {
@@ -103,6 +113,34 @@ async function save(): Promise<void> {
   <ModalDialog title="Paramètres" wide @close="emit('close')">
     <div class="columns">
       <div class="column">
+        <section class="block">
+          <h3>Apparence</h3>
+          <div class="row">
+            <label class="radio">
+              <input
+                type="radio"
+                name="theme"
+                :checked="draft.theme === 'light'"
+                @change="setTheme('light')"
+              />
+              <Icon name="sun" :size="14" /> Clair
+            </label>
+            <label class="radio">
+              <input
+                type="radio"
+                name="theme"
+                :checked="draft.theme === 'dark'"
+                @change="setTheme('dark')"
+              />
+              <Icon name="moon" :size="14" /> Sombre
+            </label>
+          </div>
+          <p class="hint">
+            Les surfaces de dessin restent claires : les couleurs des composants et des fils sont
+            celles de l’export.
+          </p>
+        </section>
+
         <section class="block">
           <h3>Bibliothèque de composants</h3>
           <p class="hint path">{{ library.libraryDir || 'Dossier par défaut' }}</p>
@@ -289,7 +327,7 @@ async function save(): Promise<void> {
 
 .block {
   padding-bottom: 12px;
-  border-bottom: 1px solid #eaeef2;
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .column .block:last-child {
@@ -302,13 +340,13 @@ async function save(): Promise<void> {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .hint {
   margin: 6px 0 0;
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .path {
@@ -333,7 +371,7 @@ async function save(): Promise<void> {
   min-width: 0;
   font: inherit;
   padding: 3px 6px;
-  border: 1px solid #d0d7de;
+  border: 1px solid var(--border);
   border-radius: 4px;
 }
 
@@ -341,7 +379,7 @@ async function save(): Promise<void> {
   width: 32px;
   height: 26px;
   padding: 0 2px;
-  border: 1px solid #d0d7de;
+  border: 1px solid var(--border);
   border-radius: 4px;
 }
 
@@ -350,7 +388,7 @@ async function save(): Promise<void> {
   flex-direction: column;
   gap: 3px;
   font-size: 12px;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .field.inline {
@@ -363,11 +401,11 @@ async function save(): Promise<void> {
 .field select {
   font: inherit;
   font-size: 13px;
-  color: #1f2328;
+  color: var(--text);
   padding: 4px 6px;
-  border: 1px solid #d0d7de;
+  border: 1px solid var(--border);
   border-radius: 4px;
-  background: #ffffff;
+  background: var(--surface);
 }
 
 .field.inline input[type='number'] {
@@ -399,6 +437,6 @@ async function save(): Promise<void> {
   margin: 12px 0 0;
   padding-left: 18px;
   font-size: 12px;
-  color: #a40e26;
+  color: var(--danger);
 }
 </style>

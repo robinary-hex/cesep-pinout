@@ -77,7 +77,7 @@ h3 {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 table {
@@ -89,15 +89,15 @@ table {
 td {
   padding: 3px 8px 3px 0;
   vertical-align: top;
-  border-top: 1px solid #eaeef2;
+  border-top: 1px solid var(--border-soft);
 }
 
 kbd {
   white-space: nowrap;
   padding: 1px 6px;
   font-size: 12px;
-  border: 1px solid #d0d7de;
+  border: 1px solid var(--border);
   border-radius: 4px;
-  background: #f6f8fa;
+  background: var(--surface-2);
 }
 </style>

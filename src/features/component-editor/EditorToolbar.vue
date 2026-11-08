@@ -113,8 +113,8 @@ const emit = defineEmits<{ save: []; create: [] }>()
   align-items: center;
   gap: 16px;
   padding: 6px 12px;
-  background: #ffffff;
-  border-bottom: 1px solid #d0d7de;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
 }
 
 .group {
@@ -127,22 +127,22 @@ const emit = defineEmits<{ save: []; create: [] }>()
   margin-left: 2px;
   padding: 0 4px;
   font-size: 10px;
-  color: #57606a;
-  border: 1px solid #d0d7de;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
   border-radius: 3px;
-  background: #f6f8fa;
+  background: var(--surface-2);
 }
 
 .tool.active {
-  background: #ddf4ff;
-  border-color: #54aeff;
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
 }
 
 .zoom {
   min-width: 48px;
   text-align: center;
   font-variant-numeric: tabular-nums;
-  color: #57606a;
+  color: var(--text-muted);
 }
 
 .spacer {
@@ -151,6 +151,6 @@ const emit = defineEmits<{ save: []; create: [] }>()
 
 .doc-name {
   font-weight: 600;
-  color: #1f2328;
+  color: var(--text);
 }
 </style>
