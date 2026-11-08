@@ -62,7 +62,7 @@ type Drag =
       tool: 'rect' | 'ellipse' | 'line'
       start: QPoint
       current: QPoint
-      /** Alt enfoncé : carré ou cercle plutôt que rectangle ou ellipse. */
+      /** Maj enfoncée : carré ou cercle plutôt que rectangle ou ellipse. */
       square: boolean
     }
   | { kind: 'polyline'; points: QPoint[]; current: QPoint }
@@ -247,7 +247,7 @@ const handles = computed(() => {
   }))
 })
 
-/** Arrivée d'un tracé rectangle/ellipse ; avec Alt, le côté le plus long s'impose aux deux axes. */
+/** Arrivée d'un tracé rectangle/ellipse ; avec Maj, le côté le plus long s'impose aux deux axes. */
 function boxEnd(box: Extract<Drag, { kind: 'box' }>): QPoint {
   if (!box.square || box.tool === 'line') return box.current
   const dx = box.current.x - box.start.x
@@ -395,7 +395,7 @@ function onPointerDown(event: PointerEvent): void {
     case 'rect':
     case 'ellipse':
     case 'line':
-      drag.value = { kind: 'box', tool, start: q, current: q, square: event.altKey }
+      drag.value = { kind: 'box', tool, start: q, current: q, square: event.shiftKey }
       capture(event)
       break
     case 'polyline': {
@@ -464,7 +464,7 @@ function onPointerMove(event: PointerEvent): void {
       break
     default:
       current.current = toQuarters(cells)
-      if (current.kind === 'box') current.square = event.altKey
+      if (current.kind === 'box') current.square = event.shiftKey
   }
 }
 

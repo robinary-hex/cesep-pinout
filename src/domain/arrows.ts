@@ -63,7 +63,10 @@ export function trimForArrows(
   return result
 }
 
-/** Pointe au milieu d'une ligne brisée, dans le sens du tracé ; null si le trait est de longueur nulle. */
+/**
+ * Pointe au milieu d'une ligne brisée, dans le sens du tracé, centrée par son centre de gravité
+ * (à un tiers de la base) pour paraître au milieu ; null si le trait est de longueur nulle.
+ */
 export function middleArrowHead(
   points: readonly LocalPoint[],
   strokeWidth: number
@@ -87,10 +90,10 @@ export function middleArrowHead(
       const mid = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
       const ux = (b.x - a.x) / length
       const uy = (b.y - a.y) / length
-      const half = arrowSize(strokeWidth) / 2
+      const ahead = (arrowSize(strokeWidth) * 2) / 3
       return arrowHeadPoints(
         { x: mid.x - ux, y: mid.y - uy },
-        { x: mid.x + ux * half, y: mid.y + uy * half },
+        { x: mid.x + ux * ahead, y: mid.y + uy * ahead },
         strokeWidth
       )
     }

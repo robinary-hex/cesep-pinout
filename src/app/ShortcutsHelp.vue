@@ -45,6 +45,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['Ctrl+molette', 'Zoom centré sur le curseur'],
       ['Ctrl+glisser', 'Saisir la poignée la plus proche de la forme'],
       ['Lasso, Maj+clic', 'Sélectionner plusieurs formes'],
+      ['Maj pendant le tracé', 'Carré ou cercle plutôt que rectangle ou ellipse'],
       ['Alt+glisser', 'Déposer une copie des formes sélectionnées'],
       ['Ctrl+C / V / D', 'Copier / coller / dupliquer les formes']
     ]

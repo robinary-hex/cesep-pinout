@@ -30,7 +30,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Primitives du mini-éditeur : entiers en quarts de cellule. Épaisseur d'une forme = `weight`
   (multiplicateur, choix dans `STROKE_WEIGHTS`) × `componentStroke` du profil de style (0,1 cellule
   par défaut) : un montage change d'épaisseur avec son profil. Lignes et polylignes ouvertes portent
-  des flèches optionnelles (`arrows` : début, centre dans le sens du tracé, fin), le trait
+  des flèches optionnelles (`arrows` : début, centre dans le sens du tracé et centrée par son
+  centre de gravité, fin), le trait
   s'arrêtant à la base des pointes d'extrémité
   (`trimForArrows`), à l'écran comme à l'export. Un texte `variable` a pour contenu le nom du champ ; l'instance
   posée fournit la valeur (`instance.fields`), sinon `defaultValue` s'affiche ; `bold` met le
@@ -121,7 +122,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     toutes les formes sélectionnées, Alt+glisser en dépose une copie, Ctrl+C / V / D copient,
     collent (décalées d'une cellule) et dupliquent ; le panneau de droite ne montre que l'élément
     sélectionné (forme, formes ou broche), sinon le composant.
-    Alt pendant le tracé d'un rectangle ou d'une ellipse impose un carré ou un cercle. Tailles des
+    Maj pendant le tracé d'un rectangle ou d'une ellipse impose un carré ou un cercle. Tailles des
     textes proposées en multiples (×1, ×1,5, ×2) d'une hauteur de référence de 0,5 cellule, comme
     les étiquettes du montage le sont de la taille des repères du profil ; la valeur stockée reste
     absolue. Les panneaux ne portent pas de texte explicatif : l'aide est dans F1.

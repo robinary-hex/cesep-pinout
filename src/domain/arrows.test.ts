@@ -52,7 +52,7 @@ describe('pointes de flèche', () => {
     expect(pointsAttribute(head ?? [])).toBe('4,1 3.3,1.28 3.3,0.72')
   })
 
-  it('place la pointe du milieu au centre du trait, dans le sens du tracé', () => {
+  it('place la pointe du milieu par son centre de gravité au milieu du trait, dans le sens du tracé', () => {
     const head = middleArrowHead(
       [
         { x: 0, y: 1 },
@@ -60,9 +60,10 @@ describe('pointes de flèche', () => {
       ],
       0.2
     )
-    expect(head?.[0]?.x).toBeCloseTo(2.35)
+    // Pointe de 0,7 : bout à 2 + 0,7 × 2/3, base à 2 − 0,7 / 3, centre de gravité sur le milieu (2).
+    expect(head?.[0]?.x).toBeCloseTo(2 + 0.7 * (2 / 3))
     expect(head?.[0]?.y).toBeCloseTo(1)
-    expect(head?.[1]?.x).toBeCloseTo(1.65)
+    expect(head?.[1]?.x).toBeCloseTo(2 - 0.7 / 3)
     const elbow = middleArrowHead(
       [
         { x: 0, y: 0 },
@@ -71,7 +72,7 @@ describe('pointes de flèche', () => {
       ],
       0.2
     )
-    expect(elbow?.[0]?.x).toBeCloseTo(2.35)
+    expect(elbow?.[0]?.x).toBeCloseTo(2 + 0.7 * (2 / 3))
     expect(elbow?.[0]?.y).toBeCloseTo(0)
     expect(middleArrowHead([{ x: 1, y: 1 }], 0.2)).toBeNull()
   })
