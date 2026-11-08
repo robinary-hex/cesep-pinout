@@ -1,0 +1,82 @@
+import type { DirEntry, PinoutApi } from '../../../electron/api'
+
+/**
+ * Système de fichiers en mémoire qui imite le pont Electron, pour les tests.
+ * Les chemins sont normalisés avec « / » ; un dossier existe dès qu'un fichier s'y trouve.
+ */
+export class FakeFs implements PinoutApi {
+  readonly texts = new Map<string, string>()
+  readonly binaries = new Map<string, string>()
+  /** Réponses programmées des dialogues : chaque appel consomme la première. */
+  readonly openDialogAnswers: Array<string | null> = []
+  readonly saveDialogAnswers: Array<string | null> = []
+
+  private norm(path: string): string {
+    return path.replace(/\\/g, '/').replace(/\/+$/, '')
+  }
+
+  private keys(): string[] {
+    return [...this.texts.keys(), ...this.binaries.keys()]
+  }
+
+  async readTextFile(path: string): Promise<string> {
+    const text = this.texts.get(this.norm(path))
+    if (text === undefined) throw new Error(`ENOENT: ${path}`)
+    return text
+  }
+
+  async writeTextFile(path: string, content: string): Promise<void> {
+    this.texts.set(this.norm(path), content)
+  }
+
+  async readBinaryFile(path: string): Promise<string> {
+    const data = this.binaries.get(this.norm(path))
+    if (data === undefined) throw new Error(`ENOENT: ${path}`)
+    return data
+  }
+
+  async writeBinaryFile(path: string, base64: string): Promise<void> {
+    this.binaries.set(this.norm(path), base64)
+  }
+
+  async readDir(path: string): Promise<DirEntry[]> {
+    const prefix = this.norm(path) + '/'
+    const names = new Map<string, boolean>()
+    for (const key of this.keys()) {
+      if (!key.startsWith(prefix)) continue
+      const rest = key.slice(prefix.length)
+      const slash = rest.indexOf('/')
+      if (slash === -1) names.set(rest, false)
+      else names.set(rest.slice(0, slash), true)
+    }
+    return [...names].map(([name, isDirectory]) => ({ name, isDirectory }))
+  }
+
+  async pathExists(path: string): Promise<boolean> {
+    const n = this.norm(path)
+    return this.keys().some((key) => key === n || key.startsWith(n + '/'))
+  }
+
+  async removeComponentFolder(path: string): Promise<void> {
+    const n = this.norm(path)
+    if (!this.texts.has(n + '/component.json')) throw new Error('pas un dossier de composant')
+    for (const key of this.keys()) {
+      if (key.startsWith(n + '/')) {
+        this.texts.delete(key)
+        this.binaries.delete(key)
+      }
+    }
+  }
+
+  async showOpenDialog(): Promise<string | null> {
+    return this.openDialogAnswers.shift() ?? null
+  }
+
+  async showSaveDialog(): Promise<string | null> {
+    return this.saveDialogAnswers.shift() ?? null
+  }
+
+  async getAppPaths(): Promise<{ userData: string; documents: string }> {
+    return { userData: 'C:/fake/Pinout', documents: 'C:/fake/Documents' }
+  }
+}

@@ -21,7 +21,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   produit des patches Immer via `src/state/history.ts` : c'est ce qui donne undo/redo.
 - `electron/main.ts` est le seul code qui touche Node. Le rendu passe par le pont IPC typé
   (`electron/api.ts`, exposé par `electron/preload.ts`), contextIsolation activé, sandbox activé.
-  Dans les tests, `setBridge()` de `src/io/bridge.ts` remplace le pont par une fausse implémentation.
+  Dans les tests, `setBridge()` de `src/io/bridge.ts` remplace le pont par `src/io/testing/fakeFs.ts`.
 
 ## Conventions
 
@@ -29,12 +29,19 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   broches et fils vivent sur les intersections ; broches uniquement sur le bord du composant.
 - Primitives du mini-éditeur : entiers en quarts de cellule.
 - PNG de composant : 80 px par cellule (4× la cellule d'affichage de 20 px).
+- Orientation d'une instance : miroir local puis rotation horaire (`transformLocalPoint`,
+  `instanceMatrix`). Un miroir à l'écran bascule `mirror` et inverse la rotation
+  (`flippedInstance`) ; une rotation à l'écran garde le centre de la boîte (`rotatedInstance`).
 - Jonctions : dérivées de la géométrie (une extrémité de fil sur un autre fil), jamais stockées ;
   un croisement en milieu de segment ne connecte pas.
 - Raccourcis définis par la lettre (`KeyboardEvent.key`), clavier AZERTY belge, jamais de crochets
-  ni de touches AltGr.
-  - Montage : V sélection, W fil, E texte, R / Maj+R rotation, T / Maj+T miroir,
-    Ctrl+Page haut/bas ordre des fils.
+  ni de touches AltGr. Les deux seuls chiffres (0, 1) se lisent par touche physique (`event.code`)
+  car la rangée du haut demande Maj sur ce clavier.
+  - Montage : V sélection (arrête la pose), R / Maj+R rotation, T / Maj+T miroir, Suppr, Échap,
+    flèches = déplacer d'une cellule, Ctrl+A / D / C / V, Ctrl+Z / Y, Ctrl+S, Ctrl+Maj+S, Ctrl+O,
+    Ctrl+N, 0 ajuster au contenu, 1 zoom 100 %, molette = zoom, Espace + glisser ou bouton du
+    milieu = déplacer la vue. W (fil) et E (texte) arrivent en phases 3 et 5 ; Ctrl+Page haut/bas
+    réglera l'ordre des fils.
   - Éditeur de composants : V sélection, R rectangle, O ellipse, L ligne, P polyligne, E texte,
     B broche, Suppr, Échap, Entrée (termine une polyligne), Ctrl+Z / Ctrl+Y, Ctrl+S, Ctrl+N.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.

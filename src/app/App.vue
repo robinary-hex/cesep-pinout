@@ -3,13 +3,15 @@ import { onMounted, ref } from 'vue'
 import ComponentEditor from '@/features/component-editor/ComponentEditor.vue'
 import LibraryPanel from '@/features/library/LibraryPanel.vue'
 import { useLibraryStore } from '@/features/library/store'
+import SchematicEditor from '@/features/schematic-editor/SchematicEditor.vue'
 
-// Coque applicative : bascule entre les deux modes. Le montage arrive en phase 2.
+// Coque applicative : bascule entre les deux modes. Un seul éditeur est monté à la fois,
+// donc un seul jeu de raccourcis clavier ; leur état vit dans les stores.
 
 type Mode = 'components' | 'schematic'
 
 const library = useLibraryStore()
-const mode = ref<Mode>('components')
+const mode = ref<Mode>('schematic')
 
 onMounted(() => {
   void library.init()
@@ -28,12 +30,15 @@ onMounted(() => {
         >
           Composants
         </button>
-        <button type="button" disabled title="Phase 2 : à venir">Montage</button>
+        <button type="button" :class="{ active: mode === 'schematic' }" @click="mode = 'schematic'">
+          Montage
+        </button>
       </nav>
     </header>
-    <main v-if="mode === 'components'" class="workspace">
-      <LibraryPanel />
-      <ComponentEditor />
+    <main class="workspace">
+      <LibraryPanel :mode="mode === 'components' ? 'edit' : 'place'" />
+      <ComponentEditor v-if="mode === 'components'" />
+      <SchematicEditor v-else />
     </main>
   </div>
 </template>

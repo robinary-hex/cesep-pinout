@@ -1,22 +1,37 @@
 <script setup lang="ts">
 import { createEmptyComponent } from '@/domain'
 import { useComponentEditorStore } from '@/features/component-editor/store'
+import { useSchematicStore } from '@/features/schematic-editor/store'
 import { deleteComponent, type LibraryEntry } from '@/io/library'
 import { baseName } from '@/io/paths'
 import ComponentThumbnail from '@/render/ComponentThumbnail.vue'
 import { useLibraryStore } from './store'
 
 // Panneau de gauche : la bibliothèque de composants sur disque.
+// En mode « edit », un clic ouvre le composant dans l'éditeur ; en mode « place », il le pose
+// sur le montage.
+
+const props = defineProps<{ mode: 'edit' | 'place' }>()
 
 const library = useLibraryStore()
 const editor = useComponentEditorStore()
+const schematic = useSchematicStore()
 
 function isCurrent(entry: LibraryEntry): boolean {
-  return editor.folder === entry.folder
+  return props.mode === 'edit' && editor.folder === entry.folder
 }
 
-function openEntry(entry: LibraryEntry): void {
-  if (!entry.def || isCurrent(entry) || !editor.confirmDiscard()) return
+function isPlacing(entry: LibraryEntry): boolean {
+  return props.mode === 'place' && schematic.placement?.def.id === entry.def?.id
+}
+
+function pick(entry: LibraryEntry): void {
+  if (!entry.def) return
+  if (props.mode === 'place') {
+    schematic.startPlacing(entry.def)
+    return
+  }
+  if (isCurrent(entry) || !editor.confirmDiscard()) return
   editor.open(entry.def, entry.folder)
 }
 
@@ -38,7 +53,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
   if (!window.confirm(message)) return
   try {
     await deleteComponent(entry.folder)
-    if (isCurrent(entry)) {
+    if (editor.folder === entry.folder) {
       editor.open(createEmptyComponent('nouveau-composant', 'Nouveau composant'), null)
     }
     await library.refresh()
@@ -52,8 +67,14 @@ async function remove(entry: LibraryEntry): Promise<void> {
   <aside class="library">
     <header class="library-head">
       <div class="title-row">
-        <h2>Bibliothèque</h2>
-        <button type="button" class="primary" title="Nouveau composant (Ctrl+N)" @click="createNew">
+        <h2>{{ mode === 'place' ? 'Composants à poser' : 'Bibliothèque' }}</h2>
+        <button
+          v-if="mode === 'edit'"
+          type="button"
+          class="primary"
+          title="Nouveau composant (Ctrl+N)"
+          @click="createNew"
+        >
           Nouveau
         </button>
       </div>
@@ -76,7 +97,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
     <div class="list">
       <p v-if="library.loading" class="hint">Lecture…</p>
       <p v-else-if="library.entries.length === 0" class="hint">
-        Aucun composant. Dessine-en un à droite, puis Enregistrer.
+        Aucun composant. Dessine-en un dans le mode Composants, puis Enregistrer.
       </p>
       <p v-else-if="library.filtered.length === 0" class="hint">
         Rien ne correspond à la recherche.
@@ -88,26 +109,32 @@ async function remove(entry: LibraryEntry): Promise<void> {
           v-for="entry in group.entries"
           :key="entry.folder"
           class="item"
-          :class="{ current: isCurrent(entry), broken: !entry.def }"
+          :class="{ current: isCurrent(entry) || isPlacing(entry), broken: !entry.def }"
         >
           <button
             type="button"
             class="open"
             :disabled="!entry.def"
-            :title="entry.def ? `Ouvrir ${entry.def.name}` : (entry.problem ?? '')"
-            @click="openEntry(entry)"
+            :title="
+              entry.def
+                ? mode === 'place'
+                  ? `Poser ${entry.def.name}`
+                  : `Ouvrir ${entry.def.name}`
+                : (entry.problem ?? '')
+            "
+            @click="pick(entry)"
           >
             <ComponentThumbnail v-if="entry.def" :def="entry.def" :size="56" />
             <span v-else class="thumb-missing">?</span>
             <span class="text">
               <span class="name">{{ entry.def?.name ?? baseName(entry.folder) }}</span>
-              <span v-if="entry.def" class="meta"
-                >{{ entry.def.pins.length }} broche(s) · {{ entry.def.id }}</span
-              >
+              <span v-if="entry.def" class="meta">
+                {{ entry.def.pins.length }} broche(s) · {{ entry.def.id }}
+              </span>
               <span v-else class="meta">Fichier illisible</span>
             </span>
           </button>
-          <div class="actions">
+          <div v-if="mode === 'edit'" class="actions">
             <button
               v-if="entry.def"
               type="button"

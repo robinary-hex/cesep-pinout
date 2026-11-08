@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
-import type { Settings } from '@/domain'
+import { DEFAULT_PROFILE, type Settings, type StyleProfile } from '@/domain'
 import { bridge } from '@/io/bridge'
 import { listComponents, type LibraryEntry } from '@/io/library'
 import { baseName } from '@/io/paths'
@@ -23,6 +23,11 @@ export const useLibraryStore = defineStore('library', () => {
   const search = ref('')
 
   const ids = computed(() => entries.value.flatMap((entry) => (entry.def ? [entry.def.id] : [])))
+
+  /** Profil de style des nouveaux projets. */
+  const defaultProfile = computed<StyleProfile>(
+    () => settings.value?.defaultProfile ?? DEFAULT_PROFILE
+  )
 
   const filtered = computed(() => {
     const needle = search.value.trim().toLowerCase()
@@ -108,6 +113,7 @@ export const useLibraryStore = defineStore('library', () => {
     filtered,
     groups,
     ids,
+    defaultProfile,
     loading,
     problem,
     search,
