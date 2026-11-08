@@ -1,6 +1,6 @@
 import { COMPONENT_SCHEMA_VERSION } from './component'
 import { PROJECT_SCHEMA_VERSION } from './project'
-import { SETTINGS_SCHEMA_VERSION } from './settings'
+import { DEFAULT_AUTOSAVE_SECONDS, DEFAULT_EXPORT, SETTINGS_SCHEMA_VERSION } from './settings'
 
 /** Erreur de lecture d'un fichier : message pour l'utilisateur, détails ligne par ligne. */
 export class FileFormatError extends Error {
@@ -25,7 +25,17 @@ export interface MigrationTable {
 
 export const projectMigrations: MigrationTable = { current: PROJECT_SCHEMA_VERSION, steps: {} }
 export const componentMigrations: MigrationTable = { current: COMPONENT_SCHEMA_VERSION, steps: {} }
-export const settingsMigrations: MigrationTable = { current: SETTINGS_SCHEMA_VERSION, steps: {} }
+export const settingsMigrations: MigrationTable = {
+  current: SETTINGS_SCHEMA_VERSION,
+  steps: {
+    // v1 → v2 : réglages d'export et intervalle de copie de secours.
+    1: (raw) => ({
+      ...raw,
+      export: { ...DEFAULT_EXPORT },
+      autosaveSeconds: DEFAULT_AUTOSAVE_SECONDS
+    })
+  }
+}
 
 /**
  * Amène un document JSON brut à la version courante, étape par étape.

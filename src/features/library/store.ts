@@ -1,9 +1,12 @@
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 import {
+  DEFAULT_AUTOSAVE_SECONDS,
+  DEFAULT_EXPORT,
   DEFAULT_PALETTE,
   DEFAULT_PROFILE,
   DEFAULT_SETTINGS,
+  type ExportSettings,
   type PaletteColor,
   type Settings,
   type StyleProfile
@@ -20,6 +23,7 @@ export interface LibraryGroup {
 
 const UNREADABLE_GROUP = 'Illisibles'
 const MAX_CUSTOM_COLORS = 8
+const MAX_RECENT_FILES = 10
 
 /** Bibliothèque de composants sur disque et paramètres de l'application. */
 export const useLibraryStore = defineStore('library', () => {
@@ -42,6 +46,11 @@ export const useLibraryStore = defineStore('library', () => {
   const customColors = computed<readonly string[]>(() => settings.value?.customColors ?? [])
   const defaultWireColor = computed(
     () => settings.value?.defaultWireColor ?? DEFAULT_SETTINGS.defaultWireColor
+  )
+  const recentFiles = computed<readonly string[]>(() => settings.value?.recentFiles ?? [])
+  const exportDefaults = computed<ExportSettings>(() => settings.value?.export ?? DEFAULT_EXPORT)
+  const autosaveSeconds = computed(
+    () => settings.value?.autosaveSeconds ?? DEFAULT_AUTOSAVE_SECONDS
   )
 
   const filtered = computed(() => {
@@ -110,19 +119,26 @@ export const useLibraryStore = defineStore('library', () => {
     }
   }
 
+  /** Enregistre un sous-ensemble de paramètres ; un nouveau dossier de bibliothèque est relu. */
+  async function updateSettings(patch: Partial<Settings>): Promise<void> {
+    const current = settings.value ?? structuredClone(DEFAULT_SETTINGS)
+    const next: Settings = { ...current, ...patch }
+    await persist(next)
+    if (patch.libraryDir !== undefined) {
+      libraryDir.value = await resolveLibraryDir(next)
+      await refresh()
+    }
+  }
+
   async function chooseDir(): Promise<void> {
-    const current = settings.value
-    if (!current) return
     const dir = await bridge().showOpenDialog({
       title: 'Dossier de la bibliothèque de composants',
       directory: true,
       defaultPath: libraryDir.value
     })
     if (dir === null) return
-    await persist({ ...current, libraryDir: dir })
-    libraryDir.value = dir
     problem.value = ''
-    await refresh()
+    await updateSettings({ libraryDir: dir })
   }
 
   /** Garde une couleur personnalisée en tête de liste (les huit dernières). */
@@ -131,10 +147,22 @@ export const useLibraryStore = defineStore('library', () => {
     if (!current) return
     if (current.palette.some((color) => color.hex.toLowerCase() === hex.toLowerCase())) return
     const others = current.customColors.filter((color) => color.toLowerCase() !== hex.toLowerCase())
-    await persist({ ...current, customColors: [hex, ...others].slice(0, MAX_CUSTOM_COLORS) })
+    await updateSettings({ customColors: [hex, ...others].slice(0, MAX_CUSTOM_COLORS) })
+  }
+
+  async function addRecentFile(path: string): Promise<void> {
+    const others = recentFiles.value.filter((candidate) => candidate !== path)
+    await updateSettings({ recentFiles: [path, ...others].slice(0, MAX_RECENT_FILES) })
+  }
+
+  async function removeRecentFile(path: string): Promise<void> {
+    await updateSettings({
+      recentFiles: recentFiles.value.filter((candidate) => candidate !== path)
+    })
   }
 
   return {
+    settings,
     libraryDir,
     entries,
     filtered,
@@ -144,12 +172,18 @@ export const useLibraryStore = defineStore('library', () => {
     palette,
     customColors,
     defaultWireColor,
+    recentFiles,
+    exportDefaults,
+    autosaveSeconds,
     loading,
     problem,
     search,
     init,
     refresh,
+    updateSettings,
     chooseDir,
-    rememberCustomColor
+    rememberCustomColor,
+    addRecentFile,
+    removeRecentFile
   }
 })

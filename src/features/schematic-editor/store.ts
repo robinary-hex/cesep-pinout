@@ -22,6 +22,7 @@ import {
   type Project,
   type RotateDirection,
   type Rotation,
+  type StyleProfile,
   type Wire
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
@@ -203,6 +204,25 @@ export const useSchematicStore = defineStore('schematic', () => {
     apply('Renommer le projet', (draft) => {
       draft.name = name
     })
+  }
+
+  function setProfile(profile: StyleProfile): void {
+    apply('Changer le profil de style', (draft) => {
+      draft.profile = castDraft(structuredClone(profile))
+    })
+  }
+
+  /** Reprend une copie de secours : le projet s'ouvre comme non enregistré. */
+  function restoreProject(project: Project, originalPath: string | null): void {
+    history.reset(project)
+    savedDoc.value = null
+    filePath.value = originalPath
+    clearSelection()
+    placement.value = null
+    drawing.value = null
+    tool.value = 'select'
+    status.value = 'Copie de secours récupérée : pense à enregistrer.'
+    sync()
   }
 
   // Outils
@@ -703,6 +723,8 @@ export const useSchematicStore = defineStore('schematic', () => {
     markSaved,
     confirmDiscard,
     setProjectName,
+    setProfile,
+    restoreProject,
     selectTool,
     startPlacing,
     stopPlacing,

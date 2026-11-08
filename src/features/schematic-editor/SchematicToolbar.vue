@@ -6,7 +6,14 @@ import { useSchematicStore } from './store'
 
 const store = useSchematicStore()
 const library = useLibraryStore()
-const emit = defineEmits<{ create: []; open: []; save: []; saveAs: [] }>()
+const emit = defineEmits<{
+  create: []
+  open: []
+  openRecent: [path: string]
+  save: []
+  saveAs: []
+  exportImage: []
+}>()
 
 const hasTarget = computed(() => store.selection.length > 0 || store.placement !== null)
 const hasWires = computed(() => store.selectedWires.length > 0)
@@ -25,6 +32,12 @@ function pickCustom(event: Event): void {
   const hex = (event.target as HTMLInputElement).value
   store.setCurrentColor(hex)
   void library.rememberCustomColor(hex)
+}
+
+function openRecent(event: Event, path: string): void {
+  const details = (event.currentTarget as HTMLElement).closest('details')
+  if (details) details.removeAttribute('open')
+  emit('openRecent', path)
 }
 </script>
 
@@ -76,11 +89,25 @@ function pickCustom(event: Event): void {
         Nouveau
       </button>
       <button type="button" title="Ouvrir un projet (Ctrl+O)" @click="emit('open')">Ouvrir</button>
+      <details class="recent">
+        <summary title="Projets récents">Récents ▾</summary>
+        <ul>
+          <li v-if="library.recentFiles.length === 0" class="empty">Aucun projet récent</li>
+          <li v-for="path in library.recentFiles" :key="path">
+            <button type="button" :title="path" @click="openRecent($event, path)">
+              {{ baseName(path) }}
+            </button>
+          </li>
+        </ul>
+      </details>
       <button type="button" class="primary" title="Enregistrer (Ctrl+S)" @click="emit('save')">
         Enregistrer
       </button>
       <button type="button" title="Enregistrer sous… (Ctrl+Maj+S)" @click="emit('saveAs')">
         Sous…
+      </button>
+      <button type="button" title="Exporter en PNG ou SVG (Ctrl+E)" @click="emit('exportImage')">
+        Exporter…
       </button>
     </div>
 
@@ -280,6 +307,57 @@ function pickCustom(event: Event): void {
   inset: 0;
   opacity: 0;
   cursor: pointer;
+}
+
+.recent {
+  position: relative;
+}
+
+.recent summary {
+  list-style: none;
+  padding: 5px 10px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: #f6f8fa;
+  cursor: pointer;
+  user-select: none;
+}
+
+.recent summary::-webkit-details-marker {
+  display: none;
+}
+
+.recent ul {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  min-width: 240px;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  background: #ffffff;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(31, 35, 40, 0.15);
+}
+
+.recent li button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 5px 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recent li.empty {
+  padding: 5px 12px;
+  font-size: 12px;
+  color: #57606a;
 }
 
 .zoom {

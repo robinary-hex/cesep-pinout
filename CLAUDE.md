@@ -40,7 +40,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   - Montage : V sélection (arrête la pose ou le fil), W fil (clic par coude, Maj inverse le L,
     double-clic ou Entrée termine, Retour arrière retire le dernier sommet, Échap annule),
     R / Maj+R rotation, T / Maj+T miroir, Suppr, Échap, flèches = déplacer d'une cellule,
-    Ctrl+A / D / C / V, Ctrl+Z / Y, Ctrl+S, Ctrl+Maj+S, Ctrl+O, Ctrl+N, Ctrl+Page haut/bas
+    Ctrl+A / D / C / V, Ctrl+Z / Y, Ctrl+S, Ctrl+Maj+S, Ctrl+O, Ctrl+N, Ctrl+E export, F1 aide,
+    Ctrl+Page haut/bas
     (Maj pour premier/arrière-plan) = ordre des fils, 0 ajuster au contenu, 1 zoom 100 %,
     molette = zoom, Espace + glisser ou bouton du milieu = déplacer la vue. E (texte) arrive en
     phase 5.
@@ -49,6 +50,16 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   extrémités libres, nets par union-find). Un fil garde ses extrémités fixes quand on déplace un
   segment ou un sommet : un coude s'ajoute au besoin. Un sommet au milieu d'un segment droit est
   permis ; les demi-tours et les sommets confondus sont refusés.
+- Export : `src/domain/svg.ts` construit le SVG autonome (viewBox en cellules, même ordre
+  d'empilement que l'éditeur, sans marqueurs d'édition) ; `src/features/export/` le rastérise en
+  PNG via un canvas et le copie dans le presse-papiers. Les réglages d'export, la palette, le profil
+  par défaut, les fichiers récents et l'intervalle de copie de secours sont dans les paramètres
+  (schéma v2 ; la migration 1 → 2 est dans `src/domain/migrations.ts`).
+- Copie de secours : `src/io/autosave.ts` écrit `userData/autosave/` tant que le montage a des
+  modifications non enregistrées ; `App.vue` la propose au lancement. La garde à la fermeture est
+  dans `electron/main.ts` (le rendu tient `setDirty` à jour, puis répond à `autosave-then-quit`).
+- Boîtes de dialogue : `src/ui/ModalDialog.vue` ; tant qu'une est ouverte (`openModals`), les
+  éditeurs ignorent leurs raccourcis.
   - Éditeur de composants : V sélection, R rectangle, O ellipse, L ligne, P polyligne, E texte,
     B broche, Suppr, Échap, Entrée (termine une polyligne), Ctrl+Z / Ctrl+Y, Ctrl+S, Ctrl+N.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.

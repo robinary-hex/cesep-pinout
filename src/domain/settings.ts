@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { hexColorSchema } from './color'
 import { DEFAULT_PROFILE, styleProfileSchema } from './profile'
 
-export const SETTINGS_SCHEMA_VERSION = 1
+export const SETTINGS_SCHEMA_VERSION = 2
 
 export const paletteColorSchema = z.object({
   name: z.string().min(1),
@@ -24,6 +24,33 @@ export const DEFAULT_PALETTE: readonly PaletteColor[] = [
   { name: 'Gris clair', hex: '#9ca3af' }
 ]
 
+export const EXPORT_SCALES = [1, 2, 4] as const
+export type ExportScale = (typeof EXPORT_SCALES)[number]
+export const exportScaleSchema = z.union([z.literal(1), z.literal(2), z.literal(4)])
+
+/** Réglages d'export d'image, mémorisés d'une fois sur l'autre. */
+export const exportSettingsSchema = z.object({
+  /** Multiplicateur de la taille de cellule du profil : 1×, 2× ou 4×. */
+  scale: exportScaleSchema,
+  background: z.union([z.literal('transparent'), z.literal('white'), hexColorSchema]),
+  /** Marge autour du contenu, en cellules. */
+  marginCells: z.number().int().nonnegative(),
+  grid: z.boolean(),
+  /** Repères des composants (R1, U2…). */
+  labels: z.boolean()
+})
+export type ExportSettings = z.infer<typeof exportSettingsSchema>
+
+export const DEFAULT_EXPORT: ExportSettings = {
+  scale: 2,
+  background: 'white',
+  marginCells: 2,
+  grid: false,
+  labels: true
+}
+
+export const DEFAULT_AUTOSAVE_SECONDS = 120
+
 export const settingsSchema = z.object({
   schemaVersion: z.literal(SETTINGS_SCHEMA_VERSION),
   /** Dossier de la bibliothèque de composants ; vide = dossier par défaut dans userData. */
@@ -33,7 +60,11 @@ export const settingsSchema = z.object({
   customColors: z.array(hexColorSchema),
   defaultWireColor: hexColorSchema,
   defaultProfile: styleProfileSchema,
-  recentFiles: z.array(z.string())
+  /** Chemins des derniers projets ouverts, le plus récent d'abord. */
+  recentFiles: z.array(z.string()),
+  export: exportSettingsSchema,
+  /** Intervalle de la copie de secours, en secondes. */
+  autosaveSeconds: z.number().int().positive()
 })
 export type Settings = z.infer<typeof settingsSchema>
 
@@ -44,5 +75,7 @@ export const DEFAULT_SETTINGS: Settings = {
   customColors: [],
   defaultWireColor: '#000000',
   defaultProfile: structuredClone(DEFAULT_PROFILE),
-  recentFiles: []
+  recentFiles: [],
+  export: { ...DEFAULT_EXPORT },
+  autosaveSeconds: DEFAULT_AUTOSAVE_SECONDS
 }

@@ -4,16 +4,16 @@ Le domaine ne dépend de rien ; tout le reste dépend de lui.
 
 ## Couches
 
-| Couche             | Dossier         | Contenu                                                                                              | Peut importer                           |
-| ------------------ | --------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| Coque applicative  | `src/app/`      | Fenêtre Vue, bascule Composants / Montage                                                            | features, state, io, render, ui, domain |
-| Fonctionnalités    | `src/features/` | `component-editor/`, `library/`, `schematic-editor/`, puis `export/` ; un store Pinia par éditeur    | state, io, render, ui, domain           |
-| État               | `src/state/`    | `History` : commandes nommées, patches Immer, undo/redo                                              | domain                                  |
-| Entrées / sorties  | `src/io/`       | Pont IPC (`bridge.ts`), paramètres, bibliothèque sur disque, chemins                                 | domain                                  |
-| Rendu              | `src/render/`   | Composants Vue SVG sans état qui dessinent les objets du domaine (composants)                        | domain                                  |
-| Interface partagée | `src/ui/`       | Boutons, panneaux, palette de couleurs (rien du métier)                                              | rien                                    |
-| Domaine            | `src/domain/`   | Types, grille, formes, placement, fils, connectivité (jonctions, nets), schémas Zod, migrations, PNG | zod seulement                           |
-| Coque Electron     | `electron/`     | `main.ts` (fenêtre, fichiers, dialogues : seul code Node), `preload.ts` (pont), `api.ts` (contrat)   | Node, Electron                          |
+| Couche             | Dossier         | Contenu                                                                                                   | Peut importer                           |
+| ------------------ | --------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| Coque applicative  | `src/app/`      | Fenêtre Vue, bascule Composants / Montage                                                                 | features, state, io, render, ui, domain |
+| Fonctionnalités    | `src/features/` | `component-editor/`, `library/`, `schematic-editor/`, `export/`, `settings/` ; un store Pinia par éditeur | state, io, render, ui, domain           |
+| État               | `src/state/`    | `History` : commandes nommées, patches Immer, undo/redo                                                   | domain                                  |
+| Entrées / sorties  | `src/io/`       | Pont IPC (`bridge.ts`), paramètres, bibliothèque, projets, exports, profils, copie de secours, chemins    | domain                                  |
+| Rendu              | `src/render/`   | Composants Vue SVG sans état qui dessinent les objets du domaine (composants)                             | domain                                  |
+| Interface partagée | `src/ui/`       | Boutons, panneaux, palette de couleurs (rien du métier)                                                   | rien                                    |
+| Domaine            | `src/domain/`   | Types, grille, formes, placement, fils, connectivité (jonctions, nets), schémas Zod, migrations, PNG      | zod seulement                           |
+| Coque Electron     | `electron/`     | `main.ts` (fenêtre, fichiers, dialogues : seul code Node), `preload.ts` (pont), `api.ts` (contrat)        | Node, Electron                          |
 
 La règle ESLint `no-restricted-imports` sur `src/domain/**` rend la ligne du domaine vérifiable.
 
@@ -47,6 +47,24 @@ pas à chaque touche, donc une saisie = une commande.
   épaisseurs de trait et hauteurs de texte en cellules.
 - PNG : 80 px par cellule. Un PNG d'une autre taille est rééchantillonné sur confirmation.
   Le profil de style (`cellPx`, par défaut 20) ne règle que l'affichage.
+
+## Export
+
+`src/domain/svg.ts` construit un SVG autonome : viewBox en cellules (étendue du contenu plus une
+marge, une cellule réservée au-dessus des composants pour leurs repères), largeur et hauteur en
+pixels = cellules × `cellPx` du profil × échelle (1×, 2×, 4×). Même ordre d'empilement que
+l'éditeur, extrémités « prolongées » dessinées en flèche, aucun marqueur d'édition. Le PNG est
+obtenu en dessinant ce SVG sur un canvas aux dimensions exactes (`src/features/export/svgToPng.ts`),
+donc avec la même netteté que le SVG ; les PNG embarqués sont rééchantillonnés par le navigateur.
+
+## Copie de secours et fermeture
+
+Tant que le montage a des modifications non enregistrées, `App.vue` écrit toutes les
+`autosaveSeconds` une copie dans `userData/autosave/` (projet + contexte : nom, chemin d'origine,
+date) et l'efface dès que le montage est propre. Au lancement, une copie présente est proposée.
+À la fermeture, le processus principal connaît l'état (`setDirty`) : s'il y a des modifications,
+il demande confirmation, puis le rendu écrit la copie de secours avant de confirmer la fermeture
+(`autosave-then-quit`, délai de repli de 3 s).
 
 ## Fichiers
 

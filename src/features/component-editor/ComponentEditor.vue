@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, useTemplateRef } from 'vue'
 import { createEmptyComponent } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import { newComponentId, saveComponent } from '@/io/library'
+import { openModals } from '@/ui/modalState'
 import EditorCanvas from './EditorCanvas.vue'
 import EditorInspector from './EditorInspector.vue'
 import EditorToolbar from './EditorToolbar.vue'
@@ -53,6 +54,7 @@ function isEditable(target: EventTarget | null): boolean {
 function onKeyDown(event: KeyboardEvent): void {
   const key = event.key.toLowerCase()
   const control = event.ctrlKey || event.metaKey
+  if (openModals.value > 0) return
 
   if (control && key === 's') {
     event.preventDefault()

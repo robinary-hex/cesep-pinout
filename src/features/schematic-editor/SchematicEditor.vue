@@ -1,21 +1,30 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, useTemplateRef } from 'vue'
+import { onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
 import { FileFormatError } from '@/domain'
+import ExportDialog from '@/features/export/ExportDialog.vue'
+import { useLibraryStore } from '@/features/library/store'
+import { clearAutosave } from '@/io/autosave'
 import {
   chooseProjectToOpen,
   chooseProjectToSave,
   readProject,
   writeProject
 } from '@/io/projectFiles'
+import { openModals } from '@/ui/modalState'
+import ProfileDialog from './ProfileDialog.vue'
 import SchematicCanvas from './SchematicCanvas.vue'
 import SchematicInspector from './SchematicInspector.vue'
 import SchematicToolbar from './SchematicToolbar.vue'
 import { useSchematicStore } from './store'
 
-// Éditeur de montage : barre d'outils, canevas, inspecteur, raccourcis, fichiers de projet.
+// Éditeur de montage : barre d'outils, canevas, inspecteur, raccourcis, fichiers de projet,
+// export et profil de style.
 
 const store = useSchematicStore()
+const library = useLibraryStore()
 const canvas = useTemplateRef<InstanceType<typeof SchematicCanvas>>('canvas')
+const showExport = ref(false)
+const showProfile = ref(false)
 
 function describe(error: unknown): string {
   if (error instanceof FileFormatError) return [error.message, ...error.issues].join(' — ')
@@ -32,8 +41,23 @@ async function save(as = false): Promise<void> {
     await writeProject(path, store.doc)
     store.markSaved(path)
     store.status = `Enregistré : ${path}`
+    await clearAutosave()
+    await library.addRecentFile(path)
   } catch (error) {
     store.status = `Échec de l’enregistrement : ${describe(error)}`
+  }
+}
+
+async function openPath(path: string): Promise<void> {
+  try {
+    const project = await readProject(path)
+    store.openProject(project, path)
+    store.fitToContent()
+    store.status = `Ouvert : ${path}`
+    await library.addRecentFile(path)
+  } catch (error) {
+    store.status = `Ouverture impossible : ${describe(error)}`
+    if (library.recentFiles.includes(path)) await library.removeRecentFile(path)
   }
 }
 
@@ -41,19 +65,25 @@ async function open(): Promise<void> {
   if (!store.confirmDiscard()) return
   const path = await chooseProjectToOpen()
   if (path === null) return
-  try {
-    const project = await readProject(path)
-    store.openProject(project, path)
-    store.fitToContent()
-    store.status = `Ouvert : ${path}`
-  } catch (error) {
-    store.status = `Ouverture impossible : ${describe(error)}`
-  }
+  await openPath(path)
+}
+
+async function openRecent(path: string): Promise<void> {
+  if (!store.confirmDiscard()) return
+  await openPath(path)
 }
 
 function createNew(): void {
   if (!store.confirmDiscard()) return
   store.newProject()
+}
+
+function openExport(): void {
+  if (store.doc.components.length === 0 && store.doc.wires.length === 0) {
+    store.status = 'Le montage est vide : rien à exporter.'
+    return
+  }
+  showExport.value = true
 }
 
 function isEditable(target: EventTarget | null): boolean {
@@ -69,6 +99,8 @@ function onKeyDown(event: KeyboardEvent): void {
   const editable = isEditable(event.target)
 
   if (key === 'shift') store.shiftHeld = true
+  if (openModals.value > 0) return
+
   if (key === ' ' && !editable) {
     store.panKeyHeld = true
     event.preventDefault()
@@ -82,6 +114,11 @@ function onKeyDown(event: KeyboardEvent): void {
   if (control && key === 'o') {
     event.preventDefault()
     void open()
+    return
+  }
+  if (control && key === 'e') {
+    event.preventDefault()
+    openExport()
     return
   }
   if (editable) return
@@ -216,11 +253,20 @@ onUnmounted(() => {
 
 <template>
   <section class="editor">
-    <SchematicToolbar @create="createNew" @open="open" @save="save(false)" @save-as="save(true)" />
+    <SchematicToolbar
+      @create="createNew"
+      @open="open"
+      @open-recent="openRecent"
+      @save="save(false)"
+      @save-as="save(true)"
+      @export-image="openExport"
+    />
     <div class="editor-body">
       <SchematicCanvas ref="canvas" />
-      <SchematicInspector />
+      <SchematicInspector @edit-profile="showProfile = true" />
     </div>
+    <ExportDialog v-if="showExport" @close="showExport = false" />
+    <ProfileDialog v-if="showProfile" @close="showProfile = false" />
   </section>
 </template>
 

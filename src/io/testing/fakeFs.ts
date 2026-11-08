@@ -1,4 +1,4 @@
-import type { DirEntry, PinoutApi } from '../../../electron/api'
+import type { AppRequest, DirEntry, PinoutApi } from '../../../electron/api'
 
 /**
  * Système de fichiers en mémoire qui imite le pont Electron, pour les tests.
@@ -10,6 +10,9 @@ export class FakeFs implements PinoutApi {
   /** Réponses programmées des dialogues : chaque appel consomme la première. */
   readonly openDialogAnswers: Array<string | null> = []
   readonly saveDialogAnswers: Array<string | null> = []
+  dirty = false
+  quitConfirmed = false
+  private readonly requestHandlers = new Set<(request: AppRequest) => void>()
 
   private norm(path: string): string {
     return path.replace(/\\/g, '/').replace(/\/+$/, '')
@@ -57,6 +60,12 @@ export class FakeFs implements PinoutApi {
     return this.keys().some((key) => key === n || key.startsWith(n + '/'))
   }
 
+  async deleteFile(path: string): Promise<void> {
+    const n = this.norm(path)
+    this.texts.delete(n)
+    this.binaries.delete(n)
+  }
+
   async removeComponentFolder(path: string): Promise<void> {
     const n = this.norm(path)
     if (!this.texts.has(n + '/component.json')) throw new Error('pas un dossier de composant')
@@ -78,5 +87,23 @@ export class FakeFs implements PinoutApi {
 
   async getAppPaths(): Promise<{ userData: string; documents: string }> {
     return { userData: 'C:/fake/Pinout', documents: 'C:/fake/Documents' }
+  }
+
+  async setDirty(dirty: boolean): Promise<void> {
+    this.dirty = dirty
+  }
+
+  async confirmQuit(): Promise<void> {
+    this.quitConfirmed = true
+  }
+
+  onAppRequest(handler: (request: AppRequest) => void): () => void {
+    this.requestHandlers.add(handler)
+    return () => this.requestHandlers.delete(handler)
+  }
+
+  /** Simule une demande du processus principal. */
+  emitRequest(request: AppRequest): void {
+    for (const handler of this.requestHandlers) handler(request)
   }
 }

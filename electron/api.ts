@@ -35,6 +35,9 @@ export interface DirEntry {
   isDirectory: boolean
 }
 
+/** Demandes du processus principal au rendu. */
+export type AppRequest = 'autosave-then-quit'
+
 export interface PinoutApi {
   readTextFile(path: string): Promise<string>
   writeTextFile(path: string, content: string): Promise<void>
@@ -44,6 +47,8 @@ export interface PinoutApi {
   /** Entrées d'un dossier ; liste vide si le dossier n'existe pas. */
   readDir(path: string): Promise<DirEntry[]>
   pathExists(path: string): Promise<boolean>
+  /** Supprime un fichier (pas un dossier) ; sans effet s'il n'existe pas. */
+  deleteFile(path: string): Promise<void>
   /** Supprime un dossier de composant ; refusé s'il ne contient pas component.json. */
   removeComponentFolder(path: string): Promise<void>
   /** Retourne le chemin choisi, ou null si l'utilisateur annule. */
@@ -51,6 +56,12 @@ export interface PinoutApi {
   /** Retourne le chemin choisi, ou null si l'utilisateur annule. */
   showSaveDialog(options?: SaveDialogOptions): Promise<string | null>
   getAppPaths(): Promise<AppPaths>
+  /** Informe le principal qu'il y a des modifications non enregistrées (garde à la fermeture). */
+  setDirty(dirty: boolean): Promise<void>
+  /** Après la copie de secours, autorise la fermeture demandée par l'utilisateur. */
+  confirmQuit(): Promise<void>
+  /** Écoute les demandes du principal ; retourne la fonction qui désabonne. */
+  onAppRequest(handler: (request: AppRequest) => void): () => void
 }
 
 export const IPC = {
@@ -60,8 +71,12 @@ export const IPC = {
   writeBinaryFile: 'fs:write-binary-file',
   readDir: 'fs:read-dir',
   pathExists: 'fs:path-exists',
+  deleteFile: 'fs:delete-file',
   removeComponentFolder: 'fs:remove-component-folder',
   showOpenDialog: 'dialog:open',
   showSaveDialog: 'dialog:save',
-  getAppPaths: 'app:paths'
+  getAppPaths: 'app:paths',
+  setDirty: 'app:set-dirty',
+  confirmQuit: 'app:confirm-quit',
+  appRequest: 'app:request'
 } as const

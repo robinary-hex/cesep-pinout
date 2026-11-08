@@ -1,19 +1,26 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
-import { access, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import {
   IPC,
   type AppPaths,
+  type AppRequest,
   type DirEntry,
   type OpenDialogOptions,
   type SaveDialogOptions
 } from './api'
 
-// Seul code du projet qui touche Node : fenêtre, fichiers, dialogues.
+// Seul code du projet qui touche Node : fenêtre, fichiers, dialogues, garde à la fermeture.
 
 app.setName('Pinout')
 
 const isDev = !app.isPackaged
+const QUIT_FALLBACK_MS = 3000
+
+/** Le rendu tient cet indicateur à jour ; il décide de la question à la fermeture. */
+let dirty = false
+/** Vrai une fois la fermeture acceptée : la fenêtre se ferme sans redemander. */
+let quitting = false
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -53,6 +60,14 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.pathExists, (_event, path: string) => exists(path))
 
+  ipcMain.handle(IPC.deleteFile, async (_event, path: string) => {
+    try {
+      await unlink(path)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+  })
+
   ipcMain.handle(IPC.removeComponentFolder, async (_event, path: string) => {
     if (!(await exists(join(path, 'component.json')))) {
       throw new Error(`Le dossier ${path} ne contient pas de component.json : suppression refusée`)
@@ -85,6 +100,15 @@ function registerIpc(): void {
     userData: app.getPath('userData'),
     documents: app.getPath('documents')
   }))
+
+  ipcMain.handle(IPC.setDirty, (_event, value: boolean) => {
+    dirty = value
+  })
+
+  ipcMain.handle(IPC.confirmQuit, (event) => {
+    quitting = true
+    BrowserWindow.fromWebContents(event.sender)?.close()
+  })
 }
 
 function createWindow(): void {
@@ -109,6 +133,33 @@ function createWindow(): void {
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url)
     return { action: 'deny' }
+  })
+
+  // Garde à la fermeture : avec des modifications non enregistrées, on demande confirmation,
+  // puis le rendu écrit la copie de secours avant que la fenêtre ne se ferme.
+  mainWindow.on('close', (event) => {
+    if (quitting || !dirty) return
+    event.preventDefault()
+    const choice = dialog.showMessageBoxSync(mainWindow, {
+      type: 'warning',
+      title: 'Pinout',
+      message: 'Des modifications ne sont pas enregistrées.',
+      detail:
+        'Une copie de secours sera gardée et proposée au prochain lancement. Quitter quand même ?',
+      buttons: ['Quitter quand même', 'Annuler'],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true
+    })
+    if (choice !== 0) return
+    const request: AppRequest = 'autosave-then-quit'
+    mainWindow.webContents.send(IPC.appRequest, request)
+    setTimeout(() => {
+      if (!quitting && !mainWindow.isDestroyed()) {
+        quitting = true
+        mainWindow.destroy()
+      }
+    }, QUIT_FALLBACK_MS)
   })
 
   const devUrl = process.env['ELECTRON_RENDERER_URL']

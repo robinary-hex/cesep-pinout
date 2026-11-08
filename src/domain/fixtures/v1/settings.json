@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "libraryDir": "D:/OneDrive/Pinout/library",
+  "palette": [
+    { "name": "Noir", "hex": "#000000" },
+    { "name": "Rouge", "hex": "#d62828" }
+  ],
+  "customColors": ["#123456"],
+  "defaultWireColor": "#d62828",
+  "defaultProfile": {
+    "name": "Standard",
+    "cellPx": 20,
+    "wireWidth": 0.15,
+    "cornerRadius": 0.4,
+    "junctionScale": 2,
+    "junctionColor": "wire",
+    "labelFont": { "family": "Segoe UI", "size": 11 }
+  },
+  "recentFiles": ["D:/Documents/alim.pinout.json"]
+}

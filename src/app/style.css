@@ -60,6 +60,20 @@ body,
   opacity: 0.5;
 }
 
+.topbar .spacer {
+  flex: 1;
+}
+
+.topbar button.ghost {
+  color: #ffffff;
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.topbar button.ghost:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
 .workspace {
   flex: 1;
   min-height: 0;

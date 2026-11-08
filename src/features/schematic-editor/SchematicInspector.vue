@@ -12,6 +12,7 @@ import { useSchematicStore } from './store'
 
 // Panneau de droite du montage : projet, puis composant(s) ou fil(s) sélectionné(s).
 
+const emit = defineEmits<{ editProfile: [] }>()
 const store = useSchematicStore()
 const library = useLibraryStore()
 const doc = computed(() => store.doc)
@@ -126,6 +127,7 @@ function setFreeEnds(event: Event): void {
       </p>
       <p class="hint">{{ doc.components.length }} composant(s), {{ doc.wires.length }} fil(s).</p>
       <p v-if="store.filePath" class="hint">Fichier : {{ store.filePath }}</p>
+      <button type="button" class="small" @click="emit('editProfile')">Modifier le profil…</button>
     </section>
 
     <section v-if="single" class="block">

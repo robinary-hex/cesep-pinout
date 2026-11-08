@@ -34,18 +34,30 @@ export function rectContainsPoint(rect: GridRect, x: number, y: number): boolean
 }
 
 /** Union des boîtes de tous les composants d'un projet ; null si le montage est vide. */
+/** Plus petit rectangle contenant les deux. */
+export function unionRects(a: GridRect, b: GridRect): GridRect {
+  const x1 = Math.min(a.x, b.x)
+  const y1 = Math.min(a.y, b.y)
+  const x2 = Math.max(a.x + a.width, b.x + b.width)
+  const y2 = Math.max(a.y + a.height, b.y + b.height)
+  return { x: x1, y: y1, width: x2 - x1, height: y2 - y1 }
+}
+
+/** Encombrement approché d'une étiquette texte, arrondi à la cellule (hauteur = taille en points / cellPx). */
+export function textLabelBounds(
+  label: { x: number; y: number; text: string; size: number },
+  cellPx: number
+): GridRect {
+  const height = label.size / cellPx
+  const width = Math.max(1, Math.ceil(label.text.length * 0.6 * height))
+  return { x: label.x, y: Math.floor(label.y - height), width, height: Math.ceil(height) }
+}
+
+/** Union des boîtes des composants, des sommets de fils et des étiquettes ; null si tout est vide. */
 export function projectBounds(project: Project): GridRect | null {
   let result: GridRect | null = null
   const include = (bounds: GridRect): void => {
-    if (!result) {
-      result = { ...bounds }
-      return
-    }
-    const x1 = Math.min(result.x, bounds.x)
-    const y1 = Math.min(result.y, bounds.y)
-    const x2 = Math.max(result.x + result.width, bounds.x + bounds.width)
-    const y2 = Math.max(result.y + result.height, bounds.y + bounds.height)
-    result = { x: x1, y: y1, width: x2 - x1, height: y2 - y1 }
+    result = result ? unionRects(result, bounds) : { ...bounds }
   }
   for (const instance of project.components) {
     const def = project.embeddedDefs[instance.defId]
@@ -54,6 +66,7 @@ export function projectBounds(project: Project): GridRect | null {
   for (const wire of project.wires) {
     for (const [x, y] of wire.points) include({ x, y, width: 0, height: 0 })
   }
+  for (const label of project.labels) include(textLabelBounds(label, project.profile.cellPx))
   return result
 }
 
