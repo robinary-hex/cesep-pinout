@@ -1,13 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import {
-  componentFields,
-  instanceBounds,
-  ROTATIONS,
-  segmentLength,
-  type FreeEndStyle,
-  type Rotation
-} from '@/domain'
+import { componentFields, ROTATIONS, TEXT_SCALES, type FreeEndStyle, type Rotation } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import Icon from '@/ui/Icon.vue'
 import { useSchematicStore } from './store'
@@ -84,16 +77,6 @@ const swatches = computed(() => [
   ...library.palette.map((color) => ({ hex: color.hex, name: color.name })),
   ...library.customColors.map((hex) => ({ hex, name: hex }))
 ])
-
-function wireLength(points: readonly [number, number][]): number {
-  let total = 0
-  for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1]
-    const b = points[i]
-    if (a && b) total += segmentLength(a, b)
-  }
-  return total
-}
 
 function inputValue(event: Event): string {
   return (event.target as HTMLInputElement).value
@@ -174,9 +157,24 @@ function setLabelBold(event: Event): void {
   if (label) store.setLabelBold(label.id, (event.target as HTMLInputElement).checked)
 }
 
+/** Tailles proposées : multiples de la taille des repères du profil, plus la taille actuelle. */
+const labelSizeChoices = computed(() => {
+  const base = profile.value.labelFont.size
+  const list: { scale: number; size: number }[] = TEXT_SCALES.map((scale) => ({
+    scale,
+    size: base * scale
+  }))
+  const current = singleLabel.value?.size
+  if (current !== undefined && !list.some((choice) => Math.abs(choice.size - current) < 1e-6)) {
+    list.push({ scale: Math.round((current / base) * 100) / 100, size: current })
+  }
+  return list.sort((a, b) => a.size - b.size)
+})
+
 function setLabelSize(event: Event): void {
   const label = singleLabel.value
-  if (label) store.setLabelSize(label.id, Math.max(4, numberValue(event)))
+  const size = Number(inputValue(event))
+  if (label && Number.isFinite(size)) store.setLabelSize(label.id, Math.max(4, size))
 }
 </script>
 
@@ -310,11 +308,6 @@ function setLabelSize(event: Event): void {
           <span>Miroir</span>
         </label>
       </div>
-      <p class="hint">
-        Boîte : {{ instanceBounds(single.instance, single.def).width }} ×
-        {{ instanceBounds(single.instance, single.def).height }} cellules ·
-        {{ single.def.pins.length }} broche(s) · définition « {{ single.def.id }} ».
-      </p>
       <div v-if="libraryUpdate" class="notice">
         <p>La bibliothèque a une version plus récente de ce composant.</p>
         <button type="button" class="small" @click="store.updateDefinition(libraryUpdate)">
@@ -416,16 +409,6 @@ function setLabelSize(event: Event): void {
             />
           </label>
         </div>
-        <p class="hint">
-          Visibles sur une extrémité libre, avec un point, dans le prolongement du fil. Double-clic
-          sur le bout d’un fil pour les saisir.
-        </p>
-        <p class="hint">
-          {{ singleWire.points.length - 1 }} segment(s), longueur
-          {{ wireLength(singleWire.points) }} cellules, rang d’empilement {{ singleWire.stack }}.
-          Glisse un segment pour le décaler, un sommet (cercle) pour le déplacer. Alt+clic sur un
-          croisement inverse l’ordre à cet endroit seulement.
-        </p>
       </template>
       <div class="row">
         <button type="button" class="icon-only" title="Reculer" @click="store.reorderWires('down')">
@@ -464,17 +447,18 @@ function setLabelSize(event: Event): void {
       </label>
       <div class="row">
         <label class="field">
-          <span>Taille (pt)</span>
-          <input type="number" min="4" step="1" :value="singleLabel.size" @change="setLabelSize" />
+          <span>Taille</span>
+          <select :value="singleLabel.size" @change="setLabelSize">
+            <option v-for="choice in labelSizeChoices" :key="choice.size" :value="choice.size">
+              ×{{ choice.scale }}
+            </option>
+          </select>
         </label>
         <label class="check">
           <input type="checkbox" :checked="singleLabel.bold" @change="setLabelBold" />
           <span>Gras</span>
         </label>
       </div>
-      <p class="hint">
-        Position : ({{ singleLabel.x }}, {{ singleLabel.y }}). Glisse-la pour la déplacer.
-      </p>
       <div class="row">
         <button type="button" class="with-icon" @click="store.duplicateSelection()">
           <Icon name="duplicate" /> Dupliquer

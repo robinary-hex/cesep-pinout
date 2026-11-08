@@ -128,7 +128,7 @@ describe('export SVG', () => {
         y1: 4,
         x2: 8,
         y2: 4,
-        arrows: { start: false, end: true },
+        arrows: { start: false, middle: false, end: true },
         style: { stroke: '#000000', weight: 2, fill: 'none' }
       },
       0.1

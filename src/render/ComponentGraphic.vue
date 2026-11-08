@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import {
   arrowHeadPoints,
+  middleArrowHead,
   NO_ARROWS,
   pointsAttribute,
   QUARTERS_PER_CELL,
@@ -135,6 +136,10 @@ function arrowHeads(primitive: Stroked): string[] {
   }
   if (arrows.start && first && second) {
     const head = arrowHeadPoints(second, first, width)
+    if (head) heads.push(scaled(head))
+  }
+  if (arrows.middle) {
+    const head = middleArrowHead(cells, width)
     if (head) heads.push(scaled(head))
   }
   return heads

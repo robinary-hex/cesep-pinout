@@ -63,6 +63,42 @@ export function trimForArrows(
   return result
 }
 
+/** Pointe au milieu d'une ligne brisée, dans le sens du tracé ; null si le trait est de longueur nulle. */
+export function middleArrowHead(
+  points: readonly LocalPoint[],
+  strokeWidth: number
+): LocalPoint[] | null {
+  let total = 0
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]
+    const b = points[i]
+    if (a && b) total += Math.hypot(b.x - a.x, b.y - a.y)
+  }
+  if (total === 0) return null
+  let remaining = total / 2
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]
+    const b = points[i]
+    if (!a || !b) continue
+    const length = Math.hypot(b.x - a.x, b.y - a.y)
+    if (length === 0) continue
+    if (remaining <= length) {
+      const t = remaining / length
+      const mid = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
+      const ux = (b.x - a.x) / length
+      const uy = (b.y - a.y) / length
+      const half = arrowSize(strokeWidth) / 2
+      return arrowHeadPoints(
+        { x: mid.x - ux, y: mid.y - uy },
+        { x: mid.x + ux * half, y: mid.y + uy * half },
+        strokeWidth
+      )
+    }
+    remaining -= length
+  }
+  return null
+}
+
 function fmt(value: number): string {
   return Number.isInteger(value) ? String(value) : String(Math.round(value * 1000) / 1000)
 }

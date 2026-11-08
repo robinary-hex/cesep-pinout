@@ -104,10 +104,6 @@ async function remove(entry: SavedProfile): Promise<void> {
 <template>
   <ModalDialog title="Profil de style du montage" @close="emit('close')">
     <ProfileFields v-model="draft" />
-    <p class="hint">
-      Le montage derrière la boîte montre le profil tel que tu le règles. Les composants gardent
-      leur taille en cellules : changer d'échelle ou de trait ne casse rien.
-    </p>
 
     <section class="saved">
       <h3>Profils enregistrés</h3>

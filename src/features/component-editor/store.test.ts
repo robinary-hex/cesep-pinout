@@ -53,7 +53,11 @@ describe('éditeur de composants : formes et zoom', () => {
       style: DEFAULT_SHAPE_STYLE
     }
     const index = store.addPrimitive(line, 'Ajouter une ligne')
-    store.setPrimitive(index, { ...line, x2: 12, arrows: { start: false, end: true } }, 'Modifier')
+    store.setPrimitive(
+      index,
+      { ...line, x2: 12, arrows: { start: false, middle: false, end: true } },
+      'Modifier'
+    )
     expect(store.selectedPrimitive).toMatchObject({ x2: 12, arrows: { end: true } })
     store.undo()
     expect(store.selectedPrimitive).toMatchObject({ x2: 8 })

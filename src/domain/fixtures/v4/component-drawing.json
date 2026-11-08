@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 4,
+  "id": "arrow-line",
+  "name": "Ligne fléchée",
+  "category": "Divers",
+  "description": "",
+  "size": { "widthCells": 4, "heightCells": 2 },
+  "visual": {
+    "kind": "drawing",
+    "primitives": [
+      {
+        "kind": "line",
+        "x1": 0,
+        "y1": 4,
+        "x2": 16,
+        "y2": 4,
+        "arrows": { "start": false, "end": true },
+        "style": { "stroke": "#000000", "weight": 1, "fill": "none" }
+      },
+      {
+        "kind": "text",
+        "x": 8,
+        "y": 1,
+        "text": "I",
+        "size": 0.5,
+        "anchor": "middle",
+        "color": "#000000",
+        "variable": false,
+        "defaultValue": "",
+        "unit": "",
+        "bold": true
+      }
+    ]
+  },
+  "pins": [
+    { "id": "a", "name": "1", "kind": "io", "x": 0, "y": 1 },
+    { "id": "b", "name": "2", "kind": "io", "x": 4, "y": 1 }
+  ]
+}

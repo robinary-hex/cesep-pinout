@@ -1344,7 +1344,7 @@ const cursorClass = computed(() => {
 
 .pins .unconnected {
   fill: none;
-  stroke: #cf222e;
+  stroke: var(--alert);
   stroke-width: 1.5;
 }
 
@@ -1358,7 +1358,7 @@ const cursorClass = computed(() => {
 
 .free-end {
   fill: var(--paper);
-  stroke: #cf222e;
+  stroke: var(--alert);
   stroke-width: 1.5;
   pointer-events: none;
 }

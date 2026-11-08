@@ -135,10 +135,6 @@ async function save(): Promise<void> {
               <Icon name="moon" :size="14" /> Sombre
             </label>
           </div>
-          <p class="hint">
-            Les surfaces de dessin restent claires : les couleurs des composants et des fils sont
-            celles de l’export.
-          </p>
         </section>
 
         <section class="block">
@@ -147,10 +143,6 @@ async function save(): Promise<void> {
           <button type="button" class="with-icon" @click="library.chooseDir()">
             <Icon name="folder-open" /> Choisir un autre dossier…
           </button>
-          <p class="hint">
-            Un dossier OneDrive partage la bibliothèque entre le PC et le portable. Les projets
-            gardent de toute façon une copie de leurs composants.
-          </p>
         </section>
 
         <section class="block">
@@ -212,11 +204,6 @@ async function save(): Promise<void> {
               "
             />
           </label>
-          <p class="hint">
-            Tant qu'un montage a des modifications non enregistrées, une copie est écrite à cet
-            intervalle et proposée au prochain lancement si l'application s'est arrêtée sans
-            enregistrer.
-          </p>
         </section>
       </div>
 

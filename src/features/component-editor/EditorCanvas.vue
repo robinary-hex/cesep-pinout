@@ -57,7 +57,14 @@ interface QPoint {
 }
 
 type Drag =
-  | { kind: 'box'; tool: 'rect' | 'ellipse' | 'line'; start: QPoint; current: QPoint }
+  | {
+      kind: 'box'
+      tool: 'rect' | 'ellipse' | 'line'
+      start: QPoint
+      current: QPoint
+      /** Alt enfoncé : carré ou cercle plutôt que rectangle ou ellipse. */
+      square: boolean
+    }
   | { kind: 'polyline'; points: QPoint[]; current: QPoint }
   | {
       kind: 'move-primitives'
@@ -240,6 +247,18 @@ const handles = computed(() => {
   }))
 })
 
+/** Arrivée d'un tracé rectangle/ellipse ; avec Alt, le côté le plus long s'impose aux deux axes. */
+function boxEnd(box: Extract<Drag, { kind: 'box' }>): QPoint {
+  if (!box.square || box.tool === 'line') return box.current
+  const dx = box.current.x - box.start.x
+  const dy = box.current.y - box.start.y
+  const side = Math.max(Math.abs(dx), Math.abs(dy))
+  return {
+    x: box.start.x + (dx >= 0 ? side : -side),
+    y: box.start.y + (dy >= 0 ? side : -side)
+  }
+}
+
 const preview = computed<Preview | null>(() => {
   const current = drag.value
   if (!current) return null
@@ -250,19 +269,20 @@ const preview = computed<Preview | null>(() => {
     }
   }
   if (current.kind !== 'box') return null
+  const end = boxEnd(current)
   if (current.tool === 'line') {
     return {
       kind: 'line',
       x1: px(current.start.x),
       y1: px(current.start.y),
-      x2: px(current.current.x),
-      y2: px(current.current.y)
+      x2: px(end.x),
+      y2: px(end.y)
     }
   }
-  const x1 = Math.min(current.start.x, current.current.x)
-  const y1 = Math.min(current.start.y, current.current.y)
-  const x2 = Math.max(current.start.x, current.current.x)
-  const y2 = Math.max(current.start.y, current.current.y)
+  const x1 = Math.min(current.start.x, end.x)
+  const y1 = Math.min(current.start.y, end.y)
+  const x2 = Math.max(current.start.x, end.x)
+  const y2 = Math.max(current.start.y, end.y)
   if (current.tool === 'rect') {
     return { kind: 'rect', x: px(x1), y: px(y1), width: px(x2 - x1), height: px(y2 - y1) }
   }
@@ -375,7 +395,7 @@ function onPointerDown(event: PointerEvent): void {
     case 'rect':
     case 'ellipse':
     case 'line':
-      drag.value = { kind: 'box', tool, start: q, current: q }
+      drag.value = { kind: 'box', tool, start: q, current: q, square: event.altKey }
       capture(event)
       break
     case 'polyline': {
@@ -444,20 +464,22 @@ function onPointerMove(event: PointerEvent): void {
       break
     default:
       current.current = toQuarters(cells)
+      if (current.kind === 'box') current.square = event.altKey
   }
 }
 
 function commitBox(box: Extract<Drag, { kind: 'box' }>): void {
   const style = { ...DEFAULT_SHAPE_STYLE }
+  const end = boxEnd(box)
   if (box.tool === 'line') {
-    if (box.start.x === box.current.x && box.start.y === box.current.y) return
+    if (box.start.x === end.x && box.start.y === end.y) return
     store.addPrimitive(
       {
         kind: 'line',
         x1: box.start.x,
         y1: box.start.y,
-        x2: box.current.x,
-        y2: box.current.y,
+        x2: end.x,
+        y2: end.y,
         arrows: { ...NO_ARROWS },
         style
       },
@@ -465,10 +487,10 @@ function commitBox(box: Extract<Drag, { kind: 'box' }>): void {
     )
     return
   }
-  const x1 = Math.min(box.start.x, box.current.x)
-  const y1 = Math.min(box.start.y, box.current.y)
-  const w = Math.abs(box.current.x - box.start.x)
-  const h = Math.abs(box.current.y - box.start.y)
+  const x1 = Math.min(box.start.x, end.x)
+  const y1 = Math.min(box.start.y, end.y)
+  const w = Math.abs(end.x - box.start.x)
+  const h = Math.abs(end.y - box.start.y)
   if (w === 0 || h === 0) return
   if (box.tool === 'rect') {
     store.addPrimitive({ kind: 'rect', x: x1, y: y1, w, h, rx: 0, style }, 'Ajouter un rectangle')

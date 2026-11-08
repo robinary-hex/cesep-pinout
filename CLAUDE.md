@@ -30,7 +30,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Primitives du mini-éditeur : entiers en quarts de cellule. Épaisseur d'une forme = `weight`
   (multiplicateur, choix dans `STROKE_WEIGHTS`) × `componentStroke` du profil de style (0,1 cellule
   par défaut) : un montage change d'épaisseur avec son profil. Lignes et polylignes ouvertes portent
-  des flèches optionnelles (`arrows`), le trait s'arrêtant à la base de la pointe
+  des flèches optionnelles (`arrows` : début, centre dans le sens du tracé, fin), le trait
+  s'arrêtant à la base des pointes d'extrémité
   (`trimForArrows`), à l'écran comme à l'export. Un texte `variable` a pour contenu le nom du champ ; l'instance
   posée fournit la valeur (`instance.fields`), sinon `defaultValue` s'affiche ; `bold` met le
   texte en gras, comme sur les étiquettes du montage ; l'`unit` éventuelle suit toujours la valeur (espace
@@ -95,6 +96,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   l'encre du thème (`--ink`, via `screenColor` de `src/render/ink.ts`), blanc cassé en sombre ;
   l'export reste noir. Les surbrillances (net survolé, fils sélectionnés) sont des groupes à
   opacité unique : deux fils qui se chevauchent ne s'additionnent pas.
+  Les marques d'extrémité libre et de broche reliée à rien prennent `--alert` (rouge en clair, ambre
+  en sombre) ; l'aperçu d'export transparent est hachuré (`--hatch-*`).
 - Profil de style : la boîte « Profil de style du montage » prévisualise chaque réglage sur le
   montage via `profilePreview` (le store expose `profile` = aperçu ou profil du projet) et
   n'enregistre qu'à « Appliquer », en une commande. Les Paramètres proposent « Appliquer au
@@ -118,9 +121,13 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     toutes les formes sélectionnées, Alt+glisser en dépose une copie, Ctrl+C / V / D copient,
     collent (décalées d'une cellule) et dupliquent ; le panneau de droite ne montre que l'élément
     sélectionné (forme, formes ou broche), sinon le composant.
+    Alt pendant le tracé d'un rectangle ou d'une ellipse impose un carré ou un cercle. Tailles des
+    textes proposées en multiples (×1, ×1,5, ×2) d'une hauteur de référence de 0,5 cellule, comme
+    les étiquettes du montage le sont de la taille des repères du profil ; la valeur stockée reste
+    absolue. Les panneaux ne portent pas de texte explicatif : l'aide est dans F1.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 4, projet 5, paramètres 4
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 5, projet 6, paramètres 4
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

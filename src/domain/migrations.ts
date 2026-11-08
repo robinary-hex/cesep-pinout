@@ -114,9 +114,34 @@ function withTextDefaults(raw: RawRecord, defaults: RawRecord): RawRecord {
 const migrateComponentV2: Migration = (raw) => withTextDefaults(raw, { unit: '' })
 const migrateComponentV3: Migration = (raw) => withTextDefaults(raw, { bold: false })
 
+// Composant v4 → v5 : flèche au milieu des lignes et polylignes.
+
+function migrateComponentV4(raw: RawRecord): RawRecord {
+  const visual = raw['visual']
+  if (!isRecord(visual) || visual['kind'] !== 'drawing' || !Array.isArray(visual['primitives'])) {
+    return raw
+  }
+  return {
+    ...raw,
+    visual: {
+      ...visual,
+      primitives: visual['primitives'].map((primitive) =>
+        isRecord(primitive) && isRecord(primitive['arrows'])
+          ? { ...primitive, arrows: { middle: false, ...primitive['arrows'] } }
+          : primitive
+      )
+    }
+  }
+}
+
 export const componentMigrations: MigrationTable = {
   current: COMPONENT_SCHEMA_VERSION,
-  steps: { 1: migrateComponentV1, 2: migrateComponentV2, 3: migrateComponentV3 }
+  steps: {
+    1: migrateComponentV1,
+    2: migrateComponentV2,
+    3: migrateComponentV3,
+    4: migrateComponentV4
+  }
 }
 
 /** Les définitions embarquées d'un projet suivent les migrations des composants. */
@@ -178,7 +203,9 @@ export const projectMigrations: MigrationTable = {
     1: migrateProjectV1,
     2: migrateEmbeddedDefs,
     3: migrateProjectV3,
-    4: migrateProjectV4
+    4: migrateProjectV4,
+    // Projet v5 → v6 : définitions embarquées migrées (flèche au milieu).
+    5: migrateEmbeddedDefs
   }
 }
 

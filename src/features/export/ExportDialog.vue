@@ -257,18 +257,15 @@ legend {
 }
 
 .preview.transparent {
-  background-image:
-    linear-gradient(45deg, var(--checker-b) 25%, transparent 25%),
-    linear-gradient(-45deg, var(--checker-b) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, var(--checker-b) 75%),
-    linear-gradient(-45deg, transparent 75%, var(--checker-b) 75%);
-  background-color: var(--checker-a);
-  background-size: 12px 12px;
-  background-position:
-    0 0,
-    0 8px,
-    8px -8px,
-    -8px 0;
+  /* Hachures légères : le fond transparent se devine sans fatiguer l'œil. */
+  background-color: var(--hatch-bg);
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--hatch-line) 0,
+    var(--hatch-line) 1px,
+    transparent 1px,
+    transparent 9px
+  );
 }
 
 .preview img {

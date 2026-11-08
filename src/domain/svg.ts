@@ -1,4 +1,4 @@
-import { arrowHeadPoints, pointsAttribute, trimForArrows } from './arrows'
+import { arrowHeadPoints, middleArrowHead, pointsAttribute, trimForArrows } from './arrows'
 import { wireEndLabelPlacement, wireRenderParts } from './wireEnds'
 import {
   strokeWidthCells,
@@ -84,6 +84,13 @@ function arrowsSvg(
   }
   if (primitive.arrows.start && first && second) {
     const head = arrowHeadPoints(second, first, width)
+    if (head)
+      heads.push(
+        `<polygon ${attrs({ points: pointsAttribute(head), fill: primitive.style.stroke })}/>`
+      )
+  }
+  if (primitive.arrows.middle) {
+    const head = middleArrowHead(points, width)
     if (head)
       heads.push(
         `<polygon ${attrs({ points: pointsAttribute(head), fill: primitive.style.stroke })}/>`

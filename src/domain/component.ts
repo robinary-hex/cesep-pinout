@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { hexColorSchema } from './color'
 import { isOnBorder, PNG_PX_PER_CELL, QUARTERS_PER_CELL, sizeSchema, type Size } from './grid'
 
-export const COMPONENT_SCHEMA_VERSION = 4
+export const COMPONENT_SCHEMA_VERSION = 5
 
 export const pinKindSchema = z.enum(['in', 'out', 'io', 'power'])
 export type PinKind = z.infer<typeof pinKindSchema>
@@ -48,9 +48,14 @@ export function strokeWidthCells(style: ShapeStyle, componentStroke: number): nu
   return style.weight * componentStroke
 }
 
-export const arrowsSchema = z.object({ start: z.boolean(), end: z.boolean() })
+/** Pointes de flèche d'une ligne ou polyligne : au départ, au milieu (sens du tracé), à la fin. */
+export const arrowsSchema = z.object({ start: z.boolean(), middle: z.boolean(), end: z.boolean() })
 export type Arrows = z.infer<typeof arrowsSchema>
-export const NO_ARROWS: Arrows = { start: false, end: false }
+export const NO_ARROWS: Arrows = { start: false, middle: false, end: false }
+
+/** Hauteur de référence des textes d'un composant (cellules) ; l'inspecteur propose des multiples. */
+export const TEXT_BASE_SIZE_CELLS = 0.5
+export const TEXT_SCALES = [1, 1.5, 2] as const
 
 /** Formes du mini-éditeur de composants, rendues en SVG natif. */
 export const primitiveSchema = z.discriminatedUnion('kind', [

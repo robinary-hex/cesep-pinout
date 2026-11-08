@@ -5,11 +5,12 @@ import {
   PIN_KIND_LABELS,
   PIN_KINDS,
   STROKE_WEIGHTS,
-  strokeWidthCells,
+  TEXT_BASE_SIZE_CELLS,
+  TEXT_SCALES,
+  type Arrows,
   type PinKind,
   type PngFit
 } from '@/domain'
-import { useLibraryStore } from '@/features/library/store'
 import Icon from '@/ui/Icon.vue'
 import { pickPng, resizePng } from './pngImport'
 import { useComponentEditorStore } from './store'
@@ -19,9 +20,7 @@ import { useComponentEditorStore } from './store'
 // Les champs valident au changement (pas à chaque touche), donc une modification = une commande.
 
 const store = useComponentEditorStore()
-const library = useLibraryStore()
 const doc = computed(() => store.doc)
-const strokeBase = computed(() => library.defaultProfile.componentStroke)
 
 function inputValue(event: Event): string {
   return (event.target as HTMLInputElement).value
@@ -154,7 +153,7 @@ function toggleFill(event: Event): void {
   store.updateStyle(primitiveIndex.value, { fill: checked(event) ? 'none' : '#ffffff' })
 }
 
-function setArrow(end: 'start' | 'end', event: Event): void {
+function setArrow(end: keyof Arrows, event: Event): void {
   const on = checked(event)
   store.updatePrimitive(
     primitiveIndex.value,
@@ -201,6 +200,19 @@ function setUnit(event: Event): void {
     if (p.kind === 'text') p.unit = unit
   })
 }
+
+/** Tailles proposées : multiples de la hauteur de référence, plus la taille actuelle si elle diffère. */
+const textSizeChoices = computed(() => {
+  const list: { scale: number; size: number }[] = TEXT_SCALES.map((scale) => ({
+    scale,
+    size: TEXT_BASE_SIZE_CELLS * scale
+  }))
+  const current = primitive.value?.kind === 'text' ? primitive.value.size : undefined
+  if (current !== undefined && !list.some((choice) => Math.abs(choice.size - current) < 1e-9)) {
+    list.push({ scale: Math.round((current / TEXT_BASE_SIZE_CELLS) * 100) / 100, size: current })
+  }
+  return list.sort((a, b) => a.size - b.size)
+})
 
 function setTextSize(event: Event): void {
   const size = Math.max(0.1, numberValue(event))
@@ -293,14 +305,12 @@ function setClosed(event: Event): void {
         </template>
         <div class="row">
           <label class="field">
-            <span>Hauteur (cellules)</span>
-            <input
-              type="number"
-              min="0.1"
-              step="0.1"
-              :value="primitive.size"
-              @change="setTextSize"
-            />
+            <span>Taille</span>
+            <select :value="primitive.size" @change="setTextSize">
+              <option v-for="choice in textSizeChoices" :key="choice.size" :value="choice.size">
+                ×{{ choice.scale }}
+              </option>
+            </select>
           </label>
           <label class="field">
             <span>Alignement</span>
@@ -340,10 +350,7 @@ function setClosed(event: Event): void {
           </label>
         </div>
         <label class="field">
-          <span
-            >Épaisseur (× trait de base =
-            {{ strokeWidthCells(shapeStyle, strokeBase).toFixed(2) }} cellule)</span
-          >
+          <span>Épaisseur</span>
           <select :value="shapeStyle.weight" @change="setWeight">
             <option v-for="weight in weightChoices" :key="weight" :value="weight">
               ×{{ weight
@@ -374,9 +381,11 @@ function setClosed(event: Event): void {
             <span>Sans remplissage</span>
           </label>
         </div>
-        <template
+        <div
           v-if="primitive.kind === 'line' || (primitive.kind === 'polyline' && !primitive.closed)"
+          class="field"
         >
+          <span>Flèche</span>
           <div class="row">
             <label class="check">
               <input
@@ -384,7 +393,15 @@ function setClosed(event: Event): void {
                 :checked="primitive.arrows.start"
                 @change="setArrow('start', $event)"
               />
-              <span>Flèche au début</span>
+              <span>Début</span>
+            </label>
+            <label class="check">
+              <input
+                type="checkbox"
+                :checked="primitive.arrows.middle"
+                @change="setArrow('middle', $event)"
+              />
+              <span>Centre</span>
             </label>
             <label class="check">
               <input
@@ -392,10 +409,10 @@ function setClosed(event: Event): void {
                 :checked="primitive.arrows.end"
                 @change="setArrow('end', $event)"
               />
-              <span>Flèche à la fin</span>
+              <span>Fin</span>
             </label>
           </div>
-        </template>
+        </div>
         <label v-if="primitive.kind === 'rect'" class="field">
           <span>Arrondi des coins (quarts de cellule)</span>
           <input type="number" min="0" step="1" :value="primitive.rx" @change="setRectRadius" />
@@ -404,10 +421,6 @@ function setClosed(event: Event): void {
           <input type="checkbox" :checked="primitive.closed" @change="setClosed" />
           <span>Fermée (polygone)</span>
         </label>
-        <p class="hint">
-          Poignées sur la forme pour la redimensionner ; Ctrl+glisser saisit la poignée la plus
-          proche.
-        </p>
       </template>
 
       <button type="button" class="danger with-icon" @click="store.removeSelection()">
@@ -428,10 +441,6 @@ function setClosed(event: Event): void {
           <Icon name="chevron-down" :size="12" /> Composant
         </button>
       </div>
-      <p class="hint">
-        Glisse l’une d’elles pour les déplacer ensemble. Maj+clic ajoute ou retire une forme ; un
-        lasso dans le vide en sélectionne plusieurs.
-      </p>
       <button type="button" class="danger with-icon" @click="store.removeSelection()">
         <Icon name="trash" /> Supprimer les formes
       </button>
@@ -468,10 +477,7 @@ function setClosed(event: Event): void {
           </select>
         </label>
       </div>
-      <p class="hint">
-        Sur le bord en ({{ selectedPin.x }}, {{ selectedPin.y }}). Glisse-la le long du bord pour la
-        déplacer ; les noms numériques suivent l’ordre des broches.
-      </p>
+      <p class="hint">Position : ({{ selectedPin.x }}, {{ selectedPin.y }})</p>
       <button type="button" class="danger with-icon" @click="store.removePin(selectedPin.id)">
         <Icon name="trash" /> Supprimer la broche
       </button>
@@ -529,9 +535,7 @@ function setClosed(event: Event): void {
 
       <section class="block">
         <h3>Broches</h3>
-        <p v-if="doc.pins.length === 0" class="hint">
-          Aucune broche. Outil Broche (B), puis clic sur une intersection du bord.
-        </p>
+        <p v-if="doc.pins.length === 0" class="hint">Aucune broche.</p>
         <div
           v-for="(pin, index) in doc.pins"
           :key="pin.id"
@@ -562,19 +566,13 @@ function setClosed(event: Event): void {
             ✕
           </button>
         </div>
-        <p v-if="doc.pins.length > 0" class="hint">
-          Les noms numériques suivent l’ordre ; glisse une broche le long du bord pour la déplacer.
-        </p>
       </section>
 
       <section class="block">
         <h3>Visuel</h3>
-        <p v-if="doc.visual.kind === 'drawing'" class="hint">
-          Dessin : {{ doc.visual.primitives.length }} forme(s), trait de base
-          {{ strokeBase }} cellule (profil de style). Clique une forme pour ses réglages, glisse un
-          lasso pour en prendre plusieurs.
+        <p v-if="doc.visual.kind === 'png'" class="hint">
+          Image PNG à {{ doc.visual.pxPerCell }} px par cellule.
         </p>
-        <p v-else class="hint">Image PNG à {{ doc.visual.pxPerCell }} px par cellule.</p>
         <div class="row">
           <button type="button" class="with-icon" @click="importPng">
             <Icon name="image" /> Importer un PNG…

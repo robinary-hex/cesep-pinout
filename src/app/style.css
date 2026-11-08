@@ -43,6 +43,9 @@
   --checker-a: #ffffff;
   --checker-b: #e6e9ed;
   --ink: #000000;
+  --alert: #cf222e;
+  --hatch-bg: #ffffff;
+  --hatch-line: #e3e6ea;
 }
 
 :root[data-theme='dark'] {
@@ -85,6 +88,10 @@
   --checker-b: #343a43;
   /* Le noir pur des composants et des fils s'affiche dans cette encre ; l'export reste noir. */
   --ink: #e6edf3;
+  /* Extrémités et broches reliées à rien : ambre, le rouge jure sur le papier sombre. */
+  --alert: #d29922;
+  --hatch-bg: #2a2f36;
+  --hatch-line: #3a414b;
 }
 
 * {
