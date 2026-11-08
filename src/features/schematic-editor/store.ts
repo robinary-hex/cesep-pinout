@@ -224,6 +224,11 @@ export const useSchematicStore = defineStore('schematic', () => {
     status.value = `Rétabli : ${label}`
   }
 
+  /** Ouvre le panneau de propriétés si les paramètres le demandent (clic sur un élément). */
+  function revealInspector(): void {
+    if (library.autoOpenInspector) inspectorOpen.value = true
+  }
+
   function clearSelection(): void {
     selection.value = []
     selectedWires.value = []
@@ -1061,6 +1066,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     reorderWires,
     toggleCrossing,
     clearSelection,
+    revealInspector,
     selectAll,
     moveInstances,
     moveSelection,

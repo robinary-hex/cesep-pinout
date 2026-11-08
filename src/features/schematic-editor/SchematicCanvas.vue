@@ -6,6 +6,7 @@ import {
   dragVertex,
   instanceBounds,
   instanceMatrix,
+  instanceTextBoxes,
   layoutTextBox,
   locateOnWire,
   matrixToSvg,
@@ -16,6 +17,7 @@ import {
   resizeBox,
   rotatedSize,
   routeLAuto,
+  textContent,
   textLabelBounds,
   wireEndLabelPlacement,
   wireIntersectsRect,
@@ -305,6 +307,24 @@ const pins = computed(() => {
   })
 })
 
+/** Textes des composants qui restent droits : dans la boîte que la transformation leur donne. */
+const uprightTexts = computed(() =>
+  store.placed.flatMap((item) => {
+    if (item.def.textFollowsTransform) return []
+    const { dx, dy } = offsetOf(item.instance.id)
+    return instanceTextBoxes(item.instance, item.def).map(({ primitive, box }, index) => ({
+      key: `${item.instance.id}:${index}`,
+      primitive,
+      layout: layoutTextBox(
+        { ...box, x: box.x + dx, y: box.y + dy },
+        textContent(primitive, item.instance.fields),
+        primitive.size,
+        primitive.anchor
+      )
+    }))
+  })
+)
+
 // Étiquettes texte
 
 /** Boîte d'une étiquette telle qu'affichée : aperçu de poignée, sinon décalage de déplacement. */
@@ -570,6 +590,7 @@ function onInstanceDown(id: string, event: PointerEvent): void {
     store.clearSelection()
     store.selection = [id]
   }
+  store.revealInspector()
   startMove(event)
 }
 
@@ -586,6 +607,7 @@ function onLabelDown(label: TextLabel, event: PointerEvent): void {
     store.clearSelection()
     store.selectedLabels = [label.id]
   }
+  store.revealInspector()
   startMove(event)
 }
 
@@ -605,6 +627,7 @@ function onWireDown(wireId: string, event: PointerEvent): void {
     store.clearSelection()
     store.selectedWires = [wireId]
   }
+  store.revealInspector()
   // Plusieurs éléments sélectionnés, ou copie : le glisser déplace tout ; un fil seul : son segment.
   if (
     event.altKey ||
@@ -766,6 +789,7 @@ function onPointerUp(event: PointerEvent): void {
       store.selectedLabels = current.additive
         ? [...new Set([...store.selectedLabels, ...texts])]
         : texts
+      if (store.hasSelection) store.revealInspector()
     }
   } else if (current.kind === 'wire-segment' || current.kind === 'wire-vertex') {
     if (!samePoints(current.original, current.preview)) {
@@ -1033,6 +1057,7 @@ const cursorClass = computed(() => {
               :cell-px="1"
               :stroke-base="profile.componentStroke"
               :fields="item.instance.fields"
+              upright-texts
             />
             <rect
               class="hit"
@@ -1040,6 +1065,27 @@ const cursorClass = computed(() => {
               :height="item.def.size.heightCells"
               fill="transparent"
             />
+          </g>
+
+          <g class="instance-texts">
+            <text
+              v-for="entry in uprightTexts"
+              :key="entry.key"
+              :font-size="entry.primitive.size"
+              :text-anchor="entry.primitive.anchor"
+              :fill="screenColor(entry.primitive.color)"
+              :font-weight="entry.primitive.bold ? 'bold' : undefined"
+              font-family="'Segoe UI', sans-serif"
+            >
+              <tspan
+                v-for="(line, l) in entry.layout.lines"
+                :key="l"
+                :x="entry.layout.x"
+                :y="line.y"
+              >
+                {{ line.text }}
+              </tspan>
+            </text>
           </g>
 
           <g class="labels">
@@ -1395,9 +1441,13 @@ const cursorClass = computed(() => {
   cursor: move;
 }
 
+.labels text,
+.instance-texts text {
+  pointer-events: none;
+}
+
 .labels text {
   fill: var(--paper-text);
-  pointer-events: none;
 }
 
 .text-label {

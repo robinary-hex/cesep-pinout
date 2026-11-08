@@ -182,7 +182,9 @@ export const componentMigrations: MigrationTable = {
     2: migrateComponentV2,
     3: migrateComponentV3,
     4: migrateComponentV4,
-    5: migrateComponentV5
+    5: migrateComponentV5,
+    // v6 → v7 : textes droits sur le montage par défaut.
+    6: (raw) => ({ textFollowsTransform: false, ...raw })
   }
 }
 
@@ -274,7 +276,9 @@ export const projectMigrations: MigrationTable = {
     6: (raw) => ({ ...raw, profile: completeProfile(raw['profile']) }),
     // Projet v7 → v8 : définitions embarquées migrées (boîtes de texte).
     7: migrateEmbeddedDefs,
-    8: migrateProjectV8
+    8: migrateProjectV8,
+    // Projet v9 → v10 : définitions embarquées migrées (textes droits).
+    9: migrateEmbeddedDefs
   }
 }
 
@@ -298,6 +302,8 @@ export const settingsMigrations: MigrationTable = {
     }),
     3: (raw) => ({ ...raw, theme: 'light' }),
     // v4 → v5 : police des étiquettes d'extrémité du profil par défaut.
-    4: (raw) => ({ ...raw, defaultProfile: completeProfile(raw['defaultProfile']) })
+    4: (raw) => ({ ...raw, defaultProfile: completeProfile(raw['defaultProfile']) }),
+    // v5 → v6 : ouverture automatique du panneau de propriétés.
+    5: (raw) => ({ ...raw, autoOpenInspector: true })
   }
 }

@@ -135,6 +135,16 @@ async function save(): Promise<void> {
               <Icon name="moon" :size="14" /> Sombre
             </label>
           </div>
+          <label class="check">
+            <input
+              type="checkbox"
+              :checked="draft.autoOpenInspector"
+              @change="
+                draft = { ...draft, autoOpenInspector: ($event.target as HTMLInputElement).checked }
+              "
+            />
+            <span>Ouvrir le panneau de propriétés du montage quand un élément est sélectionné</span>
+          </label>
         </section>
 
         <section class="block">

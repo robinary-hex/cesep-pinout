@@ -1,10 +1,17 @@
-import { layoutTextBox, type ComponentDefinition, type TextBoxLayout } from './component'
+import {
+  layoutTextBox,
+  type ComponentDefinition,
+  type TextBoxLayout,
+  type TextPrimitive
+} from './component'
+import type { Box } from './handles'
 import {
   rotateClockwise,
   rotateCounterClockwise,
   rotatedSize,
   type LocalPoint,
-  type Rotation
+  type Rotation,
+  QUARTERS_PER_CELL
 } from './grid'
 import type { ComponentInstance, Project, TextLabel } from './project'
 import { wireEndLabelBounds, wireEndLabelPlacement } from './wireEnds'
@@ -186,4 +193,34 @@ export function nextNumberedId(prefix: string, taken: Iterable<string>): string 
     const candidate = `${prefix}${n}`
     if (!used.has(candidate)) return candidate
   }
+}
+
+/**
+ * Boîtes des textes d'un composant posé, en cellules du montage, là où la transformation les
+ * place : des rectangles alignés sur la grille, puisque les rotations sont des quarts de tour.
+ * Sert aux textes qui restent droits quelle que soit l'orientation du composant.
+ */
+export function instanceTextBoxes(
+  instance: ComponentInstance,
+  def: ComponentDefinition
+): { primitive: TextPrimitive; box: Box }[] {
+  if (def.visual.kind !== 'drawing') return []
+  const matrix = instanceMatrix(instance, def)
+  return def.visual.primitives.flatMap((primitive) => {
+    if (primitive.kind !== 'text') return []
+    const { x, y, w, h } = primitive
+    const corners = [
+      [x, y],
+      [x + w, y],
+      [x, y + h],
+      [x + w, y + h]
+    ].map(([qx = 0, qy = 0]) =>
+      applyMatrix(matrix, { x: qx / QUARTERS_PER_CELL, y: qy / QUARTERS_PER_CELL })
+    )
+    const xs = corners.map((corner) => corner.x)
+    const ys = corners.map((corner) => corner.y)
+    const x1 = Math.min(...xs)
+    const y1 = Math.min(...ys)
+    return [{ primitive, box: { x: x1, y: y1, w: Math.max(...xs) - x1, h: Math.max(...ys) - y1 } }]
+  })
 }

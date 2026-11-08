@@ -55,6 +55,7 @@ export const useLibraryStore = defineStore('library', () => {
   )
 
   const theme = computed<Theme>(() => settings.value?.theme ?? 'light')
+  const autoOpenInspector = computed(() => settings.value?.autoOpenInspector ?? true)
 
   const filtered = computed(() => {
     const needle = search.value.trim().toLowerCase()
@@ -179,6 +180,7 @@ export const useLibraryStore = defineStore('library', () => {
     exportDefaults,
     autosaveSeconds,
     theme,
+    autoOpenInspector,
     loading,
     problem,
     search,

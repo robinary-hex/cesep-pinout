@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 9,
+  "name": "Moteur tourné",
+  "profile": {
+    "name": "Standard",
+    "cellPx": 20,
+    "wireWidth": 0.15,
+    "cornerRadius": 0.4,
+    "componentStroke": 0.1,
+    "junctionScale": 2,
+    "junctionColor": "wire",
+    "labelFont": { "family": "Segoe UI", "size": 11 },
+    "endLabelFont": { "family": "Segoe UI", "size": 14 }
+  },
+  "components": [
+    {
+      "id": "c1",
+      "defId": "motor",
+      "x": 0,
+      "y": 0,
+      "rotation": 90,
+      "mirror": true,
+      "label": "M1",
+      "fields": {}
+    }
+  ],
+  "wires": [],
+  "crossingOverrides": [],
+  "labels": [
+    {
+      "id": "t1",
+      "x": 0,
+      "y": 5,
+      "w": 4,
+      "h": 1,
+      "anchor": "middle",
+      "text": "Pompe",
+      "size": 11,
+      "bold": false
+    }
+  ],
+  "embeddedDefs": {
+    "motor": {
+      "schemaVersion": 6,
+      "id": "motor",
+      "name": "Moteur",
+      "category": "Divers",
+      "description": "",
+      "size": { "widthCells": 4, "heightCells": 2 },
+      "visual": {
+        "kind": "drawing",
+        "primitives": [
+          {
+            "kind": "text",
+            "x": 4,
+            "y": 2,
+            "w": 8,
+            "h": 4,
+            "text": "M",
+            "size": 1,
+            "anchor": "middle",
+            "color": "#000000",
+            "variable": false,
+            "defaultValue": "",
+            "unit": "",
+            "bold": true
+          }
+        ]
+      },
+      "pins": [
+        { "id": "a", "name": "1", "kind": "io", "x": 0, "y": 1 },
+        { "id": "b", "name": "2", "kind": "io", "x": 4, "y": 1 }
+      ]
+    }
+  }
+}

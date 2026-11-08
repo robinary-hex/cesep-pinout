@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { hexColorSchema } from './color'
 import { DEFAULT_PROFILE, styleProfileSchema } from './profile'
 
-export const SETTINGS_SCHEMA_VERSION = 5
+export const SETTINGS_SCHEMA_VERSION = 6
 
 export const paletteColorSchema = z.object({
   name: z.string().min(1),
@@ -69,7 +69,9 @@ export const settingsSchema = z.object({
   export: exportSettingsSchema,
   /** Intervalle de la copie de secours, en secondes. */
   autosaveSeconds: z.number().int().positive(),
-  theme: themeSchema
+  theme: themeSchema,
+  /** Le panneau de propriétés du montage s'ouvre quand on sélectionne un élément. */
+  autoOpenInspector: z.boolean()
 })
 export type Settings = z.infer<typeof settingsSchema>
 
@@ -83,5 +85,6 @@ export const DEFAULT_SETTINGS: Settings = {
   recentFiles: [],
   export: { ...DEFAULT_EXPORT },
   autosaveSeconds: DEFAULT_AUTOSAVE_SECONDS,
-  theme: 'light'
+  theme: 'light',
+  autoOpenInspector: true
 }

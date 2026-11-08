@@ -160,7 +160,9 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   // Commandes du composant
 
   function setMeta(
-    patch: Partial<Pick<ComponentDefinition, 'name' | 'category' | 'description'>>
+    patch: Partial<
+      Pick<ComponentDefinition, 'name' | 'category' | 'description' | 'textFollowsTransform'>
+    >
   ): void {
     apply('Modifier les propriétés', (draft) => {
       Object.assign(draft, patch)

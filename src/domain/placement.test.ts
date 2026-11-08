@@ -10,7 +10,8 @@ import {
   nextNumberedId,
   projectBounds,
   rectsIntersect,
-  rotatedInstance
+  rotatedInstance,
+  instanceTextBoxes
 } from './placement'
 import { DEFAULT_PROFILE } from './profile'
 import { absolutePinPosition, createEmptyProject, type ComponentInstance } from './project'
@@ -139,5 +140,51 @@ describe('repères et identifiants', () => {
   it('numérote les identifiants', () => {
     expect(nextNumberedId('c', ['c1', 'c2'])).toBe('c3')
     expect(nextNumberedId('c', [])).toBe('c1')
+  })
+})
+
+describe('textes droits des composants posés', () => {
+  it('donne la boîte d’un texte dans le repère du montage, rotation et miroir compris', () => {
+    const def = createEmptyComponent('motor', 'Moteur')
+    def.visual = {
+      kind: 'drawing',
+      primitives: [
+        {
+          kind: 'text',
+          x: 4,
+          y: 2,
+          w: 8,
+          h: 4,
+          text: 'M',
+          size: 1,
+          anchor: 'middle',
+          color: '#000000',
+          variable: false,
+          defaultValue: '',
+          unit: '',
+          bold: true
+        }
+      ]
+    }
+    const base = { id: 'c1', defId: 'motor', x: 10, y: 5, label: '', fields: {} }
+    expect(instanceTextBoxes({ ...base, rotation: 0, mirror: false }, def)[0]?.box).toEqual({
+      x: 11,
+      y: 5.5,
+      w: 2,
+      h: 1
+    })
+    // Quart de tour : la boîte 2 × 1 devient 1 × 2, toujours alignée sur la grille.
+    expect(instanceTextBoxes({ ...base, rotation: 90, mirror: false }, def)[0]?.box).toEqual({
+      x: 10.5,
+      y: 6,
+      w: 1,
+      h: 2
+    })
+    expect(instanceTextBoxes({ ...base, rotation: 0, mirror: true }, def)[0]?.box).toEqual({
+      x: 11,
+      y: 5.5,
+      w: 2,
+      h: 1
+    })
   })
 })

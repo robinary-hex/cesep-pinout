@@ -508,6 +508,14 @@ function setClosed(event: Event): void {
             @change="store.setMeta({ description: inputValue($event) })"
           />
         </label>
+        <label class="check">
+          <input
+            type="checkbox"
+            :checked="doc.textFollowsTransform"
+            @change="store.setMeta({ textFollowsTransform: checked($event) })"
+          />
+          <span>Sur le montage, les textes tournent et se reflètent avec le composant</span>
+        </label>
         <div class="row">
           <label class="field">
             <span>Largeur (cellules)</span>

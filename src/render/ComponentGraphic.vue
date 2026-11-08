@@ -36,8 +36,17 @@ const props = withDefaults(
     moving?: { indexes: readonly number[]; dx: number; dy: number } | null
     /** Forme remplacée pendant une modification par poignée. */
     preview?: { index: number; primitive: Primitive } | null
+    /** Montage : les textes qui restent droits sont dessinés ailleurs, hors de la transformation. */
+    uprightTexts?: boolean
   }>(),
-  { strokeBase: 0.1, fields: undefined, interactive: false, moving: null, preview: null }
+  {
+    strokeBase: 0.1,
+    fields: undefined,
+    interactive: false,
+    moving: null,
+    preview: null,
+    uprightTexts: false
+  }
 )
 
 const emit = defineEmits<{ primitiveDown: [index: number, event: PointerEvent] }>()
@@ -49,7 +58,9 @@ const widthPx = computed(() => props.def.size.widthCells * props.cellPx)
 const heightPx = computed(() => props.def.size.heightCells * props.cellPx)
 const image = computed(() => (props.def.visual.kind === 'png' ? props.def.visual : null))
 const primitives = computed(() => {
-  const list = props.def.visual.kind === 'drawing' ? props.def.visual.primitives : []
+  const all = props.def.visual.kind === 'drawing' ? props.def.visual.primitives : []
+  const hideTexts = props.uprightTexts && !props.def.textFollowsTransform
+  const list = hideTexts ? all.filter((primitive) => primitive.kind !== 'text') : all
   const preview = props.preview
   return preview
     ? list.map((primitive, i) => (i === preview.index ? preview.primitive : primitive))

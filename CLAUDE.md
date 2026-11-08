@@ -40,7 +40,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   verticalement, alignées à gauche, au centre ou à droite selon `anchor` (`layoutTextBox`, ligne de base
   placée pour centrer les capitales). Les étiquettes texte du montage suivent le même modèle,
   en cellules (`x`, `y`, `w`, `h`, `anchor`), avec poignées sur le canevas et tailles en multiples
-  de la police des repères (×1 à ×3) ; l'`unit` éventuelle suit toujours la valeur (espace
+  de la police des repères (×1 à ×3). Sur le montage, les textes d'un composant restent droits et lisibles
+  quelle que soit l'orientation : ils sont dessinés hors de la transformation, dans la boîte que
+  celle-ci leur donne (`instanceTextBoxes`), sauf si la définition demande qu'ils la suivent
+  (`textFollowsTransform`, case dans l'éditeur de composants) ; l'`unit` éventuelle suit toujours la valeur (espace
   insécable).
 - PNG de composant : 80 px par cellule (4× la cellule d'affichage de 20 px).
 - Orientation d'une instance : miroir local puis rotation horaire (`transformLocalPoint`,
@@ -60,7 +63,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     (Maj pour premier/arrière-plan) = ordre des fils, 0 ajuster au contenu, 1 zoom 100 %,
     molette = zoom, Espace + glisser ou bouton du milieu = déplacer la vue, E étiquette texte,
     Alt+clic sur un croisement = inverser l'ordre à cet endroit seulement, I = panneau de
-    propriétés (replié par défaut), clic droit = menu contextuel (composant, fil, étiquette ou
+    propriétés (replié par défaut, ouvert au clic sur un élément si le paramètre
+    `autoOpenInspector` est actif), clic droit = menu contextuel (composant, fil, étiquette ou
     vide ; termine un fil en cours, arrête une pose), double-clic = valeur d'un composant ou texte
     d'une étiquette. Pose d'un composant : clic dans le panneau puis clic sur le montage, ou
     glisser-déposer ; une pose = un composant (la pose s'arrête, le composant posé est sélectionné).
@@ -137,7 +141,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     revient à la sélection dès qu'un texte est posé, dans les deux éditeurs.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 6, projet 9, paramètres 5
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 7, projet 10, paramètres 6
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

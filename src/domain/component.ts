@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { hexColorSchema } from './color'
 import { isOnBorder, PNG_PX_PER_CELL, QUARTERS_PER_CELL, sizeSchema, type Size } from './grid'
 
-export const COMPONENT_SCHEMA_VERSION = 6
+export const COMPONENT_SCHEMA_VERSION = 7
 
 export const pinKindSchema = z.enum(['in', 'out', 'io', 'power'])
 export type PinKind = z.infer<typeof pinKindSchema>
@@ -164,7 +164,9 @@ const componentShape = z.object({
   description: z.string(),
   size: sizeSchema,
   visual: visualSchema,
-  pins: z.array(pinSchema)
+  pins: z.array(pinSchema),
+  /** Sur le montage, les textes tournent et se reflètent avec le composant ; sinon ils restent droits. */
+  textFollowsTransform: z.boolean()
 })
 export type ComponentDefinition = z.infer<typeof componentShape>
 
@@ -179,7 +181,8 @@ export function createEmptyComponent(id: string, name: string): ComponentDefinit
     description: '',
     size: { widthCells: 4, heightCells: 2 },
     visual: { kind: 'drawing', primitives: [] },
-    pins: []
+    pins: [],
+    textFollowsTransform: false
   }
 }
 
