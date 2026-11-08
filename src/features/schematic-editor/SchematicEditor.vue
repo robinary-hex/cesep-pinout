@@ -4,12 +4,7 @@ import { FileFormatError } from '@/domain'
 import ExportDialog from '@/features/export/ExportDialog.vue'
 import { useLibraryStore } from '@/features/library/store'
 import { clearAutosave } from '@/io/autosave'
-import {
-  chooseProjectToOpen,
-  chooseProjectToSave,
-  readProject,
-  writeProject
-} from '@/io/projectFiles'
+import { chooseProjectToOpen, chooseProjectToSave, writeProject } from '@/io/projectFiles'
 import { openModals } from '@/ui/modalState'
 import ProfileDialog from './ProfileDialog.vue'
 import SchematicCanvas from './SchematicCanvas.vue'
@@ -48,29 +43,16 @@ async function save(as = false): Promise<void> {
   }
 }
 
-async function openPath(path: string): Promise<void> {
-  try {
-    const project = await readProject(path)
-    store.openProject(project, path)
-    store.fitToContent()
-    store.status = `Ouvert : ${path}`
-    await library.addRecentFile(path)
-  } catch (error) {
-    store.status = `Ouverture impossible : ${describe(error)}`
-    if (library.recentFiles.includes(path)) await library.removeRecentFile(path)
-  }
-}
-
 async function open(): Promise<void> {
   if (!store.confirmDiscard()) return
   const path = await chooseProjectToOpen()
   if (path === null) return
-  await openPath(path)
+  await store.openPath(path)
 }
 
 async function openRecent(path: string): Promise<void> {
   if (!store.confirmDiscard()) return
-  await openPath(path)
+  await store.openPath(path)
 }
 
 function createNew(): void {
@@ -178,6 +160,9 @@ function onKeyDown(event: KeyboardEvent): void {
       break
     case 'w':
       store.startWireTool()
+      break
+    case 'e':
+      store.startTextTool()
       break
     case 'r':
       store.rotate(event.shiftKey ? 'ccw' : 'cw')

@@ -1,5 +1,6 @@
 import type { ComponentDefinition, Primitive } from './component'
 import { computeConnectivity, projectPins, type FreeEnd } from './connectivity'
+import { crossingPieces } from './crossings'
 import { QUARTERS_PER_CELL, type GridPoint } from './grid'
 import { instanceBounds, instanceMatrix, matrixToSvg, projectBounds, unionRects } from './placement'
 import type { Project } from './project'
@@ -191,6 +192,37 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
     }
   }
   parts.push(`<g class="wires">${wireParts.join('')}</g>`)
+
+  // Croisements : le fil du dessus est redessiné sur une demi-cellule de part et d'autre, avec un
+  // liseré couleur de fond qui rend l'ordre lisible même entre deux fils de même couleur.
+  const colorOfWire = new Map(project.wires.map((wire) => [wire.id, wire.color]))
+  const haloColor =
+    options.background === 'transparent'
+      ? null
+      : options.background === 'white'
+        ? '#ffffff'
+        : options.background
+  const haloWidth = profile.wireWidth * 2.2
+  const crossingParts = crossingPieces(project.wires, project.crossingOverrides).map((piece) => {
+    const [x, y] = piece.point
+    const x1 = piece.horizontal ? x - 0.5 : x
+    const x2 = piece.horizontal ? x + 0.5 : x
+    const y1 = piece.horizontal ? y : y - 0.5
+    const y2 = piece.horizontal ? y : y + 0.5
+    const halo = haloColor
+      ? `<line ${attrs({ x1, y1, x2, y2, stroke: haloColor, 'stroke-width': haloWidth })}/>`
+      : ''
+    const top = `<line ${attrs({
+      x1,
+      y1,
+      x2,
+      y2,
+      stroke: colorOfWire.get(piece.topWireId) ?? '#000000',
+      'stroke-width': profile.wireWidth
+    })}/>`
+    return halo + top
+  })
+  if (crossingParts.length > 0) parts.push(`<g class="crossings">${crossingParts.join('')}</g>`)
 
   const colorById = new Map(project.wires.map((wire) => [wire.id, wire.color]))
   const radius = (profile.wireWidth * profile.junctionScale) / 2

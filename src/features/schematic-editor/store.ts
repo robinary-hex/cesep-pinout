@@ -3,15 +3,20 @@ import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 import {
   computeConnectivity,
+  computeCrossings,
   createEmptyProject,
+  crossingPieces,
   flippedInstance,
+  nearestCrossing,
   nextLabel,
   nextNumberedId,
   normalizePoints,
   projectBounds,
   projectPins,
+  pruneCrossingOverrides,
   rotatedInstance,
   simplifyPoints,
+  toggledOverrides,
   translatePoints,
   wireGeometryProblem,
   type ComponentDefinition,
@@ -23,12 +28,14 @@ import {
   type RotateDirection,
   type Rotation,
   type StyleProfile,
+  type TextLabel,
   type Wire
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
+import { readProject } from '@/io/projectFiles'
 import { History } from '@/state/history'
 
-export type SchematicTool = 'select' | 'place' | 'wire'
+export type SchematicTool = 'select' | 'place' | 'wire' | 'text'
 export type StackMove = 'up' | 'down' | 'top' | 'bottom'
 
 export interface Placement {
@@ -53,6 +60,7 @@ export interface ClipboardItem {
 export interface ClipboardData {
   items: ClipboardItem[]
   wires: Wire[]
+  labels: TextLabel[]
 }
 
 export interface PlacedInstance {
@@ -68,6 +76,7 @@ export interface WireDrawing {
 const MIN_ZOOM = 0.2
 const MAX_ZOOM = 6
 const FIT_MARGIN_CELLS = 2
+const CROSSING_PICK_CELLS = 0.6
 const DEFAULT_VIEW: ViewState = { zoom: 1, panX: 80, panY: 80 }
 
 /**
@@ -88,14 +97,17 @@ export const useSchematicStore = defineStore('schematic', () => {
   const selection = ref<string[]>([])
   /** Identifiants des fils sélectionnés. */
   const selectedWires = ref<string[]>([])
+  /** Identifiants des étiquettes sélectionnées. */
+  const selectedLabels = ref<string[]>([])
   const tool = ref<SchematicTool>('select')
   const placement = shallowRef<Placement | null>(null)
   const drawing = shallowRef<WireDrawing | null>(null)
   const currentColor = ref(library.defaultWireColor)
-  const clipboard = shallowRef<ClipboardData>({ items: [], wires: [] })
+  const clipboard = shallowRef<ClipboardData>({ items: [], wires: [], labels: [] })
   const view = ref<ViewState>({ ...DEFAULT_VIEW })
   const viewport = ref({ width: 1200, height: 800 })
   const showPins = ref(true)
+  const showUnconnected = ref(true)
   const panKeyHeld = ref(false)
   const shiftHeld = ref(false)
   const hoverWireId = ref<string | null>(null)
@@ -117,10 +129,17 @@ export const useSchematicStore = defineStore('schematic', () => {
   const sortedWires = computed(() => [...doc.value.wires].sort((a, b) => a.stack - b.stack))
   const pinRefs = computed(() => projectPins(doc.value))
   const connectivity = computed(() => computeConnectivity(doc.value.wires, pinRefs.value))
+  const crossings = computed(() => computeCrossings(doc.value.wires))
+  const pieces = computed(() => crossingPieces(doc.value.wires, doc.value.crossingOverrides))
   const hoverNet = computed(() =>
     hoverWireId.value === null ? null : (connectivity.value.wireNet.get(hoverWireId.value) ?? null)
   )
-  const hasSelection = computed(() => selection.value.length > 0 || selectedWires.value.length > 0)
+  const hasSelection = computed(
+    () =>
+      selection.value.length > 0 ||
+      selectedWires.value.length > 0 ||
+      selectedLabels.value.length > 0
+  )
 
   function sync(): void {
     doc.value = history.value
@@ -134,10 +153,21 @@ export const useSchematicStore = defineStore('schematic', () => {
     if (selectedWires.value.some((id) => !wireIds.has(id))) {
       selectedWires.value = selectedWires.value.filter((id) => wireIds.has(id))
     }
+    const labelIds = new Set(doc.value.labels.map((label) => label.id))
+    if (selectedLabels.value.some((id) => !labelIds.has(id))) {
+      selectedLabels.value = selectedLabels.value.filter((id) => labelIds.has(id))
+    }
   }
 
+  /** Toute commande passe ici ; les exceptions de croisement orphelines sont élaguées au passage. */
   function apply(label: string, recipe: (draft: Draft<Project>) => void): boolean {
-    const changed = history.apply(label, recipe)
+    const changed = history.apply(label, (draft) => {
+      recipe(draft)
+      const pruned = pruneCrossingOverrides(draft.crossingOverrides, computeCrossings(draft.wires))
+      if (pruned.length !== draft.crossingOverrides.length) {
+        draft.crossingOverrides = castDraft(pruned)
+      }
+    })
     if (changed) sync()
     return changed
   }
@@ -159,18 +189,23 @@ export const useSchematicStore = defineStore('schematic', () => {
   function clearSelection(): void {
     selection.value = []
     selectedWires.value = []
+    selectedLabels.value = []
   }
 
   // Fichier
+
+  function resetEditing(): void {
+    clearSelection()
+    placement.value = null
+    drawing.value = null
+    tool.value = 'select'
+  }
 
   function newProject(): void {
     history.reset(createEmptyProject('Nouveau montage', library.defaultProfile))
     savedDoc.value = null
     filePath.value = null
-    clearSelection()
-    placement.value = null
-    drawing.value = null
-    tool.value = 'select'
+    resetEditing()
     view.value = { ...DEFAULT_VIEW }
     status.value = ''
     sync()
@@ -180,11 +215,34 @@ export const useSchematicStore = defineStore('schematic', () => {
     history.reset(project)
     savedDoc.value = project
     filePath.value = path
-    clearSelection()
-    placement.value = null
-    drawing.value = null
-    tool.value = 'select'
+    resetEditing()
     status.value = ''
+    sync()
+  }
+
+  /** Ouvre un fichier de projet par son chemin ; vrai si l'ouverture a réussi. */
+  async function openPath(path: string): Promise<boolean> {
+    try {
+      const project = await readProject(path)
+      openProject(project, path)
+      fitToContent()
+      status.value = `Ouvert : ${path}`
+      await library.addRecentFile(path)
+      return true
+    } catch (error) {
+      status.value = `Ouverture impossible : ${error instanceof Error ? error.message : String(error)}`
+      if (library.recentFiles.includes(path)) await library.removeRecentFile(path)
+      return false
+    }
+  }
+
+  /** Reprend une copie de secours : le projet s'ouvre comme non enregistré. */
+  function restoreProject(project: Project, originalPath: string | null): void {
+    history.reset(project)
+    savedDoc.value = null
+    filePath.value = originalPath
+    resetEditing()
+    status.value = 'Copie de secours récupérée : pense à enregistrer.'
     sync()
   }
 
@@ -212,17 +270,11 @@ export const useSchematicStore = defineStore('schematic', () => {
     })
   }
 
-  /** Reprend une copie de secours : le projet s'ouvre comme non enregistré. */
-  function restoreProject(project: Project, originalPath: string | null): void {
-    history.reset(project)
-    savedDoc.value = null
-    filePath.value = originalPath
-    clearSelection()
-    placement.value = null
-    drawing.value = null
-    tool.value = 'select'
-    status.value = 'Copie de secours récupérée : pense à enregistrer.'
-    sync()
+  /** Remplace la définition embarquée par celle de la bibliothèque (même identifiant). */
+  function updateDefinition(def: ComponentDefinition): void {
+    apply(`Mettre à jour ${def.name}`, (draft) => {
+      draft.embeddedDefs[def.id] = castDraft(structuredClone(def))
+    })
   }
 
   // Outils
@@ -253,6 +305,15 @@ export const useSchematicStore = defineStore('schematic', () => {
     clearSelection()
     status.value =
       'Fil : clic sur une broche ou une intersection pour partir, clic pour chaque coude, Maj inverse le L, double-clic ou Entrée pour finir, Échap annule.'
+  }
+
+  function startTextTool(): void {
+    tool.value = 'text'
+    placement.value = null
+    drawing.value = null
+    clearSelection()
+    status.value =
+      'Texte : clic pour poser une étiquette, puis modifie-la dans le panneau de droite.'
   }
 
   function probe(current: Placement): ComponentInstance {
@@ -310,6 +371,37 @@ export const useSchematicStore = defineStore('schematic', () => {
     })
     status.value = `${def.name} posé${label ? ` (${label})` : ''}. Échap pour arrêter.`
     return id
+  }
+
+  // Étiquettes texte
+
+  function addLabel(x: number, y: number): string {
+    const id = nextNumberedId(
+      't',
+      doc.value.labels.map((label) => label.id)
+    )
+    const size = doc.value.profile.labelFont.size
+    apply('Ajouter une étiquette', (draft) => {
+      draft.labels.push({ id, x, y, text: 'Texte', size })
+    })
+    selection.value = []
+    selectedWires.value = []
+    selectedLabels.value = [id]
+    return id
+  }
+
+  function setLabelText(id: string, text: string): void {
+    apply('Modifier l’étiquette', (draft) => {
+      const label = draft.labels.find((candidate) => candidate.id === id)
+      if (label) label.text = text
+    })
+  }
+
+  function setLabelSize(id: string, size: number): void {
+    apply('Taille de l’étiquette', (draft) => {
+      const label = draft.labels.find((candidate) => candidate.id === id)
+      if (label) label.size = size
+    })
   }
 
   // Tracé des fils
@@ -451,11 +543,28 @@ export const useSchematicStore = defineStore('schematic', () => {
     })
   }
 
+  /** Alt+clic près d'un croisement : l'autre fil passe au-dessus à cet endroit seulement. */
+  function toggleCrossing(x: number, y: number): boolean {
+    const crossing = nearestCrossing(crossings.value, x, y, CROSSING_PICK_CELLS)
+    if (!crossing) return false
+    const stacks = new Map(doc.value.wires.map((wire) => [wire.id, wire.stack]))
+    const next = toggledOverrides(
+      doc.value.crossingOverrides,
+      crossing,
+      (id) => stacks.get(id) ?? 0
+    )
+    apply('Ordre à ce croisement', (draft) => {
+      draft.crossingOverrides = castDraft(next)
+    })
+    return true
+  }
+
   // Sélection
 
   function selectAll(): void {
     selection.value = doc.value.components.map((instance) => instance.id)
     selectedWires.value = doc.value.wires.map((wire) => wire.id)
+    selectedLabels.value = doc.value.labels.map((label) => label.id)
   }
 
   function moveInstances(ids: readonly string[], dx: number, dy: number): void {
@@ -470,12 +579,12 @@ export const useSchematicStore = defineStore('schematic', () => {
     })
   }
 
-  /** Déplace composants et fils sélectionnés d'un même vecteur, en une commande. */
+  /** Déplace composants, fils et étiquettes sélectionnés d'un même vecteur, en une commande. */
   function moveSelection(dx: number, dy: number): void {
-    if (dx === 0 && dy === 0) return
+    if ((dx === 0 && dy === 0) || !hasSelection.value) return
     const instanceIds = selection.value
     const wireIds = selectedWires.value
-    if (instanceIds.length === 0 && wireIds.length === 0) return
+    const labelIds = selectedLabels.value
     apply('Déplacer la sélection', (draft) => {
       for (const instance of draft.components) {
         if (instanceIds.includes(instance.id)) {
@@ -485,6 +594,12 @@ export const useSchematicStore = defineStore('schematic', () => {
       }
       for (const wire of draft.wires) {
         if (wireIds.includes(wire.id)) wire.points = castDraft(translatePoints(wire.points, dx, dy))
+      }
+      for (const label of draft.labels) {
+        if (labelIds.includes(label.id)) {
+          label.x += dx
+          label.y += dy
+        }
       }
     })
   }
@@ -534,12 +649,14 @@ export const useSchematicStore = defineStore('schematic', () => {
   }
 
   function removeSelection(): void {
+    if (!hasSelection.value) return
     const instanceIds = selection.value
     const wireIds = selectedWires.value
-    if (instanceIds.length === 0 && wireIds.length === 0) return
+    const labelIds = selectedLabels.value
     apply('Supprimer la sélection', (draft) => {
       draft.components = draft.components.filter((instance) => !instanceIds.includes(instance.id))
       draft.wires = draft.wires.filter((wire) => !wireIds.includes(wire.id))
+      draft.labels = draft.labels.filter((label) => !labelIds.includes(label.id))
     })
     clearSelection()
   }
@@ -550,12 +667,13 @@ export const useSchematicStore = defineStore('schematic', () => {
         const def = doc.value.embeddedDefs[instance.defId]
         return def ? [{ instance, def }] : []
       }),
-      wires: doc.value.wires.filter((wire) => selectedWires.value.includes(wire.id))
+      wires: doc.value.wires.filter((wire) => selectedWires.value.includes(wire.id)),
+      labels: doc.value.labels.filter((label) => selectedLabels.value.includes(label.id))
     }
   }
 
   function insertCopies(data: ClipboardData, dx: number, dy: number, label: string): void {
-    if (data.items.length === 0 && data.wires.length === 0) return
+    if (data.items.length === 0 && data.wires.length === 0 && data.labels.length === 0) return
     const instanceIds = doc.value.components.map((instance) => instance.id)
     const labels = doc.value.components.map((instance) => instance.label)
     const copies: ClipboardItem[] = []
@@ -583,6 +701,12 @@ export const useSchematicStore = defineStore('schematic', () => {
       const id = nextNumberedId('w', [...wireIds, ...wireCopies.map((copy) => copy.id)])
       wireCopies.push({ ...wire, id, stack: stack++, points: translatePoints(wire.points, dx, dy) })
     }
+    const labelIds = doc.value.labels.map((entry) => entry.id)
+    const labelCopies: TextLabel[] = []
+    for (const entry of data.labels) {
+      const id = nextNumberedId('t', [...labelIds, ...labelCopies.map((copy) => copy.id)])
+      labelCopies.push({ ...entry, id, x: entry.x + dx, y: entry.y + dy })
+    }
     apply(label, (draft) => {
       for (const copy of copies) {
         if (!Object.hasOwn(draft.embeddedDefs, copy.def.id)) {
@@ -591,9 +715,11 @@ export const useSchematicStore = defineStore('schematic', () => {
         draft.components.push(castDraft(copy.instance))
       }
       for (const wire of wireCopies) draft.wires.push(castDraft(wire))
+      for (const entry of labelCopies) draft.labels.push(castDraft(entry))
     })
     selection.value = copies.map((copy) => copy.instance.id)
     selectedWires.value = wireCopies.map((wire) => wire.id)
+    selectedLabels.value = labelCopies.map((entry) => entry.id)
   }
 
   function duplicateSelection(): void {
@@ -602,9 +728,9 @@ export const useSchematicStore = defineStore('schematic', () => {
 
   function copySelection(): void {
     const data = selectionData()
-    if (data.items.length === 0 && data.wires.length === 0) return
+    if (data.items.length === 0 && data.wires.length === 0 && data.labels.length === 0) return
     clipboard.value = data
-    status.value = `${data.items.length} composant(s) et ${data.wires.length} fil(s) copié(s).`
+    status.value = `${data.items.length} composant(s), ${data.wires.length} fil(s) et ${data.labels.length} étiquette(s) copié(s).`
   }
 
   function pasteClipboard(): void {
@@ -694,6 +820,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     filePath,
     selection,
     selectedWires,
+    selectedLabels,
     tool,
     placement,
     drawing,
@@ -701,6 +828,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     view,
     viewport,
     showPins,
+    showUnconnected,
     panKeyHeld,
     shiftHeld,
     hoverWireId,
@@ -714,24 +842,32 @@ export const useSchematicStore = defineStore('schematic', () => {
     sortedWires,
     pinRefs,
     connectivity,
+    crossings,
+    pieces,
     hoverNet,
     hasSelection,
     undo,
     redo,
     newProject,
     openProject,
+    openPath,
+    restoreProject,
     markSaved,
     confirmDiscard,
     setProjectName,
     setProfile,
-    restoreProject,
+    updateDefinition,
     selectTool,
     startPlacing,
     stopPlacing,
     startWireTool,
+    startTextTool,
     rotatePlacement,
     flipPlacement,
     placeAt,
+    addLabel,
+    setLabelText,
+    setLabelSize,
     addWire,
     beginWire,
     appendWirePoints,
@@ -744,6 +880,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     setWireFreeEnds,
     removeWires,
     reorderWires,
+    toggleCrossing,
     clearSelection,
     selectAll,
     moveInstances,

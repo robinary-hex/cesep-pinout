@@ -12,6 +12,7 @@ import {
   rectsIntersect,
   rotatedSize,
   routeL,
+  textLabelBounds,
   translatePoints,
   wireIntersectsRect,
   wirePathData,
@@ -21,6 +22,7 @@ import {
   type LocalPoint,
   type PinKind,
   type PinRef,
+  type TextLabel,
   type Wire
 } from '@/domain'
 import ComponentGraphic from '@/render/ComponentGraphic.vue'
@@ -28,8 +30,9 @@ import { useSchematicStore, type PlacedInstance } from './store'
 
 // Canevas infini du montage. Tout le contenu est dessiné en unités de cellule dans un groupe
 // mis à l'échelle (zoom) et translaté (pan) ; seule la grille est calculée en pixels d'écran.
-// Ordre d'empilement : grille, fils, points de jonction, composants, repères, broches,
-// surcouches de sélection et d'édition, fantôme de pose, tracé en cours, rectangle de sélection.
+// Ordre d'empilement : grille, fils, croisements (fil du dessus avec liseré), points de jonction,
+// composants, repères, étiquettes, broches, surcouches de sélection et d'édition, fantôme de pose,
+// tracé en cours, rectangle de sélection.
 
 const store = useSchematicStore()
 const host = ref<HTMLDivElement | null>(null)
@@ -53,7 +56,15 @@ const cornerRadius = computed(() => profile.value.cornerRadius)
 
 type Drag =
   | { kind: 'pan'; lastX: number; lastY: number }
-  | { kind: 'move'; ids: string[]; wireIds: string[]; start: LocalPoint; dx: number; dy: number }
+  | {
+      kind: 'move'
+      ids: string[]
+      wireIds: string[]
+      labelIds: string[]
+      start: LocalPoint
+      dx: number
+      dy: number
+    }
   | { kind: 'band'; start: LocalPoint; current: LocalPoint; additive: boolean }
   | {
       kind: 'wire-segment'
@@ -151,10 +162,11 @@ const gridLines = computed<{ xs: GridLine[]; ys: GridLine[] }>(() => {
   return { xs, ys }
 })
 
-// Instances
+// Déplacement en cours
 
 const selectedSet = computed(() => new Set(store.selection))
 const selectedWireSet = computed(() => new Set(store.selectedWires))
+const selectedLabelSet = computed(() => new Set(store.selectedLabels))
 
 const moveOffset = computed(() => {
   const current = drag.value
@@ -162,6 +174,7 @@ const moveOffset = computed(() => {
     ? {
         ids: new Set(current.ids),
         wireIds: new Set(current.wireIds),
+        labelIds: new Set(current.labelIds),
         dx: current.dx,
         dy: current.dy
       }
@@ -172,6 +185,13 @@ function offsetOf(id: string): { dx: number; dy: number } {
   const offset = moveOffset.value
   return offset && offset.ids.has(id) ? { dx: offset.dx, dy: offset.dy } : { dx: 0, dy: 0 }
 }
+
+function labelOffsetOf(id: string): { dx: number; dy: number } {
+  const offset = moveOffset.value
+  return offset && offset.labelIds.has(id) ? { dx: offset.dx, dy: offset.dy } : { dx: 0, dy: 0 }
+}
+
+// Instances
 
 function transformOf(item: PlacedInstance): string {
   const matrix = instanceMatrix(item.instance, item.def)
@@ -192,22 +212,42 @@ const selectedBoxes = computed(() =>
 )
 
 const pins = computed(() => {
-  if (!store.showPins) return []
+  if (!store.showPins && !store.showUnconnected) return []
+  const unconnected = store.connectivity.unconnectedPinKeys
   return store.placed.flatMap((item) => {
     const { dx, dy } = offsetOf(item.instance.id)
     return item.def.pins.map((pin) => {
       const point = absolutePinPosition(item.instance, item.def, pin)
+      const key = `${item.instance.id}:${pin.id}`
       return {
-        key: `${item.instance.id}:${pin.id}`,
+        key,
         x: point.x + dx,
         y: point.y + dy,
-        kind: pin.kind
+        kind: pin.kind,
+        unconnected: unconnected.has(key)
       }
     })
   })
 })
 
 const labelFontCells = computed(() => profile.value.labelFont.size / profile.value.cellPx)
+
+// Étiquettes texte
+
+const labels = computed(() =>
+  store.doc.labels.map((label) => {
+    const { dx, dy } = labelOffsetOf(label.id)
+    const bounds = textLabelBounds(label, profile.value.cellPx)
+    return {
+      label,
+      x: label.x + dx,
+      y: label.y + dy,
+      fontCells: label.size / profile.value.cellPx,
+      box: { ...bounds, x: bounds.x + dx, y: bounds.y + dy },
+      selected: selectedLabelSet.value.has(label.id)
+    }
+  })
+)
 
 // Fils
 
@@ -242,6 +282,21 @@ const renderedWires = computed(() =>
 const hitWidth = computed(() => Math.max(wireWidth.value, 10 / cell.value))
 
 const wireColorById = computed(() => new Map(store.doc.wires.map((wire) => [wire.id, wire.color])))
+
+/** Croisements : le fil du dessus, redessiné sur une demi-cellule avec un liseré blanc. */
+const crossingMarks = computed(() =>
+  store.pieces.map((piece) => {
+    const [x, y] = piece.point
+    return {
+      key: `${x},${y}`,
+      x1: piece.horizontal ? x - 0.5 : x,
+      y1: piece.horizontal ? y : y - 0.5,
+      x2: piece.horizontal ? x + 0.5 : x,
+      y2: piece.horizontal ? y : y + 0.5,
+      color: wireColorById.value.get(piece.topWireId) ?? '#000000'
+    }
+  })
+)
 
 const junctions = computed(() => {
   const radius = (wireWidth.value * profile.value.junctionScale) / 2
@@ -348,6 +403,7 @@ function startMove(event: PointerEvent): void {
     kind: 'move',
     ids: [...store.selection],
     wireIds: [...store.selectedWires],
+    labelIds: [...store.selectedLabels],
     start: toWorld(screenPoint(event)),
     dx: 0,
     dy: 0
@@ -365,8 +421,24 @@ function onInstanceDown(id: string, event: PointerEvent): void {
     return
   }
   if (!selectedSet.value.has(id)) {
+    store.clearSelection()
     store.selection = [id]
-    store.selectedWires = []
+  }
+  startMove(event)
+}
+
+function onLabelDown(label: TextLabel, event: PointerEvent): void {
+  if (event.button !== 0 || store.panKeyHeld || store.tool !== 'select') return
+  event.stopPropagation()
+  if (event.shiftKey) {
+    store.selectedLabels = selectedLabelSet.value.has(label.id)
+      ? store.selectedLabels.filter((selected) => selected !== label.id)
+      : [...store.selectedLabels, label.id]
+    return
+  }
+  if (!selectedLabelSet.value.has(label.id)) {
+    store.clearSelection()
+    store.selectedLabels = [label.id]
   }
   startMove(event)
 }
@@ -374,6 +446,11 @@ function onInstanceDown(id: string, event: PointerEvent): void {
 function onWireDown(wireId: string, event: PointerEvent): void {
   if (event.button !== 0 || store.panKeyHeld || store.tool !== 'select') return
   event.stopPropagation()
+  const world = toWorld(screenPoint(event))
+  if (event.altKey) {
+    if (!store.toggleCrossing(world.x, world.y)) store.status = 'Aucun croisement ici.'
+    return
+  }
   if (event.shiftKey) {
     store.selectedWires = selectedWireSet.value.has(wireId)
       ? store.selectedWires.filter((selected) => selected !== wireId)
@@ -381,17 +458,20 @@ function onWireDown(wireId: string, event: PointerEvent): void {
     return
   }
   if (!selectedWireSet.value.has(wireId)) {
-    store.selection = []
+    store.clearSelection()
     store.selectedWires = [wireId]
   }
   // Plusieurs éléments sélectionnés : le glisser déplace tout ; un fil seul : on déplace le segment.
-  if (store.selection.length > 0 || store.selectedWires.length > 1) {
+  if (
+    store.selection.length > 0 ||
+    store.selectedLabels.length > 0 ||
+    store.selectedWires.length > 1
+  ) {
     startMove(event)
     return
   }
   const wire = store.doc.wires.find((candidate) => candidate.id === wireId)
   if (!wire) return
-  const world = toWorld(screenPoint(event))
   drag.value = {
     kind: 'wire-segment',
     wireId,
@@ -430,6 +510,12 @@ function onPointerDown(event: PointerEvent): void {
   if (store.tool === 'place') {
     const current = ghost.value
     if (current) store.placeAt(current.instance.x, current.instance.y)
+    return
+  }
+
+  if (store.tool === 'text') {
+    const [x, y] = snapGrid(world)
+    store.addLabel(x, y)
     return
   }
 
@@ -509,12 +595,18 @@ function onPointerUp(event: PointerEvent): void {
       const wires = store.doc.wires
         .filter((wire) => wireIntersectsRect(wire.points, rect))
         .map((wire) => wire.id)
+      const texts = store.doc.labels
+        .filter((label) => rectsIntersect(textLabelBounds(label, profile.value.cellPx), rect))
+        .map((label) => label.id)
       store.selection = current.additive
         ? [...new Set([...store.selection, ...instances])]
         : instances
       store.selectedWires = current.additive
         ? [...new Set([...store.selectedWires, ...wires])]
         : wires
+      store.selectedLabels = current.additive
+        ? [...new Set([...store.selectedLabels, ...texts])]
+        : texts
     }
   } else if (current.kind === 'wire-segment' || current.kind === 'wire-vertex') {
     if (!samePoints(current.original, current.preview)) {
@@ -550,6 +642,7 @@ const hoverText = computed(() =>
 const cursorClass = computed(() => {
   if (store.panKeyHeld || drag.value?.kind === 'pan') return 'panning'
   if (store.tool === 'place') return 'placing'
+  if (store.tool === 'text') return 'texting'
   return store.tool === 'wire' ? 'wiring' : ''
 })
 </script>
@@ -619,6 +712,27 @@ const cursorClass = computed(() => {
             </template>
           </g>
 
+          <g class="crossings">
+            <template v-for="mark in crossingMarks" :key="mark.key">
+              <line
+                class="halo"
+                :x1="mark.x1"
+                :y1="mark.y1"
+                :x2="mark.x2"
+                :y2="mark.y2"
+                :stroke-width="wireWidth * 2.2"
+              />
+              <line
+                :x1="mark.x1"
+                :y1="mark.y1"
+                :x2="mark.x2"
+                :y2="mark.y2"
+                :stroke="mark.color"
+                :stroke-width="wireWidth"
+              />
+            </template>
+          </g>
+
           <g class="junctions">
             <circle
               v-for="dot in junctions"
@@ -659,15 +773,59 @@ const cursorClass = computed(() => {
             </text>
           </g>
 
-          <g v-if="store.showPins" class="pins">
-            <circle
-              v-for="pin in pins"
-              :key="pin.key"
-              :cx="pin.x"
-              :cy="pin.y"
-              :r="3 / cell"
-              :fill="PIN_COLORS[pin.kind]"
-            />
+          <g class="texts">
+            <g
+              v-for="entry in labels"
+              :key="entry.label.id"
+              class="text-label"
+              @pointerdown="onLabelDown(entry.label, $event)"
+            >
+              <text
+                :x="entry.x"
+                :y="entry.y"
+                :font-size="entry.fontCells"
+                :font-family="profile.labelFont.family"
+              >
+                {{ entry.label.text }}
+              </text>
+              <rect
+                class="hit"
+                :x="entry.box.x"
+                :y="entry.box.y"
+                :width="entry.box.width"
+                :height="entry.box.height"
+                fill="transparent"
+              />
+              <rect
+                v-if="entry.selected"
+                class="selection"
+                :x="entry.box.x - 0.15"
+                :y="entry.box.y - 0.15"
+                :width="entry.box.width + 0.3"
+                :height="entry.box.height + 0.3"
+                vector-effect="non-scaling-stroke"
+              />
+            </g>
+          </g>
+
+          <g class="pins">
+            <template v-for="pin in pins" :key="pin.key">
+              <circle
+                v-if="store.showPins"
+                :cx="pin.x"
+                :cy="pin.y"
+                :r="3 / cell"
+                :fill="PIN_COLORS[pin.kind]"
+              />
+              <circle
+                v-if="store.showUnconnected && pin.unconnected"
+                class="unconnected"
+                :cx="pin.x"
+                :cy="pin.y"
+                :r="7 / cell"
+                vector-effect="non-scaling-stroke"
+              />
+            </template>
           </g>
 
           <rect
@@ -785,6 +943,10 @@ const cursorClass = computed(() => {
   cursor: crosshair;
 }
 
+.schematic.texting {
+  cursor: text;
+}
+
 .schematic.panning {
   cursor: grab;
 }
@@ -821,6 +983,15 @@ const cursorClass = computed(() => {
   pointer-events: none;
 }
 
+.crossings line {
+  pointer-events: none;
+  stroke-linecap: butt;
+}
+
+.crossings .halo {
+  stroke: #ffffff;
+}
+
 .junctions circle {
   pointer-events: none;
 }
@@ -834,8 +1005,23 @@ const cursorClass = computed(() => {
   pointer-events: none;
 }
 
+.text-label {
+  cursor: move;
+}
+
+.text-label text {
+  fill: #1f2328;
+  pointer-events: none;
+}
+
 .pins circle {
   pointer-events: none;
+}
+
+.pins .unconnected {
+  fill: none;
+  stroke: #cf222e;
+  stroke-width: 1.5;
 }
 
 .selection {

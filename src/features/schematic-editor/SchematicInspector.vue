@@ -10,32 +10,67 @@ import {
 import { useLibraryStore } from '@/features/library/store'
 import { useSchematicStore } from './store'
 
-// Panneau de droite du montage : projet, puis composant(s) ou fil(s) sélectionné(s).
+// Panneau de droite du montage : projet, puis composant(s), fil(s) ou étiquette(s) sélectionné(s).
 
 const emit = defineEmits<{ editProfile: [] }>()
 const store = useSchematicStore()
 const library = useLibraryStore()
 const doc = computed(() => store.doc)
 
+const onlyInstances = computed(
+  () => store.selectedWires.length === 0 && store.selectedLabels.length === 0
+)
+const onlyWires = computed(() => store.selection.length === 0 && store.selectedLabels.length === 0)
+const onlyLabels = computed(() => store.selection.length === 0 && store.selectedWires.length === 0)
+
 const single = computed(() => {
-  if (store.selection.length !== 1 || store.selectedWires.length > 0) return null
+  if (store.selection.length !== 1 || !onlyInstances.value) return null
   const id = store.selection[0]
   const instance = doc.value.components.find((candidate) => candidate.id === id)
   const def = instance ? doc.value.embeddedDefs[instance.defId] : undefined
   return instance && def ? { instance, def } : null
 })
 
+/** Définition de la bibliothèque plus récente que la copie embarquée, s'il y en a une. */
+const libraryUpdate = computed(() => {
+  const current = single.value
+  if (!current) return null
+  const entry = library.entries.find((candidate) => candidate.def?.id === current.def.id)
+  if (!entry?.def) return null
+  return JSON.stringify(entry.def) === JSON.stringify(current.def) ? null : entry.def
+})
+
 const selectedWireList = computed(() =>
   doc.value.wires.filter((wire) => store.selectedWires.includes(wire.id))
 )
 const singleWire = computed(() =>
-  store.selection.length === 0 && selectedWireList.value.length === 1
+  onlyWires.value && selectedWireList.value.length === 1
     ? (selectedWireList.value[0] ?? null)
     : null
 )
-const wiresOnly = computed(() => store.selection.length === 0 && selectedWireList.value.length > 1)
-const mixed = computed(() => store.selection.length > 0 && store.selectedWires.length > 0)
-const manyInstances = computed(() => store.selection.length > 1 && store.selectedWires.length === 0)
+const wiresOnly = computed(() => onlyWires.value && selectedWireList.value.length > 1)
+
+const selectedLabelList = computed(() =>
+  doc.value.labels.filter((label) => store.selectedLabels.includes(label.id))
+)
+const singleLabel = computed(() =>
+  onlyLabels.value && selectedLabelList.value.length === 1
+    ? (selectedLabelList.value[0] ?? null)
+    : null
+)
+
+const mixedCount = computed(
+  () => store.selection.length + store.selectedWires.length + store.selectedLabels.length
+)
+const showGroup = computed(
+  () =>
+    store.hasSelection &&
+    !single.value &&
+    !singleWire.value &&
+    !wiresOnly.value &&
+    !singleLabel.value
+)
+const rotatable = computed(() => store.selection.length > 0 && onlyInstances.value)
 
 const swatches = computed(() => [
   ...library.palette.map((color) => ({ hex: color.hex, name: color.name })),
@@ -110,6 +145,16 @@ function setFreeEnds(event: Event): void {
   const wire = singleWire.value
   if (wire) store.setWireFreeEnds(wire.id, inputValue(event) as FreeEndStyle)
 }
+
+function setLabelText(event: Event): void {
+  const label = singleLabel.value
+  if (label) store.setLabelText(label.id, inputValue(event))
+}
+
+function setLabelSize(event: Event): void {
+  const label = singleLabel.value
+  if (label) store.setLabelSize(label.id, Math.max(4, numberValue(event)))
+}
 </script>
 
 <template>
@@ -125,7 +170,11 @@ function setFreeEnds(event: Event): void {
         {{ doc.profile.wireWidth }} cellule, rayon {{ doc.profile.cornerRadius }}, point de jonction
         ×{{ doc.profile.junctionScale }}.
       </p>
-      <p class="hint">{{ doc.components.length }} composant(s), {{ doc.wires.length }} fil(s).</p>
+      <p class="hint">
+        {{ doc.components.length }} composant(s), {{ doc.wires.length }} fil(s),
+        {{ doc.labels.length }} étiquette(s), {{ doc.crossingOverrides.length }} exception(s) de
+        croisement.
+      </p>
       <p v-if="store.filePath" class="hint">Fichier : {{ store.filePath }}</p>
       <button type="button" class="small" @click="emit('editProfile')">Modifier le profil…</button>
     </section>
@@ -180,6 +229,12 @@ function setFreeEnds(event: Event): void {
         {{ instanceBounds(single.instance, single.def).height }} cellules ·
         {{ single.def.pins.length }} broche(s) · définition « {{ single.def.id }} ».
       </p>
+      <div v-if="libraryUpdate" class="notice">
+        <p>La bibliothèque a une version plus récente de ce composant.</p>
+        <button type="button" class="small" @click="store.updateDefinition(libraryUpdate)">
+          Mettre à jour dans ce montage
+        </button>
+      </div>
       <div class="row">
         <button type="button" @click="store.rotate('ccw')">⟲</button>
         <button type="button" @click="store.rotate('cw')">⟳</button>
@@ -227,7 +282,8 @@ function setFreeEnds(event: Event): void {
         <p class="hint">
           {{ singleWire.points.length - 1 }} segment(s), longueur
           {{ wireLength(singleWire.points) }} cellules, rang d’empilement {{ singleWire.stack }}.
-          Glisse un segment pour le décaler, un sommet (cercle) pour le déplacer.
+          Glisse un segment pour le décaler, un sommet (cercle) pour le déplacer. Alt+clic sur un
+          croisement inverse l’ordre à cet endroit seulement.
         </p>
       </template>
       <div class="row">
@@ -239,21 +295,40 @@ function setFreeEnds(event: Event): void {
       </div>
     </section>
 
-    <section v-else-if="manyInstances || mixed" class="block">
-      <h3>
-        {{ store.selection.length }} composant(s)<span v-if="mixed">
-          et {{ store.selectedWires.length }} fil(s)</span
-        >
-      </h3>
+    <section v-else-if="singleLabel" class="block">
+      <h3>Étiquette</h3>
+      <label class="field">
+        <span>Texte</span>
+        <input type="text" :value="singleLabel.text" @change="setLabelText" />
+      </label>
+      <label class="field">
+        <span>Taille (pt)</span>
+        <input type="number" min="4" step="1" :value="singleLabel.size" @change="setLabelSize" />
+      </label>
+      <p class="hint">
+        Position : ({{ singleLabel.x }}, {{ singleLabel.y }}). Glisse-la pour la déplacer.
+      </p>
       <div class="row">
-        <button type="button" :disabled="mixed" @click="store.rotate('ccw')">⟲</button>
-        <button type="button" :disabled="mixed" @click="store.rotate('cw')">⟳</button>
-        <button type="button" :disabled="mixed" @click="store.flip('horizontal')">↔</button>
-        <button type="button" :disabled="mixed" @click="store.flip('vertical')">↕</button>
         <button type="button" @click="store.duplicateSelection()">Dupliquer</button>
         <button type="button" class="danger" @click="store.removeSelection()">Supprimer</button>
       </div>
-      <p v-if="mixed" class="hint">Rotation et miroir s’appliquent aux composants seuls.</p>
+    </section>
+
+    <section v-else-if="showGroup" class="block">
+      <h3>{{ mixedCount }} élément(s) sélectionné(s)</h3>
+      <p class="hint">
+        {{ store.selection.length }} composant(s), {{ store.selectedWires.length }} fil(s),
+        {{ store.selectedLabels.length }} étiquette(s).
+      </p>
+      <div class="row">
+        <button type="button" :disabled="!rotatable" @click="store.rotate('ccw')">⟲</button>
+        <button type="button" :disabled="!rotatable" @click="store.rotate('cw')">⟳</button>
+        <button type="button" :disabled="!rotatable" @click="store.flip('horizontal')">↔</button>
+        <button type="button" :disabled="!rotatable" @click="store.flip('vertical')">↕</button>
+        <button type="button" @click="store.duplicateSelection()">Dupliquer</button>
+        <button type="button" class="danger" @click="store.removeSelection()">Supprimer</button>
+      </div>
+      <p v-if="!rotatable" class="hint">Rotation et miroir s’appliquent aux composants seuls.</p>
     </section>
 
     <section v-else class="block">
@@ -261,13 +336,14 @@ function setFreeEnds(event: Event): void {
       <p class="hint">
         Clique un composant de la bibliothèque pour le poser, puis clique sur le montage. W trace un
         fil : départ sur une broche ou une intersection, un clic par coude, Maj inverse le L,
-        double-clic ou Entrée pour finir ; finir sur une broche ou un fil crée la connexion. Sur le
-        montage : clic pour sélectionner, Maj+clic pour ajouter, glisser pour déplacer ou pour
-        tracer un rectangle de sélection ; molette pour zoomer, Espace + glisser pour se déplacer.
+        double-clic ou Entrée pour finir ; finir sur une broche ou un fil crée la connexion. E pose
+        une étiquette texte. Sur le montage : clic pour sélectionner, Maj+clic pour ajouter, glisser
+        pour déplacer ou pour tracer un rectangle de sélection ; molette pour zoomer, Espace +
+        glisser pour se déplacer.
       </p>
       <p class="hint">
-        Les carrés rouges marquent les extrémités de fil reliées à rien ; survoler un fil éclaire
-        tout son net.
+        Carrés rouges : extrémités de fil reliées à rien. Cercles rouges : broches reliées à rien.
+        Survoler un fil éclaire tout son net. Alt+clic sur un croisement choisit le fil du dessus.
       </p>
     </section>
   </aside>
@@ -343,6 +419,19 @@ function setFreeEnds(event: Event): void {
   font-size: 12px;
   color: #57606a;
   word-break: break-word;
+}
+
+.notice {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid #d4a72c;
+  border-radius: 4px;
+  background: #fff8c5;
+  font-size: 12px;
+}
+
+.notice p {
+  margin: 0 0 6px;
 }
 
 .swatches {

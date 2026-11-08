@@ -90,6 +90,10 @@ onMounted(async () => {
   })
   await library.init()
   await proposeRecovery()
+  const launch = await bridge().getLaunchFile()
+  if (launch && (!schematic.dirty || schematic.confirmDiscard())) {
+    if (await schematic.openPath(launch)) mode.value = 'schematic'
+  }
 })
 
 onUnmounted(() => {

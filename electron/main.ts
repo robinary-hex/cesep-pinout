@@ -17,6 +17,10 @@ app.setName('Pinout')
 const isDev = !app.isPackaged
 const QUIT_FALLBACK_MS = 3000
 
+/** Projet passé en argument (double-clic « Ouvrir avec » ou ligne de commande). */
+const launchFile =
+  process.argv.slice(1).find((arg) => /\.json$/i.test(arg) && !arg.startsWith('-')) ?? null
+
 /** Le rendu tient cet indicateur à jour ; il décide de la question à la fermeture. */
 let dirty = false
 /** Vrai une fois la fermeture acceptée : la fenêtre se ferme sans redemander. */
@@ -100,6 +104,10 @@ function registerIpc(): void {
     userData: app.getPath('userData'),
     documents: app.getPath('documents')
   }))
+
+  ipcMain.handle(IPC.launchFile, async () =>
+    launchFile !== null && (await exists(launchFile)) ? launchFile : null
+  )
 
   ipcMain.handle(IPC.setDirty, (_event, value: boolean) => {
     dirty = value

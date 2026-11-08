@@ -43,8 +43,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     Ctrl+A / D / C / V, Ctrl+Z / Y, Ctrl+S, Ctrl+Maj+S, Ctrl+O, Ctrl+N, Ctrl+E export, F1 aide,
     Ctrl+Page haut/bas
     (Maj pour premier/arrière-plan) = ordre des fils, 0 ajuster au contenu, 1 zoom 100 %,
-    molette = zoom, Espace + glisser ou bouton du milieu = déplacer la vue. E (texte) arrive en
-    phase 5.
+    molette = zoom, Espace + glisser ou bouton du milieu = déplacer la vue, E étiquette texte,
+    Alt+clic sur un croisement = inverser l'ordre à cet endroit seulement.
 - Fils : la géométrie pure est dans `src/domain/wires.ts` (tracé, coins arrondis, édition de
   segments et de sommets), la connectivité dérivée dans `src/domain/connectivity.ts` (jonctions,
   extrémités libres, nets par union-find). Un fil garde ses extrémités fixes quand on déplace un
@@ -60,6 +60,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   dans `electron/main.ts` (le rendu tient `setDirty` à jour, puis répond à `autosave-then-quit`).
 - Boîtes de dialogue : `src/ui/ModalDialog.vue` ; tant qu'une est ouverte (`openModals`), les
   éditeurs ignorent leurs raccourcis.
+- Croisements : `src/domain/crossings.ts` (croisements stricts, fil du dessus, exceptions Alt+clic
+  élaguées à chaque commande). Broches reliées à rien : `unconnectedPinKeys` de la connectivité.
+- Exécutable : `pnpm icon` régénère `build/icon.png` (script sans dépendance), `pnpm build:win`
+  produit l'installeur NSIS et l'exe portable dans `release/` (non signés : avertissement
+  SmartScreen au premier lancement, normal). Un `.json` passé en argument s'ouvre au lancement.
   - Éditeur de composants : V sélection, R rectangle, O ellipse, L ligne, P polyligne, E texte,
     B broche, Suppr, Échap, Entrée (termine une polyligne), Ctrl+Z / Ctrl+Y, Ctrl+S, Ctrl+N.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.

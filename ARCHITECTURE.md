@@ -48,6 +48,16 @@ pas à chaque touche, donc une saisie = une commande.
 - PNG : 80 px par cellule. Un PNG d'une autre taille est rééchantillonné sur confirmation.
   Le profil de style (`cellPx`, par défaut 20) ne règle que l'affichage.
 
+## Croisements et connectivité
+
+`src/domain/connectivity.ts` dérive de la géométrie ce qui est relié : jonctions (une extrémité
+sur un sommet ou un segment d'un autre fil), extrémités libres, nets par union-find, broches
+reliées à rien. `src/domain/crossings.ts` trouve les croisements stricts (segment horizontal contre
+segment vertical, hors sommets) et décide du fil du dessus : le rang d'empilement, sauf exception
+locale stockée dans `crossingOverrides` (Alt+clic). Le fil du dessus est redessiné sur une
+demi-cellule avec un liseré couleur de fond ; les exceptions orphelines sont élaguées à chaque
+commande. Rien de tout cela n'est stocké, sauf les exceptions.
+
 ## Export
 
 `src/domain/svg.ts` construit un SVG autonome : viewBox en cellules (étendue du contenu plus une

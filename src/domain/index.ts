@@ -2,6 +2,7 @@
 export * from './color'
 export * from './component'
 export * from './connectivity'
+export * from './crossings'
 export * from './grid'
 export * from './migrations'
 export * from './placement'

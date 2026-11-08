@@ -38,6 +38,8 @@ export interface Connectivity {
   wireNet: ReadonlyMap<string, number>
   /** Numéro de net de chaque broche (clé de PinRef). */
   pinNet: ReadonlyMap<string, number>
+  /** Broches qu'aucun fil ni aucune autre broche ne relie. */
+  unconnectedPinKeys: ReadonlySet<string>
 }
 
 /** Broches de toutes les instances, en coordonnées absolues. */
@@ -152,5 +154,13 @@ export function computeConnectivity(wires: readonly Wire[], pins: readonly PinRe
   const wireNet = new Map(wires.map((wire) => [wire.id, netOf(`w:${wire.id}`)]))
   const pinNet = new Map(pins.map((pin) => [pin.key, netOf(`p:${pin.key}`)]))
 
-  return { junctions: [...junctionAt.values()], freeEnds, wireNet, pinNet }
+  const netsWithWires = new Set(wireNet.values())
+  const pinsPerNet = new Map<number, number>()
+  for (const net of pinNet.values()) pinsPerNet.set(net, (pinsPerNet.get(net) ?? 0) + 1)
+  const unconnectedPinKeys = new Set<string>()
+  for (const [key, net] of pinNet) {
+    if (!netsWithWires.has(net) && (pinsPerNet.get(net) ?? 0) < 2) unconnectedPinKeys.add(key)
+  }
+
+  return { junctions: [...junctionAt.values()], freeEnds, wireNet, pinNet, unconnectedPinKeys }
 }

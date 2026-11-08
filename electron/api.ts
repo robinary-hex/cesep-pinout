@@ -56,6 +56,8 @@ export interface PinoutApi {
   /** Retourne le chemin choisi, ou null si l'utilisateur annule. */
   showSaveDialog(options?: SaveDialogOptions): Promise<string | null>
   getAppPaths(): Promise<AppPaths>
+  /** Fichier .json passé au lancement (« Ouvrir avec »), s'il existe. */
+  getLaunchFile(): Promise<string | null>
   /** Informe le principal qu'il y a des modifications non enregistrées (garde à la fermeture). */
   setDirty(dirty: boolean): Promise<void>
   /** Après la copie de secours, autorise la fermeture demandée par l'utilisateur. */
@@ -76,6 +78,7 @@ export const IPC = {
   showOpenDialog: 'dialog:open',
   showSaveDialog: 'dialog:save',
   getAppPaths: 'app:paths',
+  launchFile: 'app:launch-file',
   setDirty: 'app:set-dirty',
   confirmQuit: 'app:confirm-quit',
   appRequest: 'app:request'

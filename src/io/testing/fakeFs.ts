@@ -89,6 +89,10 @@ export class FakeFs implements PinoutApi {
     return { userData: 'C:/fake/Pinout', documents: 'C:/fake/Documents' }
   }
 
+  async getLaunchFile(): Promise<string | null> {
+    return null
+  }
+
   async setDirty(dirty: boolean): Promise<void> {
     this.dirty = dirty
   }

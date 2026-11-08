@@ -62,6 +62,15 @@ function openRecent(event: Event, path: string): void {
       >
         Fil <kbd>W</kbd>
       </button>
+      <button
+        type="button"
+        class="tool"
+        :class="{ active: store.tool === 'text' }"
+        title="Poser une étiquette texte (E)"
+        @click="store.startTextTool()"
+      >
+        Texte <kbd>E</kbd>
+      </button>
     </div>
 
     <div
@@ -228,6 +237,10 @@ function openRecent(event: Event, path: string): void {
       <label class="check" title="Afficher les broches des composants">
         <input v-model="store.showPins" type="checkbox" />
         Broches
+      </label>
+      <label class="check" title="Entourer les broches reliées à rien">
+        <input v-model="store.showUnconnected" type="checkbox" />
+        Non reliées
       </label>
     </div>
 

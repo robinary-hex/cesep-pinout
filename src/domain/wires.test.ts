@@ -311,5 +311,6 @@ describe('jonctions et nets', () => {
     expect(result.wireNet.get('w')).toBe(result.pinNet.get('r1:a'))
     expect(result.pinNet.get('r1:a')).not.toBe(result.pinNet.get('r1:b'))
     expect(result.junctions).toEqual([])
+    expect([...result.unconnectedPinKeys]).toEqual(['r1:b'])
   })
 })
