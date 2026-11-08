@@ -1,6 +1,7 @@
 // Domaine : TypeScript pur, sans Vue, Pinia, Electron ni Node. Voir ARCHITECTURE.md.
 export * from './color'
 export * from './component'
+export * from './connectivity'
 export * from './grid'
 export * from './migrations'
 export * from './placement'
@@ -10,3 +11,4 @@ export * from './project'
 export * from './serialize'
 export * from './settings'
 export * from './slug'
+export * from './wires'

@@ -37,11 +37,18 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Raccourcis définis par la lettre (`KeyboardEvent.key`), clavier AZERTY belge, jamais de crochets
   ni de touches AltGr. Les deux seuls chiffres (0, 1) se lisent par touche physique (`event.code`)
   car la rangée du haut demande Maj sur ce clavier.
-  - Montage : V sélection (arrête la pose), R / Maj+R rotation, T / Maj+T miroir, Suppr, Échap,
-    flèches = déplacer d'une cellule, Ctrl+A / D / C / V, Ctrl+Z / Y, Ctrl+S, Ctrl+Maj+S, Ctrl+O,
-    Ctrl+N, 0 ajuster au contenu, 1 zoom 100 %, molette = zoom, Espace + glisser ou bouton du
-    milieu = déplacer la vue. W (fil) et E (texte) arrivent en phases 3 et 5 ; Ctrl+Page haut/bas
-    réglera l'ordre des fils.
+  - Montage : V sélection (arrête la pose ou le fil), W fil (clic par coude, Maj inverse le L,
+    double-clic ou Entrée termine, Retour arrière retire le dernier sommet, Échap annule),
+    R / Maj+R rotation, T / Maj+T miroir, Suppr, Échap, flèches = déplacer d'une cellule,
+    Ctrl+A / D / C / V, Ctrl+Z / Y, Ctrl+S, Ctrl+Maj+S, Ctrl+O, Ctrl+N, Ctrl+Page haut/bas
+    (Maj pour premier/arrière-plan) = ordre des fils, 0 ajuster au contenu, 1 zoom 100 %,
+    molette = zoom, Espace + glisser ou bouton du milieu = déplacer la vue. E (texte) arrive en
+    phase 5.
+- Fils : la géométrie pure est dans `src/domain/wires.ts` (tracé, coins arrondis, édition de
+  segments et de sommets), la connectivité dérivée dans `src/domain/connectivity.ts` (jonctions,
+  extrémités libres, nets par union-find). Un fil garde ses extrémités fixes quand on déplace un
+  segment ou un sommet : un coude s'ajoute au besoin. Un sommet au milieu d'un segment droit est
+  permis ; les demi-tours et les sommets confondus sont refusés.
   - Éditeur de composants : V sélection, R rectangle, O ellipse, L ligne, P polyligne, E texte,
     B broche, Suppr, Échap, Entrée (termine une polyligne), Ctrl+Z / Ctrl+Y, Ctrl+S, Ctrl+N.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.

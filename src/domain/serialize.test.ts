@@ -104,15 +104,23 @@ describe('projet : charger, valider, réenregistrer', () => {
     )
   })
 
-  it('refuse deux segments alignés', () => {
-    const text = mutateProject((raw) => {
+  it('accepte un sommet dans un segment droit mais refuse un demi-tour', () => {
+    const straight = mutateProject((raw) => {
       must(raw.wires[0], 'fil w1').points = [
         [8, 3],
         [10, 3],
         [12, 3]
       ]
     })
-    expect(issuesOf(() => parseProject(text))).toMatch(/alignés/)
+    expect(() => parseProject(straight)).not.toThrow()
+    const back = mutateProject((raw) => {
+      must(raw.wires[0], 'fil w1').points = [
+        [8, 3],
+        [12, 3],
+        [10, 3]
+      ]
+    })
+    expect(issuesOf(() => parseProject(back))).toMatch(/revient/)
   })
 
   it('refuse une instance sans définition embarquée', () => {

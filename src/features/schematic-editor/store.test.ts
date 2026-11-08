@@ -159,3 +159,152 @@ describe('montage : poser, déplacer, orienter', () => {
     expect(centerX).toBeCloseTo(500)
   })
 })
+
+describe('montage : fils', () => {
+  it('trace un fil par étapes, le simplifie et le relie aux broches', () => {
+    const store = useSchematicStore()
+    store.startPlacing(resistor())
+    store.placeAt(0, 0) // broches en (0, 1) et (4, 1)
+    store.placeAt(10, 0) // broches en (10, 1) et (14, 1)
+    store.startWireTool()
+    store.beginWire([4, 1])
+    store.appendWirePoints([[7, 1]])
+    store.appendWirePoints([[10, 1]])
+    const id = store.finishWire()
+    expect(id).toBe('w1')
+    expect(store.doc.wires[0]).toMatchObject({
+      points: [
+        [4, 1],
+        [10, 1]
+      ],
+      stack: 0,
+      freeEnds: 'flat'
+    })
+    const nets = store.connectivity
+    expect(nets.freeEnds).toEqual([])
+    expect(nets.pinNet.get('c1:b')).toBe(nets.pinNet.get('c2:a'))
+    expect(nets.pinNet.get('c1:a')).not.toBe(nets.pinNet.get('c2:a'))
+  })
+
+  it('refuse un fil d’un seul point et nettoie les demi-tours', () => {
+    const store = useSchematicStore()
+    store.startWireTool()
+    store.beginWire([0, 0])
+    expect(store.finishWire()).toBeNull()
+    expect(
+      store.addWire([
+        [0, 0],
+        [6, 0],
+        [3, 0],
+        [3, 4]
+      ])
+    ).toBe('w1')
+    expect(store.doc.wires[0]?.points).toEqual([
+      [0, 0],
+      [3, 0],
+      [3, 4]
+    ])
+  })
+
+  it('dérive une jonction en T et la couleur de son porteur', () => {
+    const store = useSchematicStore()
+    store.setCurrentColor('#d62828')
+    store.addWire([
+      [0, 5],
+      [20, 5]
+    ])
+    store.setCurrentColor('#1d4ed8')
+    store.addWire([
+      [10, 0],
+      [10, 5]
+    ])
+    expect(store.connectivity.junctions).toEqual([
+      { point: [10, 5], carrierWireId: 'w1', branches: 3 }
+    ])
+    expect(store.doc.wires.map((wire) => wire.color)).toEqual(['#d62828', '#1d4ed8'])
+  })
+
+  it('recolore, réordonne, déplace et supprime les fils sélectionnés', () => {
+    const store = useSchematicStore()
+    store.addWire([
+      [0, 0],
+      [4, 0]
+    ])
+    store.addWire([
+      [0, 2],
+      [4, 2]
+    ])
+    store.addWire([
+      [0, 4],
+      [4, 4]
+    ])
+    store.selectedWires = ['w1']
+    store.setCurrentColor('#15803d')
+    expect(store.doc.wires[0]?.color).toBe('#15803d')
+
+    store.reorderWires('top')
+    expect(store.sortedWires.map((wire) => wire.id)).toEqual(['w2', 'w3', 'w1'])
+    store.reorderWires('down')
+    expect(store.sortedWires.map((wire) => wire.id)).toEqual(['w2', 'w1', 'w3'])
+
+    store.moveSelection(1, 1)
+    expect(store.doc.wires[0]?.points).toEqual([
+      [1, 1],
+      [5, 1]
+    ])
+
+    store.removeSelection()
+    expect(store.doc.wires.map((wire) => wire.id)).toEqual(['w2', 'w3'])
+    store.undo()
+    expect(store.doc.wires).toHaveLength(3)
+  })
+
+  it('modifie la géométrie d’un fil sans accepter une forme invalide', () => {
+    const store = useSchematicStore()
+    store.addWire([
+      [0, 0],
+      [4, 0],
+      [4, 6]
+    ])
+    store.setWirePoints('w1', [
+      [0, 0],
+      [0, 3],
+      [4, 3],
+      [4, 6]
+    ])
+    expect(store.doc.wires[0]?.points).toHaveLength(4)
+    store.setWirePoints('w1', [
+      [0, 0],
+      [3, 2]
+    ])
+    expect(store.doc.wires[0]?.points).toHaveLength(4)
+  })
+
+  it('duplique et colle les fils avec les composants', () => {
+    const store = useSchematicStore()
+    store.startPlacing(resistor())
+    store.placeAt(0, 0)
+    store.stopPlacing()
+    store.addWire([
+      [4, 1],
+      [8, 1]
+    ])
+    store.selectAll()
+    store.duplicateSelection()
+    expect(store.doc.components).toHaveLength(2)
+    expect(store.doc.wires.map((wire) => wire.points)).toEqual([
+      [
+        [4, 1],
+        [8, 1]
+      ],
+      [
+        [5, 2],
+        [9, 2]
+      ]
+    ])
+    expect(store.selectedWires).toEqual(['w2'])
+
+    const text = serializeProject(store.doc)
+    expect(parseProject(text)).toEqual(store.doc)
+  })
+})

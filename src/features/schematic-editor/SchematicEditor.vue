@@ -68,6 +68,7 @@ function onKeyDown(event: KeyboardEvent): void {
   const control = event.ctrlKey || event.metaKey
   const editable = isEditable(event.target)
 
+  if (key === 'shift') store.shiftHeld = true
   if (key === ' ' && !editable) {
     store.panKeyHeld = true
     event.preventDefault()
@@ -109,6 +110,12 @@ function onKeyDown(event: KeyboardEvent): void {
       case 'v':
         store.pasteClipboard()
         break
+      case 'pageup':
+        store.reorderWires(event.shiftKey ? 'top' : 'up')
+        break
+      case 'pagedown':
+        store.reorderWires(event.shiftKey ? 'bottom' : 'down')
+        break
       default:
         return
     }
@@ -130,7 +137,10 @@ function onKeyDown(event: KeyboardEvent): void {
 
   switch (key) {
     case 'v':
-      store.stopPlacing()
+      store.selectTool()
+      break
+    case 'w':
+      store.startWireTool()
       break
     case 'r':
       store.rotate(event.shiftKey ? 'ccw' : 'cw')
@@ -138,29 +148,40 @@ function onKeyDown(event: KeyboardEvent): void {
     case 't':
       store.flip(event.shiftKey ? 'vertical' : 'horizontal')
       break
-    case 'delete':
+    case 'enter':
+      store.finishWire()
+      break
     case 'backspace':
+      if (store.drawing) store.popWireVertex()
+      else store.removeSelection()
+      break
+    case 'delete':
       store.removeSelection()
       break
     case 'escape':
       if (canvas.value?.cancel()) break
+      if (store.cancelWire()) break
       if (store.placement) {
         store.stopPlacing()
         break
       }
-      store.selection = []
+      if (store.hasSelection) {
+        store.clearSelection()
+        break
+      }
+      store.selectTool()
       break
     case 'arrowleft':
-      store.moveInstances(store.selection, -1, 0)
+      store.moveSelection(-1, 0)
       break
     case 'arrowright':
-      store.moveInstances(store.selection, 1, 0)
+      store.moveSelection(1, 0)
       break
     case 'arrowup':
-      store.moveInstances(store.selection, 0, -1)
+      store.moveSelection(0, -1)
       break
     case 'arrowdown':
-      store.moveInstances(store.selection, 0, 1)
+      store.moveSelection(0, 1)
       break
     default:
       return
@@ -170,10 +191,12 @@ function onKeyDown(event: KeyboardEvent): void {
 
 function onKeyUp(event: KeyboardEvent): void {
   if (event.key === ' ') store.panKeyHeld = false
+  if (event.key === 'Shift') store.shiftHeld = false
 }
 
 function onBlur(): void {
   store.panKeyHeld = false
+  store.shiftHeld = false
 }
 
 onMounted(() => {
@@ -187,6 +210,7 @@ onUnmounted(() => {
   window.removeEventListener('keyup', onKeyUp)
   window.removeEventListener('blur', onBlur)
   store.panKeyHeld = false
+  store.shiftHeld = false
 })
 </script>
 

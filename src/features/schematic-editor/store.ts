@@ -2,23 +2,33 @@ import { castDraft, type Draft } from 'immer'
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 import {
+  computeConnectivity,
   createEmptyProject,
   flippedInstance,
   nextLabel,
   nextNumberedId,
+  normalizePoints,
   projectBounds,
+  projectPins,
   rotatedInstance,
+  simplifyPoints,
+  translatePoints,
+  wireGeometryProblem,
   type ComponentDefinition,
   type ComponentInstance,
   type FlipAxis,
+  type FreeEndStyle,
+  type GridPoint,
   type Project,
   type RotateDirection,
-  type Rotation
+  type Rotation,
+  type Wire
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import { History } from '@/state/history'
 
-export type SchematicTool = 'select' | 'place'
+export type SchematicTool = 'select' | 'place' | 'wire'
+export type StackMove = 'up' | 'down' | 'top' | 'bottom'
 
 export interface Placement {
   def: ComponentDefinition
@@ -39,9 +49,19 @@ export interface ClipboardItem {
   def: ComponentDefinition
 }
 
+export interface ClipboardData {
+  items: ClipboardItem[]
+  wires: Wire[]
+}
+
 export interface PlacedInstance {
   instance: ComponentInstance
   def: ComponentDefinition
+}
+
+/** Fil en cours de tracé : les sommets déjà validés. */
+export interface WireDrawing {
+  points: GridPoint[]
 }
 
 const MIN_ZOOM = 0.2
@@ -51,8 +71,8 @@ const DEFAULT_VIEW: ViewState = { zoom: 1, panX: 80, panY: 80 }
 
 /**
  * Montage en cours d'édition. Le projet est immuable ; chaque commande passe par l'historique.
- * Le store porte aussi l'état de vue (zoom, pan) pour que la barre d'outils et le clavier
- * puissent agir dessus.
+ * Le store porte aussi l'état de vue (zoom, pan) et l'état des outils, pour que la barre
+ * d'outils, le clavier et le canevas agissent sur la même chose.
  */
 export const useSchematicStore = defineStore('schematic', () => {
   const library = useLibraryStore()
@@ -63,14 +83,21 @@ export const useSchematicStore = defineStore('schematic', () => {
   const doc = shallowRef<Project>(history.value)
   const savedDoc = shallowRef<Project | null>(null)
   const filePath = ref<string | null>(null)
+  /** Identifiants des composants sélectionnés. */
   const selection = ref<string[]>([])
+  /** Identifiants des fils sélectionnés. */
+  const selectedWires = ref<string[]>([])
   const tool = ref<SchematicTool>('select')
   const placement = shallowRef<Placement | null>(null)
-  const clipboard = shallowRef<ClipboardItem[]>([])
+  const drawing = shallowRef<WireDrawing | null>(null)
+  const currentColor = ref(library.defaultWireColor)
+  const clipboard = shallowRef<ClipboardData>({ items: [], wires: [] })
   const view = ref<ViewState>({ ...DEFAULT_VIEW })
   const viewport = ref({ width: 1200, height: 800 })
   const showPins = ref(true)
   const panKeyHeld = ref(false)
+  const shiftHeld = ref(false)
+  const hoverWireId = ref<string | null>(null)
   const status = ref('')
   const undoLabel = ref<string | null>(null)
   const redoLabel = ref<string | null>(null)
@@ -86,14 +113,25 @@ export const useSchematicStore = defineStore('schematic', () => {
   const selectedInstances = computed(() =>
     doc.value.components.filter((instance) => selection.value.includes(instance.id))
   )
+  const sortedWires = computed(() => [...doc.value.wires].sort((a, b) => a.stack - b.stack))
+  const pinRefs = computed(() => projectPins(doc.value))
+  const connectivity = computed(() => computeConnectivity(doc.value.wires, pinRefs.value))
+  const hoverNet = computed(() =>
+    hoverWireId.value === null ? null : (connectivity.value.wireNet.get(hoverWireId.value) ?? null)
+  )
+  const hasSelection = computed(() => selection.value.length > 0 || selectedWires.value.length > 0)
 
   function sync(): void {
     doc.value = history.value
     undoLabel.value = history.undoLabel
     redoLabel.value = history.redoLabel
-    const ids = new Set(doc.value.components.map((instance) => instance.id))
-    if (selection.value.some((id) => !ids.has(id))) {
-      selection.value = selection.value.filter((id) => ids.has(id))
+    const instanceIds = new Set(doc.value.components.map((instance) => instance.id))
+    if (selection.value.some((id) => !instanceIds.has(id))) {
+      selection.value = selection.value.filter((id) => instanceIds.has(id))
+    }
+    const wireIds = new Set(doc.value.wires.map((wire) => wire.id))
+    if (selectedWires.value.some((id) => !wireIds.has(id))) {
+      selectedWires.value = selectedWires.value.filter((id) => wireIds.has(id))
     }
   }
 
@@ -117,14 +155,20 @@ export const useSchematicStore = defineStore('schematic', () => {
     status.value = `Rétabli : ${label}`
   }
 
+  function clearSelection(): void {
+    selection.value = []
+    selectedWires.value = []
+  }
+
   // Fichier
 
   function newProject(): void {
     history.reset(createEmptyProject('Nouveau montage', library.defaultProfile))
     savedDoc.value = null
     filePath.value = null
-    selection.value = []
+    clearSelection()
     placement.value = null
+    drawing.value = null
     tool.value = 'select'
     view.value = { ...DEFAULT_VIEW }
     status.value = ''
@@ -135,8 +179,9 @@ export const useSchematicStore = defineStore('schematic', () => {
     history.reset(project)
     savedDoc.value = project
     filePath.value = path
-    selection.value = []
+    clearSelection()
     placement.value = null
+    drawing.value = null
     tool.value = 'select'
     status.value = ''
     sync()
@@ -160,24 +205,38 @@ export const useSchematicStore = defineStore('schematic', () => {
     })
   }
 
-  // Pose d'un composant
+  // Outils
+
+  function selectTool(): void {
+    tool.value = 'select'
+    placement.value = null
+    drawing.value = null
+  }
 
   function startPlacing(def: ComponentDefinition): void {
     placement.value = { def, rotation: 0, mirror: false }
+    drawing.value = null
     tool.value = 'place'
-    selection.value = []
+    clearSelection()
     status.value = `Pose de ${def.name} : clic pour poser, R et T pour tourner et retourner, Échap pour arrêter.`
   }
 
   function stopPlacing(): void {
     placement.value = null
-    tool.value = 'select'
+    if (tool.value === 'place') tool.value = 'select'
   }
 
-  function rotatePlacement(direction: RotateDirection): void {
-    const current = placement.value
-    if (!current) return
-    const probe: ComponentInstance = {
+  function startWireTool(): void {
+    tool.value = 'wire'
+    placement.value = null
+    drawing.value = null
+    clearSelection()
+    status.value =
+      'Fil : clic sur une broche ou une intersection pour partir, clic pour chaque coude, Maj inverse le L, double-clic ou Entrée pour finir, Échap annule.'
+  }
+
+  function probe(current: Placement): ComponentInstance {
+    return {
       id: '',
       defId: current.def.id,
       x: 0,
@@ -186,23 +245,19 @@ export const useSchematicStore = defineStore('schematic', () => {
       mirror: current.mirror,
       label: ''
     }
-    const turned = rotatedInstance(probe, current.def, direction)
+  }
+
+  function rotatePlacement(direction: RotateDirection): void {
+    const current = placement.value
+    if (!current) return
+    const turned = rotatedInstance(probe(current), current.def, direction)
     placement.value = { ...current, rotation: turned.rotation }
   }
 
   function flipPlacement(axis: FlipAxis): void {
     const current = placement.value
     if (!current) return
-    const probe: ComponentInstance = {
-      id: '',
-      defId: current.def.id,
-      x: 0,
-      y: 0,
-      rotation: current.rotation,
-      mirror: current.mirror,
-      label: ''
-    }
-    const flipped = flippedInstance(probe, axis)
+    const flipped = flippedInstance(probe(current), axis)
     placement.value = { ...current, rotation: flipped.rotation, mirror: flipped.mirror }
   }
 
@@ -237,10 +292,150 @@ export const useSchematicStore = defineStore('schematic', () => {
     return id
   }
 
+  // Tracé des fils
+
+  function nextWireId(): string {
+    return nextNumberedId(
+      'w',
+      doc.value.wires.map((wire) => wire.id)
+    )
+  }
+
+  function nextStack(): number {
+    return doc.value.wires.reduce((max, wire) => Math.max(max, wire.stack + 1), 0)
+  }
+
+  /** Crée un fil à partir de sommets bruts ; retourne son identifiant, ou null s'il est invalide. */
+  function addWire(points: readonly GridPoint[], color = currentColor.value): string | null {
+    const clean = simplifyPoints(points)
+    if (clean.length < 2 || wireGeometryProblem(clean) !== null) return null
+    const id = nextWireId()
+    const stack = nextStack()
+    apply('Tracer un fil', (draft) => {
+      draft.wires.push({ id, color, points: castDraft(clean), stack, freeEnds: 'flat' })
+    })
+    return id
+  }
+
+  function beginWire(point: GridPoint): void {
+    drawing.value = { points: [point] }
+  }
+
+  function appendWirePoints(points: readonly GridPoint[]): void {
+    const current = drawing.value
+    if (!current) return
+    drawing.value = { points: normalizePoints([...current.points, ...points]) }
+  }
+
+  /** Retire le dernier sommet validé ; annule le tracé s'il n'en reste pas. */
+  function popWireVertex(): void {
+    const current = drawing.value
+    if (!current) return
+    drawing.value = current.points.length <= 1 ? null : { points: current.points.slice(0, -1) }
+  }
+
+  function finishWire(): string | null {
+    const current = drawing.value
+    drawing.value = null
+    if (!current || current.points.length < 2) return null
+    const id = addWire(current.points)
+    if (id)
+      status.value = 'Fil tracé. Clic pour en commencer un autre, V pour revenir à la sélection.'
+    return id
+  }
+
+  function cancelWire(): boolean {
+    if (!drawing.value) return false
+    drawing.value = null
+    return true
+  }
+
+  // Édition des fils
+
+  function setWirePoints(id: string, points: readonly GridPoint[]): void {
+    const clean = normalizePoints(points)
+    if (clean.length < 2 || wireGeometryProblem(clean) !== null) return
+    apply('Modifier le fil', (draft) => {
+      const wire = draft.wires.find((candidate) => candidate.id === id)
+      if (wire) wire.points = castDraft(clean)
+    })
+  }
+
+  function recolorWires(ids: readonly string[], color: string): void {
+    if (ids.length === 0) return
+    apply('Colorer les fils', (draft) => {
+      for (const wire of draft.wires) if (ids.includes(wire.id)) wire.color = color
+    })
+  }
+
+  /** Couleur des prochains fils ; recolore aussi les fils sélectionnés. */
+  function setCurrentColor(color: string): void {
+    currentColor.value = color
+    recolorWires(selectedWires.value, color)
+  }
+
+  function setWireFreeEnds(id: string, style: FreeEndStyle): void {
+    apply('Extrémités libres', (draft) => {
+      const wire = draft.wires.find((candidate) => candidate.id === id)
+      if (wire) wire.freeEnds = style
+    })
+  }
+
+  function removeWires(ids: readonly string[]): void {
+    if (ids.length === 0) return
+    apply(ids.length > 1 ? 'Supprimer les fils' : 'Supprimer le fil', (draft) => {
+      draft.wires = draft.wires.filter((wire) => !ids.includes(wire.id))
+    })
+  }
+
+  /** Ordre d'empilement : avancer, reculer, premier plan, arrière-plan. */
+  function reorderWires(move: StackMove): void {
+    const ids = new Set(selectedWires.value)
+    if (ids.size === 0) return
+    const order = sortedWires.value.map((wire) => wire.id)
+    if (move === 'top' || move === 'bottom') {
+      const chosen = order.filter((id) => ids.has(id))
+      const others = order.filter((id) => !ids.has(id))
+      order.splice(
+        0,
+        order.length,
+        ...(move === 'top' ? [...others, ...chosen] : [...chosen, ...others])
+      )
+    } else if (move === 'up') {
+      for (let i = order.length - 2; i >= 0; i--) {
+        const current = order[i]
+        const next = order[i + 1]
+        if (current !== undefined && next !== undefined && ids.has(current) && !ids.has(next)) {
+          order[i] = next
+          order[i + 1] = current
+        }
+      }
+    } else {
+      for (let i = 1; i < order.length; i++) {
+        const current = order[i]
+        const previous = order[i - 1]
+        if (
+          current !== undefined &&
+          previous !== undefined &&
+          ids.has(current) &&
+          !ids.has(previous)
+        ) {
+          order[i] = previous
+          order[i - 1] = current
+        }
+      }
+    }
+    const rank = new Map(order.map((id, index) => [id, index]))
+    apply('Ordre des fils', (draft) => {
+      for (const wire of draft.wires) wire.stack = rank.get(wire.id) ?? wire.stack
+    })
+  }
+
   // Sélection
 
   function selectAll(): void {
     selection.value = doc.value.components.map((instance) => instance.id)
+    selectedWires.value = doc.value.wires.map((wire) => wire.id)
   }
 
   function moveInstances(ids: readonly string[], dx: number, dy: number): void {
@@ -251,6 +446,25 @@ export const useSchematicStore = defineStore('schematic', () => {
           instance.x += dx
           instance.y += dy
         }
+      }
+    })
+  }
+
+  /** Déplace composants et fils sélectionnés d'un même vecteur, en une commande. */
+  function moveSelection(dx: number, dy: number): void {
+    if (dx === 0 && dy === 0) return
+    const instanceIds = selection.value
+    const wireIds = selectedWires.value
+    if (instanceIds.length === 0 && wireIds.length === 0) return
+    apply('Déplacer la sélection', (draft) => {
+      for (const instance of draft.components) {
+        if (instanceIds.includes(instance.id)) {
+          instance.x += dx
+          instance.y += dy
+        }
+      }
+      for (const wire of draft.wires) {
+        if (wireIds.includes(wire.id)) wire.points = castDraft(translatePoints(wire.points, dx, dy))
       }
     })
   }
@@ -300,26 +514,33 @@ export const useSchematicStore = defineStore('schematic', () => {
   }
 
   function removeSelection(): void {
-    const ids = selection.value
-    if (ids.length === 0) return
-    apply(ids.length > 1 ? 'Supprimer la sélection' : 'Supprimer le composant', (draft) => {
-      draft.components = draft.components.filter((instance) => !ids.includes(instance.id))
+    const instanceIds = selection.value
+    const wireIds = selectedWires.value
+    if (instanceIds.length === 0 && wireIds.length === 0) return
+    apply('Supprimer la sélection', (draft) => {
+      draft.components = draft.components.filter((instance) => !instanceIds.includes(instance.id))
+      draft.wires = draft.wires.filter((wire) => !wireIds.includes(wire.id))
     })
-    selection.value = []
+    clearSelection()
   }
 
-  function insertCopies(
-    items: readonly ClipboardItem[],
-    dx: number,
-    dy: number,
-    label: string
-  ): void {
-    if (items.length === 0) return
-    const ids = doc.value.components.map((instance) => instance.id)
+  function selectionData(): ClipboardData {
+    return {
+      items: selectedInstances.value.flatMap((instance) => {
+        const def = doc.value.embeddedDefs[instance.defId]
+        return def ? [{ instance, def }] : []
+      }),
+      wires: doc.value.wires.filter((wire) => selectedWires.value.includes(wire.id))
+    }
+  }
+
+  function insertCopies(data: ClipboardData, dx: number, dy: number, label: string): void {
+    if (data.items.length === 0 && data.wires.length === 0) return
+    const instanceIds = doc.value.components.map((instance) => instance.id)
     const labels = doc.value.components.map((instance) => instance.label)
     const copies: ClipboardItem[] = []
-    for (const item of items) {
-      const id = nextNumberedId('c', [...ids, ...copies.map((copy) => copy.instance.id)])
+    for (const item of data.items) {
+      const id = nextNumberedId('c', [...instanceIds, ...copies.map((copy) => copy.instance.id)])
       const copyLabel = nextLabel(item.def.labelPrefix, [
         ...labels,
         ...copies.map((copy) => copy.instance.label)
@@ -335,6 +556,13 @@ export const useSchematicStore = defineStore('schematic', () => {
         }
       })
     }
+    const wireIds = doc.value.wires.map((wire) => wire.id)
+    let stack = nextStack()
+    const wireCopies: Wire[] = []
+    for (const wire of data.wires) {
+      const id = nextNumberedId('w', [...wireIds, ...wireCopies.map((copy) => copy.id)])
+      wireCopies.push({ ...wire, id, stack: stack++, points: translatePoints(wire.points, dx, dy) })
+    }
     apply(label, (draft) => {
       for (const copy of copies) {
         if (!Object.hasOwn(draft.embeddedDefs, copy.def.id)) {
@@ -342,26 +570,21 @@ export const useSchematicStore = defineStore('schematic', () => {
         }
         draft.components.push(castDraft(copy.instance))
       }
+      for (const wire of wireCopies) draft.wires.push(castDraft(wire))
     })
     selection.value = copies.map((copy) => copy.instance.id)
-  }
-
-  function selectionItems(): ClipboardItem[] {
-    return selectedInstances.value.flatMap((instance) => {
-      const def = doc.value.embeddedDefs[instance.defId]
-      return def ? [{ instance, def }] : []
-    })
+    selectedWires.value = wireCopies.map((wire) => wire.id)
   }
 
   function duplicateSelection(): void {
-    insertCopies(selectionItems(), 1, 1, 'Dupliquer')
+    insertCopies(selectionData(), 1, 1, 'Dupliquer')
   }
 
   function copySelection(): void {
-    const items = selectionItems()
-    if (items.length === 0) return
-    clipboard.value = items
-    status.value = `${items.length} composant(s) copié(s).`
+    const data = selectionData()
+    if (data.items.length === 0 && data.wires.length === 0) return
+    clipboard.value = data
+    status.value = `${data.items.length} composant(s) et ${data.wires.length} fil(s) copié(s).`
   }
 
   function pasteClipboard(): void {
@@ -450,12 +673,17 @@ export const useSchematicStore = defineStore('schematic', () => {
     doc,
     filePath,
     selection,
+    selectedWires,
     tool,
     placement,
+    drawing,
+    currentColor,
     view,
     viewport,
     showPins,
     panKeyHeld,
+    shiftHeld,
+    hoverWireId,
     status,
     undoLabel,
     redoLabel,
@@ -463,6 +691,11 @@ export const useSchematicStore = defineStore('schematic', () => {
     cellPx,
     placed,
     selectedInstances,
+    sortedWires,
+    pinRefs,
+    connectivity,
+    hoverNet,
+    hasSelection,
     undo,
     redo,
     newProject,
@@ -470,13 +703,29 @@ export const useSchematicStore = defineStore('schematic', () => {
     markSaved,
     confirmDiscard,
     setProjectName,
+    selectTool,
     startPlacing,
     stopPlacing,
+    startWireTool,
     rotatePlacement,
     flipPlacement,
     placeAt,
+    addWire,
+    beginWire,
+    appendWirePoints,
+    popWireVertex,
+    finishWire,
+    cancelWire,
+    setWirePoints,
+    recolorWires,
+    setCurrentColor,
+    setWireFreeEnds,
+    removeWires,
+    reorderWires,
+    clearSelection,
     selectAll,
     moveInstances,
+    moveSelection,
     rotateSelection,
     flipSelection,
     rotate,

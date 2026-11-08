@@ -4,16 +4,16 @@ Le domaine ne dépend de rien ; tout le reste dépend de lui.
 
 ## Couches
 
-| Couche             | Dossier         | Contenu                                                                                             | Peut importer                           |
-| ------------------ | --------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| Coque applicative  | `src/app/`      | Fenêtre Vue, bascule Composants / Montage                                                           | features, state, io, render, ui, domain |
-| Fonctionnalités    | `src/features/` | `component-editor/`, `library/`, puis `schematic-editor/`, `export/` ; un store Pinia par éditeur   | state, io, render, ui, domain           |
-| État               | `src/state/`    | `History` : commandes nommées, patches Immer, undo/redo                                             | domain                                  |
-| Entrées / sorties  | `src/io/`       | Pont IPC (`bridge.ts`), paramètres, bibliothèque sur disque, chemins                                | domain                                  |
-| Rendu              | `src/render/`   | Composants Vue SVG sans état qui dessinent les objets du domaine (composants, plus tard fils)       | domain                                  |
-| Interface partagée | `src/ui/`       | Boutons, panneaux, palette de couleurs (rien du métier)                                             | rien                                    |
-| Domaine            | `src/domain/`   | Types, grille, formes, schémas Zod, migrations, PNG, identifiants ; plus tard fils, jonctions, nets | zod seulement                           |
-| Coque Electron     | `electron/`     | `main.ts` (fenêtre, fichiers, dialogues : seul code Node), `preload.ts` (pont), `api.ts` (contrat)  | Node, Electron                          |
+| Couche             | Dossier         | Contenu                                                                                              | Peut importer                           |
+| ------------------ | --------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| Coque applicative  | `src/app/`      | Fenêtre Vue, bascule Composants / Montage                                                            | features, state, io, render, ui, domain |
+| Fonctionnalités    | `src/features/` | `component-editor/`, `library/`, `schematic-editor/`, puis `export/` ; un store Pinia par éditeur    | state, io, render, ui, domain           |
+| État               | `src/state/`    | `History` : commandes nommées, patches Immer, undo/redo                                              | domain                                  |
+| Entrées / sorties  | `src/io/`       | Pont IPC (`bridge.ts`), paramètres, bibliothèque sur disque, chemins                                 | domain                                  |
+| Rendu              | `src/render/`   | Composants Vue SVG sans état qui dessinent les objets du domaine (composants)                        | domain                                  |
+| Interface partagée | `src/ui/`       | Boutons, panneaux, palette de couleurs (rien du métier)                                              | rien                                    |
+| Domaine            | `src/domain/`   | Types, grille, formes, placement, fils, connectivité (jonctions, nets), schémas Zod, migrations, PNG | zod seulement                           |
+| Coque Electron     | `electron/`     | `main.ts` (fenêtre, fichiers, dialogues : seul code Node), `preload.ts` (pont), `api.ts` (contrat)   | Node, Electron                          |
 
 La règle ESLint `no-restricted-imports` sur `src/domain/**` rend la ligne du domaine vérifiable.
 

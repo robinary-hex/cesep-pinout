@@ -1,6 +1,13 @@
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
-import { DEFAULT_PROFILE, type Settings, type StyleProfile } from '@/domain'
+import {
+  DEFAULT_PALETTE,
+  DEFAULT_PROFILE,
+  DEFAULT_SETTINGS,
+  type PaletteColor,
+  type Settings,
+  type StyleProfile
+} from '@/domain'
 import { bridge } from '@/io/bridge'
 import { listComponents, type LibraryEntry } from '@/io/library'
 import { baseName } from '@/io/paths'
@@ -12,8 +19,9 @@ export interface LibraryGroup {
 }
 
 const UNREADABLE_GROUP = 'Illisibles'
+const MAX_CUSTOM_COLORS = 8
 
-/** Bibliothèque de composants sur disque et paramètres qui la localisent. */
+/** Bibliothèque de composants sur disque et paramètres de l'application. */
 export const useLibraryStore = defineStore('library', () => {
   const settings = shallowRef<Settings | null>(null)
   const libraryDir = ref('')
@@ -27,6 +35,13 @@ export const useLibraryStore = defineStore('library', () => {
   /** Profil de style des nouveaux projets. */
   const defaultProfile = computed<StyleProfile>(
     () => settings.value?.defaultProfile ?? DEFAULT_PROFILE
+  )
+  const palette = computed<readonly PaletteColor[]>(
+    () => settings.value?.palette ?? DEFAULT_PALETTE
+  )
+  const customColors = computed<readonly string[]>(() => settings.value?.customColors ?? [])
+  const defaultWireColor = computed(
+    () => settings.value?.defaultWireColor ?? DEFAULT_SETTINGS.defaultWireColor
   )
 
   const filtered = computed(() => {
@@ -86,6 +101,15 @@ export const useLibraryStore = defineStore('library', () => {
     }
   }
 
+  async function persist(next: Settings): Promise<void> {
+    try {
+      await saveSettings(next)
+      settings.value = next
+    } catch (error) {
+      problem.value = `Paramètres non enregistrés : ${describe(error)}`
+    }
+  }
+
   async function chooseDir(): Promise<void> {
     const current = settings.value
     if (!current) return
@@ -95,16 +119,19 @@ export const useLibraryStore = defineStore('library', () => {
       defaultPath: libraryDir.value
     })
     if (dir === null) return
-    const next: Settings = { ...current, libraryDir: dir }
-    try {
-      await saveSettings(next)
-      settings.value = next
-      libraryDir.value = dir
-      problem.value = ''
-      await refresh()
-    } catch (error) {
-      problem.value = `Paramètres non enregistrés : ${describe(error)}`
-    }
+    await persist({ ...current, libraryDir: dir })
+    libraryDir.value = dir
+    problem.value = ''
+    await refresh()
+  }
+
+  /** Garde une couleur personnalisée en tête de liste (les huit dernières). */
+  async function rememberCustomColor(hex: string): Promise<void> {
+    const current = settings.value
+    if (!current) return
+    if (current.palette.some((color) => color.hex.toLowerCase() === hex.toLowerCase())) return
+    const others = current.customColors.filter((color) => color.toLowerCase() !== hex.toLowerCase())
+    await persist({ ...current, customColors: [hex, ...others].slice(0, MAX_CUSTOM_COLORS) })
   }
 
   return {
@@ -114,11 +141,15 @@ export const useLibraryStore = defineStore('library', () => {
     groups,
     ids,
     defaultProfile,
+    palette,
+    customColors,
+    defaultWireColor,
     loading,
     problem,
     search,
     init,
     refresh,
-    chooseDir
+    chooseDir,
+    rememberCustomColor
   }
 })

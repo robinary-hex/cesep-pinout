@@ -2,21 +2,34 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
   absolutePinPosition,
+  dragVertex,
   instanceBounds,
   instanceMatrix,
+  locateOnWire,
   matrixToSvg,
+  moveSegment,
+  nearestSegmentIndex,
   rectsIntersect,
   rotatedSize,
+  routeL,
+  translatePoints,
+  wireIntersectsRect,
+  wirePathData,
   type ComponentInstance,
+  type GridPoint,
   type GridRect,
   type LocalPoint,
-  type PinKind
+  type PinKind,
+  type PinRef,
+  type Wire
 } from '@/domain'
 import ComponentGraphic from '@/render/ComponentGraphic.vue'
 import { useSchematicStore, type PlacedInstance } from './store'
 
 // Canevas infini du montage. Tout le contenu est dessiné en unités de cellule dans un groupe
 // mis à l'échelle (zoom) et translaté (pan) ; seule la grille est calculée en pixels d'écran.
+// Ordre d'empilement : grille, fils, points de jonction, composants, repères, broches,
+// surcouches de sélection et d'édition, fantôme de pose, tracé en cours, rectangle de sélection.
 
 const store = useSchematicStore()
 const host = ref<HTMLDivElement | null>(null)
@@ -30,15 +43,32 @@ const PIN_COLORS: Record<PinKind, string> = {
 }
 const MIN_GRID_PX = 6
 const ZOOM_STEP = 1.1
+const PIN_SNAP_CELLS = 0.5
 
 const cell = computed(() => store.cellPx)
 const view = computed(() => store.view)
 const profile = computed(() => store.doc.profile)
+const wireWidth = computed(() => profile.value.wireWidth)
+const cornerRadius = computed(() => profile.value.cornerRadius)
 
 type Drag =
   | { kind: 'pan'; lastX: number; lastY: number }
-  | { kind: 'move'; ids: string[]; start: LocalPoint; dx: number; dy: number }
+  | { kind: 'move'; ids: string[]; wireIds: string[]; start: LocalPoint; dx: number; dy: number }
   | { kind: 'band'; start: LocalPoint; current: LocalPoint; additive: boolean }
+  | {
+      kind: 'wire-segment'
+      wireId: string
+      index: number
+      original: readonly GridPoint[]
+      preview: GridPoint[]
+    }
+  | {
+      kind: 'wire-vertex'
+      wireId: string
+      index: number
+      original: readonly GridPoint[]
+      preview: GridPoint[]
+    }
 
 const drag = ref<Drag | null>(null)
 /** Pointeur en cellules (flottant), null hors du canevas. */
@@ -71,6 +101,33 @@ function toWorld(screen: { x: number; y: number }): LocalPoint {
   }
 }
 
+function snapGrid(point: LocalPoint): GridPoint {
+  return [Math.round(point.x), Math.round(point.y)]
+}
+
+function nearestPin(point: LocalPoint): PinRef | null {
+  let best: PinRef | null = null
+  let bestDistance = PIN_SNAP_CELLS
+  for (const pin of store.pinRefs) {
+    const distance = Math.hypot(pin.point[0] - point.x, pin.point[1] - point.y)
+    if (distance <= bestDistance) {
+      best = pin
+      bestDistance = distance
+    }
+  }
+  return best
+}
+
+/** Point de départ ou d'arrivée d'un fil : une broche proche l'emporte sur la grille. */
+function wireSnap(point: LocalPoint): { point: GridPoint; pinKey: string | null } {
+  const pin = nearestPin(point)
+  return pin ? { point: pin.point, pinKey: pin.key } : { point: snapGrid(point), pinKey: null }
+}
+
+function wireAt(point: GridPoint): Wire | null {
+  return store.doc.wires.find((wire) => locateOnWire(wire.points, point) !== null) ?? null
+}
+
 // Grille, en pixels d'écran
 
 interface GridLine {
@@ -97,11 +154,17 @@ const gridLines = computed<{ xs: GridLine[]; ys: GridLine[] }>(() => {
 // Instances
 
 const selectedSet = computed(() => new Set(store.selection))
+const selectedWireSet = computed(() => new Set(store.selectedWires))
 
 const moveOffset = computed(() => {
   const current = drag.value
   return current?.kind === 'move'
-    ? { ids: new Set(current.ids), dx: current.dx, dy: current.dy }
+    ? {
+        ids: new Set(current.ids),
+        wireIds: new Set(current.wireIds),
+        dx: current.dx,
+        dy: current.dy
+      }
     : null
 })
 
@@ -146,6 +209,97 @@ const pins = computed(() => {
 
 const labelFontCells = computed(() => profile.value.labelFont.size / profile.value.cellPx)
 
+// Fils
+
+function wirePoints(wire: Wire): readonly GridPoint[] {
+  const current = drag.value
+  if (
+    (current?.kind === 'wire-segment' || current?.kind === 'wire-vertex') &&
+    current.wireId === wire.id
+  ) {
+    return current.preview
+  }
+  const offset = moveOffset.value
+  if (offset && offset.wireIds.has(wire.id))
+    return translatePoints(wire.points, offset.dx, offset.dy)
+  return wire.points
+}
+
+const renderedWires = computed(() =>
+  store.sortedWires.map((wire) => {
+    const points = wirePoints(wire)
+    return {
+      wire,
+      points,
+      d: wirePathData(points, cornerRadius.value),
+      selected: selectedWireSet.value.has(wire.id),
+      inHoverNet:
+        store.hoverNet !== null && store.connectivity.wireNet.get(wire.id) === store.hoverNet
+    }
+  })
+)
+
+const hitWidth = computed(() => Math.max(wireWidth.value, 10 / cell.value))
+
+const wireColorById = computed(() => new Map(store.doc.wires.map((wire) => [wire.id, wire.color])))
+
+const junctions = computed(() => {
+  const radius = (wireWidth.value * profile.value.junctionScale) / 2
+  const fixed = profile.value.junctionColor
+  return store.connectivity.junctions.map((junction) => ({
+    key: `${junction.point[0]},${junction.point[1]}`,
+    x: junction.point[0],
+    y: junction.point[1],
+    r: radius,
+    fill: fixed === 'wire' ? (wireColorById.value.get(junction.carrierWireId) ?? '#000000') : fixed
+  }))
+})
+
+const freeEnds = computed(() =>
+  store.connectivity.freeEnds.map((end) => ({
+    key: `${end.wireId}:${end.endIndex}`,
+    x: end.point[0],
+    y: end.point[1]
+  }))
+)
+
+const vertexHandles = computed(() =>
+  store.doc.wires
+    .filter((wire) => selectedWireSet.value.has(wire.id))
+    .flatMap((wire) =>
+      wirePoints(wire).map(([x, y], index) => ({
+        key: `${wire.id}:${index}`,
+        wireId: wire.id,
+        index,
+        x,
+        y
+      }))
+    )
+)
+
+const drawingPreview = computed(() => {
+  const current = store.drawing
+  const point = hover.value
+  if (!current) return null
+  const last = current.points.at(-1)
+  if (!last) return null
+  const committed = wirePathData(current.points, cornerRadius.value)
+  if (!point) return { committed, pending: '', end: null as GridPoint | null, onPin: false }
+  const snap = wireSnap(point)
+  const route = routeL(last, snap.point, !store.shiftHeld)
+  return {
+    committed,
+    pending: wirePathData([...current.points, ...route.slice(1)], cornerRadius.value),
+    end: snap.point,
+    onPin: snap.pinKey !== null
+  }
+})
+
+const wireStartTarget = computed(() => {
+  if (store.tool !== 'wire' || store.drawing || !hover.value) return null
+  return wireSnap(hover.value)
+})
+
 // Fantôme de pose
 
 const ghost = computed(() => {
@@ -189,8 +343,20 @@ function capture(event: PointerEvent): void {
   svg.value?.setPointerCapture(event.pointerId)
 }
 
+function startMove(event: PointerEvent): void {
+  drag.value = {
+    kind: 'move',
+    ids: [...store.selection],
+    wireIds: [...store.selectedWires],
+    start: toWorld(screenPoint(event)),
+    dx: 0,
+    dy: 0
+  }
+  capture(event)
+}
+
 function onInstanceDown(id: string, event: PointerEvent): void {
-  if (event.button !== 0 || store.panKeyHeld || store.tool === 'place') return
+  if (event.button !== 0 || store.panKeyHeld || store.tool !== 'select') return
   event.stopPropagation()
   if (event.shiftKey) {
     store.selection = selectedSet.value.has(id)
@@ -198,13 +364,55 @@ function onInstanceDown(id: string, event: PointerEvent): void {
       : [...store.selection, id]
     return
   }
-  if (!selectedSet.value.has(id)) store.selection = [id]
+  if (!selectedSet.value.has(id)) {
+    store.selection = [id]
+    store.selectedWires = []
+  }
+  startMove(event)
+}
+
+function onWireDown(wireId: string, event: PointerEvent): void {
+  if (event.button !== 0 || store.panKeyHeld || store.tool !== 'select') return
+  event.stopPropagation()
+  if (event.shiftKey) {
+    store.selectedWires = selectedWireSet.value.has(wireId)
+      ? store.selectedWires.filter((selected) => selected !== wireId)
+      : [...store.selectedWires, wireId]
+    return
+  }
+  if (!selectedWireSet.value.has(wireId)) {
+    store.selection = []
+    store.selectedWires = [wireId]
+  }
+  // Plusieurs éléments sélectionnés : le glisser déplace tout ; un fil seul : on déplace le segment.
+  if (store.selection.length > 0 || store.selectedWires.length > 1) {
+    startMove(event)
+    return
+  }
+  const wire = store.doc.wires.find((candidate) => candidate.id === wireId)
+  if (!wire) return
+  const world = toWorld(screenPoint(event))
   drag.value = {
-    kind: 'move',
-    ids: [...store.selection],
-    start: toWorld(screenPoint(event)),
-    dx: 0,
-    dy: 0
+    kind: 'wire-segment',
+    wireId,
+    index: nearestSegmentIndex(wire.points, world),
+    original: wire.points,
+    preview: [...wire.points]
+  }
+  capture(event)
+}
+
+function onVertexDown(wireId: string, index: number, event: PointerEvent): void {
+  if (event.button !== 0 || store.panKeyHeld || store.tool !== 'select') return
+  event.stopPropagation()
+  const wire = store.doc.wires.find((candidate) => candidate.id === wireId)
+  if (!wire) return
+  drag.value = {
+    kind: 'wire-vertex',
+    wireId,
+    index,
+    original: wire.points,
+    preview: [...wire.points]
   }
   capture(event)
 }
@@ -217,13 +425,29 @@ function onPointerDown(event: PointerEvent): void {
     return
   }
   if (event.button !== 0) return
+  const world = toWorld(screenPoint(event))
+
   if (store.tool === 'place') {
     const current = ghost.value
     if (current) store.placeAt(current.instance.x, current.instance.y)
     return
   }
-  const world = toWorld(screenPoint(event))
-  if (!event.shiftKey) store.selection = []
+
+  if (store.tool === 'wire') {
+    const snap = wireSnap(world)
+    const current = store.drawing
+    if (!current) {
+      store.beginWire(snap.point)
+      return
+    }
+    const last = current.points.at(-1)
+    if (!last) return
+    store.appendWirePoints(routeL(last, snap.point, !store.shiftHeld).slice(1))
+    if (snap.pinKey !== null || wireAt(snap.point)) store.finishWire()
+    return
+  }
+
+  if (!event.shiftKey) store.clearSelection()
   drag.value = { kind: 'band', start: world, current: world, additive: event.shiftKey }
   capture(event)
 }
@@ -233,16 +457,41 @@ function onPointerMove(event: PointerEvent): void {
   hover.value = world
   const current = drag.value
   if (!current) return
-  if (current.kind === 'pan') {
-    store.panBy(event.clientX - current.lastX, event.clientY - current.lastY)
-    current.lastX = event.clientX
-    current.lastY = event.clientY
-  } else if (current.kind === 'move') {
-    current.dx = Math.round(world.x - current.start.x)
-    current.dy = Math.round(world.y - current.start.y)
-  } else {
-    current.current = world
+  switch (current.kind) {
+    case 'pan':
+      store.panBy(event.clientX - current.lastX, event.clientY - current.lastY)
+      current.lastX = event.clientX
+      current.lastY = event.clientY
+      break
+    case 'move':
+      current.dx = Math.round(world.x - current.start.x)
+      current.dy = Math.round(world.y - current.start.y)
+      break
+    case 'band':
+      current.current = world
+      break
+    case 'wire-segment': {
+      const a = current.original[current.index]
+      const b = current.original[current.index + 1]
+      if (!a || !b) break
+      const horizontal = a[1] === b[1]
+      current.preview = moveSegment(
+        current.original,
+        current.index,
+        Math.round(horizontal ? world.y : world.x)
+      )
+      break
+    }
+    case 'wire-vertex':
+      current.preview = dragVertex(current.original, current.index, snapGrid(world))
+      break
   }
+}
+
+function samePoints(a: readonly GridPoint[], b: readonly GridPoint[]): boolean {
+  return (
+    a.length === b.length && a.every((point, i) => b[i]?.[0] === point[0] && b[i]?.[1] === point[1])
+  )
 }
 
 function onPointerUp(event: PointerEvent): void {
@@ -250,18 +499,34 @@ function onPointerUp(event: PointerEvent): void {
   if (!current) return
   drag.value = null
   if (current.kind === 'move') {
-    store.moveInstances(current.ids, current.dx, current.dy)
+    store.moveSelection(current.dx, current.dy)
   } else if (current.kind === 'band') {
     const rect = normalizeRect(current.start, current.current)
     if (rect.width > 0.05 || rect.height > 0.05) {
-      const hit = store.placed
+      const instances = store.placed
         .filter((item) => rectsIntersect(instanceBounds(item.instance, item.def), rect))
         .map((item) => item.instance.id)
-      store.selection = current.additive ? [...new Set([...store.selection, ...hit])] : hit
+      const wires = store.doc.wires
+        .filter((wire) => wireIntersectsRect(wire.points, rect))
+        .map((wire) => wire.id)
+      store.selection = current.additive
+        ? [...new Set([...store.selection, ...instances])]
+        : instances
+      store.selectedWires = current.additive
+        ? [...new Set([...store.selectedWires, ...wires])]
+        : wires
+    }
+  } else if (current.kind === 'wire-segment' || current.kind === 'wire-vertex') {
+    if (!samePoints(current.original, current.preview)) {
+      store.setWirePoints(current.wireId, current.preview)
     }
   }
   if (svg.value?.hasPointerCapture(event.pointerId))
     svg.value.releasePointerCapture(event.pointerId)
+}
+
+function onDoubleClick(): void {
+  if (store.tool === 'wire') store.finishWire()
 }
 
 function onWheel(event: WheelEvent): void {
@@ -284,7 +549,8 @@ const hoverText = computed(() =>
 
 const cursorClass = computed(() => {
   if (store.panKeyHeld || drag.value?.kind === 'pan') return 'panning'
-  return store.tool === 'place' ? 'placing' : ''
+  if (store.tool === 'place') return 'placing'
+  return store.tool === 'wire' ? 'wiring' : ''
 })
 </script>
 
@@ -301,6 +567,7 @@ const cursorClass = computed(() => {
         @pointermove="onPointerMove"
         @pointerup="onPointerUp"
         @pointerleave="hover = null"
+        @dblclick="onDoubleClick"
         @wheel.prevent="onWheel"
         @contextmenu.prevent
       >
@@ -326,6 +593,43 @@ const cursorClass = computed(() => {
         </g>
 
         <g :transform="`translate(${view.panX} ${view.panY}) scale(${cell})`">
+          <g class="wires">
+            <template v-for="item in renderedWires" :key="item.wire.id">
+              <path
+                v-if="item.inHoverNet"
+                class="net-glow"
+                :d="item.d"
+                :stroke-width="wireWidth * 4"
+              />
+              <path
+                v-if="item.selected"
+                class="wire-selected"
+                :d="item.d"
+                :stroke-width="wireWidth + 6 / cell"
+              />
+              <path class="wire" :d="item.d" :stroke="item.wire.color" :stroke-width="wireWidth" />
+              <path
+                class="wire-hit"
+                :d="item.d"
+                :stroke-width="hitWidth"
+                @pointerdown="onWireDown(item.wire.id, $event)"
+                @pointerenter="store.hoverWireId = item.wire.id"
+                @pointerleave="store.hoverWireId = null"
+              />
+            </template>
+          </g>
+
+          <g class="junctions">
+            <circle
+              v-for="dot in junctions"
+              :key="dot.key"
+              :cx="dot.x"
+              :cy="dot.y"
+              :r="dot.r"
+              :fill="dot.fill"
+            />
+          </g>
+
           <g
             v-for="item in store.placed"
             :key="item.instance.id"
@@ -377,6 +681,29 @@ const cursorClass = computed(() => {
             vector-effect="non-scaling-stroke"
           />
 
+          <g class="edit-marks">
+            <rect
+              v-for="end in freeEnds"
+              :key="end.key"
+              class="free-end"
+              :x="end.x - 4 / cell"
+              :y="end.y - 4 / cell"
+              :width="8 / cell"
+              :height="8 / cell"
+              vector-effect="non-scaling-stroke"
+            />
+            <circle
+              v-for="handle in vertexHandles"
+              :key="handle.key"
+              class="vertex-handle"
+              :cx="handle.x"
+              :cy="handle.y"
+              :r="4.5 / cell"
+              vector-effect="non-scaling-stroke"
+              @pointerdown="onVertexDown(handle.wireId, handle.index, $event)"
+            />
+          </g>
+
           <g v-if="ghost" class="ghost" :transform="ghost.transform">
             <ComponentGraphic :def="ghost.def" :cell-px="1" />
             <rect
@@ -386,6 +713,34 @@ const cursorClass = computed(() => {
               vector-effect="non-scaling-stroke"
             />
           </g>
+
+          <g v-if="drawingPreview" class="drawing">
+            <path class="pending" :d="drawingPreview.pending" :stroke-width="wireWidth" />
+            <path
+              class="committed"
+              :d="drawingPreview.committed"
+              :stroke="store.currentColor"
+              :stroke-width="wireWidth"
+            />
+            <circle
+              v-if="drawingPreview.end"
+              class="end"
+              :class="{ 'on-pin': drawingPreview.onPin }"
+              :cx="drawingPreview.end[0]"
+              :cy="drawingPreview.end[1]"
+              :r="5 / cell"
+              vector-effect="non-scaling-stroke"
+            />
+          </g>
+          <circle
+            v-if="wireStartTarget"
+            class="wire-start"
+            :class="{ 'on-pin': wireStartTarget.pinKey !== null }"
+            :cx="wireStartTarget.point[0]"
+            :cy="wireStartTarget.point[1]"
+            :r="5 / cell"
+            vector-effect="non-scaling-stroke"
+          />
 
           <rect v-if="band" class="band" v-bind="band" vector-effect="non-scaling-stroke" />
         </g>
@@ -426,6 +781,10 @@ const cursorClass = computed(() => {
   cursor: copy;
 }
 
+.schematic.wiring {
+  cursor: crosshair;
+}
+
 .schematic.panning {
   cursor: grab;
 }
@@ -436,6 +795,34 @@ const cursorClass = computed(() => {
 
 .grid line.major {
   stroke: #d8dee4;
+}
+
+.wires path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.wire-hit {
+  stroke: transparent;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.wire-selected {
+  stroke: #1f6feb;
+  stroke-opacity: 0.35;
+  pointer-events: none;
+}
+
+.net-glow {
+  stroke: #ffd33d;
+  stroke-opacity: 0.45;
+  pointer-events: none;
+}
+
+.junctions circle {
+  pointer-events: none;
 }
 
 .instance {
@@ -459,6 +846,20 @@ const cursorClass = computed(() => {
   pointer-events: none;
 }
 
+.free-end {
+  fill: #ffffff;
+  stroke: #cf222e;
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+.vertex-handle {
+  fill: #ffffff;
+  stroke: #1f6feb;
+  stroke-width: 1.5;
+  cursor: move;
+}
+
 .ghost {
   opacity: 0.55;
   pointer-events: none;
@@ -469,6 +870,32 @@ const cursorClass = computed(() => {
   stroke: #1f6feb;
   stroke-width: 1;
   stroke-dasharray: 4 3;
+}
+
+.drawing path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.drawing .pending {
+  stroke: #1f6feb;
+  stroke-opacity: 0.6;
+}
+
+.drawing .end,
+.wire-start {
+  fill: rgba(31, 111, 235, 0.15);
+  stroke: #1f6feb;
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+.drawing .end.on-pin,
+.wire-start.on-pin {
+  fill: rgba(26, 127, 55, 0.25);
+  stroke: #1a7f37;
 }
 
 .band {

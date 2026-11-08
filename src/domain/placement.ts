@@ -36,19 +36,23 @@ export function rectContainsPoint(rect: GridRect, x: number, y: number): boolean
 /** Union des boîtes de tous les composants d'un projet ; null si le montage est vide. */
 export function projectBounds(project: Project): GridRect | null {
   let result: GridRect | null = null
-  for (const instance of project.components) {
-    const def = project.embeddedDefs[instance.defId]
-    if (!def) continue
-    const bounds = instanceBounds(instance, def)
+  const include = (bounds: GridRect): void => {
     if (!result) {
       result = { ...bounds }
-      continue
+      return
     }
     const x1 = Math.min(result.x, bounds.x)
     const y1 = Math.min(result.y, bounds.y)
     const x2 = Math.max(result.x + result.width, bounds.x + bounds.width)
     const y2 = Math.max(result.y + result.height, bounds.y + bounds.height)
     result = { x: x1, y: y1, width: x2 - x1, height: y2 - y1 }
+  }
+  for (const instance of project.components) {
+    const def = project.embeddedDefs[instance.defId]
+    if (def) include(instanceBounds(instance, def))
+  }
+  for (const wire of project.wires) {
+    for (const [x, y] of wire.points) include({ x, y, width: 0, height: 0 })
   }
   return result
 }

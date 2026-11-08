@@ -10,6 +10,7 @@ import {
   type LocalPoint
 } from './grid'
 import { styleProfileSchema, type StyleProfile } from './profile'
+import { isUTurn } from './wires'
 
 export const PROJECT_SCHEMA_VERSION = 1
 
@@ -31,8 +32,9 @@ export const freeEndStyleSchema = z.enum(['flat', 'arrow'])
 export type FreeEndStyle = z.infer<typeof freeEndStyleSchema>
 
 /**
- * Un fil valide est une polyligne d'intersections à segments alternés horizontaux et verticaux :
- * chaque sommet intermédiaire est un coude. Retourne la première anomalie, ou null.
+ * Un fil valide est une polyligne d'intersections à segments horizontaux ou verticaux, sans
+ * sommet confondu ni demi-tour. Un sommet au milieu d'un segment droit est permis (il sert à
+ * l'édition). Retourne la première anomalie, ou null.
  */
 export function wireGeometryProblem(points: ReadonlyArray<GridPoint>): string | null {
   for (let i = 1; i < points.length; i++) {
@@ -44,12 +46,8 @@ export function wireGeometryProblem(points: ReadonlyArray<GridPoint>): string | 
     if (ax === bx && ay === by) return `Sommets ${i - 1} et ${i} confondus`
     if (ax !== bx && ay !== by) return `Segment ${i - 1} à ${i} ni horizontal ni vertical`
     const before = points[i - 2]
-    if (before !== undefined) {
-      const previousHorizontal = before[1] === ay
-      const currentHorizontal = ay === by
-      if (previousHorizontal === currentHorizontal) {
-        return `Segments ${i - 2} à ${i} alignés : un seul segment suffit`
-      }
+    if (before !== undefined && isUTurn(before, previous, current)) {
+      return `Segment ${i - 1} à ${i} revient sur le précédent`
     }
   }
   return null
