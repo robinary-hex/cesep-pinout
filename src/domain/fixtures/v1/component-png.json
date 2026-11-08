@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "arduino-nano",
+  "name": "Arduino Nano",
+  "category": "Microcontrôleurs",
+  "description": "Carte Arduino Nano vue de dessus, image PNG à 80 px par cellule",
+  "labelPrefix": "U",
+  "size": { "widthCells": 6, "heightCells": 14 },
+  "visual": { "kind": "png", "file": "image.png", "pxPerCell": 80 },
+  "pins": [
+    { "id": "d2", "name": "D2", "kind": "io", "x": 0, "y": 3 },
+    { "id": "d3", "name": "D3", "kind": "io", "x": 0, "y": 4 },
+    { "id": "gnd", "name": "GND", "kind": "power", "x": 6, "y": 1 },
+    { "id": "vin", "name": "VIN", "kind": "power", "x": 6, "y": 2 },
+    { "id": "5v", "name": "5V", "kind": "power", "x": 6, "y": 3 }
+  ]
+}

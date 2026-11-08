@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "name": "Exemple de montage",
+  "profile": {
+    "name": "Standard",
+    "cellPx": 20,
+    "wireWidth": 0.15,
+    "cornerRadius": 0.4,
+    "junctionScale": 2,
+    "junctionColor": "wire",
+    "labelFont": { "family": "Segoe UI", "size": 11 }
+  },
+  "components": [
+    {
+      "id": "u1",
+      "defId": "arduino-nano",
+      "x": 2,
+      "y": 2,
+      "rotation": 0,
+      "mirror": false,
+      "label": "U1"
+    },
+    {
+      "id": "r1",
+      "defId": "resistor",
+      "x": 12,
+      "y": 2,
+      "rotation": 0,
+      "mirror": false,
+      "label": "R1"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "color": "#000000",
+      "points": [
+        [8, 3],
+        [12, 3]
+      ],
+      "stack": 0,
+      "freeEnds": "flat"
+    },
+    {
+      "id": "w2",
+      "color": "#d62828",
+      "points": [
+        [16, 3],
+        [20, 3],
+        [20, 8]
+      ],
+      "stack": 1,
+      "freeEnds": "flat"
+    },
+    {
+      "id": "w3",
+      "color": "#d62828",
+      "points": [
+        [20, 6],
+        [24, 6]
+      ],
+      "stack": 2,
+      "freeEnds": "arrow"
+    }
+  ],
+  "crossingOverrides": [],
+  "labels": [{ "id": "t1", "x": 2, "y": 0, "text": "Exemple", "size": 11 }],
+  "embeddedDefs": {
+    "arduino-nano": {
+      "schemaVersion": 1,
+      "id": "arduino-nano",
+      "name": "Arduino Nano",
+      "category": "Microcontrôleurs",
+      "description": "Carte Arduino Nano vue de dessus, image PNG à 80 px par cellule",
+      "labelPrefix": "U",
+      "size": { "widthCells": 6, "heightCells": 14 },
+      "visual": {
+        "kind": "png",
+        "file": "image.png",
+        "pxPerCell": 80,
+        "dataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+      },
+      "pins": [
+        { "id": "d2", "name": "D2", "kind": "io", "x": 0, "y": 3 },
+        { "id": "d3", "name": "D3", "kind": "io", "x": 0, "y": 4 },
+        { "id": "gnd", "name": "GND", "kind": "power", "x": 6, "y": 1 },
+        { "id": "vin", "name": "VIN", "kind": "power", "x": 6, "y": 2 },
+        { "id": "5v", "name": "5V", "kind": "power", "x": 6, "y": 3 }
+      ]
+    },
+    "resistor": {
+      "schemaVersion": 1,
+      "id": "resistor",
+      "name": "Résistance",
+      "category": "Passifs",
+      "description": "Résistance fixe, corps rectangulaire, dessinée dans le mini-éditeur",
+      "labelPrefix": "R",
+      "size": { "widthCells": 4, "heightCells": 2 },
+      "visual": {
+        "kind": "drawing",
+        "primitives": [
+          {
+            "kind": "line",
+            "x1": 0,
+            "y1": 4,
+            "x2": 4,
+            "y2": 4,
+            "style": { "stroke": "#000000", "strokeWidth": 0.1, "fill": "none" }
+          },
+          {
+            "kind": "rect",
+            "x": 4,
+            "y": 2,
+            "w": 8,
+            "h": 4,
+            "rx": 0,
+            "style": { "stroke": "#000000", "strokeWidth": 0.1, "fill": "#f5deb3" }
+          },
+          {
+            "kind": "line",
+            "x1": 12,
+            "y1": 4,
+            "x2": 16,
+            "y2": 4,
+            "style": { "stroke": "#000000", "strokeWidth": 0.1, "fill": "none" }
+          },
+          {
+            "kind": "text",
+            "x": 8,
+            "y": 1,
+            "text": "R",
+            "size": 0.5,
+            "anchor": "middle",
+            "color": "#000000"
+          }
+        ]
+      },
+      "pins": [
+        { "id": "a", "name": "1", "kind": "io", "x": 0, "y": 1 },
+        { "id": "b", "name": "2", "kind": "io", "x": 4, "y": 1 }
+      ]
+    }
+  }
+}
