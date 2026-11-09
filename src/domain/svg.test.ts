@@ -93,8 +93,7 @@ describe('export SVG', () => {
           followsRotation: false,
           italic: false,
           underline: false,
-          strike: false,
-          mono: false
+          strike: false
         },
         0.1
       )
@@ -120,8 +119,7 @@ describe('export SVG', () => {
         followsRotation: false,
         italic: false,
         underline: false,
-        strike: false,
-        mono: false
+        strike: false
       },
       0.1
     )
@@ -145,8 +143,7 @@ describe('export SVG', () => {
           followsRotation: false,
           italic: false,
           underline: false,
-          strike: false,
-          mono: false
+          strike: false
         },
         0.1,
         { valeur: '4,7 kΩ' }

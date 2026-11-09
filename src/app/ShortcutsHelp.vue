@@ -39,7 +39,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
     rows: [
       ['V', 'Sélection : glisser déplace une forme ou une broche'],
       ['R / O / L / P', 'Rectangle / ellipse / ligne / polyligne'],
-      ['E / B', 'Texte / broche (sur le bord)'],
+      ['E / B', 'Texte / broche (sur une intersection du composant)'],
       ['Entrée', 'Terminer la polyligne'],
       ['Suppr, Échap', 'Supprimer, annuler'],
       ['Ctrl+Z / Y / S / N', 'Annuler / rétablir / enregistrer / nouveau'],

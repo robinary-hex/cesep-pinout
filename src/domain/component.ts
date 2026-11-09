@@ -1,8 +1,8 @@
 import { z } from 'zod'
 import { hexColorSchema } from './color'
-import { isOnBorder, PNG_PX_PER_CELL, QUARTERS_PER_CELL, sizeSchema, type Size } from './grid'
+import { isInsideBox, PNG_PX_PER_CELL, QUARTERS_PER_CELL, sizeSchema, type Size } from './grid'
 
-export const COMPONENT_SCHEMA_VERSION = 9
+export const COMPONENT_SCHEMA_VERSION = 10
 
 export const pinKindSchema = z.enum(['in', 'out', 'io', 'power'])
 export type PinKind = z.infer<typeof pinKindSchema>
@@ -117,11 +117,10 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
     bold: z.boolean(),
     /** Sur le montage, le texte tourne avec le composant (jamais en miroir) ; sinon il reste horizontal. */
     followsRotation: z.boolean(),
-    /** Styles : italique, souligné, barré, chasse fixe (code). */
+    /** Styles : italique, souligné, barré. */
     italic: z.boolean(),
     underline: z.boolean(),
-    strike: z.boolean(),
-    mono: z.boolean()
+    strike: z.boolean()
   })
 ])
 export type Primitive = z.infer<typeof primitiveSchema>
@@ -148,7 +147,6 @@ export function textContent(primitive: TextPrimitive, fields?: FieldValues): str
 }
 
 export const TEXT_FONT_FAMILY = "'Segoe UI', sans-serif"
-export const MONO_FONT_FAMILY = "Consolas, 'Courier New', monospace"
 
 /** Attributs SVG du style d'un texte : graisse, italique, décorations, famille ; à l'écran comme à l'export. */
 export function textStyleAttrs(primitive: TextPrimitive): Record<string, string | undefined> {
@@ -159,7 +157,7 @@ export function textStyleAttrs(primitive: TextPrimitive): Record<string, string 
     'font-weight': primitive.bold ? 'bold' : undefined,
     'font-style': primitive.italic ? 'italic' : undefined,
     'text-decoration': decorations.length > 0 ? decorations.join(' ') : undefined,
-    'font-family': primitive.mono ? MONO_FONT_FAMILY : TEXT_FONT_FAMILY
+    'font-family': TEXT_FONT_FAMILY
   }
 }
 
@@ -280,9 +278,9 @@ export function componentFields(def: ComponentDefinition): ComponentField[] {
   return fields
 }
 
-/** Broches encore sur le bord d'une boîte donnée (après redimensionnement). */
-export function pinsOnBorder(pins: readonly Pin[], size: Size): Pin[] {
-  return pins.filter((pin) => isOnBorder(pin, size))
+/** Broches encore dans une boîte donnée, bord compris (après redimensionnement). */
+export function pinsInside(pins: readonly Pin[], size: Size): Pin[] {
+  return pins.filter((pin) => isInsideBox(pin, size))
 }
 
 /** Les noms purement numériques suivent l'ordre des broches ; les autres ne bougent pas. */
@@ -395,11 +393,11 @@ export function componentIssues(def: ComponentDefinition): ComponentIssue[] {
     }
     seenIds.add(pin.id)
 
-    if (!isOnBorder(pin, def.size)) {
+    if (!isInsideBox(pin, def.size)) {
       issues.push({
         level: 'error',
         pinId: pin.id,
-        message: `Broche ${pin.name} en (${pin.x}, ${pin.y}) : les broches vont sur le bord du composant`
+        message: `Broche ${pin.name} en (${pin.x}, ${pin.y}) : les broches vont dans la boîte du composant`
       })
     }
 

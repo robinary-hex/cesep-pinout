@@ -106,8 +106,7 @@ export const ICONS = {
   bold: ['M6 4h8a4 4 0 0 1 0 8H6z', 'M6 12h9a4 4 0 0 1 0 8H6z'],
   italic: ['M19 4h-9', 'M14 20H5', 'M15 4L9 20'],
   underline: ['M6 4v6a6 6 0 0 0 12 0V4', 'M4 20h16'],
-  strikethrough: ['M16 4H9a3 3 0 0 0-2.83 4', 'M14 12a4 4 0 0 1 1.17 7.83H8', 'M4 12h16'],
-  code: ['M16 18l6-6-6-6', 'M8 6l-6 6 6 6']
+  strikethrough: ['M16 4H9a3 3 0 0 0-2.83 4', 'M14 12a4 4 0 0 1 1.17 7.83H8', 'M4 12h16']
 } as const satisfies Record<string, readonly string[]>
 
 export type IconName = keyof typeof ICONS

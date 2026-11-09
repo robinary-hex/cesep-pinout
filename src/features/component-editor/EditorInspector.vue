@@ -18,7 +18,7 @@ import { useComponentEditorStore } from './store'
 
 // Panneau de droite. Sans sélection : le composant (propriétés, broches, visuel). Avec des
 // formes sélectionnées : seulement elles. Une broche sélectionnée reste dans la liste du
-// composant, mise en évidence. Les contrôles restent en bas.
+// composant, mise en évidence, avec les contrôles de cohérence ; une forme sélectionnée les cache.
 // Les champs valident au changement (pas à chaque touche), donc une modification = une commande.
 
 const store = useComponentEditorStore()
@@ -233,15 +233,14 @@ function setTextColor(event: Event): void {
   })
 }
 
-type TextStyleKey = 'bold' | 'italic' | 'underline' | 'strike' | 'mono'
+type TextStyleKey = 'bold' | 'italic' | 'underline' | 'strike'
 
 /** Styles de texte, un bouton à pictogramme chacun ; `label` sert d'infobulle et de libellé d'annulation. */
 const TEXT_STYLE_OPTIONS: { key: TextStyleKey; label: string; icon: IconName }[] = [
   { key: 'bold', label: 'Gras', icon: 'bold' },
   { key: 'italic', label: 'Italique', icon: 'italic' },
   { key: 'underline', label: 'Souligné', icon: 'underline' },
-  { key: 'strike', label: 'Barré', icon: 'strikethrough' },
-  { key: 'mono', label: 'Chasse fixe (code)', icon: 'code' }
+  { key: 'strike', label: 'Barré', icon: 'strikethrough' }
 ]
 
 function toggleTextStyle(option: (typeof TEXT_STYLE_OPTIONS)[number]): void {
@@ -299,7 +298,7 @@ function setClosed(event: Event): void {
           title="Revenir au composant (Échap)"
           @click="store.selection = null"
         >
-          <Icon name="chevron-down" :size="12" /> Composant
+          ✕
         </button>
       </div>
 
@@ -488,7 +487,7 @@ function setClosed(event: Event): void {
           title="Revenir au composant (Échap)"
           @click="store.selection = null"
         >
-          <Icon name="chevron-down" :size="12" /> Composant
+          ✕
         </button>
       </div>
       <button type="button" class="danger with-icon" @click="store.removeSelection()">
@@ -609,17 +608,17 @@ function setClosed(event: Event): void {
         </div>
         <p v-if="importError" class="error">{{ importError }}</p>
       </section>
-    </template>
 
-    <section class="block">
-      <h3>Contrôles</h3>
-      <p v-if="store.issues.length === 0" class="ok">Aucun problème.</p>
-      <ul v-else class="issues">
-        <li v-for="(issue, i) in store.issues" :key="i" :class="issue.level">
-          {{ issue.message }}
-        </li>
-      </ul>
-    </section>
+      <section class="block">
+        <h3>Contrôles</h3>
+        <p v-if="store.issues.length === 0" class="ok">Aucun problème.</p>
+        <ul v-else class="issues">
+          <li v-for="(issue, i) in store.issues" :key="i" :class="issue.level">
+            {{ issue.message }}
+          </li>
+        </ul>
+      </section>
+    </template>
   </aside>
 </template>
 
@@ -655,16 +654,6 @@ function setClosed(event: Event): void {
 
 .head-row h3 {
   margin: 0;
-}
-
-.head-row button {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.head-row .icon {
-  transform: rotate(90deg);
 }
 
 .field {

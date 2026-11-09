@@ -4,7 +4,7 @@ import { computed, ref, shallowRef } from 'vue'
 import {
   componentIssues,
   createEmptyComponent,
-  pinsOnBorder,
+  pinsInside,
   PNG_PX_PER_CELL,
   QUARTERS_PER_CELL,
   renumberPins,
@@ -186,21 +186,21 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     })
   }
 
-  /** Redimensionne ; les broches qui ne sont plus sur le bord disparaissent, les autres sont renumérotées. */
+  /** Redimensionne ; les broches qui sortent de la boîte disparaissent, les autres sont renumérotées. */
   function setSize(size: Size): void {
-    const kept = pinsOnBorder(doc.value.pins, size)
+    const kept = pinsInside(doc.value.pins, size)
     const removed = doc.value.pins.length - kept.length
     apply('Redimensionner', (draft) => {
       draft.size = { widthCells: size.widthCells, heightCells: size.heightCells }
       if (removed > 0) draft.pins = castDraft(renumberPins(kept))
     })
     if (removed > 0) {
-      status.value = `${removed} broche(s) hors du nouveau bord supprimée(s).`
+      status.value = `${removed} broche(s) hors de la nouvelle boîte supprimée(s).`
     }
   }
 
   function setVisualPng(dataUrl: string, size: Size): void {
-    const kept = pinsOnBorder(doc.value.pins, size)
+    const kept = pinsInside(doc.value.pins, size)
     apply('Importer un PNG', (draft) => {
       draft.visual = { kind: 'png', file: 'image.png', pxPerCell: PNG_PX_PER_CELL, dataUrl }
       draft.size = { widthCells: size.widthCells, heightCells: size.heightCells }

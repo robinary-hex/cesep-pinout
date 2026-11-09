@@ -168,8 +168,7 @@ describe('textes des composants posés', () => {
           followsRotation: false,
           italic: false,
           underline: false,
-          strike: false,
-          mono: false
+          strike: false
         }
       ]
     }
@@ -217,8 +216,7 @@ describe('textes des composants posés', () => {
           followsRotation: true,
           italic: false,
           underline: false,
-          strike: false,
-          mono: false
+          strike: false
         }
       ]
     }

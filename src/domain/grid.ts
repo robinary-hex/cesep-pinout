@@ -83,11 +83,19 @@ export function transformLocalPoint(
   }
 }
 
+/** Vrai si le point est dans la boîte [0, w] × [0, h], bord compris. */
+export function isInsideBox(point: LocalPoint, size: Size): boolean {
+  const { x, y } = point
+  return x >= 0 && x <= size.widthCells && y >= 0 && y <= size.heightCells
+}
+
 /** Vrai si le point est sur le bord de la boîte [0, w] × [0, h]. */
 export function isOnBorder(point: LocalPoint, size: Size): boolean {
   const { x, y } = point
-  const inside = x >= 0 && x <= size.widthCells && y >= 0 && y <= size.heightCells
-  return inside && (x === 0 || x === size.widthCells || y === 0 || y === size.heightCells)
+  return (
+    isInsideBox(point, size) &&
+    (x === 0 || x === size.widthCells || y === 0 || y === size.heightCells)
+  )
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -95,31 +103,16 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Intersection du bord la plus proche d'un point quelconque (en cellules, non entier),
- * avec la distance en cellules. Sert à poser et déplacer les broches.
+ * Intersection de la boîte du composant (bord compris) la plus proche d'un point quelconque (en
+ * cellules, non entier), avec la distance en cellules. Sert à poser et déplacer les broches.
  */
-export function nearestBorderPoint(
+export function nearestInsidePoint(
   point: LocalPoint,
   size: Size
 ): { point: LocalPoint; distance: number } {
-  const w = size.widthCells
-  const h = size.heightCells
-  const cx = clamp(Math.round(point.x), 0, w)
-  const cy = clamp(Math.round(point.y), 0, h)
-  const candidates: LocalPoint[] = [
-    { x: 0, y: cy },
-    { x: w, y: cy },
-    { x: cx, y: 0 },
-    { x: cx, y: h }
-  ]
-  let best = candidates[0] ?? { x: 0, y: 0 }
-  let bestDistance = Number.POSITIVE_INFINITY
-  for (const candidate of candidates) {
-    const distance = Math.hypot(candidate.x - point.x, candidate.y - point.y)
-    if (distance < bestDistance) {
-      best = candidate
-      bestDistance = distance
-    }
+  const best = {
+    x: clamp(Math.round(point.x), 0, size.widthCells),
+    y: clamp(Math.round(point.y), 0, size.heightCells)
   }
-  return { point: best, distance: bestDistance }
+  return { point: best, distance: Math.hypot(best.x - point.x, best.y - point.y) }
 }

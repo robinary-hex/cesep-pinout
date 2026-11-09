@@ -26,7 +26,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 ## Conventions
 
 - Coordonnées du domaine : entiers en unités de grille. Les composants occupent des cellules ;
-  broches et fils vivent sur les intersections ; broches uniquement sur le bord du composant.
+  broches et fils vivent sur les intersections ; une broche se pose sur n'importe quelle
+  intersection de la boîte du composant, bord compris (décision du 9 novembre 2026).
 - Primitives du mini-éditeur : entiers en quarts de cellule. Épaisseur d'une forme = `weight`
   (multiplicateur, choix dans `STROKE_WEIGHTS`) × `componentStroke` du profil de style (0,1 cellule
   par défaut) : un montage change d'épaisseur avec son profil. Lignes et polylignes ouvertes portent
@@ -35,7 +36,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   s'arrêtant à la base des pointes d'extrémité
   (`trimForArrows`), à l'écran comme à l'export. Un texte `variable` a pour contenu le nom du champ ; l'instance
   posée fournit la valeur (`instance.fields`), sinon `defaultValue` s'affiche ; `bold`, `italic`,
-  `underline`, `strike` et `mono` (chasse fixe) stylent le texte (`textStyleAttrs`, boutons à
+  `underline` et `strike` stylent le texte (`textStyleAttrs`, boutons à
   pictogramme dans le panneau) ; les étiquettes du montage n'ont que le gras. Un texte occupe une boîte (`x`, `y`, `w`, `h` en
   quarts) redimensionnable par poignées : lignes (retours à la ligne permis) centrées
   verticalement, alignées à gauche, au centre ou à droite selon `anchor` (`layoutTextBox`, ligne de base
@@ -159,7 +160,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     revient à la sélection dès qu'un texte est posé, dans les deux éditeurs.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 9, projet 12, paramètres 7
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 10, projet 13, paramètres 7
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

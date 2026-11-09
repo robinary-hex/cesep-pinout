@@ -401,8 +401,7 @@ describe('montage : élasticité des fils, valeurs, collage', () => {
           followsRotation: false,
           italic: false,
           underline: false,
-          strike: false,
-          mono: false
+          strike: false
         }
       ]
     }

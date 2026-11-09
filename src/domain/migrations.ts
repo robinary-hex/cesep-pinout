@@ -199,6 +199,27 @@ function migrateComponentV7(raw: RawRecord): RawRecord {
   }
 }
 
+// Composant v9 → v10 : plus de chasse fixe sur les textes.
+
+function migrateComponentV9(raw: RawRecord): RawRecord {
+  const visual = raw['visual']
+  if (!isRecord(visual) || visual['kind'] !== 'drawing' || !Array.isArray(visual['primitives'])) {
+    return raw
+  }
+  return {
+    ...raw,
+    visual: {
+      ...visual,
+      primitives: visual['primitives'].map((primitive) => {
+        if (!isRecord(primitive) || primitive['kind'] !== 'text') return primitive
+        const rest = { ...primitive }
+        delete rest['mono']
+        return rest
+      })
+    }
+  }
+}
+
 export const componentMigrations: MigrationTable = {
   current: COMPONENT_SCHEMA_VERSION,
   steps: {
@@ -212,7 +233,9 @@ export const componentMigrations: MigrationTable = {
     7: migrateComponentV7,
     // v8 → v9 : italique, souligné, barré et chasse fixe sur les textes, désactivés.
     8: (raw) =>
-      withTextDefaults(raw, { italic: false, underline: false, strike: false, mono: false })
+      withTextDefaults(raw, { italic: false, underline: false, strike: false, mono: false }),
+    // v9 → v10 : la chasse fixe disparaît (option retirée le jour même).
+    9: migrateComponentV9
   }
 }
 
@@ -310,7 +333,9 @@ export const projectMigrations: MigrationTable = {
     // Projet v10 → v11 : définitions embarquées migrées (orientation texte par texte).
     10: migrateEmbeddedDefs,
     // Projet v11 → v12 : définitions embarquées migrées (styles de texte).
-    11: migrateEmbeddedDefs
+    11: migrateEmbeddedDefs,
+    // Projet v12 → v13 : définitions embarquées migrées (plus de chasse fixe).
+    12: migrateEmbeddedDefs
   }
 }
 

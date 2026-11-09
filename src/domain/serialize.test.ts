@@ -155,11 +155,11 @@ describe('composants', () => {
     }
   })
 
-  it('refuse une broche à l’intérieur du composant', () => {
+  it('refuse une broche hors de la boîte du composant', () => {
     const text = mutateComponent(drawingText, (raw) => {
-      must(raw.pins[0], 'broche a').x = 2
+      must(raw.pins[0], 'broche a').x = -1
     })
-    expect(issuesOf(() => parseComponentDefinition(text))).toMatch(/sur le bord/)
+    expect(issuesOf(() => parseComponentDefinition(text))).toMatch(/dans la boîte/)
   })
 
   it('refuse deux broches sur la même intersection', () => {

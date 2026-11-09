@@ -3,7 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import {
   DEFAULT_SHAPE_STYLE,
   dragHandle,
-  nearestBorderPoint,
+  nearestInsidePoint,
   nearestHandle,
   NO_ARROWS,
   primitiveBounds,
@@ -137,18 +137,18 @@ const quarterDots = computed(() => {
   return dots
 })
 
+/** Intersections de la boîte du composant, bord compris : cibles de l'outil Broche. */
 const borderTargets = computed<LocalPoint[]>(() => {
-  const w = size.value.widthCells
-  const h = size.value.heightCells
   const points: LocalPoint[] = []
-  for (let x = 0; x <= w; x++) points.push({ x, y: 0 }, { x, y: h })
-  for (let y = 1; y < h; y++) points.push({ x: 0, y }, { x: w, y })
+  for (let x = 0; x <= size.value.widthCells; x++) {
+    for (let y = 0; y <= size.value.heightCells; y++) points.push({ x, y })
+  }
   return points
 })
 
 const pinTarget = computed<LocalPoint | null>(() => {
   if (store.tool !== 'pin' || !hover.value) return null
-  const nearest = nearestBorderPoint(hover.value, size.value)
+  const nearest = nearestInsidePoint(hover.value, size.value)
   return nearest.distance <= PIN_SNAP_CELLS ? nearest.point : null
 })
 
@@ -448,17 +448,16 @@ function onPointerDown(event: PointerEvent): void {
           followsRotation: false,
           italic: false,
           underline: false,
-          strike: false,
-          mono: false
+          strike: false
         },
         'Ajouter un texte'
       )
       store.tool = 'select'
       break
     case 'pin': {
-      const nearest = nearestBorderPoint(cells, size.value)
+      const nearest = nearestInsidePoint(cells, size.value)
       if (nearest.distance > PIN_SNAP_CELLS) {
-        store.status = 'Clique une intersection du bord du composant.'
+        store.status = 'Clique une intersection de la boîte du composant.'
         break
       }
       const taken = store.doc.pins.some(
@@ -481,7 +480,7 @@ function onPointerMove(event: PointerEvent): void {
   if (!current) return
   switch (current.kind) {
     case 'move-pin':
-      current.current = nearestBorderPoint(cells, size.value).point
+      current.current = nearestInsidePoint(cells, size.value).point
       break
     case 'handle': {
       const q = toQuarters(cells)

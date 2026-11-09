@@ -59,8 +59,9 @@ restent claires.
 
 - Unité du domaine : la cellule de grille, en entiers. Canevas infini, négatifs permis.
 - Les composants occupent des cellules ; leur origine est le coin supérieur gauche.
-- Les broches et les fils vivent sur les intersections. Une broche est sur le bord du composant ;
-  l'éditeur accroche le clic à l'intersection du bord la plus proche (`nearestBorderPoint`).
+- Les broches et les fils vivent sur les intersections. Une broche se pose sur n'importe quelle
+  intersection de la boîte du composant, bord compris ; l'éditeur accroche le clic à la plus
+  proche (`nearestInsidePoint`).
 - Transformation d'une instance : miroir horizontal d'abord, puis rotation horaire, en gardant le
   coin supérieur gauche de la boîte à l'origine (`transformLocalPoint`). Le miroir vertical de
   l'interface = miroir horizontal + 180°.
@@ -108,8 +109,8 @@ renonce). La copie de secours ne survit qu'à un arrêt brutal : c'est alors qu'
 
 Tous en JSON indenté, avec `schemaVersion`, validés par Zod à l'ouverture, migrés étape par étape
 (`src/domain/migrations.ts`). Un fichier d'exemple par version dans `src/domain/fixtures/`.
-Versions courantes : composant 9 (italique, souligné, barré et chasse fixe des textes, orientation réglée texte par texte, textes droits sur le montage, boîtes de texte multilignes, flèche au milieu, graisse des textes, épaisseur en multiplicateur, flèches, textes variables avec
-unité, plus de `labelPrefix`), projet 12 (étiquettes texte en boîte, police des étiquettes d'extrémité dans le profil, graisse des étiquettes, étiquettes d'extrémité des fils, `componentStroke` dans le profil, `fields` par instance,
+Versions courantes : composant 10 (italique, souligné et barré des textes, orientation réglée texte par texte, textes droits sur le montage, boîtes de texte multilignes, flèche au milieu, graisse des textes, épaisseur en multiplicateur, flèches, textes variables avec
+unité, plus de `labelPrefix`), projet 13 (étiquettes texte en boîte, police des étiquettes d'extrémité dans le profil, graisse des étiquettes, étiquettes d'extrémité des fils, `componentStroke` dans le profil, `fields` par instance,
 définitions embarquées migrées à chaque version des composants), paramètres 7 (`componentStroke`
 et `endLabelFont` du profil par défaut, thème sombre par défaut, ouverture du panneau).
 

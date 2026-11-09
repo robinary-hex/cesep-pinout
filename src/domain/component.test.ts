@@ -10,7 +10,7 @@ import {
   translatePrimitive,
   type Primitive
 } from './component'
-import { nearestBorderPoint } from './grid'
+import { nearestInsidePoint } from './grid'
 
 const style = DEFAULT_SHAPE_STYLE
 
@@ -105,19 +105,21 @@ describe('formes du mini-éditeur', () => {
   })
 })
 
-describe('accrochage des broches au bord', () => {
+describe('accrochage des broches aux intersections du composant', () => {
   const size = { widthCells: 4, heightCells: 2 }
 
-  it('choisit l’intersection du bord la plus proche', () => {
-    expect(nearestBorderPoint({ x: 0.2, y: 1.1 }, size).point).toEqual({ x: 0, y: 1 })
-    expect(nearestBorderPoint({ x: 3.9, y: 0.9 }, size).point).toEqual({ x: 4, y: 1 })
-    expect(nearestBorderPoint({ x: 2.1, y: -0.3 }, size).point).toEqual({ x: 2, y: 0 })
-    expect(nearestBorderPoint({ x: 2.4, y: 1.8 }, size).point).toEqual({ x: 2, y: 2 })
+  it('choisit l’intersection la plus proche, bord compris', () => {
+    expect(nearestInsidePoint({ x: 0.2, y: 1.1 }, size).point).toEqual({ x: 0, y: 1 })
+    expect(nearestInsidePoint({ x: 3.9, y: 0.9 }, size).point).toEqual({ x: 4, y: 1 })
+    expect(nearestInsidePoint({ x: 2.1, y: -0.3 }, size).point).toEqual({ x: 2, y: 0 })
+    expect(nearestInsidePoint({ x: 2.4, y: 1.8 }, size).point).toEqual({ x: 2, y: 2 })
+    // Au milieu du composant aussi : une broche peut être intérieure.
+    expect(nearestInsidePoint({ x: 2.2, y: 0.9 }, size).point).toEqual({ x: 2, y: 1 })
   })
 
   it('donne une distance utile pour refuser un clic trop loin', () => {
-    expect(nearestBorderPoint({ x: 2, y: 1 }, size).distance).toBeCloseTo(1)
-    expect(nearestBorderPoint({ x: 8, y: 1 }, size).distance).toBeCloseTo(4)
+    expect(nearestInsidePoint({ x: 2, y: 1.4 }, size).distance).toBeCloseTo(0.4)
+    expect(nearestInsidePoint({ x: 8, y: 1 }, size).distance).toBeCloseTo(4)
   })
 })
 
@@ -140,8 +142,7 @@ describe('textes variables', () => {
       followsRotation: false,
       italic: false,
       underline: false,
-      strike: false,
-      mono: false
+      strike: false
     }
     const nbsp = String.fromCharCode(0xa0)
     expect(textContent(base, { R: '4,7' })).toBe(`4,7${nbsp}kΩ`)
@@ -155,8 +156,7 @@ describe('textes variables', () => {
         followsRotation: false,
         italic: false,
         underline: false,
-        strike: false,
-        mono: false
+        strike: false
       })
     ).toBe('{R}')
     expect(textContent({ ...base, variable: false })).toBe('R')
