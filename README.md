@@ -17,8 +17,8 @@ pnpm build      # bundles electron-vite dans out/
 
 Les exécutables Windows sont publiés sur GitHub : https://github.com/robinary-hex/cesep-pinout/releases/latest
 
-- Installeur 1.1.0 : https://github.com/robinary-hex/cesep-pinout/releases/download/v1.1.0/pinout-1.1.0-setup.exe
-- Portable 1.1.0 : https://github.com/robinary-hex/cesep-pinout/releases/download/v1.1.0/pinout-1.1.0-portable.exe
+- Installeur 1.1.1 : https://github.com/robinary-hex/cesep-pinout/releases/download/v1.1.1/pinout-1.1.1-setup.exe
+- Portable 1.1.1 : https://github.com/robinary-hex/cesep-pinout/releases/download/v1.1.1/pinout-1.1.1-portable.exe
 
 La bibliothèque de composants vit par défaut dans OneDrive, sous `(Cours)\Robotique\(Ressources)\Pinout\library`, résolu
 sur chaque machine à partir de la racine OneDrive ; sans OneDrive, dans `%APPDATA%\Pinout\library`.
