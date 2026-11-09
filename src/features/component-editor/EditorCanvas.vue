@@ -901,7 +901,11 @@ defineExpose({ cancel, finishPolyline })
 }
 
 .canvas-status {
+  /* Hauteur fixe : la barre ne se replie pas quand elle est vide, le canevas ne bouge pas. */
+  flex: none;
+  min-height: 26px;
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding: 4px 12px;
