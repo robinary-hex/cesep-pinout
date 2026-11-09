@@ -110,7 +110,7 @@ function editInstanceLabel(id: string): void {
   if (!found) return
   prompt.value = {
     title: found.def.name,
-    label: 'Repère',
+    label: 'Libellé',
     value: found.instance.label,
     placeholder: 'R1, U2…',
     onSubmit: (value) => store.setInstanceLabel(id, value.trim())
@@ -216,7 +216,7 @@ function openMenu(request: MenuRequest): void {
           item(`${field.name} : ${text}…`, () => editField(instance.id, field), { icon: 'edit' })
         )
       }
-      items.push(item('Repère…', () => editInstanceLabel(instance.id), { icon: 'tag' }))
+      items.push(item('Libellé…', () => editInstanceLabel(instance.id), { icon: 'tag' }))
       const newer = store.newerLibraryDefinition(def.id)
       if (newer) {
         items.push(

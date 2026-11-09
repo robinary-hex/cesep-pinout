@@ -10,6 +10,7 @@ import {
   renumberPins,
   reorderItem,
   translatePrimitive,
+  type Box,
   type ComponentDefinition,
   type LocalPoint,
   type Pin,
@@ -199,6 +200,47 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     if (removed > 0) {
       status.value = `${removed} broche(s) hors de la nouvelle boîte supprimée(s).`
     }
+  }
+
+  /**
+   * Nouvelle boîte du composant, en cellules par rapport à l'origine actuelle (poignées avec Ctrl) :
+   * le dessin et les broches suivent l'origine, les broches qui sortent disparaissent.
+   */
+  function setBox(box: Box): void {
+    const before = doc.value
+    const size = {
+      widthCells: Math.max(1, Math.round(box.w)),
+      heightCells: Math.max(1, Math.round(box.h))
+    }
+    const dx = -Math.round(box.x)
+    const dy = -Math.round(box.y)
+    if (
+      dx === 0 &&
+      dy === 0 &&
+      size.widthCells === before.size.widthCells &&
+      size.heightCells === before.size.heightCells
+    ) {
+      return
+    }
+    const moved = before.pins.map((pin) => ({ ...pin, x: pin.x + dx, y: pin.y + dy }))
+    const kept = pinsInside(moved, size)
+    apply('Redimensionner', (draft) => {
+      draft.size = size
+      const list = drawing(draft)
+      if (list && (dx !== 0 || dy !== 0)) {
+        for (let i = 0; i < list.length; i++) {
+          const primitive = list[i]
+          if (primitive) {
+            list[i] = castDraft(
+              translatePrimitive(primitive, dx * QUARTERS_PER_CELL, dy * QUARTERS_PER_CELL)
+            )
+          }
+        }
+      }
+      draft.pins = castDraft(kept.length !== before.pins.length ? renumberPins(kept) : kept)
+    })
+    const removed = before.pins.length - kept.length
+    if (removed > 0) status.value = `${removed} broche(s) hors de la nouvelle boîte supprimée(s).`
   }
 
   function setVisualPng(dataUrl: string, size: Size): void {
@@ -465,6 +507,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     setMeta,
     setId,
     setSize,
+    setBox,
     setVisualPng,
     setVisualDrawing,
     addPrimitive,

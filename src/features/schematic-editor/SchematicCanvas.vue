@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   absolutePinPosition,
   boxHandles,
@@ -93,6 +93,7 @@ type Drag =
       duplicate: boolean
     }
   | { kind: 'band'; start: LocalPoint; current: LocalPoint; additive: boolean }
+  | { kind: 'text-box'; start: GridPoint; current: GridPoint }
   | { kind: 'label-handle'; id: string; handleId: string; original: Box; preview: Box }
   | {
       kind: 'wire-segment'
@@ -569,6 +570,28 @@ const band = computed(() => {
   return current?.kind === 'band' ? normalizeRect(current.start, current.current) : null
 })
 
+// Changer d'outil abandonne une étiquette dont le second coin n'est pas encore donné.
+watch(
+  () => store.tool,
+  () => {
+    if (drag.value?.kind === 'text-box') drag.value = null
+  }
+)
+
+/** Aperçu de la boîte d'une étiquette en cours de pose. */
+const textBox = computed(() => {
+  const current = drag.value
+  if (current?.kind !== 'text-box') return null
+  const [x1, y1] = current.start
+  const [x2, y2] = current.current
+  return {
+    x: Math.min(x1, x2),
+    y: Math.min(y1, y2),
+    width: Math.max(1, Math.abs(x2 - x1)),
+    height: Math.max(1, Math.abs(y2 - y1))
+  }
+})
+
 // Interactions
 
 function capture(event: PointerEvent): void {
@@ -712,9 +735,16 @@ function onPointerDown(event: PointerEvent): void {
   }
 
   if (store.tool === 'text') {
-    const [x, y] = snapGrid(world)
-    store.addLabel(x, y)
-    store.selectTool()
+    const point = snapGrid(world)
+    const pending = drag.value
+    if (pending?.kind === 'text-box') {
+      drag.value = null
+      commitTextBox(pending.start, point)
+    } else {
+      // Premier coin de la boîte ; le second vient au relâchement (glisser) ou au clic suivant.
+      drag.value = { kind: 'text-box', start: point, current: point }
+      capture(event)
+    }
     return
   }
 
@@ -755,6 +785,9 @@ function onPointerMove(event: PointerEvent): void {
     case 'band':
       current.current = world
       break
+    case 'text-box':
+      current.current = snapGrid(world)
+      break
     case 'wire-segment': {
       const a = current.original[current.index]
       const b = current.original[current.index + 1]
@@ -782,9 +815,32 @@ function samePoints(a: readonly GridPoint[], b: readonly GridPoint[]): boolean {
   )
 }
 
+/** Étiquette entre deux coins ; deux clics au même point donnent la boîte par défaut. */
+function commitTextBox(start: GridPoint, end: GridPoint): void {
+  const [x1, y1] = start
+  const [x2, y2] = end
+  if (x1 === x2 && y1 === y2) store.addLabel(x1, y1)
+  else {
+    store.addLabelBox({
+      x: Math.min(x1, x2),
+      y: Math.min(y1, y2),
+      w: Math.max(1, Math.abs(x2 - x1)),
+      h: Math.max(1, Math.abs(y2 - y1))
+    })
+  }
+  store.selectTool()
+}
+
 function onPointerUp(event: PointerEvent): void {
   const current = drag.value
   if (!current) return
+  if (current.kind === 'text-box') {
+    // Relâché sans bouger : on attend le second clic pour le coin opposé.
+    if (current.start[0] === current.current[0] && current.start[1] === current.current[1]) return
+    drag.value = null
+    commitTextBox(current.start, current.current)
+    return
+  }
   drag.value = null
   if (current.kind === 'move') {
     if (current.duplicate) store.duplicateSelectionAt(current.dx, current.dy)
@@ -1350,6 +1406,7 @@ const cursorClass = computed(() => {
           />
 
           <rect v-if="band" class="band" v-bind="band" vector-effect="non-scaling-stroke" />
+          <rect v-if="textBox" class="band" v-bind="textBox" vector-effect="non-scaling-stroke" />
         </g>
       </svg>
     </div>
@@ -1470,6 +1527,10 @@ const cursorClass = computed(() => {
 }
 
 .labels text,
+.instance-texts text {
+  pointer-events: none;
+}
+
 /* Composant PNG dont la bibliothèque a une version plus récente : cadre teinté, ses traits ne
    pouvant pas être recolorés comme ceux d'un dessin. */
 .instance .stale-frame {
@@ -1477,10 +1538,6 @@ const cursorClass = computed(() => {
   stroke: var(--stale);
   stroke-width: 0.12;
   stroke-dasharray: 0.3 0.2;
-}
-
-.instance-texts text {
-  pointer-events: none;
 }
 
 .labels text {

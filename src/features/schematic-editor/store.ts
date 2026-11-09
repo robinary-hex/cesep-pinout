@@ -35,7 +35,8 @@ import {
   type StyleProfile,
   type TextAnchor,
   type TextLabel,
-  type Wire
+  type Wire,
+  type Box
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import { readProject } from '@/io/projectFiles'
@@ -430,19 +431,24 @@ export const useSchematicStore = defineStore('schematic', () => {
   // Étiquettes texte
 
   function addLabel(x: number, y: number): string {
+    // Boîte de 4 × 1 cellules dont le bord haut est centré sur le clic.
+    return addLabelBox({ x: x - 2, y, w: 4, h: 1 })
+  }
+
+  /** Étiquette « Texte » dans une boîte donnée, en cellules. */
+  function addLabelBox(box: Box): string {
     const id = nextNumberedId(
       't',
       doc.value.labels.map((label) => label.id)
     )
     const size = doc.value.profile.labelFont.size
     apply('Ajouter une étiquette', (draft) => {
-      // Boîte de 4 × 1 cellules dont le bord haut est centré sur le clic.
       draft.labels.push({
         id,
-        x: x - 2,
-        y,
-        w: 4,
-        h: 1,
+        x: box.x,
+        y: box.y,
+        w: box.w,
+        h: box.h,
         anchor: 'middle',
         text: 'Texte',
         size,
@@ -889,7 +895,7 @@ export const useSchematicStore = defineStore('schematic', () => {
   )
 
   function setInstanceLabel(id: string, label: string): void {
-    apply('Modifier le repère', (draft) => {
+    apply('Modifier le libellé', (draft) => {
       const instance = draft.components.find((candidate) => candidate.id === id)
       if (instance) instance.label = label
     })
@@ -1054,6 +1060,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     flipPlacement,
     placeAt,
     addLabel,
+    addLabelBox,
     setLabelText,
     setLabelSize,
     setLabelBold,

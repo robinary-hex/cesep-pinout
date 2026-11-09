@@ -258,7 +258,7 @@ function setLabelSize(event: Event): void {
                 : `couleur ${profile.junctionColor}`
             }}
           </li>
-          <li>Repères : {{ profile.labelFont.family }} {{ profile.labelFont.size }} pt</li>
+          <li>Libellés : {{ profile.labelFont.family }} {{ profile.labelFont.size }} pt</li>
           <li>
             Étiquettes d’extrémité : {{ profile.endLabelFont.family }}
             {{ profile.endLabelFont.size }} pt
@@ -293,7 +293,7 @@ function setLabelSize(event: Event): void {
         </div>
       </div>
       <label class="field">
-        <span>Repère</span>
+        <span>Libellé</span>
         <input
           type="text"
           :value="single.instance.label"
@@ -311,7 +311,6 @@ function setLabelSize(event: Event): void {
             @change="setField(field.name, $event)"
           />
         </label>
-        <p class="hint">Un champ vide reprend la valeur par défaut de la définition.</p>
       </template>
       <div class="row">
         <label class="field">

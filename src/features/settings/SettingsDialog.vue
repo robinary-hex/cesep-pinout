@@ -296,7 +296,7 @@ async function save(): Promise<void> {
                   }
                 "
               />
-              <span>Repères des composants</span>
+              <span>Libellés des composants</span>
             </label>
             <label class="check">
               <input

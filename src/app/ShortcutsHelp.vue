@@ -38,6 +38,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
     title: 'Éditeur de composants',
     rows: [
       ['V', 'Sélection : glisser déplace une forme ou une broche'],
+      ['Ctrl (sans sélection)', 'Poignées de la boîte du composant : glisser un coin ou un côté'],
       ['R / O / L / P', 'Rectangle / ellipse / ligne / polyligne'],
       ['E / B', 'Texte / broche (sur une intersection du composant)'],
       ['Ctrl+Page haut / bas', 'Avancer / reculer la forme (Maj : premier / arrière-plan)'],

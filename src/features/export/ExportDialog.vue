@@ -160,7 +160,7 @@ function setMargin(event: Event): void {
         </label>
         <label class="check">
           <input v-model="options.labels" type="checkbox" />
-          <span>Repères des composants (R1, U2…)</span>
+          <span>Libellés des composants (R1, U2…)</span>
         </label>
 
         <p v-if="result" class="hint">

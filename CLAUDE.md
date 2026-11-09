@@ -44,7 +44,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   verticalement, alignées à gauche, au centre ou à droite selon `anchor` (`layoutTextBox`, ligne de base
   placée pour centrer les capitales). Les étiquettes texte du montage suivent le même modèle,
   en cellules (`x`, `y`, `w`, `h`, `anchor`), avec poignées sur le canevas et tailles en multiples
-  de la police des repères (×1 à ×3). Sur le montage, les textes d'un composant sont dessinés hors
+  de la police des libellés (×1 à ×3). Sur le montage, les textes d'un composant sont dessinés hors
   de la transformation (`instanceTextPlacements`) : par défaut ils restent horizontaux dans la
   boîte que celle-ci leur donne ; un texte dont `followsRotation` est coché (case « Tourne avec le
   composant » dans l'éditeur) est vertical quand le composant est tourné d'un quart de tour (90°
@@ -69,7 +69,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     Ctrl+Page haut/bas
     (Maj pour premier/arrière-plan) = ordre des fils, 0 ajuster au contenu, 1 zoom 100 %,
     molette = zoom, Espace + glisser ou bouton du milieu = déplacer la vue, double-clic du bouton
-    du milieu = ajuster au contenu, E étiquette texte,
+    du milieu = ajuster au contenu, E étiquette texte (deux clics ou un glisser donnent deux coins
+    opposés de la boîte ; deux clics au même point, la boîte par défaut),
     Alt+clic sur un croisement = inverser l'ordre à cet endroit seulement, I = panneau de
     propriétés (replié par défaut, ouvert au clic sur un élément si le paramètre
     `autoOpenInspector` est actif), clic droit = menu contextuel (composant, fil, étiquette ou
@@ -152,8 +153,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     Ctrl+molette = zoom centré sur le curseur (boutons −/+/Ajuster dans la barre), bouton du milieu
     maintenu = déplacer la vue, double-clic du bouton du milieu = ajuster à la fenêtre. Le composant est centré dans la zone et ajusté à la fenêtre à
     l'ouverture (premier affichage, nouveau composant, composant chargé), sans ascenseur. La forme
-    sélectionnée montre ses poignées (`src/domain/handles.ts`) ; Ctrl+glisser sur une forme saisit
-    la poignée la plus proche. Redimensionner le composant supprime les broches qui sortent de la
+    sélectionnée montre ses poignées (`src/domain/handles.ts`, curseurs en double flèche selon le
+    coin ou le côté) ; Ctrl+glisser sur une forme saisit la poignée la plus proche ; sans sélection,
+    Ctrl fait apparaître les poignées de la boîte du composant (`setBox` : le contenu suit
+    l'origine, les broches qui sortent disparaissent). Redimensionner le composant supprime les broches qui sortent de la
     boîte ; les noms numériques des broches suivent toujours leur ordre (`renumberPins`). Le repère
     d'une broche se met du côté libre le plus proche du bord (`pinLabelSide`, contours et traits
     évités), sinon du côté du bord le plus proche.
@@ -165,7 +168,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     textes proposées en multiples (×1 à ×3) d'une hauteur de référence de 0,5 cellule, comme
     les étiquettes du montage le sont de la taille des repères du profil ; la valeur stockée reste
     absolue. Les panneaux ne portent pas de texte explicatif : l'aide est dans F1. L'outil Texte
-    revient à la sélection dès qu'un texte est posé, dans les deux éditeurs.
+    pose la boîte entre deux coins (deux clics ou un glisser ; même point = boîte par défaut) et
+    revient à la sélection dès qu'un texte est posé, dans les deux éditeurs. Le « repère » d'un
+    composant posé s'appelle « libellé » dans l'interface.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
   par version dans `src/domain/fixtures/`. Versions courantes : composant 11, projet 14, paramètres 8

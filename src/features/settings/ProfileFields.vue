@@ -110,7 +110,7 @@ function number(event: Event, fallback: number): number {
     </div>
     <div class="row">
       <label class="field">
-        <span>Police des repères</span>
+        <span>Police des libellés</span>
         <input
           type="text"
           :value="profile.labelFont.family"

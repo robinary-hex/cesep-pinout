@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   DEFAULT_SHAPE_STYLE,
   dragHandle,
@@ -9,6 +9,8 @@ import {
   NO_ARROWS,
   primitiveBounds,
   primitiveHandles,
+  boxHandles,
+  resizeBox,
   QUARTERS_PER_CELL,
   translatePrimitive,
   type ComponentDefinition,
@@ -81,6 +83,8 @@ type Drag =
   | { kind: 'handle'; index: number; handleId: string; original: Primitive; preview: Primitive }
   | { kind: 'band'; start: LocalPoint; current: LocalPoint; base: number[] }
   | { kind: 'pan'; lastX: number; lastY: number }
+  | { kind: 'text-box'; start: QPoint; current: QPoint }
+  | { kind: 'resize-box'; handleId: string; preview: Box }
 
 type Preview =
   | { kind: 'rect'; x: number; y: number; width: number; height: number }
@@ -111,6 +115,37 @@ onMounted(() => {
 })
 
 onUnmounted(() => observer?.disconnect())
+
+// Changer d'outil abandonne une boîte de texte dont le second coin n'est pas encore donné.
+watch(
+  () => store.tool,
+  () => {
+    if (drag.value?.kind === 'text-box') drag.value = null
+  }
+)
+
+/** Ctrl enfoncée : sans sélection, les poignées de la boîte du composant apparaissent. */
+const ctrlHeld = ref(false)
+
+function onModifierKey(event: KeyboardEvent): void {
+  ctrlHeld.value = event.ctrlKey
+}
+
+function onWindowBlur(): void {
+  ctrlHeld.value = false
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onModifierKey)
+  window.addEventListener('keyup', onModifierKey)
+  window.addEventListener('blur', onWindowBlur)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', onModifierKey)
+  window.removeEventListener('keyup', onModifierKey)
+  window.removeEventListener('blur', onWindowBlur)
+})
 
 function pointerCells(event: PointerEvent | WheelEvent): LocalPoint {
   const element = svg.value
@@ -297,6 +332,37 @@ const handles = computed(() => {
   }))
 })
 
+/** Boîte du composant, en cellules. */
+const componentBox = computed<Box>(() => ({
+  x: 0,
+  y: 0,
+  w: size.value.widthCells,
+  h: size.value.heightCells
+}))
+
+/** Poignées de la boîte du composant : outil Sélection, rien de sélectionné, Ctrl enfoncée. */
+const boxHandlesShown = computed(() => {
+  const current = drag.value
+  if (current?.kind !== 'resize-box') {
+    if (store.tool !== 'select' || store.selection !== null || !ctrlHeld.value || current) return []
+  }
+  const box = current?.kind === 'resize-box' ? current.preview : componentBox.value
+  return boxHandles(box).map((handle) => ({
+    ...handle,
+    px: handle.x * cell.value,
+    py: handle.y * cell.value
+  }))
+})
+
+/** Curseur d'une poignée : double flèche selon le coin ou le côté ; déplacement pour un sommet. */
+function handleCursor(id: string): string {
+  if (id === 'nw' || id === 'se') return 'nwse-resize'
+  if (id === 'ne' || id === 'sw') return 'nesw-resize'
+  if (id === 'e' || id === 'w') return 'ew-resize'
+  if (id === 'n' || id === 's') return 'ns-resize'
+  return 'move'
+}
+
 /** Arrivée d'un tracé rectangle/ellipse ; avec Maj, le côté le plus long s'impose aux deux axes. */
 function boxEnd(box: Extract<Drag, { kind: 'box' }>): QPoint {
   if (!box.square || box.tool === 'line') return box.current
@@ -316,6 +382,23 @@ const preview = computed<Preview | null>(() => {
     return {
       kind: 'polyline',
       points: [...current.points, current.current].map((p) => `${px(p.x)},${px(p.y)}`).join(' ')
+    }
+  }
+  if (current.kind === 'text-box') {
+    const x1 = Math.min(current.start.x, current.current.x)
+    const y1 = Math.min(current.start.y, current.current.y)
+    const w = Math.max(1, Math.abs(current.current.x - current.start.x))
+    const h = Math.max(1, Math.abs(current.current.y - current.start.y))
+    return { kind: 'rect', x: px(x1), y: px(y1), width: px(w), height: px(h) }
+  }
+  if (current.kind === 'resize-box') {
+    const box = current.preview
+    return {
+      kind: 'rect',
+      x: box.x * cell.value,
+      y: box.y * cell.value,
+      width: box.w * cell.value,
+      height: box.h * cell.value
     }
   }
   if (current.kind !== 'box') return null
@@ -410,6 +493,46 @@ function onPrimitiveDown(index: number, event: PointerEvent): void {
   capture(event)
 }
 
+function onBoxHandleDown(handleId: string, event: PointerEvent): void {
+  if (event.button !== 0) return
+  event.stopPropagation()
+  drag.value = { kind: 'resize-box', handleId, preview: componentBox.value }
+  capture(event)
+}
+
+/** Texte dans la boîte entre deux coins ; deux clics au même point donnent la boîte par défaut. */
+function commitTextBox(start: QPoint, end: QPoint): void {
+  const same = start.x === end.x && start.y === end.y
+  const box = same
+    ? { x: start.x - 4, y: start.y - 1, w: 8, h: 2 }
+    : {
+        x: Math.min(start.x, end.x),
+        y: Math.min(start.y, end.y),
+        w: Math.max(1, Math.abs(end.x - start.x)),
+        h: Math.max(1, Math.abs(end.y - start.y))
+      }
+  store.addPrimitive(
+    {
+      kind: 'text',
+      ...box,
+      text: 'Texte',
+      size: 0.5,
+      anchor: 'middle',
+      color: '#000000',
+      variable: false,
+      defaultValue: '',
+      unit: '',
+      bold: false,
+      followsRotation: false,
+      italic: false,
+      underline: false,
+      strike: false
+    },
+    'Ajouter un texte'
+  )
+  store.tool = 'select'
+}
+
 function onHandleDown(handleId: string, event: PointerEvent): void {
   const index = store.selectedIndexes[0]
   if (event.button !== 0 || index === undefined || store.selectedIndexes.length !== 1) return
@@ -477,31 +600,18 @@ function onPointerDown(event: PointerEvent): void {
       }
       break
     }
-    case 'text':
-      store.addPrimitive(
-        {
-          kind: 'text',
-          x: q.x - 4,
-          y: q.y - 1,
-          w: 8,
-          h: 2,
-          text: 'Texte',
-          size: 0.5,
-          anchor: 'middle',
-          color: '#000000',
-          variable: false,
-          defaultValue: '',
-          unit: '',
-          bold: false,
-          followsRotation: false,
-          italic: false,
-          underline: false,
-          strike: false
-        },
-        'Ajouter un texte'
-      )
-      store.tool = 'select'
+    case 'text': {
+      const pending = drag.value
+      if (pending?.kind === 'text-box') {
+        drag.value = null
+        commitTextBox(pending.start, q)
+      } else {
+        // Premier coin de la boîte ; le second vient au relâchement (glisser) ou au clic suivant.
+        drag.value = { kind: 'text-box', start: q, current: q }
+        capture(event)
+      }
       break
+    }
     case 'pin': {
       const nearest = nearestInsidePoint(cells, size.value)
       if (nearest.distance > PIN_SNAP_CELLS) {
@@ -537,6 +647,12 @@ function onPointerMove(event: PointerEvent): void {
     }
     case 'band':
       current.current = cells
+      break
+    case 'resize-box':
+      current.preview = resizeBox(componentBox.value, current.handleId, [
+        Math.round(cells.x),
+        Math.round(cells.y)
+      ])
       break
     case 'pan': {
       const container = scroller.value
@@ -610,8 +726,23 @@ function samePrimitive(a: Primitive, b: Primitive): boolean {
 function onPointerUp(event: PointerEvent): void {
   const current = drag.value
   if (!current || current.kind === 'polyline') return
+  if (current.kind === 'text-box') {
+    // Relâché sans bouger : on attend le second clic pour le coin opposé.
+    if (current.start.x === current.current.x && current.start.y === current.current.y) return
+    drag.value = null
+    commitTextBox(current.start, current.current)
+    return
+  }
   drag.value = null
   switch (current.kind) {
+    case 'resize-box': {
+      const box = current.preview
+      const before = componentBox.value
+      if (box.x !== before.x || box.y !== before.y || box.w !== before.w || box.h !== before.h) {
+        store.setBox(box)
+      }
+      break
+    }
     case 'box':
       commitBox(current)
       break
@@ -813,11 +944,26 @@ defineExpose({ cancel, finishPolyline })
               v-for="handle in handles"
               :key="handle.id"
               class="handle"
+              :style="{ cursor: handleCursor(handle.id) }"
               :x="handle.px - 4"
               :y="handle.py - 4"
               width="8"
               height="8"
               @pointerdown="onHandleDown(handle.id, $event)"
+            />
+          </g>
+
+          <g class="handles">
+            <rect
+              v-for="handle in boxHandlesShown"
+              :key="`box-${handle.id}`"
+              class="handle"
+              :style="{ cursor: handleCursor(handle.id) }"
+              :x="handle.px - 4"
+              :y="handle.py - 4"
+              width="8"
+              height="8"
+              @pointerdown="onBoxHandleDown(handle.id, $event)"
             />
           </g>
 
@@ -919,7 +1065,6 @@ defineExpose({ cancel, finishPolyline })
   fill: #ffffff;
   stroke: #1f6feb;
   stroke-width: 1.5;
-  cursor: move;
 }
 
 .pin-targets circle {
