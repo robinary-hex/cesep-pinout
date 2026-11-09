@@ -41,3 +41,15 @@ describe('fichiers de projet', () => {
     )
   })
 })
+
+describe('chemins', () => {
+  it('assemble avec le séparateur du premier segment', async () => {
+    const { joinPath } = await import('./paths')
+    expect(joinPath('C:\\Users\\Robin\\AppData\\Roaming\\Pinout', 'library')).toBe(
+      'C:\\Users\\Robin\\AppData\\Roaming\\Pinout\\library'
+    )
+    expect(joinPath('D:/OneDrive/Pinout/', '/library', 'resistor')).toBe(
+      'D:/OneDrive/Pinout/library/resistor'
+    )
+  })
+})
