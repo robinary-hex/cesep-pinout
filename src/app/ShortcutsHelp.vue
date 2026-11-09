@@ -20,7 +20,11 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['Ctrl+C / V', 'Copier / coller (aussi dans un autre montage)'],
       ['Ctrl+Page haut / bas', 'Avancer / reculer les fils (Maj : premier / arrière-plan)'],
       ['Ctrl+Z / Y', 'Annuler / rétablir'],
-      ['Ctrl+N / O / S', 'Nouveau / ouvrir / enregistrer (Ctrl+Maj+S : sous…)'],
+      ['Ctrl+N / O / S', 'Nouveau / ouvrir (dans un onglet) / enregistrer (Ctrl+Maj+S : sous…)'],
+      [
+        'Ctrl+Tab / Ctrl+Maj+Tab',
+        'Montage suivant / précédent ; clic du milieu sur un onglet : le fermer'
+      ],
       ['Ctrl+E', 'Exporter en PNG ou SVG'],
       ['0 / 1', 'Ajuster au contenu / zoom 100 %'],
       ['Molette, Espace + glisser', 'Zoom autour du curseur, déplacer la vue'],

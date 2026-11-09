@@ -39,6 +39,7 @@ import {
   type Box
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
+import { samePath } from '@/io/paths'
 import { readProject } from '@/io/projectFiles'
 import { History } from '@/state/history'
 
@@ -80,6 +81,34 @@ export interface WireDrawing {
   points: GridPoint[]
 }
 
+/** Onglet affiché dans la barre d'application. */
+export interface TabInfo {
+  id: number
+  name: string
+  filePath: string | null
+  dirty: boolean
+}
+
+/** Ce qu'un onglet garde quand il n'est pas affiché : son document, son historique, son édition. */
+interface TabState {
+  id: number
+  history: History<Project>
+  savedDoc: Project | null
+  filePath: string | null
+  view: ViewState
+  selection: string[]
+  selectedWires: string[]
+  selectedLabels: string[]
+  currentColor: string
+}
+
+/** Montage modifié, pour la copie de secours ; `key` est l'identifiant de son onglet. */
+export interface DirtyDocument {
+  key: number
+  project: Project
+  originalPath: string | null
+}
+
 const MIN_ZOOM = 0.2
 const MAX_ZOOM = 6
 const FIT_MARGIN_CELLS = 2
@@ -87,18 +116,50 @@ const CROSSING_PICK_CELLS = 0.6
 const DEFAULT_VIEW: ViewState = { zoom: 1, panX: 80, panY: 80 }
 
 /**
- * Montage en cours d'édition. Le projet est immuable ; chaque commande passe par l'historique.
- * Le store porte aussi l'état de vue (zoom, pan) et l'état des outils, pour que la barre
- * d'outils, le clavier et le canevas agissent sur la même chose.
+ * Montages ouverts, un par onglet, et celui en cours d'édition. Le projet est immuable ; chaque
+ * commande passe par l'historique de son onglet. Le store porte aussi l'état de vue (zoom, pan)
+ * et l'état des outils, pour que la barre d'outils, le clavier et le canevas agissent sur la
+ * même chose. L'onglet actif vit dans les refs du store ; les autres attendent dans `tabStates`
+ * et `activateTab` range l'un pour charger l'autre. Le presse-papiers est commun aux onglets.
  */
 export const useSchematicStore = defineStore('schematic', () => {
   const library = useLibraryStore()
-  const history = new History<Project>(
-    createEmptyProject('Nouveau montage', library.defaultProfile)
-  )
+
+  let nextTabId = 1
+
+  function blankProject(): Project {
+    return createEmptyProject('Nouveau montage', library.defaultProfile)
+  }
+
+  function freshTab(project: Project, saved: Project | null, path: string | null): TabState {
+    return {
+      id: nextTabId++,
+      history: new History<Project>(project),
+      savedDoc: saved,
+      filePath: path,
+      view: { ...DEFAULT_VIEW },
+      selection: [],
+      selectedWires: [],
+      selectedLabels: [],
+      currentColor: library.defaultWireColor
+    }
+  }
+
+  /** Onglet d'un montage vierge : il n'a rien à enregistrer tant qu'on n'y touche pas. */
+  function blankTab(): TabState {
+    const blank = blankProject()
+    return freshTab(blank, blank, null)
+  }
+
+  const firstTab = blankTab()
+  /** Historique de l'onglet actif ; remplacé à chaque changement d'onglet. */
+  let history = firstTab.history
+  /** États rangés des onglets ; celui de l'onglet actif n'y est à jour qu'après `stash`. */
+  const tabStates = shallowRef<TabState[]>([firstTab])
+  const activeTabId = ref(firstTab.id)
 
   const doc = shallowRef<Project>(history.value)
-  const savedDoc = shallowRef<Project | null>(null)
+  const savedDoc = shallowRef<Project | null>(firstTab.savedDoc)
   const filePath = ref<string | null>(null)
   /** Identifiants des composants sélectionnés. */
   const selection = ref<string[]>([])
@@ -127,6 +188,21 @@ export const useSchematicStore = defineStore('schematic', () => {
   const redoLabel = ref<string | null>(null)
 
   const dirty = computed(() => doc.value !== savedDoc.value)
+  /** Onglet vierge : jamais enregistré, jamais modifié. Un montage qu'on ouvre prend sa place. */
+  const pristine = computed(() => filePath.value === null && !dirty.value)
+  const tabs = computed<TabInfo[]>(() =>
+    tabStates.value.map((tab) =>
+      tab.id === activeTabId.value
+        ? { id: tab.id, name: doc.value.name, filePath: filePath.value, dirty: dirty.value }
+        : {
+            id: tab.id,
+            name: tab.history.value.name,
+            filePath: tab.filePath,
+            dirty: tab.history.value !== tab.savedDoc
+          }
+    )
+  )
+  const anyDirty = computed(() => tabs.value.some((tab) => tab.dirty))
   /** Profil effectif pour l'affichage : l'aperçu de la boîte de dialogue, sinon celui du projet. */
   const profile = computed<StyleProfile>(() => profilePreview.value ?? doc.value.profile)
   const cellPx = computed(() => profile.value.cellPx * view.value.zoom)
@@ -247,36 +323,101 @@ export const useSchematicStore = defineStore('schematic', () => {
     currentColor.value = last?.color ?? library.defaultWireColor
   }
 
-  function resetEditing(): void {
-    syncCurrentColor()
-    clearSelection()
+  // Onglets
+
+  /** Range l'état vivant dans l'onglet actif, avant d'en montrer un autre. */
+  function stash(): void {
+    const id = activeTabId.value
+    const state: TabState = {
+      id,
+      history,
+      savedDoc: savedDoc.value,
+      filePath: filePath.value,
+      view: view.value,
+      selection: selection.value,
+      selectedWires: selectedWires.value,
+      selectedLabels: selectedLabels.value,
+      currentColor: currentColor.value
+    }
+    tabStates.value = tabStates.value.map((tab) => (tab.id === id ? state : tab))
+  }
+
+  /** Montre un onglet : document, historique, vue et sélection deviennent l'état vivant. */
+  function load(tab: TabState): void {
+    history = tab.history
+    savedDoc.value = tab.savedDoc
+    filePath.value = tab.filePath
+    view.value = tab.view
+    selection.value = tab.selection
+    selectedWires.value = tab.selectedWires
+    selectedLabels.value = tab.selectedLabels
+    currentColor.value = tab.currentColor
+    activeTabId.value = tab.id
+    // Pose, tracé et aperçus appartenaient au document qu'on quitte.
     placement.value = null
-    // Le document change : un tracé en cours n'a plus de sens, il est abandonné.
     drawing.value = null
     tool.value = 'select'
+    profilePreview.value = null
+    hoverWireId.value = null
+    sync()
+  }
+
+  function activateTab(id: number): void {
+    if (id === activeTabId.value) return
+    const target = tabStates.value.find((tab) => tab.id === id)
+    if (!target) return
+    // Un fil en cours de tracé est gardé s'il a deux sommets, abandonné sinon.
+    stopWireDrawing()
+    stash()
+    load(target)
+    status.value = ''
+  }
+
+  /** Onglet suivant (1) ou précédent (-1), en boucle. */
+  function cycleTab(step: 1 | -1): void {
+    const list = tabStates.value
+    const index = list.findIndex((tab) => tab.id === activeTabId.value)
+    const next = list[(index + step + list.length) % list.length]
+    if (next) activateTab(next.id)
+  }
+
+  /** Montre un document dans un onglet : l'onglet actif s'il est vierge, sinon un nouveau. */
+  function showInTab(project: Project, saved: Project | null, path: string | null): void {
+    stopWireDrawing()
+    const tab = freshTab(project, saved, path)
+    if (pristine.value) {
+      const replaced = activeTabId.value
+      tabStates.value = tabStates.value.map((other) => (other.id === replaced ? tab : other))
+    } else {
+      stash()
+      tabStates.value = [...tabStates.value, tab]
+    }
+    load(tab)
+    syncCurrentColor()
   }
 
   function newProject(): void {
-    history.reset(createEmptyProject('Nouveau montage', library.defaultProfile))
-    savedDoc.value = null
-    filePath.value = null
-    resetEditing()
-    view.value = { ...DEFAULT_VIEW }
+    const blank = blankProject()
+    showInTab(blank, blank, null)
     status.value = ''
-    sync()
   }
 
   function openProject(project: Project, path: string): void {
-    history.reset(project)
-    savedDoc.value = project
-    filePath.value = path
-    resetEditing()
+    showInTab(project, project, path)
     status.value = ''
-    sync()
   }
 
-  /** Ouvre un fichier de projet par son chemin ; vrai si l'ouverture a réussi. */
+  /**
+   * Ouvre un fichier de projet par son chemin ; vrai si l'ouverture a réussi. Un fichier déjà
+   * ouvert n'est pas relu : son onglet revient devant.
+   */
   async function openPath(path: string): Promise<boolean> {
+    const already = tabs.value.find((tab) => tab.filePath !== null && samePath(tab.filePath, path))
+    if (already) {
+      activateTab(already.id)
+      status.value = `Déjà ouvert : ${path}`
+      return true
+    }
     try {
       const project = await readProject(path)
       openProject(project, path)
@@ -291,14 +432,11 @@ export const useSchematicStore = defineStore('schematic', () => {
     }
   }
 
-  /** Reprend une copie de secours : le projet s'ouvre comme non enregistré. */
+  /** Reprend une copie de secours : le projet s'ouvre dans un onglet, comme non enregistré. */
   function restoreProject(project: Project, originalPath: string | null): void {
-    history.reset(project)
-    savedDoc.value = null
-    filePath.value = originalPath
-    resetEditing()
+    showInTab(project, null, originalPath)
+    fitToContent()
     status.value = 'Copie de secours récupérée : pense à enregistrer.'
-    sync()
   }
 
   function markSaved(path: string): void {
@@ -306,11 +444,43 @@ export const useSchematicStore = defineStore('schematic', () => {
     filePath.value = path
   }
 
-  function confirmDiscard(): boolean {
-    return (
-      !dirty.value ||
-      window.confirm('Le montage a des modifications non enregistrées. Les abandonner ?')
-    )
+  /**
+   * Ferme un onglet, après confirmation s'il a des modifications ; vrai s'il est fermé. Fermer le
+   * dernier laisse un montage vierge.
+   */
+  function closeTab(id: number): boolean {
+    const info = tabs.value.find((tab) => tab.id === id)
+    if (!info) return false
+    if (
+      info.dirty &&
+      !window.confirm(`« ${info.name} » a des modifications non enregistrées. Fermer quand même ?`)
+    ) {
+      return false
+    }
+    const index = tabStates.value.findIndex((tab) => tab.id === id)
+    const remaining = tabStates.value.filter((tab) => tab.id !== id)
+    if (id !== activeTabId.value) {
+      tabStates.value = remaining
+      return true
+    }
+    // L'onglet affiché disparaît : son voisin prend sa place, sans rien ranger.
+    const next = remaining[Math.min(index, remaining.length - 1)] ?? blankTab()
+    tabStates.value = remaining.length > 0 ? remaining : [next]
+    load(next)
+    status.value = ''
+    return true
+  }
+
+  /** Montages modifiés, un par onglet concerné : ce que la copie de secours doit contenir. */
+  function dirtyDocuments(): DirtyDocument[] {
+    return tabStates.value.flatMap((tab) => {
+      const active = tab.id === activeTabId.value
+      const project = active ? doc.value : tab.history.value
+      const saved = active ? savedDoc.value : tab.savedDoc
+      return project === saved
+        ? []
+        : [{ key: tab.id, project, originalPath: active ? filePath.value : tab.filePath }]
+    })
   }
 
   function setProjectName(name: string): void {
@@ -1007,6 +1177,10 @@ export const useSchematicStore = defineStore('schematic', () => {
   return {
     doc,
     filePath,
+    tabs,
+    activeTabId,
+    anyDirty,
+    pristine,
     selection,
     selectedWires,
     selectedLabels,
@@ -1046,7 +1220,10 @@ export const useSchematicStore = defineStore('schematic', () => {
     openPath,
     restoreProject,
     markSaved,
-    confirmDiscard,
+    activateTab,
+    cycleTab,
+    closeTab,
+    dirtyDocuments,
     syncCurrentColor,
     setProjectName,
     setProfile,

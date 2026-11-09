@@ -1,8 +1,10 @@
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   absolutePinPosition,
   createEmptyComponent,
+  createEmptyProject,
+  DEFAULT_PROFILE,
   parseProject,
   serializeProject,
   type ComponentDefinition
@@ -536,5 +538,124 @@ describe('montage : fin d’un tracé de fil', () => {
     store.appendWirePoints([[6, 6]])
     store.startTextTool()
     expect(store.doc.wires).toHaveLength(2)
+  })
+})
+
+describe('onglets de montage', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('un montage vierge n’est pas modifié, et un nouveau montage prend sa place', () => {
+    const store = useSchematicStore()
+    expect(store.dirty).toBe(false)
+    expect(store.pristine).toBe(true)
+    store.newProject()
+    expect(store.tabs).toHaveLength(1)
+    store.setProjectName('Alim')
+    expect(store.pristine).toBe(false)
+    store.newProject()
+    expect(store.tabs.map((tab) => [tab.name, tab.dirty])).toEqual([
+      ['Alim', true],
+      ['Nouveau montage', false]
+    ])
+  })
+
+  it('garde un document, un historique et une sélection par onglet', () => {
+    const store = useSchematicStore()
+    store.startPlacing(resistor())
+    const id = store.placeAt(2, 3)
+    store.stopPlacing()
+    store.selection = id ? [id] : []
+    const first = store.activeTabId
+
+    store.newProject()
+    expect(store.doc.components).toHaveLength(0)
+    expect(store.undoLabel).toBeNull()
+    expect(store.selection).toEqual([])
+    store.setProjectName('Second')
+
+    store.activateTab(first)
+    expect(store.doc.components.map((c) => c.id)).toEqual([id])
+    expect(store.selection).toEqual([id])
+    expect(store.undoLabel).toBe('Poser Résistance')
+    store.undo()
+    expect(store.doc.components).toHaveLength(0)
+
+    // L'annulation n'a touché que cet onglet.
+    store.cycleTab(1)
+    expect(store.doc.name).toBe('Second')
+    expect(store.undoLabel).toBe('Renommer le projet')
+  })
+
+  it('colle dans un autre montage en y embarquant la définition du composant', () => {
+    const store = useSchematicStore()
+    store.startPlacing(resistor())
+    const id = store.placeAt(0, 0)
+    store.stopPlacing()
+    store.selection = id ? [id] : []
+    store.copySelection()
+    const first = store.activeTabId
+
+    store.newProject()
+    store.pasteClipboard()
+    expect(store.doc.components).toHaveLength(1)
+    expect(store.doc.embeddedDefs['resistor']).toBeDefined()
+
+    store.activateTab(first)
+    expect(store.doc.components).toHaveLength(1)
+  })
+
+  it('rouvrir un fichier déjà ouvert ramène son onglet', async () => {
+    const store = useSchematicStore()
+    store.openProject(createEmptyProject('Alim', DEFAULT_PROFILE), 'D:\\Docs\\alim.pinout.json')
+    // Le montage vierge du départ a cédé sa place.
+    expect(store.tabs).toHaveLength(1)
+    store.newProject()
+    expect(store.tabs).toHaveLength(2)
+    expect(await store.openPath('d:/docs/ALIM.pinout.json')).toBe(true)
+    expect(store.tabs).toHaveLength(2)
+    expect(store.doc.name).toBe('Alim')
+  })
+
+  it('ferme un onglet ; le dernier laisse un montage vierge', () => {
+    const store = useSchematicStore()
+    store.openProject(createEmptyProject('Alim', DEFAULT_PROFILE), 'D:/Docs/alim.pinout.json')
+    const alim = store.activeTabId
+    store.newProject()
+    const blank = store.activeTabId
+    // Fermer l'onglet affiché montre son voisin.
+    expect(store.closeTab(blank)).toBe(true)
+    expect(store.activeTabId).toBe(alim)
+    expect(store.closeTab(alim)).toBe(true)
+    expect(store.tabs).toHaveLength(1)
+    expect(store.pristine).toBe(true)
+  })
+
+  it('demande confirmation avant de fermer un onglet modifié', () => {
+    const store = useSchematicStore()
+    store.setProjectName('Brouillon')
+    vi.stubGlobal('window', { confirm: () => false })
+    expect(store.closeTab(store.activeTabId)).toBe(false)
+    expect(store.doc.name).toBe('Brouillon')
+    vi.stubGlobal('window', { confirm: () => true })
+    expect(store.closeTab(store.activeTabId)).toBe(true)
+    expect(store.doc.name).toBe('Nouveau montage')
+  })
+
+  it('liste les montages modifiés pour la copie de secours, onglet par onglet', () => {
+    const store = useSchematicStore()
+    store.setProjectName('A')
+    const first = store.activeTabId
+    store.newProject()
+    expect(store.anyDirty).toBe(true)
+    expect(store.dirtyDocuments().map((entry) => [entry.key, entry.project.name])).toEqual([
+      [first, 'A']
+    ])
+    // Enregistré : plus rien à sauvegarder pour cet onglet.
+    store.activateTab(first)
+    store.markSaved('D:/Docs/a.pinout.json')
+    expect(store.dirtyDocuments()).toEqual([])
+    expect(store.anyDirty).toBe(false)
   })
 })

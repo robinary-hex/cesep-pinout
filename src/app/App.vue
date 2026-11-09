@@ -10,7 +10,7 @@ import { saveProject } from '@/features/schematic-editor/projectActions'
 import SchematicEditor from '@/features/schematic-editor/SchematicEditor.vue'
 import { useSchematicStore } from '@/features/schematic-editor/store'
 import SettingsDialog from '@/features/settings/SettingsDialog.vue'
-import { clearAutosave, readAutosave, writeAutosave } from '@/io/autosave'
+import { clearAutosave, readAutosaves, syncAutosaves } from '@/io/autosave'
 import { bridge } from '@/io/bridge'
 import { baseName } from '@/io/paths'
 import ContextMenu from '@/ui/ContextMenu.vue'
@@ -22,8 +22,8 @@ import type { UpdateStatus } from '../../electron/api'
 import ShortcutsHelp from './ShortcutsHelp.vue'
 import { updateButtonLabel, updateButtonTitle } from './update'
 
-// Coque applicative : menu Fichier, bascule entre les deux modes, thème, paramètres, aide,
-// copie de secours et garde à la fermeture. Un seul éditeur est monté à la fois, donc un seul
+// Coque applicative : menu Fichier, bascule entre les deux modes, onglets des montages ouverts,
+// thème, paramètres, aide, copies de secours et garde à la fermeture. Un seul éditeur est monté à la fois, donc un seul
 // jeu de raccourcis ; le menu Fichier appelle les actions exposées par l'éditeur visible.
 
 type Mode = 'components' | 'schematic'
@@ -69,7 +69,7 @@ async function onUpdateClick(): Promise<void> {
   }
 }
 
-const anyDirty = computed(() => schematic.dirty || editor.dirty)
+const anyDirty = computed(() => schematic.anyDirty || editor.dirty)
 
 watch(
   anyDirty,
@@ -86,6 +86,28 @@ function createComponent(): void {
   if (!editor.confirmDiscard()) return
   editor.open(createEmptyComponent('nouveau-composant', 'Nouveau composant'), null)
   mode.value = 'components'
+}
+
+// Onglets de montage : à droite du bouton Montage, un par montage ouvert.
+
+function showTab(id: number): void {
+  schematic.activateTab(id)
+  mode.value = 'schematic'
+}
+
+function newTab(): void {
+  schematic.newProject()
+  mode.value = 'schematic'
+}
+
+function closeTabOnMiddle(id: number, event: MouseEvent): void {
+  if (event.button === 1) schematic.closeTab(id)
+}
+
+/** La molette fait défiler la rangée d'onglets quand elle déborde. */
+function onTabsWheel(event: WheelEvent): void {
+  const strip = event.currentTarget
+  if (strip instanceof HTMLElement) strip.scrollLeft += event.deltaY
 }
 
 // Menu Fichier
@@ -168,7 +190,7 @@ function openFileMenu(): void {
   }
 }
 
-// Copie de secours du montage, à intervalle régulier tant qu'il y a des modifications.
+// Copies de secours, à intervalle régulier : une par montage modifié, les autres sont effacées.
 let autosaveTimer: ReturnType<typeof setInterval> | null = null
 let autosaveBusy = false
 
@@ -176,8 +198,7 @@ async function autosaveTick(): Promise<void> {
   if (autosaveBusy) return
   autosaveBusy = true
   try {
-    if (schematic.dirty) await writeAutosave(schematic.doc, schematic.filePath)
-    else await clearAutosave()
+    await syncAutosaves(schematic.dirtyDocuments())
   } catch (error) {
     schematic.status = `Copie de secours impossible : ${error instanceof Error ? error.message : String(error)}`
   } finally {
@@ -192,17 +213,20 @@ function scheduleAutosave(seconds: number): void {
 
 watch(() => library.autosaveSeconds, scheduleAutosave, { immediate: true })
 
+/** Au lancement : chaque copie de secours trouvée retrouve son onglet, si Robin le veut. */
 async function proposeRecovery(): Promise<void> {
-  const found = await readAutosave()
-  if (!found) return
-  const when = new Date(found.meta.savedAt).toLocaleString('fr-BE')
-  const where = found.meta.originalPath ?? 'montage jamais enregistré'
-  const accept = window.confirm(
-    `Une copie de secours du montage « ${found.meta.name} » existe (${when}, ${where}). La récupérer ?`
-  )
-  if (accept) {
-    schematic.restoreProject(found.project, found.meta.originalPath)
-    schematic.fitToContent()
+  const found = await readAutosaves()
+  if (found.length === 0) return
+  const lines = found.map(({ meta }) => {
+    const when = new Date(meta.savedAt).toLocaleString('fr-BE')
+    return `« ${meta.name} » (${when}, ${meta.originalPath ?? 'montage jamais enregistré'})`
+  })
+  const question =
+    found.length === 1
+      ? `Une copie de secours du montage ${lines.join('')} existe. La récupérer ?`
+      : `Des copies de secours de ${found.length} montages existent :\n${lines.join('\n')}\nLes récupérer ?`
+  if (window.confirm(question)) {
+    for (const { project, meta } of found) schematic.restoreProject(project, meta.originalPath)
     mode.value = 'schematic'
   } else {
     await clearAutosave()
@@ -215,15 +239,23 @@ onMounted(async () => {
   unsubscribe = bridge().onAppRequest((request) => {
     void (async () => {
       if (request === 'save-then-quit') {
-        // « Enregistrer » avant de quitter : montage puis composant ; un refus garde la fenêtre.
-        const montageSaved = !schematic.dirty || (await saveProject(schematic, library))
-        const componentSaved = !editor.dirty || (await saveComponentDoc(editor, library))
-        if (montageSaved && componentSaved) await bridge().confirmQuit()
+        // « Enregistrer » avant de quitter : chaque montage modifié, affiché à son tour, puis le
+        // composant ; un refus garde la fenêtre.
+        let saved = true
+        for (const tab of schematic.tabs.filter((candidate) => candidate.dirty)) {
+          showTab(tab.id)
+          if (!(await saveProject(schematic, library))) {
+            saved = false
+            break
+          }
+        }
+        if (saved && editor.dirty) saved = await saveComponentDoc(editor, library)
+        if (saved) await bridge().confirmQuit()
         else await bridge().cancelQuit()
         return
       }
       if (request !== 'discard-then-quit') return
-      // « Ne pas enregistrer » : la copie de secours disparaît, le prochain lancement part à vide.
+      // « Ne pas enregistrer » : les copies de secours disparaissent, le prochain lancement part à vide.
       try {
         await clearAutosave()
       } finally {
@@ -235,13 +267,13 @@ onMounted(async () => {
     update.value = status
   })
   await library.init()
-  // Les paramètres sont lus : la couleur des prochains fils part de la couleur par défaut.
+  // Les paramètres sont lus : le montage vierge du lancement repart du profil et de la couleur
+  // par défaut.
+  if (schematic.pristine) schematic.newProject()
   schematic.syncCurrentColor()
   await proposeRecovery()
   const launch = await bridge().getLaunchFile()
-  if (launch && (!schematic.dirty || schematic.confirmDiscard())) {
-    if (await schematic.openPath(launch)) mode.value = 'schematic'
-  }
+  if (launch && (await schematic.openPath(launch))) mode.value = 'schematic'
 })
 
 onUnmounted(() => {
@@ -254,6 +286,15 @@ function onKeyDown(event: KeyboardEvent): void {
   if (event.key === 'F1') {
     event.preventDefault()
     if (openModals.value === 0) showHelp.value = true
+  } else if (
+    event.key === 'Tab' &&
+    event.ctrlKey &&
+    mode.value === 'schematic' &&
+    openModals.value === 0
+  ) {
+    // Ctrl+Tab / Ctrl+Maj+Tab : montage suivant / précédent.
+    event.preventDefault()
+    schematic.cycleTab(event.shiftKey ? -1 : 1)
   }
 }
 
@@ -286,6 +327,40 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
           Montage
         </button>
       </nav>
+      <div class="doc-tabs" @wheel.prevent="onTabsWheel">
+        <div
+          v-for="tab in schematic.tabs"
+          :key="tab.id"
+          class="doc-tab"
+          :class="{ active: mode === 'schematic' && tab.id === schematic.activeTabId }"
+          role="tab"
+          tabindex="0"
+          :title="tab.filePath ?? 'Pas encore enregistré'"
+          @click="showTab(tab.id)"
+          @keydown.enter="showTab(tab.id)"
+          @mousedown.middle.prevent
+          @auxclick.prevent="closeTabOnMiddle(tab.id, $event)"
+        >
+          <span class="doc-tab-name">{{ tab.name }}</span>
+          <span v-if="tab.dirty" class="doc-tab-dot" title="Modifications non enregistrées">●</span>
+          <button
+            type="button"
+            class="doc-tab-close"
+            title="Fermer ce montage (ou clic du milieu sur l’onglet)"
+            @click.stop="schematic.closeTab(tab.id)"
+          >
+            ✕
+          </button>
+        </div>
+        <button
+          type="button"
+          class="ghost icon-only"
+          title="Nouveau montage (Ctrl+N)"
+          @click="newTab"
+        >
+          <Icon name="plus" :size="16" />
+        </button>
+      </div>
       <div class="spacer" />
       <button
         v-if="update"

@@ -101,9 +101,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   PNG via un canvas et le copie dans le presse-papiers. Les réglages d'export, la palette, le profil
   par défaut, les fichiers récents et l'intervalle de copie de secours sont dans les paramètres
   (schéma v2 ; la migration 1 → 2 est dans `src/domain/migrations.ts`).
-- Copie de secours : `src/io/autosave.ts` écrit `userData/autosave/` tant que le montage a des
-  modifications non enregistrées ; `App.vue` la propose au lancement. Elle ne survit qu'à un arrêt
-  brutal : quitter en enregistrant ou en abandonnant l'efface. La garde à la fermeture est
+- Copies de secours : `src/io/autosave.ts` tient dans `userData/autosave/` une copie par montage
+  modifié (`syncAutosaves(dirtyDocuments())`, fichiers `montage-<onglet>.*`, les autres effacés) ;
+  `App.vue` les propose toutes au lancement. Elles ne survivent qu'à un arrêt brutal : quitter en
+  enregistrant (chaque onglet modifié, à son tour) ou en abandonnant les efface. La garde à la fermeture est
   dans `electron/main.ts` (le rendu tient `setDirty` à jour, puis répond à `discard-then-quit` (efface la copie de secours) ou `save-then-quit` : Enregistrer / Ne pas enregistrer /
   Annuler, `cancelQuit` si l'enregistrement est abandonné ; l'enregistrement lui-même est dans
   `projectActions.ts` et `componentActions.ts`, partagé avec les éditeurs).
@@ -119,6 +120,15 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   composant dont la bibliothèque a une version plus récente se dessine dans `--stale` (traits
   rouges en clair, jaunes en sombre ; cadre pour un PNG). Pictogrammes : `src/ui/Icon.vue` dessine les
   tracés de `src/ui/icons.ts` (SVG inline, trait de la couleur courante, pas de police d'icônes).
+- Onglets de montage (`App.vue`, à droite du bouton Montage) : un par montage ouvert, au nom du
+  montage, point s'il est modifié, croix ou clic du milieu pour fermer (confirmation s'il est
+  modifié), « + » pour un nouveau, Ctrl+Tab / Ctrl+Maj+Tab pour passer de l'un à l'autre. Le store
+  du montage reste unique : l'onglet actif vit dans ses refs, les autres sont rangés dans
+  `tabStates` (historique, fichier, vue, sélection, couleur courante) ; `activateTab` range l'un et
+  charge l'autre. Nouveau et Ouvrir créent un onglet, ou prennent la place de l'onglet actif s'il
+  est vierge (`pristine` : jamais enregistré, jamais modifié) ; rouvrir un fichier déjà ouvert
+  ramène son onglet. Un montage vierge n'est pas « modifié ». Le presse-papiers est commun :
+  coller dans un autre montage y embarque les définitions qui manquent.
 - Thème clair ou sombre choisi dans les paramètres (`theme`) : `src/ui/theme.ts` pose
   `data-theme` sur `<html>` et toutes les couleurs de l'interface passent par les variables CSS de
   `src/app/style.css`, jamais en dur dans les styles ; les surfaces de dessin (`--paper`) sont blanches en clair et

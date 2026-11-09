@@ -570,6 +570,14 @@ const band = computed(() => {
   return current?.kind === 'band' ? normalizeRect(current.start, current.current) : null
 })
 
+// Changer d'onglet abandonne le geste en cours : il portait sur le montage qu'on quitte.
+watch(
+  () => store.activeTabId,
+  () => {
+    drag.value = null
+  }
+)
+
 // Changer d'outil abandonne une étiquette dont le second coin n'est pas encore donné.
 watch(
   () => store.tool,

@@ -18,6 +18,12 @@ export function dirOf(path: string): string {
   return index > 0 ? path.slice(0, index) : path
 }
 
+/** Même fichier ? Windows ne distingue ni la casse ni le sens des séparateurs. */
+export function samePath(a: string, b: string): boolean {
+  const normalize = (path: string): string => path.replace(/\\/g, '/').toLowerCase()
+  return normalize(a) === normalize(b)
+}
+
 export function baseName(path: string): string {
   const segments = path.split(/[\\/]/).filter((segment) => segment.length > 0)
   return segments.at(-1) ?? path

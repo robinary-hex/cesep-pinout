@@ -94,16 +94,28 @@ l'éditeur, extrémités « prolongées » dessinées en flèche, aucun marqueur
 obtenu en dessinant ce SVG sur un canvas aux dimensions exactes (`src/features/export/svgToPng.ts`),
 donc avec la même netteté que le SVG ; les PNG embarqués sont rééchantillonnés par le navigateur.
 
-## Copie de secours et fermeture
+## Onglets de montage
 
-Tant que le montage a des modifications non enregistrées, `App.vue` écrit toutes les
-`autosaveSeconds` une copie dans `userData/autosave/` (projet + contexte : nom, chemin d'origine,
-date) et l'efface dès que le montage est propre. Au lancement, une copie présente est proposée.
-À la fermeture, le processus principal connaît l'état (`setDirty`) : s'il y a des modifications,
-il demande confirmation, puis le rendu écrit la copie de secours avant de confirmer la fermeture
-(`discard-then-quit` efface la copie de secours puis ferme, avec un délai de repli de 3 s ;
-`save-then-quit` enregistre d'abord, sans délai, et `cancelQuit` garde la fenêtre si l'utilisateur
-renonce). La copie de secours ne survit qu'à un arrêt brutal : c'est alors qu'elle est proposée.
+Plusieurs montages peuvent être ouverts, un par onglet de la barre d'application. Le store du
+montage reste unique : l'onglet actif vit dans ses refs (document, fichier, vue, sélection) et dans
+la variable `history` ; les autres attendent dans `tabStates`, chacun avec son propre `History`.
+`activateTab` range l'état vivant (`stash`) puis charge celui de l'onglet demandé (`load`) ; les
+éditeurs, les raccourcis et le canevas ne connaissent que l'onglet actif. Nouveau et Ouvrir passent
+par `showInTab`, qui réutilise l'onglet actif s'il est vierge (`pristine`). Le presse-papiers
+(`ClipboardData`, avec la définition de chaque composant copié) est commun : `insertCopies` embarque
+dans le montage cible les définitions qui lui manquent.
+
+## Copies de secours et fermeture
+
+Toutes les `autosaveSeconds`, `App.vue` appelle `syncAutosaves(dirtyDocuments())` : une copie par
+montage modifié dans `userData/autosave/` (`montage-<onglet>.pinout.json` + contexte : nom, chemin
+d'origine, date), toutes les autres effacées. Au lancement, les copies présentes sont proposées et
+rouvertes chacune dans un onglet. À la fermeture, le processus principal connaît l'état
+(`setDirty`, vrai dès qu'un onglet ou le composant est modifié) : s'il y a des modifications, il
+demande confirmation (`discard-then-quit` efface les copies de secours puis ferme, avec un délai de
+repli de 3 s ; `save-then-quit` enregistre chaque montage modifié, affiché à son tour, sans délai,
+et `cancelQuit` garde la fenêtre si l'utilisateur renonce). Les copies de secours ne survivent qu'à
+un arrêt brutal : c'est alors qu'elles sont proposées.
 
 ## Fichiers
 

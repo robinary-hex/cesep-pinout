@@ -47,20 +47,19 @@ async function save(as = false): Promise<void> {
   await saveProject(store, library, as)
 }
 
+// Nouveau et Ouvrir ne remplacent rien : chaque montage a son onglet.
+
 async function open(): Promise<void> {
-  if (!store.confirmDiscard()) return
   const path = await chooseProjectToOpen(library.lastProjectDir)
   if (path === null) return
   await store.openPath(path)
 }
 
 async function openRecent(path: string): Promise<void> {
-  if (!store.confirmDiscard()) return
   await store.openPath(path)
 }
 
 function createNew(): void {
-  if (!store.confirmDiscard()) return
   store.newProject()
 }
 

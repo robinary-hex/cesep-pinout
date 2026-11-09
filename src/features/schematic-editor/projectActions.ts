@@ -1,6 +1,6 @@
 import { FileFormatError } from '@/domain'
 import type { useLibraryStore } from '@/features/library/store'
-import { clearAutosave } from '@/io/autosave'
+import { syncAutosaves } from '@/io/autosave'
 import { dirOf } from '@/io/paths'
 import { chooseProjectToSave, writeProject } from '@/io/projectFiles'
 import type { useSchematicStore } from './store'
@@ -36,7 +36,8 @@ export async function saveProject(
     await writeProject(path, store.doc)
     store.markSaved(path)
     store.status = `Enregistré : ${path}`
-    await clearAutosave()
+    // La copie de secours de ce montage n'a plus lieu d'être ; celles des autres onglets restent.
+    await syncAutosaves(store.dirtyDocuments())
     await library.addRecentFile(path)
     return true
   } catch (error) {
