@@ -9,6 +9,7 @@ import {
   type ExportSettings,
   type PaletteColor,
   type Settings,
+  type LibraryView,
   type Theme,
   type StyleProfile
 } from '@/domain'
@@ -56,6 +57,7 @@ export const useLibraryStore = defineStore('library', () => {
 
   const theme = computed<Theme>(() => settings.value?.theme ?? 'light')
   const autoOpenInspector = computed(() => settings.value?.autoOpenInspector ?? true)
+  const libraryView = computed<LibraryView>(() => settings.value?.libraryView ?? 'list')
 
   const filtered = computed(() => {
     const needle = search.value.trim().toLowerCase()
@@ -182,6 +184,7 @@ export const useLibraryStore = defineStore('library', () => {
     autosaveSeconds,
     theme,
     autoOpenInspector,
+    libraryView,
     loading,
     problem,
     search,

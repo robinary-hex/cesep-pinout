@@ -363,6 +363,8 @@ export const settingsMigrations: MigrationTable = {
     // v5 → v6 : ouverture automatique du panneau de propriétés.
     5: (raw) => ({ ...raw, autoOpenInspector: true }),
     // v6 → v7 : thème sombre par défaut (le clair avait été imposé à la v4, pas choisi).
-    6: (raw) => ({ ...raw, theme: 'dark' })
+    6: (raw) => ({ ...raw, theme: 'dark' }),
+    // v7 → v8 : affichage de la bibliothèque, en liste comme avant.
+    7: (raw) => ({ ...raw, libraryView: 'list' })
   }
 }

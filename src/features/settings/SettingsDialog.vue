@@ -143,8 +143,29 @@ async function save(): Promise<void> {
                 draft = { ...draft, autoOpenInspector: ($event.target as HTMLInputElement).checked }
               "
             />
-            <span>Ouvrir le panneau de propriétés du montage quand un élément est sélectionné</span>
+            <span>Ouvrir le panneau de propriétés à la sélection</span>
           </label>
+          <div class="row">
+            <span class="hint">Bibliothèque :</span>
+            <label class="radio">
+              <input
+                type="radio"
+                name="libraryView"
+                :checked="draft.libraryView === 'list'"
+                @change="draft = { ...draft, libraryView: 'list' }"
+              />
+              Liste
+            </label>
+            <label class="radio">
+              <input
+                type="radio"
+                name="libraryView"
+                :checked="draft.libraryView === 'grid'"
+                @change="draft = { ...draft, libraryView: 'grid' }"
+              />
+              Grille
+            </label>
+          </div>
         </section>
 
         <section class="block">

@@ -4,6 +4,7 @@ import {
   DEFAULT_SHAPE_STYLE,
   dragHandle,
   nearestInsidePoint,
+  pinLabelSide,
   nearestHandle,
   NO_ARROWS,
   primitiveBounds,
@@ -11,6 +12,8 @@ import {
   QUARTERS_PER_CELL,
   translatePrimitive,
   type ComponentDefinition,
+  type Box,
+  type LabelSide,
   type LocalPoint,
   type Pin,
   type PinKind,
@@ -163,13 +166,54 @@ function pinPosition(pin: Pin): LocalPoint {
     : { x: pin.x, y: pin.y }
 }
 
-function pinLabel(pin: Pin): { dx: number; dy: number; anchor: 'start' | 'middle' | 'end' } {
-  const { x, y } = pinPosition(pin)
-  const inside = y > 0 && y < size.value.heightCells
-  if (x === 0 && inside) return { dx: -16, dy: 0, anchor: 'end' }
-  if (x === size.value.widthCells && inside) return { dx: 16, dy: 0, anchor: 'start' }
-  if (y === 0) return { dx: 0, dy: -22, anchor: 'middle' }
-  return { dx: 0, dy: 24, anchor: 'middle' }
+// Repère d'une broche : du côté libre le plus proche du bord, sinon du bord le plus proche
+// (les broches peuvent être n'importe où dans la boîte). Boîtes estimées en cellules.
+
+type LabelOffset = { dx: number; dy: number; anchor: 'start' | 'middle' | 'end' }
+
+const PIN_LABEL_FONT_PX = 22
+/** Décalage du repère en pixels, par côté, depuis le centre de la broche. */
+const PIN_LABEL_OFFSETS: Record<LabelSide, LabelOffset> = {
+  left: { dx: -16, dy: 0, anchor: 'end' },
+  right: { dx: 16, dy: 0, anchor: 'start' },
+  top: { dx: 0, dy: -22, anchor: 'middle' },
+  bottom: { dx: 0, dy: 24, anchor: 'middle' }
+}
+
+function pinLabelText(pin: Pin, index: number): string {
+  return `${index + 1}${pin.name !== String(index + 1) ? ` · ${pin.name}` : ''}`
+}
+
+/** Boîte du repère pour un côté, en cellules, d'après une largeur de caractère moyenne. */
+function pinLabelBox(point: LocalPoint, text: string, side: LabelSide): Box {
+  const width = (text.length * 0.55 * PIN_LABEL_FONT_PX) / cell.value
+  const height = (PIN_LABEL_FONT_PX * 1.1) / cell.value
+  const offset = PIN_LABEL_OFFSETS[side]
+  const centerX = point.x + offset.dx / cell.value
+  const centerY = point.y + offset.dy / cell.value
+  const x =
+    offset.anchor === 'start'
+      ? centerX
+      : offset.anchor === 'end'
+        ? centerX - width
+        : centerX - width / 2
+  return { x, y: centerY - height / 2, w: width, h: height }
+}
+
+function pinLabel(pin: Pin, index: number): LabelOffset {
+  const point = pinPosition(pin)
+  const text = pinLabelText(pin, index)
+  const primitives = store.doc.visual.kind === 'drawing' ? store.doc.visual.primitives : []
+  const side = pinLabelSide(point, size.value, primitives, (candidate) =>
+    pinLabelBox(point, text, candidate)
+  )
+  return PIN_LABEL_OFFSETS[side]
+}
+
+const pinLabels = computed(() => store.doc.pins.map((pin, index) => pinLabel(pin, index)))
+
+function labelOf(index: number): LabelOffset {
+  return pinLabels.value[index] ?? PIN_LABEL_OFFSETS.bottom
 }
 
 /** Décalage des originaux pendant un déplacement (pas pendant une copie). */
@@ -739,14 +783,14 @@ defineExpose({ cancel, finishPolyline })
             />
             <circle r="6" :fill="PIN_COLORS[pin.kind]" stroke="var(--paper)" stroke-width="2" />
             <text
-              :x="pinLabel(pin).dx"
-              :y="pinLabel(pin).dy"
-              :text-anchor="pinLabel(pin).anchor"
+              :x="labelOf(index).dx"
+              :y="labelOf(index).dy"
+              :text-anchor="labelOf(index).anchor"
               dominant-baseline="middle"
-              font-size="22"
+              :font-size="PIN_LABEL_FONT_PX"
               fill="var(--paper-text)"
             >
-              {{ index + 1 }}{{ pin.name !== String(index + 1) ? ` · ${pin.name}` : '' }}
+              {{ pinLabelText(pin, index) }}
             </text>
           </g>
 

@@ -21,6 +21,7 @@ import projectV12 from './fixtures/v12/project.json?raw'
 import projectV11 from './fixtures/v11/project.json?raw'
 import projectV10 from './fixtures/v10/project.json?raw'
 import settingsV6 from './fixtures/v6/settings.json?raw'
+import settingsV7 from './fixtures/v7/settings.json?raw'
 import projectV9 from './fixtures/v9/project.json?raw'
 import settingsV5 from './fixtures/v5/settings.json?raw'
 import settingsV4 from './fixtures/v4/settings.json?raw'
@@ -213,7 +214,7 @@ describe('composant v4 → v5', () => {
   })
 })
 
-describe('projet v5 → v7', () => {
+describe('projet v5 → v8', () => {
   it('migre les définitions embarquées et garde les étiquettes en gras', () => {
     const project = parseProject(projectV5)
     expect(project.schemaVersion).toBe(13)
@@ -225,7 +226,7 @@ describe('projet v5 → v7', () => {
   })
 })
 
-describe('projet v6 → v7', () => {
+describe('projet v6 → v8', () => {
   it('donne au profil une police d’étiquettes d’extrémité, de la famille des repères', () => {
     const project = parseProject(projectV6)
     expect(project.schemaVersion).toBe(13)
@@ -234,7 +235,7 @@ describe('projet v6 → v7', () => {
   })
 })
 
-describe('composant v5 → v7', () => {
+describe('composant v5 → v8', () => {
   it('donne au texte une boîte déduite de son ancre, centrée sur l’ancien point', () => {
     const def = parseComponentDefinition(componentV5)
     expect(def.schemaVersion).toBe(10)
@@ -272,7 +273,7 @@ describe('projet v8 → v9', () => {
   })
 })
 
-describe('composant v6 → v7', () => {
+describe('composant v6 → v8', () => {
   it('garde les textes droits sur le montage par défaut', () => {
     const def = parseComponentDefinition(componentV6)
     expect(def.schemaVersion).toBe(10)
@@ -366,47 +367,56 @@ describe('projet v12 → v13', () => {
   })
 })
 
-describe('paramètres v6 → v7', () => {
+describe('paramètres v7 → v8', () => {
+  it('affiche la bibliothèque en liste par défaut et garde le reste', () => {
+    const settings = parseSettings(settingsV7)
+    expect(settings.schemaVersion).toBe(8)
+    expect(settings.libraryView).toBe('list')
+    expect(settings.theme).toBe('dark')
+  })
+})
+
+describe('paramètres v6 → v8', () => {
   it('passe au thème sombre et garde le reste', () => {
     const settings = parseSettings(settingsV6)
-    expect(settings.schemaVersion).toBe(7)
+    expect(settings.schemaVersion).toBe(8)
     expect(settings.theme).toBe('dark')
     expect(settings.autoOpenInspector).toBe(true)
     expect(settings.autosaveSeconds).toBe(120)
   })
 })
 
-describe('paramètres v5 → v7', () => {
+describe('paramètres v5 → v8', () => {
   it('ouvre le panneau de propriétés à la sélection par défaut', () => {
     const settings = parseSettings(settingsV5)
-    expect(settings.schemaVersion).toBe(7)
+    expect(settings.schemaVersion).toBe(8)
     expect(settings.autoOpenInspector).toBe(true)
   })
 })
 
-describe('paramètres v4 → v7', () => {
+describe('paramètres v4 → v8', () => {
   it('complète le profil par défaut et garde le thème', () => {
     const settings = parseSettings(settingsV4)
-    expect(settings.schemaVersion).toBe(7)
+    expect(settings.schemaVersion).toBe(8)
     expect(settings.theme).toBe('dark')
     expect(settings.defaultProfile.endLabelFont).toEqual({ family: 'Segoe UI', size: 14 })
   })
 })
 
-describe('paramètres v1 → v7', () => {
+describe('paramètres v1 → v8', () => {
   it('ajoute export, copie de secours, trait des composants et thème', () => {
     const settings = parseSettings(settingsV1)
-    expect(settings.schemaVersion).toBe(7)
+    expect(settings.schemaVersion).toBe(8)
     expect(settings.defaultProfile.componentStroke).toBe(0.1)
     expect(settings.export.scale).toBe(2)
     expect(settings.theme).toBe('dark')
   })
 })
 
-describe('paramètres v3 → v7', () => {
+describe('paramètres v3 → v8', () => {
   it('ajoute le thème, sombre désormais, et garde le reste', () => {
     const settings = parseSettings(settingsV3)
-    expect(settings.schemaVersion).toBe(7)
+    expect(settings.schemaVersion).toBe(8)
     expect(settings.theme).toBe('dark')
     expect(settings.recentFiles).toEqual(['D:/Documents/diviseur.pinout.json'])
     expect(settings.autosaveSeconds).toBe(60)

@@ -11,7 +11,7 @@ import {
 describe('paramètres', () => {
   it('migre un fichier de version 1 en ajoutant export et copie de secours', () => {
     const settings = parseSettings(settingsV1)
-    expect(settings.schemaVersion).toBe(7)
+    expect(settings.schemaVersion).toBe(8)
     expect(settings.export).toEqual(DEFAULT_EXPORT)
     expect(settings.autosaveSeconds).toBe(DEFAULT_AUTOSAVE_SECONDS)
     expect(settings.libraryDir).toBe('D:/OneDrive/Pinout/library')

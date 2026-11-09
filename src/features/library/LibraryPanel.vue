@@ -9,7 +9,8 @@ import ComponentThumbnail from '@/render/ComponentThumbnail.vue'
 import Icon from '@/ui/Icon.vue'
 import { useLibraryStore } from './store'
 
-// Panneau de gauche : la bibliothèque de composants sur disque.
+// Panneau de gauche : la bibliothèque de composants sur disque, en liste (nom, broches) ou en
+// grille de vignettes (nom au survol) selon le paramètre `libraryView`.
 // En mode « edit », un clic ouvre le composant dans l'éditeur ; en mode « place », il le pose
 // sur le montage.
 
@@ -32,6 +33,14 @@ function toggleGroup(name: string): void {
 
 function isOpen(name: string): boolean {
   return library.search.trim().length > 0 || !collapsed.value.has(name)
+}
+
+/** Infobulle d'une vignette de la grille : le nom, que la grille ne montre pas, et les broches. */
+function tileTitle(entry: LibraryEntry): string {
+  if (!entry.def) return entry.problem ?? 'Fichier illisible'
+  const action =
+    props.mode === 'place' ? ' — clic puis clic sur le montage, ou glisser-déposer' : ''
+  return `${entry.def.name} · ${entry.def.pins.length} broche(s)${action}`
 }
 
 function isCurrent(entry: LibraryEntry): boolean {
@@ -154,59 +163,104 @@ async function remove(entry: LibraryEntry): Promise<void> {
           <span class="group-name">{{ group.name }}</span>
           <span class="count">{{ group.entries.length }}</span>
         </button>
-        <div
-          v-for="entry in group.entries"
-          v-show="isOpen(group.name)"
-          :key="entry.folder"
-          class="item"
-          :class="{ current: isCurrent(entry) || isPlacing(entry), broken: !entry.def }"
-          :draggable="mode === 'place' && entry.def !== null"
-          @dragstart="onDragStart(entry, $event)"
-          @dragend="onDragEnd"
-        >
-          <button
-            type="button"
-            class="open"
-            :disabled="!entry.def"
-            :title="
-              entry.def
-                ? mode === 'place'
-                  ? `Poser ${entry.def.name} : clic puis clic sur le montage, ou glisser-déposer`
-                  : `Ouvrir ${entry.def.name}`
-                : (entry.problem ?? '')
-            "
-            @click="pick(entry)"
-          >
-            <ComponentThumbnail
-              v-if="entry.def"
-              :def="entry.def"
-              :size="56"
-              :stroke-base="library.defaultProfile.componentStroke"
-            />
-            <span v-else class="thumb-missing">?</span>
-            <span class="text">
-              <span class="name">{{ entry.def?.name ?? baseName(entry.folder) }}</span>
-              <span v-if="entry.def" class="meta">
-                {{ entry.def.pins.length }} broche(s) · {{ entry.def.id }}
-              </span>
-              <span v-else class="meta">Fichier illisible</span>
-            </span>
-          </button>
-          <div v-if="mode === 'edit'" class="actions">
-            <button
-              v-if="entry.def"
-              type="button"
-              class="small"
-              title="Dupliquer"
-              @click="duplicate(entry)"
+        <template v-if="library.libraryView === 'grid'">
+          <div v-show="isOpen(group.name)" class="grid">
+            <div
+              v-for="entry in group.entries"
+              :key="entry.folder"
+              class="tile"
+              :class="{ current: isCurrent(entry) || isPlacing(entry), broken: !entry.def }"
+              :draggable="mode === 'place' && entry.def !== null"
+              @dragstart="onDragStart(entry, $event)"
+              @dragend="onDragEnd"
             >
-              ⧉
-            </button>
-            <button type="button" class="small danger" title="Supprimer" @click="remove(entry)">
-              ✕
-            </button>
+              <button
+                type="button"
+                class="tile-open"
+                :disabled="!entry.def"
+                :title="tileTitle(entry)"
+                @click="pick(entry)"
+              >
+                <ComponentThumbnail
+                  v-if="entry.def"
+                  :def="entry.def"
+                  :size="52"
+                  :stroke-base="library.defaultProfile.componentStroke"
+                />
+                <span v-else class="thumb-missing">?</span>
+              </button>
+              <div v-if="mode === 'edit'" class="tile-actions">
+                <button
+                  v-if="entry.def"
+                  type="button"
+                  class="small"
+                  title="Dupliquer"
+                  @click="duplicate(entry)"
+                >
+                  ⧉
+                </button>
+                <button type="button" class="small danger" title="Supprimer" @click="remove(entry)">
+                  ✕
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        </template>
+        <template v-else>
+          <div
+            v-for="entry in group.entries"
+            v-show="isOpen(group.name)"
+            :key="entry.folder"
+            class="item"
+            :class="{ current: isCurrent(entry) || isPlacing(entry), broken: !entry.def }"
+            :draggable="mode === 'place' && entry.def !== null"
+            @dragstart="onDragStart(entry, $event)"
+            @dragend="onDragEnd"
+          >
+            <button
+              type="button"
+              class="open"
+              :disabled="!entry.def"
+              :title="
+                entry.def
+                  ? mode === 'place'
+                    ? `Poser ${entry.def.name} : clic puis clic sur le montage, ou glisser-déposer`
+                    : `Ouvrir ${entry.def.name}`
+                  : (entry.problem ?? '')
+              "
+              @click="pick(entry)"
+            >
+              <ComponentThumbnail
+                v-if="entry.def"
+                :def="entry.def"
+                :size="56"
+                :stroke-base="library.defaultProfile.componentStroke"
+              />
+              <span v-else class="thumb-missing">?</span>
+              <span class="text">
+                <span class="name">{{ entry.def?.name ?? baseName(entry.folder) }}</span>
+                <span v-if="entry.def" class="meta">
+                  {{ entry.def.pins.length }} broche(s) · {{ entry.def.id }}
+                </span>
+                <span v-else class="meta">Fichier illisible</span>
+              </span>
+            </button>
+            <div v-if="mode === 'edit'" class="actions">
+              <button
+                v-if="entry.def"
+                type="button"
+                class="small"
+                title="Dupliquer"
+                @click="duplicate(entry)"
+              >
+                ⧉
+              </button>
+              <button type="button" class="small danger" title="Supprimer" @click="remove(entry)">
+                ✕
+              </button>
+            </div>
+          </div>
+        </template>
       </section>
     </div>
   </aside>
@@ -390,6 +444,63 @@ async function remove(entry: LibraryEntry): Promise<void> {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Grille : des vignettes carrées, le nom dans l'infobulle ; actions au survol dans le coin. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+  gap: 4px;
+  padding: 2px 10px 6px;
+}
+
+.tile {
+  position: relative;
+}
+
+.tile-open {
+  width: 100%;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.tile-open:hover:not(:disabled) {
+  background: var(--surface-3);
+  border-color: var(--border);
+}
+
+.tile-open:disabled {
+  cursor: default;
+}
+
+.tile.current .tile-open {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.tile-actions {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+}
+
+.tile:hover .tile-actions {
+  opacity: 1;
+}
+
+.tile-actions button {
+  padding: 0 4px;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .actions {
