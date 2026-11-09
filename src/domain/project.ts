@@ -17,7 +17,7 @@ import {
 import { styleProfileSchema, type StyleProfile } from './profile'
 import { isUTurn } from './wires'
 
-export const PROJECT_SCHEMA_VERSION = 13
+export const PROJECT_SCHEMA_VERSION = 14
 
 /** Composant posé sur le montage ; (x, y) = coin supérieur gauche de sa boîte, en grille. */
 export const componentInstanceSchema = z.object({

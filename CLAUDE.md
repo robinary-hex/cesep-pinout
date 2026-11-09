@@ -30,7 +30,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   intersection de la boîte du composant, bord compris (décision du 9 novembre 2026).
 - Primitives du mini-éditeur : entiers en quarts de cellule. Épaisseur d'une forme = `weight`
   (multiplicateur, choix dans `STROKE_WEIGHTS`) × `componentStroke` du profil de style (0,1 cellule
-  par défaut) : un montage change d'épaisseur avec son profil. Lignes et polylignes ouvertes portent
+  par défaut) : un montage change d'épaisseur avec son profil. Le remplissage a une opacité
+  (`fillOpacity`, 0 à 1, attribut `fill-opacity` à l'écran et à l'export) ; le trait reste
+  opaque. Lignes et polylignes ouvertes portent
   des flèches optionnelles (`arrows` : début, centre dans le sens du tracé et centrée par son
   centre de gravité, fin), le trait
   s'arrêtant à la base des pointes d'extrémité
@@ -131,7 +133,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Bibliothèque de composants : dossier par défaut = racine OneDrive de la machine (variables
   `OneDriveCommercial` puis `OneDrive`, exposées par `getAppPaths().oneDrive`) + `(Cours)\Robotique\(Ressources)\Pinout\library`,
   sinon `userData/library` ; un dossier choisi dans OneDrive est enregistré avec le préfixe
-  `${OneDrive}` (`portableLibraryDir`), résolu sur chaque machine (`resolveLibraryDir`).
+  `${OneDrive}` (`portableLibraryDir`), résolu sur chaque machine (`resolveLibraryDir`). Panneau en
+  liste (nom, broches) ou en grille de vignettes (nom en petit dessous) selon `libraryView`
+  (paramètres) ; catégories repliables.
 - Boîtes de dialogue : `src/ui/ModalDialog.vue` ; tant qu'une est ouverte (`openModals`), les
   éditeurs ignorent leurs raccourcis. `src/ui/PromptDialog.vue` (saisie d'une valeur) et
   `src/ui/ContextMenu.vue` (menu contextuel, entrées décrites dans `contextMenu.ts`) comptent aussi
@@ -143,12 +147,16 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   SmartScreen au premier lancement, normal). Un `.json` passé en argument s'ouvre au lancement.
   - Éditeur de composants : V sélection, R rectangle, O ellipse, L ligne, P polyligne, E texte,
     B broche, Suppr, Échap, Entrée (termine une polyligne), Ctrl+Z / Ctrl+Y, Ctrl+S, Ctrl+N,
+    Ctrl+Page haut/bas (Maj pour premier/arrière-plan) = ordre d'empilement de la forme
+    sélectionnée (`reorderItem`, aussi par boutons dans le panneau),
     Ctrl+molette = zoom centré sur le curseur (boutons −/+/Ajuster dans la barre), bouton du milieu
     maintenu = déplacer la vue, double-clic du bouton du milieu = ajuster à la fenêtre. Le composant est centré dans la zone et ajusté à la fenêtre à
     l'ouverture (premier affichage, nouveau composant, composant chargé), sans ascenseur. La forme
     sélectionnée montre ses poignées (`src/domain/handles.ts`) ; Ctrl+glisser sur une forme saisit
-    la poignée la plus proche. Redimensionner le composant supprime les broches qui ne sont plus sur
-    le bord ; les noms numériques des broches suivent toujours leur ordre (`renumberPins`).
+    la poignée la plus proche. Redimensionner le composant supprime les broches qui sortent de la
+    boîte ; les noms numériques des broches suivent toujours leur ordre (`renumberPins`). Le repère
+    d'une broche se met du côté libre le plus proche du bord (`pinLabelSide`, contours et traits
+    évités), sinon du côté du bord le plus proche.
     Sélection multiple : lasso dans le vide, Maj+clic ajoute ou retire une forme, glisser déplace
     toutes les formes sélectionnées, Alt+glisser en dépose une copie, Ctrl+C / V / D copient,
     collent (décalées d'une cellule) et dupliquent ; le panneau de droite ne montre que l'élément
@@ -160,7 +168,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     revient à la sélection dès qu'un texte est posé, dans les deux éditeurs.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 10, projet 13, paramètres 7
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 11, projet 14, paramètres 8
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

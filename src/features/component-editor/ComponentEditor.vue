@@ -52,6 +52,8 @@ function onKeyDown(event: KeyboardEvent): void {
     else if (key === 'c') store.copySelection()
     else if (key === 'v') store.pasteClipboard()
     else if (key === 'd') store.duplicateSelection()
+    else if (key === 'pageup') store.reorderPrimitive(event.shiftKey ? 'top' : 'up')
+    else if (key === 'pagedown') store.reorderPrimitive(event.shiftKey ? 'bottom' : 'down')
     else return
     event.preventDefault()
     return

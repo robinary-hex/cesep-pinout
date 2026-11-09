@@ -8,13 +8,15 @@ import {
   PNG_PX_PER_CELL,
   QUARTERS_PER_CELL,
   renumberPins,
+  reorderItem,
   translatePrimitive,
   type ComponentDefinition,
   type LocalPoint,
   type Pin,
   type Primitive,
   type ShapeStyle,
-  type Size
+  type Size,
+  type StackMove
 } from '@/domain'
 import { History } from '@/state/history'
 import type { ToolId } from './tools'
@@ -268,6 +270,28 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     })
   }
 
+  /** Ordre d'empilement de la forme sélectionnée (seule) ; la sélection la suit. */
+  function reorderPrimitive(move: StackMove): void {
+    const indexes = selectedIndexes.value
+    const index = indexes[0]
+    if (indexes.length !== 1 || index === undefined) return
+    const list = doc.value.visual.kind === 'drawing' ? doc.value.visual.primitives : null
+    if (!list) return
+    const result = reorderItem(list, index, move)
+    if (result.index === index) return
+    const labels: Record<StackMove, string> = {
+      up: 'Avancer la forme',
+      down: 'Reculer la forme',
+      top: 'Forme au premier plan',
+      bottom: 'Forme à l’arrière-plan'
+    }
+    apply(labels[move], (draft) => {
+      const target = drawing(draft)
+      if (target) target.splice(0, target.length, ...castDraft(result.list))
+    })
+    selection.value = { kind: 'primitives', indexes: [result.index] }
+  }
+
   function removePrimitives(indexes: readonly number[]): void {
     if (indexes.length === 0) return
     apply(indexes.length > 1 ? 'Supprimer les formes' : 'Supprimer la forme', (draft) => {
@@ -449,6 +473,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     updateStyle,
     movePrimitives,
     removePrimitives,
+    reorderPrimitive,
     addPin,
     updatePin,
     movePin,

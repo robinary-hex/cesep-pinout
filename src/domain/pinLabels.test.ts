@@ -10,7 +10,7 @@ import {
 } from './pinLabels'
 
 const size = { widthCells: 4, heightCells: 2 }
-const stroke = { stroke: '#000000', fill: 'none', weight: 1 }
+const stroke = { stroke: '#000000', fill: 'none', weight: 1, fillOpacity: 1 }
 
 /** Contour du composant : rectangle vide 4 × 2 cellules (16 × 8 quarts). */
 const outline: Primitive = { kind: 'rect', x: 0, y: 0, w: 16, h: 8, rx: 0, style: stroke }

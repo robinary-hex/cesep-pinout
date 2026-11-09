@@ -135,6 +135,7 @@ export function primitiveSvg(
     stroke: primitive.style.stroke,
     'stroke-width': width,
     fill: primitive.style.fill,
+    'fill-opacity': primitive.style.fillOpacity < 1 ? primitive.style.fillOpacity : undefined,
     'stroke-linecap': 'round',
     'stroke-linejoin': 'round'
   }

@@ -40,6 +40,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['V', 'Sélection : glisser déplace une forme ou une broche'],
       ['R / O / L / P', 'Rectangle / ellipse / ligne / polyligne'],
       ['E / B', 'Texte / broche (sur une intersection du composant)'],
+      ['Ctrl+Page haut / bas', 'Avancer / reculer la forme (Maj : premier / arrière-plan)'],
       ['Bouton du milieu', 'Glisser : déplacer la vue ; double-clic : ajuster à la fenêtre'],
       ['Entrée', 'Terminer la polyligne'],
       ['Suppr, Échap', 'Supprimer, annuler'],

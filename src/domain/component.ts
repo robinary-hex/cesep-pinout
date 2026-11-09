@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { hexColorSchema } from './color'
 import { isInsideBox, PNG_PX_PER_CELL, QUARTERS_PER_CELL, sizeSchema, type Size } from './grid'
 
-export const COMPONENT_SCHEMA_VERSION = 10
+export const COMPONENT_SCHEMA_VERSION = 11
 
 export const pinKindSchema = z.enum(['in', 'out', 'io', 'power'])
 export type PinKind = z.infer<typeof pinKindSchema>
@@ -37,10 +37,17 @@ export type QuarterPoint = z.infer<typeof quarterPointSchema>
 export const shapeStyleSchema = z.object({
   stroke: z.union([hexColorSchema, z.literal('none')]),
   weight: z.number().nonnegative(),
-  fill: z.union([hexColorSchema, z.literal('none')])
+  fill: z.union([hexColorSchema, z.literal('none')]),
+  /** Opacité du remplissage, de 0 (invisible) à 1 (opaque) ; le trait reste opaque. */
+  fillOpacity: z.number().min(0).max(1)
 })
 export type ShapeStyle = z.infer<typeof shapeStyleSchema>
-export const DEFAULT_SHAPE_STYLE: ShapeStyle = { stroke: '#000000', weight: 1, fill: 'none' }
+export const DEFAULT_SHAPE_STYLE: ShapeStyle = {
+  stroke: '#000000',
+  weight: 1,
+  fill: 'none',
+  fillOpacity: 1
+}
 /** Nuances proposées par l'interface ; le schéma accepte tout multiplicateur positif. */
 export const STROKE_WEIGHTS = [0.5, 1, 1.5, 2, 3] as const
 
@@ -340,6 +347,30 @@ export function primitiveBounds(primitive: Primitive): Bounds {
         y2: primitive.y + primitive.h
       }
   }
+}
+
+/** Déplacement d'un élément dans l'ordre d'empilement. */
+export type StackMove = 'up' | 'down' | 'top' | 'bottom'
+
+/** Même liste avec l'élément `index` avancé, reculé, au premier ou à l'arrière-plan ; nouvel index. */
+export function reorderItem<T>(
+  list: readonly T[],
+  index: number,
+  move: StackMove
+): { list: T[]; index: number } {
+  const item = list[index]
+  if (item === undefined) return { list: [...list], index }
+  const rest = list.filter((_, i) => i !== index)
+  const target =
+    move === 'top'
+      ? rest.length
+      : move === 'bottom'
+        ? 0
+        : move === 'up'
+          ? Math.min(rest.length, index + 1)
+          : Math.max(0, index - 1)
+  rest.splice(target, 0, item)
+  return { list: rest, index: target }
 }
 
 /** Même forme décalée de (dx, dy) quarts de cellule. */

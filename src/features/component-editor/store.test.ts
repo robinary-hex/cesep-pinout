@@ -80,7 +80,7 @@ describe('éditeur de composants : formes et zoom', () => {
 describe('éditeur de composants : sélection multiple', () => {
   it('sélectionne plusieurs formes, les déplace ensemble et les supprime', () => {
     const store = useComponentEditorStore()
-    const style = { stroke: '#000000', weight: 1, fill: 'none' }
+    const style = { stroke: '#000000', weight: 1, fill: 'none', fillOpacity: 1 }
     store.addPrimitive({ kind: 'rect', x: 0, y: 0, w: 4, h: 4, rx: 0, style }, 'r')
     store.addPrimitive({ kind: 'rect', x: 8, y: 0, w: 4, h: 4, rx: 0, style }, 'r')
     store.addPrimitive({ kind: 'rect', x: 0, y: 8, w: 4, h: 4, rx: 0, style }, 'r')
@@ -115,7 +115,7 @@ describe('éditeur de composants : sélection multiple', () => {
 describe('éditeur de composants : copier, coller, dupliquer', () => {
   it('colle des copies décalées d’une cellule et dépose une copie à un décalage donné', () => {
     const store = useComponentEditorStore()
-    const style = { stroke: '#000000', weight: 1, fill: 'none' }
+    const style = { stroke: '#000000', weight: 1, fill: 'none', fillOpacity: 1 }
     store.addPrimitive({ kind: 'rect', x: 0, y: 0, w: 4, h: 4, rx: 0, style }, 'r')
     expect(store.clipboardEmpty).toBe(true)
     store.copySelection()

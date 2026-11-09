@@ -4,6 +4,7 @@ import {
   componentIssues,
   createEmptyComponent,
   DEFAULT_SHAPE_STYLE,
+  reorderItem,
   NO_ARROWS,
   primitiveBounds,
   textContent,
@@ -88,7 +89,7 @@ describe('formes du mini-éditeur', () => {
           w: 4,
           h: 4,
           rx: 0,
-          style: { stroke: '#000000', fill: 'none', weight: 1 }
+          style: { stroke: '#000000', fill: 'none', weight: 1, fillOpacity: 1 }
         }
       ]
     }
@@ -166,5 +167,18 @@ describe('textes variables', () => {
         visual: { kind: 'drawing', primitives: [base] }
       })
     ).toEqual([{ name: 'R', defaultValue: '10', unit: 'kΩ' }])
+  })
+})
+
+describe('ordre des formes', () => {
+  it('avance, recule, met au premier ou à l’arrière-plan, et donne le nouvel index', () => {
+    const list = ['a', 'b', 'c', 'd']
+    expect(reorderItem(list, 1, 'up')).toEqual({ list: ['a', 'c', 'b', 'd'], index: 2 })
+    expect(reorderItem(list, 1, 'down')).toEqual({ list: ['b', 'a', 'c', 'd'], index: 0 })
+    expect(reorderItem(list, 1, 'top')).toEqual({ list: ['a', 'c', 'd', 'b'], index: 3 })
+    expect(reorderItem(list, 2, 'bottom')).toEqual({ list: ['c', 'a', 'b', 'd'], index: 0 })
+    // Déjà au bout : rien ne bouge.
+    expect(reorderItem(list, 3, 'up')).toEqual({ list, index: 3 })
+    expect(reorderItem(list, 0, 'down')).toEqual({ list, index: 0 })
   })
 })

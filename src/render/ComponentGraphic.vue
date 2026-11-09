@@ -91,6 +91,7 @@ function shapeAttrs(style: ShapeStyle): Record<string, string | number> {
       props.ink && style.fill !== 'none' && style.fill === style.stroke
         ? props.ink
         : screenColor(style.fill),
+    ...(style.fillOpacity < 1 ? { 'fill-opacity': style.fillOpacity } : {}),
     'stroke-linecap': 'round',
     'stroke-linejoin': 'round'
   }

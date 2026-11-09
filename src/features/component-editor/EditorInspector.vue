@@ -112,6 +112,9 @@ function setPinKind(id: string, event: Event): void {
 
 const primitive = computed(() => store.selectedPrimitive)
 const primitiveIndex = computed(() => store.selectedIndexes[0] ?? -1)
+const primitiveCount = computed(() =>
+  doc.value.visual.kind === 'drawing' ? doc.value.visual.primitives.length : 0
+)
 const multiCount = computed(() => store.selectedIndexes.length)
 const shapeStyle = computed(() =>
   primitive.value && primitive.value.kind !== 'text' ? primitive.value.style : null
@@ -149,6 +152,11 @@ function setFill(event: Event): void {
 
 function toggleFill(event: Event): void {
   store.updateStyle(primitiveIndex.value, { fill: checked(event) ? 'none' : '#ffffff' })
+}
+
+function setFillOpacity(event: Event): void {
+  const opacity = Math.min(1, Math.max(0, numberValue(event) / 100))
+  store.updateStyle(primitiveIndex.value, { fillOpacity: opacity })
 }
 
 function setArrow(end: keyof Arrows, event: Event): void {
@@ -301,6 +309,47 @@ function setClosed(event: Event): void {
           ✕
         </button>
       </div>
+      <div class="row order">
+        <span class="hint">Ordre {{ primitiveIndex + 1 }} / {{ primitiveCount }}</span>
+        <div class="toggles">
+          <button
+            type="button"
+            class="toggle"
+            title="Arrière-plan (Ctrl+Maj+Page bas)"
+            :disabled="primitiveIndex === 0"
+            @click="store.reorderPrimitive('bottom')"
+          >
+            <Icon name="arrow-down-line" />
+          </button>
+          <button
+            type="button"
+            class="toggle"
+            title="Reculer (Ctrl+Page bas)"
+            :disabled="primitiveIndex === 0"
+            @click="store.reorderPrimitive('down')"
+          >
+            <Icon name="arrow-down" />
+          </button>
+          <button
+            type="button"
+            class="toggle"
+            title="Avancer (Ctrl+Page haut)"
+            :disabled="primitiveIndex >= primitiveCount - 1"
+            @click="store.reorderPrimitive('up')"
+          >
+            <Icon name="arrow-up" />
+          </button>
+          <button
+            type="button"
+            class="toggle"
+            title="Premier plan (Ctrl+Maj+Page haut)"
+            :disabled="primitiveIndex >= primitiveCount - 1"
+            @click="store.reorderPrimitive('top')"
+          >
+            <Icon name="arrow-up-line" />
+          </button>
+        </div>
+      </div>
 
       <template v-if="primitive.kind === 'text'">
         <label class="check">
@@ -428,6 +477,18 @@ function setClosed(event: Event): void {
           <label class="check">
             <input type="checkbox" :checked="shapeStyle.fill === 'none'" @change="toggleFill" />
             <span>Sans remplissage</span>
+          </label>
+          <label class="field opacity">
+            <span>Opacité du remplissage : {{ Math.round(shapeStyle.fillOpacity * 100) }} %</span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              :value="Math.round(shapeStyle.fillOpacity * 100)"
+              :disabled="shapeStyle.fill === 'none'"
+              @change="setFillOpacity"
+            />
           </label>
         </div>
         <div
@@ -720,6 +781,27 @@ function setClosed(event: Event): void {
   background: var(--accent-soft);
   border-color: var(--accent-border);
   color: var(--accent);
+}
+
+.order {
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.order .hint {
+  margin: 0;
+}
+
+.field.opacity {
+  flex-basis: 100%;
+}
+
+.field input[type='range'] {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--accent);
 }
 
 .pin-row {

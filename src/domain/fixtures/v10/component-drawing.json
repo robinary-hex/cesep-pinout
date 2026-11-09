@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 10,
+  "id": "motor",
+  "name": "Moteur",
+  "category": "Divers",
+  "description": "",
+  "size": {
+    "widthCells": 4,
+    "heightCells": 2
+  },
+  "visual": {
+    "kind": "drawing",
+    "primitives": [
+      {
+        "kind": "rect",
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 8,
+        "rx": 1,
+        "style": {
+          "stroke": "#000000",
+          "weight": 1,
+          "fill": "#ffffff"
+        }
+      },
+      {
+        "kind": "text",
+        "x": 4,
+        "y": 2,
+        "w": 8,
+        "h": 4,
+        "text": "M",
+        "size": 1,
+        "anchor": "middle",
+        "color": "#000000",
+        "variable": false,
+        "defaultValue": "",
+        "unit": "",
+        "bold": true,
+        "followsRotation": true,
+        "italic": true,
+        "underline": false,
+        "strike": false
+      }
+    ]
+  },
+  "pins": [
+    {
+      "id": "a",
+      "name": "1",
+      "kind": "io",
+      "x": 0,
+      "y": 1
+    },
+    {
+      "id": "b",
+      "name": "2",
+      "kind": "io",
+      "x": 4,
+      "y": 1
+    }
+  ]
+}

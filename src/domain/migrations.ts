@@ -220,6 +220,25 @@ function migrateComponentV9(raw: RawRecord): RawRecord {
   }
 }
 
+/** Complète le style de chaque forme (hors textes) avec des valeurs par défaut. */
+function withStyleDefaults(raw: RawRecord, defaults: RawRecord): RawRecord {
+  const visual = raw['visual']
+  if (!isRecord(visual) || visual['kind'] !== 'drawing' || !Array.isArray(visual['primitives'])) {
+    return raw
+  }
+  return {
+    ...raw,
+    visual: {
+      ...visual,
+      primitives: visual['primitives'].map((primitive) =>
+        isRecord(primitive) && isRecord(primitive['style'])
+          ? { ...primitive, style: { ...defaults, ...primitive['style'] } }
+          : primitive
+      )
+    }
+  }
+}
+
 export const componentMigrations: MigrationTable = {
   current: COMPONENT_SCHEMA_VERSION,
   steps: {
@@ -235,7 +254,9 @@ export const componentMigrations: MigrationTable = {
     8: (raw) =>
       withTextDefaults(raw, { italic: false, underline: false, strike: false, mono: false }),
     // v9 → v10 : la chasse fixe disparaît (option retirée le jour même).
-    9: migrateComponentV9
+    9: migrateComponentV9,
+    // v10 → v11 : opacité du remplissage, opaque par défaut.
+    10: (raw) => withStyleDefaults(raw, { fillOpacity: 1 })
   }
 }
 
@@ -335,7 +356,9 @@ export const projectMigrations: MigrationTable = {
     // Projet v11 → v12 : définitions embarquées migrées (styles de texte).
     11: migrateEmbeddedDefs,
     // Projet v12 → v13 : définitions embarquées migrées (plus de chasse fixe).
-    12: migrateEmbeddedDefs
+    12: migrateEmbeddedDefs,
+    // Projet v13 → v14 : définitions embarquées migrées (opacité du remplissage).
+    13: migrateEmbeddedDefs
   }
 }
 
