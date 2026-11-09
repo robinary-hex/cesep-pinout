@@ -2,8 +2,8 @@
 import { onMounted, onUnmounted, useTemplateRef } from 'vue'
 import { createEmptyComponent } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
-import { newComponentId, saveComponent } from '@/io/library'
 import { openModals } from '@/ui/modalState'
+import { saveComponentDoc } from './componentActions'
 import EditorCanvas from './EditorCanvas.vue'
 import EditorInspector from './EditorInspector.vue'
 import EditorToolbar from './EditorToolbar.vue'
@@ -18,25 +18,7 @@ const library = useLibraryStore()
 const canvas = useTemplateRef<InstanceType<typeof EditorCanvas>>('canvas')
 
 async function save(): Promise<void> {
-  if (store.hasErrors) {
-    store.status = 'Corrige les erreurs listées à droite avant d’enregistrer.'
-    return
-  }
-  if (library.libraryDir.length === 0) {
-    store.status = 'Bibliothèque indisponible : choisis un dossier dans le panneau de gauche.'
-    return
-  }
-  if (store.folder === null) {
-    store.setId(newComponentId(store.doc.name, library.ids))
-  }
-  try {
-    const folder = await saveComponent(library.libraryDir, store.doc)
-    store.markSaved(folder)
-    store.status = `Enregistré dans ${folder}`
-    await library.refresh()
-  } catch (error) {
-    store.status = `Échec de l’enregistrement : ${error instanceof Error ? error.message : String(error)}`
-  }
+  await saveComponentDoc(store, library)
 }
 
 function createNew(): void {

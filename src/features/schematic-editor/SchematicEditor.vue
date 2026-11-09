@@ -2,7 +2,6 @@
 import { onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
 import {
   componentFields,
-  FileFormatError,
   type ComponentDefinition,
   type ComponentField,
   type ComponentInstance,
@@ -10,14 +9,14 @@ import {
 } from '@/domain'
 import ExportDialog from '@/features/export/ExportDialog.vue'
 import { useLibraryStore } from '@/features/library/store'
-import { clearAutosave } from '@/io/autosave'
-import { chooseProjectToOpen, chooseProjectToSave, writeProject } from '@/io/projectFiles'
+import { chooseProjectToOpen } from '@/io/projectFiles'
 import ContextMenu from '@/ui/ContextMenu.vue'
 import { heading, item, SEPARATOR, type MenuItem } from '@/ui/contextMenu'
 import { openModals } from '@/ui/modalState'
 import PromptDialog from '@/ui/PromptDialog.vue'
 import type { MenuRequest } from './menu'
 import ProfileDialog from './ProfileDialog.vue'
+import { saveProject } from './projectActions'
 import SchematicCanvas from './SchematicCanvas.vue'
 import SchematicInspector from './SchematicInspector.vue'
 import SchematicToolbar from './SchematicToolbar.vue'
@@ -44,26 +43,8 @@ interface PromptState {
 const menu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
 const prompt = ref<PromptState | null>(null)
 
-function describe(error: unknown): string {
-  if (error instanceof FileFormatError) return [error.message, ...error.issues].join(' — ')
-  return error instanceof Error ? error.message : String(error)
-}
-
 async function save(as = false): Promise<void> {
-  let path = store.filePath
-  if (as || path === null) {
-    path = await chooseProjectToSave(store.doc.name)
-    if (path === null) return
-  }
-  try {
-    await writeProject(path, store.doc)
-    store.markSaved(path)
-    store.status = `Enregistré : ${path}`
-    await clearAutosave()
-    await library.addRecentFile(path)
-  } catch (error) {
-    store.status = `Échec de l’enregistrement : ${describe(error)}`
-  }
+  await saveProject(store, library, as)
 }
 
 async function open(): Promise<void> {

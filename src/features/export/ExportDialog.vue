@@ -175,7 +175,8 @@ function setMargin(event: Event): void {
       </div>
     </div>
 
-    <p v-if="message" class="message" :class="{ failed }">{{ message }}</p>
+    <!-- Zone réservée : la boîte ne bouge pas quand le message apparaît. -->
+    <p class="message" :class="{ failed }">{{ message }}</p>
 
     <template #footer>
       <button type="button" :disabled="!result || busy" @click="copyPng">Copier l’image</button>
@@ -276,6 +277,7 @@ legend {
 
 .message {
   margin: 10px 0 0;
+  min-height: 1.5em;
   font-size: 12px;
   color: var(--success);
 }

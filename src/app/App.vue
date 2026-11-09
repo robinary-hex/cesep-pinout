@@ -2,9 +2,11 @@
 import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 import { createEmptyComponent } from '@/domain'
 import ComponentEditor from '@/features/component-editor/ComponentEditor.vue'
+import { saveComponentDoc } from '@/features/component-editor/componentActions'
 import { useComponentEditorStore } from '@/features/component-editor/store'
 import LibraryPanel from '@/features/library/LibraryPanel.vue'
 import { useLibraryStore } from '@/features/library/store'
+import { saveProject } from '@/features/schematic-editor/projectActions'
 import SchematicEditor from '@/features/schematic-editor/SchematicEditor.vue'
 import { useSchematicStore } from '@/features/schematic-editor/store'
 import SettingsDialog from '@/features/settings/SettingsDialog.vue'
@@ -182,8 +184,16 @@ let unsubscribe: (() => void) | null = null
 
 onMounted(async () => {
   unsubscribe = bridge().onAppRequest((request) => {
-    if (request !== 'autosave-then-quit') return
     void (async () => {
+      if (request === 'save-then-quit') {
+        // « Enregistrer » avant de quitter : montage puis composant ; un refus garde la fenêtre.
+        const montageSaved = !schematic.dirty || (await saveProject(schematic, library))
+        const componentSaved = !editor.dirty || (await saveComponentDoc(editor, library))
+        if (montageSaved && componentSaved) await bridge().confirmQuit()
+        else await bridge().cancelQuit()
+        return
+      }
+      if (request !== 'autosave-then-quit') return
       try {
         if (schematic.dirty) await writeAutosave(schematic.doc, schematic.filePath)
       } finally {
