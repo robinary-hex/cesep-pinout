@@ -85,8 +85,11 @@ export class FakeFs implements PinoutApi {
     return this.saveDialogAnswers.shift() ?? null
   }
 
-  async getAppPaths(): Promise<{ userData: string; documents: string }> {
-    return { userData: 'C:/fake/Pinout', documents: 'C:/fake/Documents' }
+  /** Racine OneDrive simulée ; null par défaut, comme une machine sans OneDrive. */
+  oneDrive: string | null = null
+
+  async getAppPaths(): Promise<{ userData: string; documents: string; oneDrive: string | null }> {
+    return { userData: 'C:/fake/Pinout', documents: 'C:/fake/Documents', oneDrive: this.oneDrive }
   }
 
   async getLaunchFile(): Promise<string | null> {

@@ -15,7 +15,7 @@ import {
 import { bridge } from '@/io/bridge'
 import { listComponents, type LibraryEntry } from '@/io/library'
 import { baseName } from '@/io/paths'
-import { loadSettings, resolveLibraryDir, saveSettings } from '@/io/settings'
+import { loadSettings, portableLibraryDir, resolveLibraryDir, saveSettings } from '@/io/settings'
 
 export interface LibraryGroup {
   name: string
@@ -142,7 +142,8 @@ export const useLibraryStore = defineStore('library', () => {
     })
     if (dir === null) return
     problem.value = ''
-    await updateSettings({ libraryDir: dir })
+    const { oneDrive } = await bridge().getAppPaths()
+    await updateSettings({ libraryDir: portableLibraryDir(dir, oneDrive) })
   }
 
   /** Garde une couleur personnalisée en tête de liste (les huit dernières). */

@@ -28,6 +28,8 @@ export interface AppPaths {
   userData: string
   /** Dossier Documents de l'utilisateur. */
   documents: string
+  /** Racine OneDrive de la machine (OneDriveCommercial, sinon OneDrive), ou null sans OneDrive. */
+  oneDrive: string | null
 }
 
 export interface DirEntry {

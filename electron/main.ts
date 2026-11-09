@@ -104,7 +104,8 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.getAppPaths, (): AppPaths => ({
     userData: app.getPath('userData'),
-    documents: app.getPath('documents')
+    documents: app.getPath('documents'),
+    oneDrive: process.env['OneDriveCommercial'] ?? process.env['OneDrive'] ?? null
   }))
 
   ipcMain.handle(IPC.launchFile, async () =>

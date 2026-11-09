@@ -120,8 +120,9 @@ et `endLabelFont` du profil par défaut, thème, ouverture du panneau).
 | Profil de style         | `styleProfileSchema`        | copié dans chaque projet ; modèles dans `userData/profiles/`            |
 | Paramètres              | `settingsSchema`            | `userData/settings.json` (`userData` = `%APPDATA%\Pinout`)              |
 
-La bibliothèque est par défaut `userData/library` ; les paramètres peuvent pointer vers un
-autre dossier (OneDrive par exemple). Le nom du dossier d'un composant est son identifiant,
+La bibliothèque vit par défaut dans OneDrive (`(Cours)\Robotique\(Ressources)\Pinout\library` sous la racine
+`OneDriveCommercial` ou `OneDrive` de la machine), sinon dans `userData/library` ; les paramètres
+peuvent pointer ailleurs, un dossier pris dans OneDrive étant enregistré relativement à sa racine. Le nom du dossier d'un composant est son identifiant,
 dérivé du nom à la première sauvegarde et stable ensuite.
 
 Un projet embarque une copie de chaque définition utilisée (`embeddedDefs`, une par type, PNG en

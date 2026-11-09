@@ -119,6 +119,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   montage via `profilePreview` (le store expose `profile` = aperçu ou profil du projet) et
   n'enregistre qu'à « Appliquer », en une commande. Les Paramètres proposent « Appliquer au
   montage ouvert » pour copier le profil par défaut dans le projet courant.
+- Bibliothèque de composants : dossier par défaut = racine OneDrive de la machine (variables
+  `OneDriveCommercial` puis `OneDrive`, exposées par `getAppPaths().oneDrive`) + `(Cours)\Robotique\(Ressources)\Pinout\library`,
+  sinon `userData/library` ; un dossier choisi dans OneDrive est enregistré avec le préfixe
+  `${OneDrive}` (`portableLibraryDir`), résolu sur chaque machine (`resolveLibraryDir`).
 - Boîtes de dialogue : `src/ui/ModalDialog.vue` ; tant qu'une est ouverte (`openModals`), les
   éditeurs ignorent leurs raccourcis. `src/ui/PromptDialog.vue` (saisie d'une valeur) et
   `src/ui/ContextMenu.vue` (menu contextuel, entrées décrites dans `contextMenu.ts`) comptent aussi
@@ -153,6 +157,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.
 
 ## Git
+
+- Dépôt GitHub : https://github.com/robinary-hex/cesep-pinout (public). Publier une version :
+  `pnpm build:win`, puis `gh release create vX.Y.Z release/pinout-X.Y.Z-setup.exe
+release/pinout-X.Y.Z-portable.exe` avec des notes qui donnent les liens directs des deux fichiers.
 
 - Un commit par phase de la feuille de route (accordé par Robin le 8 novembre 2026), après
   `pnpm check` vert. Message en français, trailer `Co-Authored-By` conservé.
