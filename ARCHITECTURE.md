@@ -100,7 +100,9 @@ Tant que le montage a des modifications non enregistrées, `App.vue` écrit tout
 date) et l'efface dès que le montage est propre. Au lancement, une copie présente est proposée.
 À la fermeture, le processus principal connaît l'état (`setDirty`) : s'il y a des modifications,
 il demande confirmation, puis le rendu écrit la copie de secours avant de confirmer la fermeture
-(`autosave-then-quit`, délai de repli de 3 s).
+(`discard-then-quit` efface la copie de secours puis ferme, avec un délai de repli de 3 s ;
+`save-then-quit` enregistre d'abord, sans délai, et `cancelQuit` garde la fenêtre si l'utilisateur
+renonce). La copie de secours ne survit qu'à un arrêt brutal : c'est alors qu'elle est proposée.
 
 ## Fichiers
 
