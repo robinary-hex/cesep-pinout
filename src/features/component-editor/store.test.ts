@@ -71,8 +71,9 @@ describe('éditeur de composants : formes et zoom', () => {
     expect(store.cellPx).toBe(8)
     store.viewport = { width: 648, height: 448 }
     store.fitToViewport()
-    // 4 × 2 cellules plus une cellule de marge de chaque côté : 6 × 4 dans 600 × 400.
-    expect(store.cellPx).toBe(100)
+    // 4 × 2 cellules plus une cellule de marge de chaque côté : 6 × 4 dans 600 × 400, moins la
+    // réserve de 2 px qui évite l'ascenseur, arrondi vers le bas.
+    expect(store.cellPx).toBe(99)
   })
 })
 

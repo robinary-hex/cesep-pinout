@@ -131,7 +131,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   - Éditeur de composants : V sélection, R rectangle, O ellipse, L ligne, P polyligne, E texte,
     B broche, Suppr, Échap, Entrée (termine une polyligne), Ctrl+Z / Ctrl+Y, Ctrl+S, Ctrl+N,
     Ctrl+molette = zoom centré sur le curseur (boutons −/+/Ajuster dans la barre), double-clic du
-    bouton du milieu = ajuster à la fenêtre. La forme
+    bouton du milieu = ajuster à la fenêtre. Le composant est centré dans la zone et ajusté à la fenêtre à
+    l'ouverture (premier affichage, nouveau composant, composant chargé), sans ascenseur. La forme
     sélectionnée montre ses poignées (`src/domain/handles.ts`) ; Ctrl+glisser sur une forme saisit
     la poignée la plus proche. Redimensionner le composant supprime les broches qui ne sont plus sur
     le bord ; les noms numériques des broches suivent toujours leur ordre (`renumberPins`).

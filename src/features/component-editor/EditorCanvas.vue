@@ -100,6 +100,8 @@ onMounted(() => {
     store.viewport = { width: element.clientWidth, height: element.clientHeight }
   }
   update()
+  // Première ouverture de l'éditeur : le composant prend toute la zone disponible.
+  store.fitToViewport()
   observer = new ResizeObserver(update)
   observer.observe(element)
 })
@@ -813,10 +815,14 @@ defineExpose({ cancel, finishPolyline })
   flex: 1;
   overflow: auto;
   padding: 24px;
+  /* Flex + marges automatiques : le canevas est centré quand il est plus petit que la zone, et
+     reste accessible par les ascenseurs quand il est plus grand. */
+  display: flex;
 }
 
 .canvas {
   display: block;
+  margin: auto;
   background: var(--paper);
   box-shadow: 0 1px 4px var(--shadow);
   touch-action: none;

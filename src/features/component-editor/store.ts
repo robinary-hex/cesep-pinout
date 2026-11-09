@@ -26,6 +26,7 @@ export type Selection =
 const MIN_CELL_PX = 8
 const MAX_CELL_PX = 200
 const FIT_PADDING_PX = 48
+const FIT_SAFETY_PX = 2
 
 function nextPinId(pins: ReadonlyArray<Pin>): string {
   const taken = new Set(pins.map((pin) => pin.id))
@@ -126,6 +127,8 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     tool.value = 'select'
     status.value = ''
     sync()
+    // Un composant qui s'ouvre occupe toute la zone d'édition.
+    fitToViewport()
   }
 
   function markSaved(savedFolder: string): void {
@@ -385,14 +388,20 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     setCellPx(cellPx.value * factor)
   }
 
-  /** Taille de cellule qui fait tenir le composant, avec sa marge, dans la zone visible. */
+  /**
+   * Taille de cellule qui fait tenir le composant, avec sa marge d'une cellule, dans la zone
+   * visible : arrondie vers le bas et avec une petite réserve, pour ne jamais faire apparaître
+   * d'ascenseur.
+   */
   function fitToViewport(): void {
     const columns = doc.value.size.widthCells + 2
     const rows = doc.value.size.heightCells + 2
     setCellPx(
-      Math.min(
-        (viewport.value.width - FIT_PADDING_PX) / columns,
-        (viewport.value.height - FIT_PADDING_PX) / rows
+      Math.floor(
+        Math.min(
+          (viewport.value.width - FIT_PADDING_PX - FIT_SAFETY_PX) / columns,
+          (viewport.value.height - FIT_PADDING_PX - FIT_SAFETY_PX) / rows
+        )
       )
     )
   }
