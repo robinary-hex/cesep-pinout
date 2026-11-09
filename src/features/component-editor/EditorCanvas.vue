@@ -884,6 +884,9 @@ defineExpose({ cancel, finishPolyline })
 
 .canvas {
   display: block;
+  /* Enfant de flex : sans ceci il se laisserait comprimer en largeur et l'ascenseur horizontal
+     n'apparaîtrait jamais ; la hauteur, elle, débordait déjà. */
+  flex: none;
   margin: auto;
   background: var(--paper);
   box-shadow: 0 1px 4px var(--shadow);
