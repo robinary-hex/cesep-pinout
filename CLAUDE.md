@@ -94,8 +94,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   par défaut, les fichiers récents et l'intervalle de copie de secours sont dans les paramètres
   (schéma v2 ; la migration 1 → 2 est dans `src/domain/migrations.ts`).
 - Copie de secours : `src/io/autosave.ts` écrit `userData/autosave/` tant que le montage a des
-  modifications non enregistrées ; `App.vue` la propose au lancement. La garde à la fermeture est
-  dans `electron/main.ts` (le rendu tient `setDirty` à jour, puis répond à `autosave-then-quit` ou `save-then-quit` : Enregistrer / Ne pas enregistrer /
+  modifications non enregistrées ; `App.vue` la propose au lancement. Elle ne survit qu'à un arrêt
+  brutal : quitter en enregistrant ou en abandonnant l'efface. La garde à la fermeture est
+  dans `electron/main.ts` (le rendu tient `setDirty` à jour, puis répond à `discard-then-quit` (efface la copie de secours) ou `save-then-quit` : Enregistrer / Ne pas enregistrer /
   Annuler, `cancelQuit` si l'enregistrement est abandonné ; l'enregistrement lui-même est dans
   `projectActions.ts` et `componentActions.ts`, partagé avec les éditeurs).
 - Barre d'application (`src/app/App.vue`) : menu Fichier (nouveau, ouvrir, récents, enregistrer,

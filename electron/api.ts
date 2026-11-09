@@ -36,7 +36,8 @@ export interface DirEntry {
 }
 
 /** Demandes du processus principal au rendu. */
-export type AppRequest = 'autosave-then-quit' | 'save-then-quit'
+/** discard-then-quit : abandonner les modifications (copie de secours effacée) ; save-then-quit : enregistrer d'abord. */
+export type AppRequest = 'discard-then-quit' | 'save-then-quit'
 
 export interface PinoutApi {
   readTextFile(path: string): Promise<string>

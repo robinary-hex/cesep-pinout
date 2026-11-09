@@ -152,8 +152,9 @@ function createWindow(): void {
   })
 
   // Garde à la fermeture : avec des modifications non enregistrées, on propose d'enregistrer ;
-  // le rendu enregistre (ou écrit la copie de secours) puis confirme, ou annule si l'utilisateur
-  // renonce au choix du fichier.
+  // le rendu enregistre, ou abandonne (la copie de secours est effacée : au prochain lancement,
+  // rien n'est proposé), puis confirme ; il annule si l'utilisateur renonce au choix du fichier.
+  // Une copie de secours ne survit donc qu'à un arrêt brutal, et c'est alors qu'elle est proposée.
   mainWindow.on('close', (event) => {
     if (quitting || !dirty) return
     event.preventDefault()
@@ -161,17 +162,17 @@ function createWindow(): void {
       type: 'warning',
       title: 'Pinout',
       message: 'Enregistrer les modifications avant de quitter ?',
-      detail: 'Une copie de secours du montage est gardée dans tous les cas.',
+      detail: 'Sans enregistrement, les modifications sont perdues.',
       buttons: ['Enregistrer', 'Ne pas enregistrer', 'Annuler'],
       defaultId: 0,
       cancelId: 2,
       noLink: true
     })
     if (choice === 2) return
-    const request: AppRequest = choice === 0 ? 'save-then-quit' : 'autosave-then-quit'
+    const request: AppRequest = choice === 0 ? 'save-then-quit' : 'discard-then-quit'
     mainWindow.webContents.send(IPC.appRequest, request)
     // Un enregistrement peut attendre un choix de fichier : pas de délai dans ce cas.
-    if (request === 'autosave-then-quit') {
+    if (request === 'discard-then-quit') {
       quitFallback = setTimeout(() => {
         if (!quitting && !mainWindow.isDestroyed()) {
           quitting = true

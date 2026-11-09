@@ -193,9 +193,10 @@ onMounted(async () => {
         else await bridge().cancelQuit()
         return
       }
-      if (request !== 'autosave-then-quit') return
+      if (request !== 'discard-then-quit') return
+      // « Ne pas enregistrer » : la copie de secours disparaît, le prochain lancement part à vide.
       try {
-        if (schematic.dirty) await writeAutosave(schematic.doc, schematic.filePath)
+        await clearAutosave()
       } finally {
         await bridge().confirmQuit()
       }
