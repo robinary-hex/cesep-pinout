@@ -159,8 +159,16 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 ## Git
 
 - Dépôt GitHub : https://github.com/robinary-hex/cesep-pinout (public). Publier une version :
-  `pnpm build:win`, puis `gh release create vX.Y.Z release/pinout-X.Y.Z-setup.exe
-release/pinout-X.Y.Z-portable.exe` avec des notes qui donnent les liens directs des deux fichiers.
+  monter `version` dans package.json, commit, tag `vX.Y.Z`, `pnpm build:win`, puis
+  `gh release create vX.Y.Z release/pinout-X.Y.Z-setup.exe release/pinout-X.Y.Z-setup.exe.blockmap
+release/latest.yml release/pinout-X.Y.Z-portable.exe --latest` avec des notes qui donnent les
+  liens directs des deux exécutables. `latest.yml` et le `.blockmap` sont indispensables : c'est ce
+  que lit la mise à jour automatique.
+- Mise à jour automatique (`electron-updater`, `setupUpdater` dans `electron/main.ts`) : au
+  lancement d'une version installée, vérification de la dernière release GitHub ; si elle est plus
+  récente, un bouton apparaît en haut à droite (`App.vue`, libellés dans `src/app/update.ts`) :
+  télécharger en arrière-plan, puis installer et relancer. La version portable ne peut pas se
+  réinstaller : son bouton ouvre la page de la release. Rien en développement ni hors ligne.
 
 - Un commit par phase de la feuille de route (accordé par Robin le 8 novembre 2026), après
   `pnpm check` vert. Message en français, trailer `Co-Authored-By` conservé.

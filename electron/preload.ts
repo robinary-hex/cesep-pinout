@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import {
   IPC,
   type AppRequest,
+  type UpdateStatus,
   type OpenDialogOptions,
   type PinoutApi,
   type SaveDialogOptions
@@ -28,7 +29,14 @@ const api: PinoutApi = {
     const listener = (_event: IpcRendererEvent, request: AppRequest): void => handler(request)
     ipcRenderer.on(IPC.appRequest, listener)
     return () => ipcRenderer.removeListener(IPC.appRequest, listener)
-  }
+  },
+  onUpdateStatus: (handler) => {
+    const listener = (_event: IpcRendererEvent, status: UpdateStatus): void => handler(status)
+    ipcRenderer.on(IPC.updateStatus, listener)
+    return () => ipcRenderer.removeListener(IPC.updateStatus, listener)
+  },
+  downloadUpdate: () => ipcRenderer.invoke(IPC.downloadUpdate),
+  installUpdate: () => ipcRenderer.invoke(IPC.installUpdate)
 }
 
 contextBridge.exposeInMainWorld('pinout', api)

@@ -113,6 +113,19 @@ export class FakeFs implements PinoutApi {
     return () => this.requestHandlers.delete(handler)
   }
 
+  /** Pas de mise à jour dans les tests : l'abonnement ne reçoit jamais rien. */
+  onUpdateStatus(): () => void {
+    return () => undefined
+  }
+
+  downloadUpdate(): Promise<void> {
+    return Promise.resolve()
+  }
+
+  installUpdate(): Promise<void> {
+    return Promise.resolve()
+  }
+
   /** Simule une demande du processus principal. */
   emitRequest(request: AppRequest): void {
     for (const handler of this.requestHandlers) handler(request)

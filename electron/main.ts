@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { autoUpdater } from 'electron-updater'
 import { access, mkdir, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import {
@@ -7,7 +8,8 @@ import {
   type AppRequest,
   type DirEntry,
   type OpenDialogOptions,
-  type SaveDialogOptions
+  type SaveDialogOptions,
+  type UpdateStatus
 } from './api'
 
 // Seul code du projet qui touche Node : fenêtre, fichiers, dialogues, garde à la fermeture.
@@ -16,6 +18,7 @@ app.setName('Pinout')
 
 const isDev = !app.isPackaged
 const QUIT_FALLBACK_MS = 3000
+const RELEASES_URL = 'https://github.com/robinary-hex/cesep-pinout/releases/latest'
 
 /** Projet passé en argument (double-clic « Ouvrir avec » ou ligne de commande). */
 const launchFile =
@@ -126,6 +129,48 @@ function registerIpc(): void {
     if (quitFallback) clearTimeout(quitFallback)
     quitFallback = null
   })
+
+  ipcMain.handle(IPC.downloadUpdate, async () => {
+    if (app.isPackaged) await autoUpdater.downloadUpdate()
+  })
+
+  ipcMain.handle(IPC.installUpdate, () => {
+    if (!app.isPackaged) return
+    quitting = true
+    autoUpdater.quitAndInstall()
+  })
+}
+
+/**
+ * Mise à jour automatique depuis les releases GitHub : vérification au lancement, téléchargement
+ * quand l'utilisateur le demande, installation au clic. La version portable ne peut pas se
+ * réinstaller : elle est renvoyée vers la page de la release. Rien en développement.
+ */
+function setupUpdater(mainWindow: BrowserWindow): void {
+  if (!app.isPackaged) return
+  const portable = process.env['PORTABLE_EXECUTABLE_DIR'] !== undefined
+  const send = (status: UpdateStatus): void => {
+    if (!mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.updateStatus, status)
+  }
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = false
+  autoUpdater.setFeedURL({ provider: 'github', owner: 'robinary-hex', repo: 'cesep-pinout' })
+  autoUpdater.on('update-available', (info) => {
+    send(
+      portable
+        ? { state: 'manual', version: info.version, url: RELEASES_URL }
+        : { state: 'available', version: info.version }
+    )
+  })
+  autoUpdater.on('download-progress', (progress) => {
+    send({ state: 'downloading', percent: Math.round(progress.percent) })
+  })
+  autoUpdater.on('update-downloaded', (info) =>
+    send({ state: 'downloaded', version: info.version })
+  )
+  autoUpdater.on('error', (error) => send({ state: 'error', message: error.message }))
+  // Hors ligne ou GitHub injoignable : on se tait, l'application démarre normalement.
+  autoUpdater.checkForUpdates().catch(() => undefined)
 }
 
 function createWindow(): void {
@@ -146,6 +191,7 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => mainWindow.show())
+  setupUpdater(mainWindow)
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url)

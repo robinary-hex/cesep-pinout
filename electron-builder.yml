@@ -30,3 +30,9 @@ nsis:
 portable:
   artifactName: ${name}-${version}-portable.${ext}
 npmRebuild: false
+# Releases GitHub : electron-builder génère latest.yml (lu par electron-updater au lancement) ; la
+# publication elle-même se fait à la main avec gh release create.
+publish:
+  - provider: github
+    owner: robinary-hex
+    repo: cesep-pinout

@@ -41,6 +41,15 @@ export interface DirEntry {
 /** discard-then-quit : abandonner les modifications (copie de secours effacée) ; save-then-quit : enregistrer d'abord. */
 export type AppRequest = 'discard-then-quit' | 'save-then-quit'
 
+/** État de la mise à jour automatique, envoyé par le principal au fil de l'eau. */
+export type UpdateStatus =
+  | { state: 'available'; version: string }
+  | { state: 'downloading'; percent: number }
+  | { state: 'downloaded'; version: string }
+  /** Version portable : pas d'installation possible, on renvoie vers la page de la release. */
+  | { state: 'manual'; version: string; url: string }
+  | { state: 'error'; message: string }
+
 export interface PinoutApi {
   readTextFile(path: string): Promise<string>
   writeTextFile(path: string, content: string): Promise<void>
@@ -69,6 +78,12 @@ export interface PinoutApi {
   cancelQuit(): Promise<void>
   /** Écoute les demandes du principal ; retourne la fonction qui désabonne. */
   onAppRequest(handler: (request: AppRequest) => void): () => void
+  /** Écoute l'état de la mise à jour automatique ; retourne la fonction qui désabonne. */
+  onUpdateStatus(handler: (status: UpdateStatus) => void): () => void
+  /** Télécharge la mise à jour disponible en arrière-plan. */
+  downloadUpdate(): Promise<void>
+  /** Installe la mise à jour téléchargée et relance l'application. */
+  installUpdate(): Promise<void>
 }
 
 export const IPC = {
@@ -87,5 +102,8 @@ export const IPC = {
   setDirty: 'app:set-dirty',
   confirmQuit: 'app:confirm-quit',
   cancelQuit: 'app:cancel-quit',
-  appRequest: 'app:request'
+  appRequest: 'app:request',
+  updateStatus: 'update:status',
+  downloadUpdate: 'update:download',
+  installUpdate: 'update:install'
 } as const

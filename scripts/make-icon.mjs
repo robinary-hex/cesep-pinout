@@ -47,14 +47,37 @@ function roundedRect(x, y, w, h, radius, color) {
 }
 
 function circle(cx, cy, radius, color) {
-  fill(cx - radius, cy - radius, cx + radius, cy + radius, color, (u, v) => Math.hypot(u - cx, v - cy) <= radius)
+  fill(
+    cx - radius,
+    cy - radius,
+    cx + radius,
+    cy + radius,
+    color,
+    (u, v) => Math.hypot(u - cx, v - cy) <= radius
+  )
 }
 
 /** Trait horizontal ou vertical à bouts ronds. */
 function line(x1, y1, x2, y2, thickness, color) {
   const half = thickness / 2
-  if (y1 === y2) roundedRect(Math.min(x1, x2) - half, y1 - half, Math.abs(x2 - x1) + thickness, thickness, half, color)
-  else roundedRect(x1 - half, Math.min(y1, y2) - half, thickness, Math.abs(y2 - y1) + thickness, half, color)
+  if (y1 === y2)
+    roundedRect(
+      Math.min(x1, x2) - half,
+      y1 - half,
+      Math.abs(x2 - x1) + thickness,
+      thickness,
+      half,
+      color
+    )
+  else
+    roundedRect(
+      x1 - half,
+      Math.min(y1, y2) - half,
+      thickness,
+      Math.abs(y2 - y1) + thickness,
+      half,
+      color
+    )
 }
 
 /** Demi-anneau droit (de −90° à +90°), centre et rayon donnés, épaisseur du trait. */

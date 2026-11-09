@@ -163,6 +163,22 @@ body,
   background: rgba(128, 128, 128, 0.22);
 }
 
+/* Bouton de mise à jour : visible sans crier, plein quand il y a une action à faire. */
+.topbar button.update {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+.topbar button.update.downloading {
+  opacity: 0.75;
+}
+
+.topbar button.update.error {
+  background: var(--warning-text);
+  border-color: var(--warning-text);
+}
+
 .workspace {
   flex: 1;
   min-height: 0;

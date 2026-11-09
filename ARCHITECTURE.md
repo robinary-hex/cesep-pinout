@@ -135,6 +135,8 @@ pas stockées, elles se déduisent de la géométrie des fils.
 - `immer` : patches pour l'historique undo/redo.
 - `zod` : validation des fichiers et types dérivés.
 - `electron`, `electron-vite`, `electron-builder` : coque, build, installeur.
+- `electron-updater` : mise à jour automatique depuis les releases GitHub (vérification au
+  lancement, téléchargement à la demande, installation au clic) ; lit `latest.yml` de la release.
 - Outillage : TypeScript strict, ESLint (configs electron-toolkit + plugin Vue), Prettier, Vitest,
   Vue Test Utils + jsdom pour les tests de rendu.
 

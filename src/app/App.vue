@@ -18,7 +18,9 @@ import { heading, item, SEPARATOR, type MenuItem } from '@/ui/contextMenu'
 import Icon from '@/ui/Icon.vue'
 import { openModals } from '@/ui/modalState'
 import { applyTheme } from '@/ui/theme'
+import type { UpdateStatus } from '../../electron/api'
 import ShortcutsHelp from './ShortcutsHelp.vue'
+import { updateButtonLabel, updateButtonTitle } from './update'
 
 // Coque applicative : menu Fichier, bascule entre les deux modes, thème, paramètres, aide,
 // copie de secours et garde à la fermeture. Un seul éditeur est monté à la fois, donc un seul
@@ -39,6 +41,32 @@ const fileButton = ref<HTMLButtonElement | null>(null)
 const fileMenu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
 
 const MAX_RECENT_IN_MENU = 8
+
+// Mise à jour automatique : le principal vérifie GitHub au lancement et tient cet état à jour ;
+// le bouton en haut à droite n'apparaît que s'il y a quelque chose à faire.
+const update = ref<UpdateStatus | null>(null)
+let unsubscribeUpdate: (() => void) | null = null
+
+async function onUpdateClick(): Promise<void> {
+  const current = update.value
+  if (!current) return
+  if (current.state === 'available' || current.state === 'error') {
+    update.value = { state: 'downloading', percent: 0 }
+    await bridge().downloadUpdate()
+  } else if (current.state === 'downloaded') {
+    if (
+      anyDirty.value &&
+      !window.confirm(
+        'Des modifications ne sont pas enregistrées. Installer la mise à jour et relancer quand même ?'
+      )
+    ) {
+      return
+    }
+    await bridge().installUpdate()
+  } else if (current.state === 'manual') {
+    window.open(current.url)
+  }
+}
 
 const anyDirty = computed(() => schematic.dirty || editor.dirty)
 
@@ -202,6 +230,9 @@ onMounted(async () => {
       }
     })()
   })
+  unsubscribeUpdate = bridge().onUpdateStatus((status) => {
+    update.value = status
+  })
   await library.init()
   // Les paramètres sont lus : la couleur des prochains fils part de la couleur par défaut.
   schematic.syncCurrentColor()
@@ -214,6 +245,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   unsubscribe?.()
+  unsubscribeUpdate?.()
   if (autosaveTimer) clearInterval(autosaveTimer)
 })
 
@@ -254,6 +286,17 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
         </button>
       </nav>
       <div class="spacer" />
+      <button
+        v-if="update"
+        type="button"
+        class="with-icon update"
+        :class="update.state"
+        :disabled="update.state === 'downloading'"
+        :title="updateButtonTitle(update)"
+        @click="onUpdateClick"
+      >
+        <Icon name="export" :size="15" /> {{ updateButtonLabel(update) }}
+      </button>
       <div class="group">
         <button
           type="button"
