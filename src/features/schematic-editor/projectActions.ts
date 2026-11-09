@@ -1,6 +1,7 @@
 import { FileFormatError } from '@/domain'
 import type { useLibraryStore } from '@/features/library/store'
 import { clearAutosave } from '@/io/autosave'
+import { dirOf } from '@/io/paths'
 import { chooseProjectToSave, writeProject } from '@/io/projectFiles'
 import type { useSchematicStore } from './store'
 
@@ -26,7 +27,9 @@ export async function saveProject(
 ): Promise<boolean> {
   let path = store.filePath
   if (as || path === null) {
-    path = await chooseProjectToSave(store.doc.name)
+    // Dossier proposé : celui du projet s'il en a un, sinon celui du dernier projet enregistré ou ouvert.
+    const dir = path ? dirOf(path) : library.lastProjectDir
+    path = await chooseProjectToSave(store.doc.name, dir)
     if (path === null) return false
   }
   try {

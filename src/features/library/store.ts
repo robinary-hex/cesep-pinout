@@ -15,7 +15,7 @@ import {
 } from '@/domain'
 import { bridge } from '@/io/bridge'
 import { listComponents, type LibraryEntry } from '@/io/library'
-import { baseName } from '@/io/paths'
+import { baseName, dirOf } from '@/io/paths'
 import { loadSettings, portableLibraryDir, resolveLibraryDir, saveSettings } from '@/io/settings'
 
 export interface LibraryGroup {
@@ -50,6 +50,11 @@ export const useLibraryStore = defineStore('library', () => {
     () => settings.value?.defaultWireColor ?? DEFAULT_SETTINGS.defaultWireColor
   )
   const recentFiles = computed<readonly string[]>(() => settings.value?.recentFiles ?? [])
+  /** Dossier du dernier projet enregistré ou ouvert : là où Enregistrer et Ouvrir s'ouvrent. */
+  const lastProjectDir = computed<string | null>(() => {
+    const last = recentFiles.value[0]
+    return last ? dirOf(last) : null
+  })
   const exportDefaults = computed<ExportSettings>(() => settings.value?.export ?? DEFAULT_EXPORT)
   const autosaveSeconds = computed(
     () => settings.value?.autosaveSeconds ?? DEFAULT_AUTOSAVE_SECONDS
@@ -180,6 +185,7 @@ export const useLibraryStore = defineStore('library', () => {
     customColors,
     defaultWireColor,
     recentFiles,
+    lastProjectDir,
     exportDefaults,
     autosaveSeconds,
     theme,

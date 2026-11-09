@@ -1,6 +1,6 @@
 import { slugify } from '@/domain'
 import { bridge } from './bridge'
-import { baseName, joinPath } from './paths'
+import { baseName, dirOf, joinPath } from './paths'
 
 export type ExportKind = 'png' | 'svg'
 
@@ -16,11 +16,6 @@ export function defaultExportName(
         .replace(/\.json$/i, '')
     : slugify(projectName)
   return `${base}.${kind}`
-}
-
-function dirOf(path: string): string {
-  const index = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
-  return index > 0 ? path.slice(0, index) : path
 }
 
 /** Dialogue d'enregistrement de l'image, à côté du projet s'il est enregistré. */

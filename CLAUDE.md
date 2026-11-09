@@ -109,7 +109,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   `projectActions.ts` et `componentActions.ts`, partagé avec les éditeurs).
 - Barre d'application (`src/app/App.vue`) : menu Fichier (nouveau, ouvrir, récents, enregistrer,
   exporter, paramètres, raccourcis, quitter) construit avec `ContextMenu` et appelant les actions
-  que `SchematicEditor` / `ComponentEditor` exposent par `defineExpose` selon le mode. Les barres
+  que `SchematicEditor` / `ComponentEditor` exposent par `defineExpose` selon le mode. Enregistrer
+  sous propose le dossier du projet, sinon celui du dernier projet enregistré ou ouvert
+  (`lastProjectDir`, dérivé des fichiers récents) ; Ouvrir s'ouvre dans ce dossier. Les barres
   d'outils ne portent plus d'actions de fichier ; dans le montage, rotation, miroir, duplication,
   suppression et ordre des fils ne sont accessibles que par le menu contextuel et le clavier. Les outils des deux barres sont des
   boutons à pictogramme seul (raccourci dans l'infobulle) ; quand la place manque, la partie gauche

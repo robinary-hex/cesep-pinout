@@ -12,6 +12,12 @@ export function joinPath(...parts: string[]): string {
     .join(separator)
 }
 
+/** Dossier d'un chemin de fichier (sans le séparateur final) ; le chemin lui-même sans séparateur. */
+export function dirOf(path: string): string {
+  const index = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+  return index > 0 ? path.slice(0, index) : path
+}
+
 export function baseName(path: string): string {
   const segments = path.split(/[\\/]/).filter((segment) => segment.length > 0)
   return segments.at(-1) ?? path

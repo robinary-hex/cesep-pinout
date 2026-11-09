@@ -49,7 +49,7 @@ async function save(as = false): Promise<void> {
 
 async function open(): Promise<void> {
   if (!store.confirmDiscard()) return
-  const path = await chooseProjectToOpen()
+  const path = await chooseProjectToOpen(library.lastProjectDir)
   if (path === null) return
   await store.openPath(path)
 }

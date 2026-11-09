@@ -11,15 +11,24 @@ export function ensureProjectExtension(path: string): string {
   return /\.json$/i.test(path) ? path : path + PROJECT_EXTENSION
 }
 
-export async function chooseProjectToOpen(): Promise<string | null> {
-  return bridge().showOpenDialog({ title: 'Ouvrir un projet Pinout', filters: PROJECT_FILTERS })
+/** Dialogue d'ouverture, dans `defaultDir` s'il est donné (dossier du dernier projet). */
+export async function chooseProjectToOpen(defaultDir?: string | null): Promise<string | null> {
+  return bridge().showOpenDialog({
+    title: 'Ouvrir un projet Pinout',
+    defaultPath: defaultDir ?? undefined,
+    filters: PROJECT_FILTERS
+  })
 }
 
-export async function chooseProjectToSave(projectName: string): Promise<string | null> {
-  const { documents } = await bridge().getAppPaths()
+/** Dialogue d'enregistrement, dans `defaultDir` s'il est donné, sinon dans Documents. */
+export async function chooseProjectToSave(
+  projectName: string,
+  defaultDir?: string | null
+): Promise<string | null> {
+  const dir = defaultDir ?? (await bridge().getAppPaths()).documents
   const path = await bridge().showSaveDialog({
     title: 'Enregistrer le projet',
-    defaultPath: joinPath(documents, slugify(projectName) + PROJECT_EXTENSION),
+    defaultPath: joinPath(dir, slugify(projectName) + PROJECT_EXTENSION),
     filters: PROJECT_FILTERS
   })
   return path === null ? null : ensureProjectExtension(path)
