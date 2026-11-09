@@ -284,6 +284,23 @@ function setLabelSize(event: Event): void {
 
     <section v-else-if="single" class="block">
       <h3>{{ single.def.name }}</h3>
+      <div v-if="libraryUpdate" class="notice">
+        <Icon name="refresh" :size="16" class="notice-icon" />
+        <div class="notice-body">
+          <strong>Version plus récente dans la bibliothèque</strong>
+          <p>
+            Ce montage garde sa propre copie du composant. La mettre à jour remplace cette copie
+            pour tous les « {{ single.def.name }} » du montage ; les fils suivent les broches.
+          </p>
+          <button
+            type="button"
+            class="primary small with-icon"
+            @click="store.updateDefinition(libraryUpdate)"
+          >
+            <Icon name="refresh" :size="13" /> Mettre à jour dans ce montage
+          </button>
+        </div>
+      </div>
       <label class="field">
         <span>Repère</span>
         <input
@@ -338,12 +355,6 @@ function setLabelSize(event: Event): void {
           <input type="checkbox" :checked="single.instance.mirror" @change="setMirror" />
           <span>Miroir</span>
         </label>
-      </div>
-      <div v-if="libraryUpdate" class="notice">
-        <p>La bibliothèque a une version plus récente de ce composant.</p>
-        <button type="button" class="small" @click="store.updateDefinition(libraryUpdate)">
-          Mettre à jour dans ce montage
-        </button>
       </div>
       <div class="row">
         <button
@@ -678,16 +689,41 @@ function setLabelSize(event: Event): void {
 }
 
 .notice {
-  margin: 8px 0;
-  padding: 8px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0 0 10px;
+  padding: 10px;
   border: 1px solid var(--warning-border);
-  border-radius: 4px;
+  border-radius: 6px;
   background: var(--warning-bg);
   font-size: 12px;
 }
 
-.notice p {
-  margin: 0 0 6px;
+.notice-icon {
+  flex: none;
+  margin-top: 1px;
+  color: var(--warning-text);
+}
+
+.notice-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.notice-body strong {
+  color: var(--text);
+}
+
+.notice-body p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.notice-body button {
+  align-self: flex-start;
 }
 
 .swatches {

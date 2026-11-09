@@ -1,13 +1,21 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { COMPONENT_FILE } from '@/io/library'
+import { baseName } from '@/io/paths'
 import Icon from '@/ui/Icon.vue'
 import { useComponentEditorStore } from './store'
 import { TOOLS } from './tools'
 
-// Barre d'outils de l'éditeur de composants : outils de dessin, annuler/rétablir, zoom,
-// nouveau et enregistrer (aussi dans le menu Fichier).
+// Barre d'outils de l'éditeur de composants : outils de dessin, annuler/rétablir, zoom, et à
+// droite le nom du composant avec son fichier, puis Enregistrer (aussi dans le menu Fichier).
+// Quand la place manque, les raccourcis disparaissent, puis les libellés ; les icônes restent.
 
 const store = useComponentEditorStore()
-const emit = defineEmits<{ save: []; create: [] }>()
+const emit = defineEmits<{ save: [] }>()
+
+const fileLabel = computed(() =>
+  store.folder ? `${baseName(store.folder)}/${COMPONENT_FILE}` : 'Non enregistré'
+)
 </script>
 
 <template>
@@ -23,7 +31,7 @@ const emit = defineEmits<{ save: []; create: [] }>()
         @click="store.tool = tool.id"
       >
         <Icon :name="tool.icon" />
-        {{ tool.label }}
+        <span class="label">{{ tool.label }}</span>
         <kbd>{{ tool.key.toUpperCase() }}</kbd>
       </button>
     </div>
@@ -80,35 +88,25 @@ const emit = defineEmits<{ save: []; create: [] }>()
     <div class="spacer" />
 
     <span class="doc-name" :title="store.folder ?? 'Pas encore enregistré'">
-      {{ store.doc.name }}<span v-if="store.dirty" class="dirty"> · modifié</span>
+      <span class="name">{{ store.doc.name }}</span>
+      <span class="file">{{ fileLabel }}{{ store.dirty ? ' · modifié' : '' }}</span>
     </span>
 
-    <div class="group">
-      <button
-        type="button"
-        class="with-icon"
-        title="Nouveau composant (Ctrl+N)"
-        @click="emit('create')"
-      >
-        <Icon name="file-plus" /> Nouveau
-      </button>
-      <button
-        type="button"
-        class="primary with-icon"
-        :disabled="store.hasErrors"
-        :title="
-          store.hasErrors ? 'Corrige les erreurs avant d’enregistrer' : 'Enregistrer (Ctrl+S)'
-        "
-        @click="emit('save')"
-      >
-        <Icon name="save" /> Enregistrer
-      </button>
-    </div>
+    <button
+      type="button"
+      class="primary with-icon save"
+      :disabled="store.hasErrors"
+      :title="store.hasErrors ? 'Corrige les erreurs avant d’enregistrer' : 'Enregistrer (Ctrl+S)'"
+      @click="emit('save')"
+    >
+      <Icon name="save" /> <span class="label">Enregistrer</span>
+    </button>
   </div>
 </template>
 
 <style scoped>
 .toolbar {
+  container-type: inline-size;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -121,6 +119,7 @@ const emit = defineEmits<{ save: []; create: [] }>()
   display: flex;
   align-items: center;
   gap: 4px;
+  flex: none;
 }
 
 .tool kbd {
@@ -150,12 +149,44 @@ const emit = defineEmits<{ save: []; create: [] }>()
 }
 
 .doc-name {
-  font-weight: 600;
-  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 0;
+  line-height: 1.2;
 }
 
-.dirty {
-  font-weight: 400;
+.doc-name .name,
+.doc-name .file {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-name .name {
+  font-weight: 600;
+}
+
+.file {
+  font-size: 11px;
   color: var(--text-muted);
+}
+
+.save {
+  flex: none;
+}
+
+/* Barre étroite : d'abord les raccourcis s'effacent, puis les libellés ; les icônes restent. */
+@container (max-width: 1300px) {
+  .tool kbd {
+    display: none;
+  }
+}
+
+@container (max-width: 1080px) {
+  .with-icon .label {
+    display: none;
+  }
 }
 </style>

@@ -7,7 +7,8 @@ import { useSchematicStore } from './store'
 
 // Barre d'outils du montage : outils, palette, annuler/rétablir, vue, et tout à droite le
 // panneau de propriétés. Rotation, miroir, duplication, suppression et ordre des fils passent
-// par le menu contextuel et le clavier ; les actions de fichier par le menu Fichier.
+// par le menu contextuel et le clavier ; les actions de fichier par le menu Fichier. Quand la
+// place manque, les raccourcis disparaissent, puis les libellés ; les icônes restent.
 
 const store = useSchematicStore()
 const library = useLibraryStore()
@@ -40,7 +41,7 @@ function pickCustom(event: Event): void {
         title="Sélection (V)"
         @click="store.selectTool()"
       >
-        <Icon name="cursor" /> Sélection <kbd>V</kbd>
+        <Icon name="cursor" /> <span class="label">Sélection</span> <kbd>V</kbd>
       </button>
       <button
         type="button"
@@ -49,7 +50,7 @@ function pickCustom(event: Event): void {
         title="Tracer un fil (F)"
         @click="store.startWireTool()"
       >
-        <Icon name="wire" /> Fil <kbd>F</kbd>
+        <Icon name="wire" /> <span class="label">Fil</span> <kbd>F</kbd>
       </button>
       <button
         type="button"
@@ -58,7 +59,7 @@ function pickCustom(event: Event): void {
         title="Poser une étiquette texte (E)"
         @click="store.startTextTool()"
       >
-        <Icon name="type" /> Texte <kbd>E</kbd>
+        <Icon name="type" /> <span class="label">Texte</span> <kbd>E</kbd>
       </button>
     </div>
 
@@ -161,6 +162,7 @@ function pickCustom(event: Event): void {
 
 <style scoped>
 .toolbar {
+  container-type: inline-size;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -260,5 +262,18 @@ function pickCustom(event: Event): void {
   font-weight: 400;
   font-size: 11px;
   color: var(--text-muted);
+}
+
+/* Barre étroite : d'abord les raccourcis s'effacent, puis les libellés ; les icônes restent. */
+@container (max-width: 1300px) {
+  .tool kbd {
+    display: none;
+  }
+}
+
+@container (max-width: 1080px) {
+  .tool .label {
+    display: none;
+  }
 }
 </style>

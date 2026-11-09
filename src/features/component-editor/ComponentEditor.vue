@@ -84,7 +84,7 @@ defineExpose({ save, createNew })
 
 <template>
   <section class="editor">
-    <EditorToolbar @save="save" @create="createNew" />
+    <EditorToolbar @save="save" />
     <div class="editor-body">
       <EditorCanvas ref="canvas" />
       <EditorInspector />

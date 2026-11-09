@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import projectText from './fixtures/v1/project.json?raw'
+import projectV10 from './fixtures/v10/project.json?raw'
 import { parseProject } from './serialize'
 import { DEFAULT_EXPORT } from './settings'
 import { buildProjectSvg, escapeXml, primitiveSvg } from './svg'
@@ -33,6 +34,15 @@ describe('export SVG', () => {
     expect(result.svg).toContain('>R1</text>')
     expect(result.svg).toContain('>Exemple</tspan>')
     expect(result.svg).not.toContain('free-end')
+  })
+
+  it('tourne avec le composant les textes qui le demandent, jamais en miroir', () => {
+    // Moteur 4 × 2 en (0, 0), tourné de 90° et en miroir : le M garde sa boîte 2 × 1, centrée
+    // sur la boîte transformée (0,5..1,5 × 1..3), tournée autour de (1, 2).
+    const result = buildProjectSvg(parseProject(projectV10), DEFAULT_EXPORT)
+    if (!result) throw new Error('export vide')
+    expect(result.svg).toContain('transform="rotate(90 1 2)"')
+    expect(result.svg).toContain('>M</tspan>')
   })
 
   it('ajoute une flèche aux extrémités libres prolongées', () => {
@@ -79,7 +89,8 @@ describe('export SVG', () => {
           variable: false,
           defaultValue: '',
           unit: '',
-          bold: false
+          bold: false,
+          followsRotation: false
         },
         0.1
       )
@@ -101,7 +112,8 @@ describe('export SVG', () => {
         variable: true,
         defaultValue: '10 kΩ',
         unit: '',
-        bold: false
+        bold: false,
+        followsRotation: false
       },
       0.1
     )
@@ -121,7 +133,8 @@ describe('export SVG', () => {
           variable: true,
           defaultValue: '10 kΩ',
           unit: '',
-          bold: false
+          bold: false,
+          followsRotation: false
         },
         0.1,
         { valeur: '4,7 kΩ' }

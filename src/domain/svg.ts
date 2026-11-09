@@ -20,7 +20,8 @@ import {
   projectBounds,
   unionRects,
   layoutLabel,
-  instanceTextBoxes
+  instanceTextPlacements,
+  textPlacementTransform
 } from './placement'
 import type { Project } from './project'
 import type { ExportSettings } from './settings'
@@ -351,34 +352,32 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
   parts.push(`<g class="junctions">${junctionParts.join('')}</g>`)
 
   const instanceParts: string[] = []
-  const uprightParts: string[] = []
+  const componentTextParts: string[] = []
   const labelParts: string[] = []
   const labelSize = profile.labelFont.size / profile.cellPx
   for (const instance of project.components) {
     const def = project.embeddedDefs[instance.defId]
     if (!def) continue
-    const upright = !def.textFollowsTransform
     instanceParts.push(
-      `<g ${attrs({ transform: matrixToSvg(instanceMatrix(instance, def)) })}>${componentSvg(def, profile.componentStroke, instance.fields, { skipTexts: upright })}</g>`
+      `<g ${attrs({ transform: matrixToSvg(instanceMatrix(instance, def)) })}>${componentSvg(def, profile.componentStroke, instance.fields, { skipTexts: true })}</g>`
     )
-    // Textes droits : dessinés hors de la transformation, dans la boîte que celle-ci leur donne.
-    if (upright) {
-      for (const { primitive, box } of instanceTextBoxes(instance, def)) {
-        const layout = layoutTextBox(
-          box,
-          textContent(primitive, instance.fields),
-          primitive.size,
-          primitive.anchor
+    // Textes : hors de la transformation, droits ou tournés avec le composant, jamais en miroir.
+    for (const placement of instanceTextPlacements(instance, def)) {
+      const { primitive, box } = placement
+      const layout = layoutTextBox(
+        box,
+        textContent(primitive, instance.fields),
+        primitive.size,
+        primitive.anchor
+      )
+      const spans = layout.lines
+        .map(
+          (line) => `<tspan ${attrs({ x: layout.x, y: line.y })}>${escapeXml(line.text)}</tspan>`
         )
-        const spans = layout.lines
-          .map(
-            (line) => `<tspan ${attrs({ x: layout.x, y: line.y })}>${escapeXml(line.text)}</tspan>`
-          )
-          .join('')
-        uprightParts.push(
-          `<text ${attrs({ 'font-size': primitive.size, 'font-weight': primitive.bold ? 'bold' : undefined, 'text-anchor': primitive.anchor, fill: primitive.color, 'font-family': FONT_STACK })}>${spans}</text>`
-        )
-      }
+        .join('')
+      componentTextParts.push(
+        `<text ${attrs({ 'font-size': primitive.size, 'font-weight': primitive.bold ? 'bold' : undefined, 'text-anchor': primitive.anchor, fill: primitive.color, 'font-family': FONT_STACK, transform: textPlacementTransform(placement) })}>${spans}</text>`
+      )
     }
     if (options.labels && instance.label.length > 0) {
       const box = instanceBounds(instance, def)
@@ -388,7 +387,9 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
     }
   }
   parts.push(`<g class="components">${instanceParts.join('')}</g>`)
-  if (uprightParts.length > 0) parts.push(`<g class="component-texts">${uprightParts.join('')}</g>`)
+  if (componentTextParts.length > 0) {
+    parts.push(`<g class="component-texts">${componentTextParts.join('')}</g>`)
+  }
   if (labelParts.length > 0) parts.push(`<g class="labels">${labelParts.join('')}</g>`)
 
   if (project.labels.length > 0) {

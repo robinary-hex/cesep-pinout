@@ -195,15 +195,29 @@ export function nextNumberedId(prefix: string, taken: Iterable<string>): string 
   }
 }
 
+/** Texte d'un composant posé, tel que le montage le dessine : boîte de mise en page et rotation. */
+export interface InstanceTextPlacement {
+  primitive: TextPrimitive
+  /**
+   * Boîte de mise en page, en cellules du montage. Pour un texte qui tourne avec le composant,
+   * c'est sa boîte dans son propre repère, tournée de `rotation` autour de son centre ; sinon la
+   * boîte droite que la transformation lui donne.
+   */
+  box: Box
+  /** Rotation horaire du texte en degrés ; toujours 0 pour un texte qui reste horizontal. */
+  rotation: Rotation
+}
+
 /**
- * Boîtes des textes d'un composant posé, en cellules du montage, là où la transformation les
- * place : des rectangles alignés sur la grille, puisque les rotations sont des quarts de tour.
- * Sert aux textes qui restent droits quelle que soit l'orientation du composant.
+ * Textes d'un composant posé, dessinés hors de la transformation de l'instance : les rotations
+ * sont des quarts de tour, donc la boîte transformée reste un rectangle aligné sur la grille.
+ * Un texte qui reste horizontal est mis en page dans cette boîte ; un texte qui suit la rotation
+ * tourne avec le composant mais n'est jamais en miroir : il reste lisible dans tous les cas.
  */
-export function instanceTextBoxes(
+export function instanceTextPlacements(
   instance: ComponentInstance,
   def: ComponentDefinition
-): { primitive: TextPrimitive; box: Box }[] {
+): InstanceTextPlacement[] {
   if (def.visual.kind !== 'drawing') return []
   const matrix = instanceMatrix(instance, def)
   return def.visual.primitives.flatMap((primitive) => {
@@ -221,6 +235,28 @@ export function instanceTextBoxes(
     const ys = corners.map((corner) => corner.y)
     const x1 = Math.min(...xs)
     const y1 = Math.min(...ys)
-    return [{ primitive, box: { x: x1, y: y1, w: Math.max(...xs) - x1, h: Math.max(...ys) - y1 } }]
+    const placed: Box = { x: x1, y: y1, w: Math.max(...xs) - x1, h: Math.max(...ys) - y1 }
+    if (!primitive.followsRotation) return [{ primitive, box: placed, rotation: 0 }]
+    // Boîte dans le repère du texte : mêmes proportions qu'au dessin, centrée là où la
+    // transformation l'a mise ; un quart de tour échange largeur et hauteur.
+    const quarterTurn = instance.rotation === 90 || instance.rotation === 270
+    const width = quarterTurn ? placed.h : placed.w
+    const height = quarterTurn ? placed.w : placed.h
+    const centerX = placed.x + placed.w / 2
+    const centerY = placed.y + placed.h / 2
+    return [
+      {
+        primitive,
+        box: { x: centerX - width / 2, y: centerY - height / 2, w: width, h: height },
+        rotation: instance.rotation
+      }
+    ]
   })
+}
+
+/** Attribut `transform` SVG d'un texte posé : rotation autour du centre de sa boîte, sinon rien. */
+export function textPlacementTransform(placement: InstanceTextPlacement): string | undefined {
+  if (placement.rotation === 0) return undefined
+  const { x, y, w, h } = placement.box
+  return `rotate(${placement.rotation} ${x + w / 2} ${y + h / 2})`
 }

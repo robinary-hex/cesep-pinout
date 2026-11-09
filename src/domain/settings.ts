@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { hexColorSchema } from './color'
 import { DEFAULT_PROFILE, styleProfileSchema } from './profile'
 
-export const SETTINGS_SCHEMA_VERSION = 6
+export const SETTINGS_SCHEMA_VERSION = 7
 
 export const paletteColorSchema = z.object({
   name: z.string().min(1),
@@ -85,6 +85,6 @@ export const DEFAULT_SETTINGS: Settings = {
   recentFiles: [],
   export: { ...DEFAULT_EXPORT },
   autosaveSeconds: DEFAULT_AUTOSAVE_SECONDS,
-  theme: 'light',
+  theme: 'dark',
   autoOpenInspector: true
 }

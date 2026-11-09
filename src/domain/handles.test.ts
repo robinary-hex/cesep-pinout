@@ -39,7 +39,8 @@ describe('poignées des formes', () => {
         variable: false,
         defaultValue: '',
         unit: '',
-        bold: false
+        bold: false,
+        followsRotation: false
       })
     ).toHaveLength(8)
   })

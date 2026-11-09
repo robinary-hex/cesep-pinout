@@ -166,10 +166,10 @@ function pinPosition(pin: Pin): LocalPoint {
 function pinLabel(pin: Pin): { dx: number; dy: number; anchor: 'start' | 'middle' | 'end' } {
   const { x, y } = pinPosition(pin)
   const inside = y > 0 && y < size.value.heightCells
-  if (x === 0 && inside) return { dx: -12, dy: 0, anchor: 'end' }
-  if (x === size.value.widthCells && inside) return { dx: 12, dy: 0, anchor: 'start' }
-  if (y === 0) return { dx: 0, dy: -14, anchor: 'middle' }
-  return { dx: 0, dy: 16, anchor: 'middle' }
+  if (x === 0 && inside) return { dx: -16, dy: 0, anchor: 'end' }
+  if (x === size.value.widthCells && inside) return { dx: 16, dy: 0, anchor: 'start' }
+  if (y === 0) return { dx: 0, dy: -22, anchor: 'middle' }
+  return { dx: 0, dy: 24, anchor: 'middle' }
 }
 
 /** Décalage des originaux pendant un déplacement (pas pendant une copie). */
@@ -444,7 +444,8 @@ function onPointerDown(event: PointerEvent): void {
           variable: false,
           defaultValue: '',
           unit: '',
-          bold: false
+          bold: false,
+          followsRotation: false
         },
         'Ajouter un texte'
       )
@@ -739,7 +740,7 @@ defineExpose({ cancel, finishPolyline })
               :y="pinLabel(pin).dy"
               :text-anchor="pinLabel(pin).anchor"
               dominant-baseline="middle"
-              font-size="11"
+              font-size="22"
               fill="var(--paper-text)"
             >
               {{ index + 1 }}{{ pin.name !== String(index + 1) ? ` · ${pin.name}` : '' }}

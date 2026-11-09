@@ -74,9 +74,24 @@ describe('formes du mini-éditeur', () => {
     })
   })
 
-  it('crée un composant vide valide, avec un seul avertissement (pas de broche)', () => {
+  it('crée un composant vierge valide ; l’avertissement « aucune broche » attend la première forme', () => {
     const def = createEmptyComponent('nouveau', 'Nouveau')
     expect(def.size).toEqual({ widthCells: 4, heightCells: 2 })
+    expect(componentIssues(def)).toEqual([])
+    def.visual = {
+      kind: 'drawing',
+      primitives: [
+        {
+          kind: 'rect',
+          x: 0,
+          y: 0,
+          w: 4,
+          h: 4,
+          rx: 0,
+          style: { stroke: '#000000', fill: 'none', weight: 1 }
+        }
+      ]
+    }
     expect(componentIssues(def).map((issue) => issue.level)).toEqual(['warning'])
   })
 
@@ -121,12 +136,15 @@ describe('textes variables', () => {
       variable: true,
       defaultValue: '10',
       unit: 'kΩ',
-      bold: false
+      bold: false,
+      followsRotation: false
     }
     const nbsp = String.fromCharCode(0xa0)
     expect(textContent(base, { R: '4,7' })).toBe(`4,7${nbsp}kΩ`)
     expect(textContent(base, {})).toBe(`10${nbsp}kΩ`)
-    expect(textContent({ ...base, defaultValue: '', unit: '', bold: false })).toBe('{R}')
+    expect(
+      textContent({ ...base, defaultValue: '', unit: '', bold: false, followsRotation: false })
+    ).toBe('{R}')
     expect(textContent({ ...base, variable: false })).toBe('R')
     expect(
       componentFields({

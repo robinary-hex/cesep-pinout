@@ -25,7 +25,8 @@ describe('ComponentGraphic', () => {
           variable: false,
           defaultValue: '',
           unit: '',
-          bold: false
+          bold: false,
+          followsRotation: false
         }
       ]
     }
@@ -66,7 +67,8 @@ describe('ComponentGraphic', () => {
           variable: true,
           defaultValue: '10 kΩ',
           unit: '',
-          bold: false
+          bold: false,
+          followsRotation: false
         }
       ]
     }

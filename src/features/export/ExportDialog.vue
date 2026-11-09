@@ -246,19 +246,30 @@ legend {
   color: var(--text-muted);
 }
 
+/* Entourage gris ; la zone exportée est cernée d'un pointillé bleu, à la taille de l'image. */
 .preview {
   min-height: 320px;
   max-height: 60vh;
   display: grid;
   place-items: center;
   overflow: auto;
+  padding: 20px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--bg);
+  background: var(--preview-bg);
 }
 
-.preview.transparent {
-  /* Hachures légères : le fond transparent se devine sans fatiguer l'œil. */
+.preview img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(58vh - 40px);
+  object-fit: contain;
+  outline: 2px dashed var(--accent);
+  outline-offset: 4px;
+}
+
+/* Fond transparent : hachures légères sous le dessin seulement. */
+.preview.transparent img {
   background-color: var(--hatch-bg);
   background-image: repeating-linear-gradient(
     45deg,
@@ -267,12 +278,6 @@ legend {
     transparent 1px,
     transparent 9px
   );
-}
-
-.preview img {
-  max-width: 100%;
-  max-height: 58vh;
-  object-fit: contain;
 }
 
 .message {

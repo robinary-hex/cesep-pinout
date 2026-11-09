@@ -175,6 +175,30 @@ function migrateComponentV5(raw: RawRecord): RawRecord {
   return { ...raw, visual: { ...visual, primitives: visual['primitives'].map(migrateTextV5) } }
 }
 
+// Composant v7 → v8 : l'orientation des textes sur le montage se règle texte par texte
+// (`followsRotation`), héritée du réglage global `textFollowsTransform`, qui disparaît.
+
+function migrateComponentV7(raw: RawRecord): RawRecord {
+  const follows = raw['textFollowsTransform'] === true
+  const rest = { ...raw }
+  delete rest['textFollowsTransform']
+  const visual = rest['visual']
+  if (!isRecord(visual) || visual['kind'] !== 'drawing' || !Array.isArray(visual['primitives'])) {
+    return rest
+  }
+  return {
+    ...rest,
+    visual: {
+      ...visual,
+      primitives: visual['primitives'].map((primitive) =>
+        isRecord(primitive) && primitive['kind'] === 'text'
+          ? { ...primitive, followsRotation: follows }
+          : primitive
+      )
+    }
+  }
+}
+
 export const componentMigrations: MigrationTable = {
   current: COMPONENT_SCHEMA_VERSION,
   steps: {
@@ -184,7 +208,8 @@ export const componentMigrations: MigrationTable = {
     4: migrateComponentV4,
     5: migrateComponentV5,
     // v6 → v7 : textes droits sur le montage par défaut.
-    6: (raw) => ({ textFollowsTransform: false, ...raw })
+    6: (raw) => ({ textFollowsTransform: false, ...raw }),
+    7: migrateComponentV7
   }
 }
 
@@ -278,7 +303,9 @@ export const projectMigrations: MigrationTable = {
     7: migrateEmbeddedDefs,
     8: migrateProjectV8,
     // Projet v9 → v10 : définitions embarquées migrées (textes droits).
-    9: migrateEmbeddedDefs
+    9: migrateEmbeddedDefs,
+    // Projet v10 → v11 : définitions embarquées migrées (orientation texte par texte).
+    10: migrateEmbeddedDefs
   }
 }
 
@@ -304,6 +331,8 @@ export const settingsMigrations: MigrationTable = {
     // v4 → v5 : police des étiquettes d'extrémité du profil par défaut.
     4: (raw) => ({ ...raw, defaultProfile: completeProfile(raw['defaultProfile']) }),
     // v5 → v6 : ouverture automatique du panneau de propriétés.
-    5: (raw) => ({ ...raw, autoOpenInspector: true })
+    5: (raw) => ({ ...raw, autoOpenInspector: true }),
+    // v6 → v7 : thème sombre par défaut (le clair avait été imposé à la v4, pas choisi).
+    6: (raw) => ({ ...raw, theme: 'dark' })
   }
 }

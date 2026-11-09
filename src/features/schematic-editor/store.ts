@@ -919,6 +919,14 @@ export const useSchematicStore = defineStore('schematic', () => {
     return JSON.stringify(entry.def) === JSON.stringify(embedded) ? null : entry.def
   }
 
+  /** Définitions embarquées que la bibliothèque a fait évoluer : le canevas les teinte. */
+  const staleDefIds = computed(
+    () =>
+      new Set(
+        Object.keys(doc.value.embeddedDefs).filter((id) => newerLibraryDefinition(id) !== null)
+      )
+  )
+
   function setInstancePosition(id: string, x: number, y: number): void {
     applyWithElasticWires('Déplacer le composant', (draft) => {
       const instance = draft.components.find((candidate) => candidate.id === id)
@@ -1083,6 +1091,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     setInstanceLabel,
     setInstanceField,
     newerLibraryDefinition,
+    staleDefIds,
     setInstancePosition,
     setInstanceOrientation,
     zoomAround,

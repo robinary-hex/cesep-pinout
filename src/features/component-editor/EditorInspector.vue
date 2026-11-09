@@ -15,8 +15,9 @@ import Icon from '@/ui/Icon.vue'
 import { pickPng, resizePng } from './pngImport'
 import { useComponentEditorStore } from './store'
 
-// Panneau de droite. Sans sélection : le composant (propriétés, broches, visuel). Avec une
-// sélection : seulement l'élément sélectionné (forme, formes, broche). Les contrôles restent en bas.
+// Panneau de droite. Sans sélection : le composant (propriétés, broches, visuel). Avec des
+// formes sélectionnées : seulement elles. Une broche sélectionnée reste dans la liste du
+// composant, mise en évidence. Les contrôles restent en bas.
 // Les champs valident au changement (pas à chaque touche), donc une modification = une commande.
 
 const store = useComponentEditorStore()
@@ -89,10 +90,6 @@ async function acceptResize(): Promise<void> {
 // Broches
 
 const selectedPin = computed(() => store.selectedPin)
-const selectedPinOrdinal = computed(() =>
-  selectedPin.value ? doc.value.pins.findIndex((pin) => pin.id === selectedPin.value?.id) + 1 : 0
-)
-
 function selectPin(id: string): void {
   store.selection = { kind: 'pin', id }
 }
@@ -242,6 +239,17 @@ function setBold(event: Event): void {
   })
 }
 
+function setFollowsRotation(event: Event): void {
+  const follows = checked(event)
+  store.updatePrimitive(
+    primitiveIndex.value,
+    follows ? 'Texte qui tourne avec le composant' : 'Texte toujours horizontal',
+    (p) => {
+      if (p.kind === 'text') p.followsRotation = follows
+    }
+  )
+}
+
 function setRectRadius(event: Event): void {
   const rx = Math.max(0, Math.round(numberValue(event)))
   store.updatePrimitive(primitiveIndex.value, 'Arrondi du rectangle', (p) => {
@@ -332,6 +340,17 @@ function setClosed(event: Event): void {
             <span>Gras</span>
           </label>
         </div>
+        <label
+          class="check"
+          title="Sinon le texte reste horizontal quelle que soit l'orientation du composant. Un miroir ne reflète jamais un texte."
+        >
+          <input
+            type="checkbox"
+            :checked="primitive.followsRotation"
+            @change="setFollowsRotation"
+          />
+          <span>Tourne avec le composant sur le montage</span>
+        </label>
       </template>
 
       <template v-else-if="shapeStyle">
@@ -447,44 +466,7 @@ function setClosed(event: Event): void {
       </button>
     </section>
 
-    <!-- Une broche -->
-    <section v-else-if="selectedPin" class="block">
-      <div class="head-row">
-        <h3>Broche {{ selectedPinOrdinal }}</h3>
-        <button
-          type="button"
-          class="small"
-          title="Revenir au composant (Échap)"
-          @click="store.selection = null"
-        >
-          <Icon name="chevron-down" :size="12" /> Composant
-        </button>
-      </div>
-      <div class="row">
-        <label class="field">
-          <span>Nom</span>
-          <input
-            type="text"
-            :value="selectedPin.name"
-            @change="setPinName(selectedPin.id, $event)"
-          />
-        </label>
-        <label class="field">
-          <span>Type</span>
-          <select :value="selectedPin.kind" @change="setPinKind(selectedPin.id, $event)">
-            <option v-for="kind in PIN_KINDS" :key="kind" :value="kind">
-              {{ PIN_KIND_LABELS[kind] }}
-            </option>
-          </select>
-        </label>
-      </div>
-      <p class="hint">Position : ({{ selectedPin.x }}, {{ selectedPin.y }})</p>
-      <button type="button" class="danger with-icon" @click="store.removePin(selectedPin.id)">
-        <Icon name="trash" /> Supprimer la broche
-      </button>
-    </section>
-
-    <!-- Rien de sélectionné : le composant -->
+    <!-- Rien de sélectionné, ou une broche : le composant, la broche en évidence dans la liste -->
     <template v-else>
       <section class="block">
         <h3>Composant</h3>
@@ -507,14 +489,6 @@ function setClosed(event: Event): void {
             :value="doc.description"
             @change="store.setMeta({ description: inputValue($event) })"
           />
-        </label>
-        <label class="check">
-          <input
-            type="checkbox"
-            :checked="doc.textFollowsTransform"
-            @change="store.setMeta({ textFollowsTransform: checked($event) })"
-          />
-          <span>Sur le montage, les textes tournent et se reflètent avec le composant</span>
         </label>
         <div class="row">
           <label class="field">
@@ -549,6 +523,7 @@ function setClosed(event: Event): void {
           v-for="(pin, index) in doc.pins"
           :key="pin.id"
           class="pin-row"
+          :class="{ selected: selectedPin?.id === pin.id }"
           @pointerenter="store.hoverPinId = pin.id"
           @pointerleave="store.hoverPinId = null"
           @click="selectPin(pin.id)"
@@ -723,6 +698,10 @@ function setClosed(event: Event): void {
 
 .pin-row:hover {
   background: var(--surface-3);
+}
+
+.pin-row.selected {
+  background: var(--accent-soft);
 }
 
 .pin-row .ordinal {

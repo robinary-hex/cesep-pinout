@@ -6,7 +6,8 @@ import {
   dragVertex,
   instanceBounds,
   instanceMatrix,
-  instanceTextBoxes,
+  instanceTextPlacements,
+  textPlacementTransform,
   layoutTextBox,
   locateOnWire,
   matrixToSvg,
@@ -310,21 +311,25 @@ const pins = computed(() => {
   })
 })
 
-/** Textes des composants qui restent droits : dans la boîte que la transformation leur donne. */
-const uprightTexts = computed(() =>
+/** Textes des composants, hors de la transformation : droits, ou tournés avec le composant sans miroir. */
+const instanceTexts = computed(() =>
   store.placed.flatMap((item) => {
-    if (item.def.textFollowsTransform) return []
     const { dx, dy } = offsetOf(item.instance.id)
-    return instanceTextBoxes(item.instance, item.def).map(({ primitive, box }, index) => ({
-      key: `${item.instance.id}:${index}`,
-      primitive,
-      layout: layoutTextBox(
-        { ...box, x: box.x + dx, y: box.y + dy },
-        textContent(primitive, item.instance.fields),
-        primitive.size,
-        primitive.anchor
-      )
-    }))
+    return instanceTextPlacements(item.instance, item.def).map((placement, index) => {
+      const box = { ...placement.box, x: placement.box.x + dx, y: placement.box.y + dy }
+      const { primitive } = placement
+      return {
+        key: `${item.instance.id}:${index}`,
+        primitive,
+        transform: textPlacementTransform({ ...placement, box }),
+        layout: layoutTextBox(
+          box,
+          textContent(primitive, item.instance.fields),
+          primitive.size,
+          primitive.anchor
+        )
+      }
+    })
   })
 )
 
@@ -1064,12 +1069,19 @@ const cursorClass = computed(() => {
             @dblclick="onInstanceDoubleClick(item.instance.id, $event)"
             @contextmenu="onContextMenu($event, { kind: 'instance', id: item.instance.id })"
           >
+            <rect
+              v-if="store.staleDefIds.has(item.def.id)"
+              class="stale"
+              :width="item.def.size.widthCells"
+              :height="item.def.size.heightCells"
+              rx="0.2"
+            />
             <ComponentGraphic
               :def="item.def"
               :cell-px="1"
               :stroke-base="profile.componentStroke"
               :fields="item.instance.fields"
-              upright-texts
+              skip-texts
             />
             <rect
               class="hit"
@@ -1081,8 +1093,9 @@ const cursorClass = computed(() => {
 
           <g class="instance-texts">
             <text
-              v-for="entry in uprightTexts"
+              v-for="entry in instanceTexts"
               :key="entry.key"
+              :transform="entry.transform"
               :font-size="entry.primitive.size"
               :text-anchor="entry.primitive.anchor"
               :fill="screenColor(entry.primitive.color)"
@@ -1454,6 +1467,11 @@ const cursorClass = computed(() => {
 }
 
 .labels text,
+/* Composant dont la bibliothèque a une version plus récente : fond teinté. */
+.instance .stale {
+  fill: var(--stale);
+}
+
 .instance-texts text {
   pointer-events: none;
 }

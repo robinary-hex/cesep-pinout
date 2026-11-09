@@ -274,15 +274,15 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
         Fichier <Icon name="chevron-down" :size="14" />
       </button>
       <nav class="modes">
+        <button type="button" :class="{ active: mode === 'schematic' }" @click="mode = 'schematic'">
+          Montage
+        </button>
         <button
           type="button"
           :class="{ active: mode === 'components' }"
           @click="mode = 'components'"
         >
           Composants
-        </button>
-        <button type="button" :class="{ active: mode === 'schematic' }" @click="mode = 'schematic'">
-          Montage
         </button>
       </nav>
       <div class="spacer" />

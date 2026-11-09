@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { createEmptyComponent } from '@/domain'
 import { useComponentEditorStore } from '@/features/component-editor/store'
 import { useSchematicStore } from '@/features/schematic-editor/store'
@@ -18,6 +19,20 @@ const emit = defineEmits<{ create: [] }>()
 const library = useLibraryStore()
 const editor = useComponentEditorStore()
 const schematic = useSchematicStore()
+
+// Catégories repliables ; une recherche en cours montre tout, le temps de la recherche.
+const collapsed = ref(new Set<string>())
+
+function toggleGroup(name: string): void {
+  const next = new Set(collapsed.value)
+  if (next.has(name)) next.delete(name)
+  else next.add(name)
+  collapsed.value = next
+}
+
+function isOpen(name: string): boolean {
+  return library.search.trim().length > 0 || !collapsed.value.has(name)
+}
 
 function isCurrent(entry: LibraryEntry): boolean {
   return props.mode === 'edit' && editor.folder === entry.folder
@@ -123,10 +138,25 @@ async function remove(entry: LibraryEntry): Promise<void> {
         Rien ne correspond à la recherche.
       </p>
 
-      <section v-for="group in library.groups" :key="group.name" class="group">
-        <h3>{{ group.name }}</h3>
+      <section
+        v-for="group in library.groups"
+        :key="group.name"
+        class="group"
+        :class="{ collapsed: !isOpen(group.name) }"
+      >
+        <button
+          type="button"
+          class="group-head"
+          :title="isOpen(group.name) ? 'Replier la catégorie' : 'Déplier la catégorie'"
+          @click="toggleGroup(group.name)"
+        >
+          <Icon name="chevron-down" :size="12" class="chevron" />
+          <span class="group-name">{{ group.name }}</span>
+          <span class="count">{{ group.entries.length }}</span>
+        </button>
         <div
           v-for="entry in group.entries"
+          v-show="isOpen(group.name)"
           :key="entry.folder"
           class="item"
           :class="{ current: isCurrent(entry) || isPlacing(entry), broken: !entry.def }"
@@ -251,12 +281,47 @@ async function remove(entry: LibraryEntry): Promise<void> {
   color: var(--text-muted);
 }
 
-.group h3 {
-  margin: 8px 12px 4px;
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin: 6px 0 2px;
+  padding: 4px 12px 4px 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
   font-size: 11px;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
+}
+
+.group-head:hover {
+  background: var(--surface-3);
+}
+
+.group-head .chevron {
+  flex: none;
+  transition: transform 0.12s;
+}
+
+.group.collapsed .chevron {
+  transform: rotate(-90deg);
+}
+
+.group-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.count {
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
 }
 
 .item {

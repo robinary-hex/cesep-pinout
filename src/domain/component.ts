@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { hexColorSchema } from './color'
 import { isOnBorder, PNG_PX_PER_CELL, QUARTERS_PER_CELL, sizeSchema, type Size } from './grid'
 
-export const COMPONENT_SCHEMA_VERSION = 7
+export const COMPONENT_SCHEMA_VERSION = 8
 
 export const pinKindSchema = z.enum(['in', 'out', 'io', 'power'])
 export type PinKind = z.infer<typeof pinKindSchema>
@@ -114,7 +114,9 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
     defaultValue: z.string(),
     /** Unité affichée à droite de la valeur d'un texte variable (kΩ, V, mA…) ; vide sinon. */
     unit: z.string(),
-    bold: z.boolean()
+    bold: z.boolean(),
+    /** Sur le montage, le texte tourne avec le composant (jamais en miroir) ; sinon il reste horizontal. */
+    followsRotation: z.boolean()
   })
 ])
 export type Primitive = z.infer<typeof primitiveSchema>
@@ -164,9 +166,7 @@ const componentShape = z.object({
   description: z.string(),
   size: sizeSchema,
   visual: visualSchema,
-  pins: z.array(pinSchema),
-  /** Sur le montage, les textes tournent et se reflètent avec le composant ; sinon ils restent droits. */
-  textFollowsTransform: z.boolean()
+  pins: z.array(pinSchema)
 })
 export type ComponentDefinition = z.infer<typeof componentShape>
 
@@ -181,8 +181,7 @@ export function createEmptyComponent(id: string, name: string): ComponentDefinit
     description: '',
     size: { widthCells: 4, heightCells: 2 },
     visual: { kind: 'drawing', primitives: [] },
-    pins: [],
-    textFollowsTransform: false
+    pins: []
   }
 }
 
@@ -405,7 +404,9 @@ export function componentIssues(def: ComponentDefinition): ComponentIssue[] {
     seenNames.add(pin.name)
   }
 
-  if (def.pins.length === 0) {
+  // Un dessin encore vide n'a rien à câbler : l'avertissement attend la première forme.
+  const blankDrawing = def.visual.kind === 'drawing' && def.visual.primitives.length === 0
+  if (def.pins.length === 0 && !blankDrawing) {
     issues.push({
       level: 'warning',
       message: 'Aucune broche : le composant ne pourra pas être câblé'

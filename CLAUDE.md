@@ -40,10 +40,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   verticalement, alignées à gauche, au centre ou à droite selon `anchor` (`layoutTextBox`, ligne de base
   placée pour centrer les capitales). Les étiquettes texte du montage suivent le même modèle,
   en cellules (`x`, `y`, `w`, `h`, `anchor`), avec poignées sur le canevas et tailles en multiples
-  de la police des repères (×1 à ×3). Sur le montage, les textes d'un composant restent droits et lisibles
-  quelle que soit l'orientation : ils sont dessinés hors de la transformation, dans la boîte que
-  celle-ci leur donne (`instanceTextBoxes`), sauf si la définition demande qu'ils la suivent
-  (`textFollowsTransform`, case dans l'éditeur de composants) ; l'`unit` éventuelle suit toujours la valeur (espace
+  de la police des repères (×1 à ×3). Sur le montage, les textes d'un composant sont dessinés hors
+  de la transformation (`instanceTextPlacements`) : par défaut ils restent horizontaux dans la
+  boîte que celle-ci leur donne ; un texte dont `followsRotation` est coché (case « Tourne avec le
+  composant » dans l'éditeur) tourne avec le composant autour du centre de sa boîte. Dans les deux
+  cas un miroir ne reflète jamais un texte. L'`unit` éventuelle suit toujours la valeur (espace
   insécable).
 - PNG de composant : 80 px par cellule (4× la cellule d'affichage de 20 px).
 - Orientation d'une instance : miroir local puis rotation horaire (`transformLocalPoint`,
@@ -145,13 +146,13 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     collent (décalées d'une cellule) et dupliquent ; le panneau de droite ne montre que l'élément
     sélectionné (forme, formes ou broche), sinon le composant.
     Maj pendant le tracé d'un rectangle ou d'une ellipse impose un carré ou un cercle. Tailles des
-    textes proposées en multiples (×1, ×1,5, ×2) d'une hauteur de référence de 0,5 cellule, comme
+    textes proposées en multiples (×1 à ×3) d'une hauteur de référence de 0,5 cellule, comme
     les étiquettes du montage le sont de la taille des repères du profil ; la valeur stockée reste
     absolue. Les panneaux ne portent pas de texte explicatif : l'aide est dans F1. L'outil Texte
     revient à la sélection dès qu'un texte est posé, dans les deux éditeurs.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 7, projet 10, paramètres 6
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 8, projet 11, paramètres 7
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

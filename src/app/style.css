@@ -46,6 +46,10 @@
   --alert: #cf222e;
   --hatch-bg: #ffffff;
   --hatch-line: #e3e6ea;
+  /* Composant dont la bibliothèque a une version plus récente : rouge clair en clair. */
+  --stale: rgba(255, 110, 110, 0.28);
+  /* Entourage de l'aperçu d'export : gris, pour que la zone exportée se détache. */
+  --preview-bg: #d8dde4;
 }
 
 :root[data-theme='dark'] {
@@ -92,6 +96,9 @@
   --alert: #d29922;
   --hatch-bg: #2a2f36;
   --hatch-line: #3a414b;
+  /* Jaune clair en sombre : le rouge se perdrait sur le papier gris-bleu. */
+  --stale: rgba(245, 220, 110, 0.3);
+  --preview-bg: #262c35;
 }
 
 * {

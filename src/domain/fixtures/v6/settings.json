@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 6,
+  "libraryDir": "",
+  "palette": [
+    {
+      "name": "Noir",
+      "hex": "#000000"
+    },
+    {
+      "name": "Rouge",
+      "hex": "#d62828"
+    }
+  ],
+  "customColors": [],
+  "defaultWireColor": "#000000",
+  "defaultProfile": {
+    "name": "Standard",
+    "cellPx": 20,
+    "wireWidth": 0.15,
+    "cornerRadius": 0.4,
+    "componentStroke": 0.1,
+    "junctionScale": 2,
+    "junctionColor": "wire",
+    "labelFont": {
+      "family": "Segoe UI",
+      "size": 11
+    },
+    "endLabelFont": {
+      "family": "Segoe UI",
+      "size": 14
+    }
+  },
+  "recentFiles": [],
+  "export": {
+    "scale": 2,
+    "background": "white",
+    "marginCells": 2,
+    "labels": true,
+    "grid": false
+  },
+  "autosaveSeconds": 120,
+  "theme": "light",
+  "autoOpenInspector": true
+}

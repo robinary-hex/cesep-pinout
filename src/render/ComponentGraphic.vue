@@ -36,8 +36,8 @@ const props = withDefaults(
     moving?: { indexes: readonly number[]; dx: number; dy: number } | null
     /** Forme remplacée pendant une modification par poignée. */
     preview?: { index: number; primitive: Primitive } | null
-    /** Montage : les textes qui restent droits sont dessinés ailleurs, hors de la transformation. */
-    uprightTexts?: boolean
+    /** Montage : les textes sont dessinés ailleurs, hors de la transformation (droits ou tournés, jamais en miroir). */
+    skipTexts?: boolean
   }>(),
   {
     strokeBase: 0.1,
@@ -45,7 +45,7 @@ const props = withDefaults(
     interactive: false,
     moving: null,
     preview: null,
-    uprightTexts: false
+    skipTexts: false
   }
 )
 
@@ -59,7 +59,7 @@ const heightPx = computed(() => props.def.size.heightCells * props.cellPx)
 const image = computed(() => (props.def.visual.kind === 'png' ? props.def.visual : null))
 const primitives = computed(() => {
   const all = props.def.visual.kind === 'drawing' ? props.def.visual.primitives : []
-  const hideTexts = props.uprightTexts && !props.def.textFollowsTransform
+  const hideTexts = props.skipTexts
   const list = hideTexts ? all.filter((primitive) => primitive.kind !== 'text') : all
   const preview = props.preview
   return preview

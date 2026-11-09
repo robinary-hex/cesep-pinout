@@ -136,9 +136,19 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     folder.value = savedFolder
   }
 
+  /** Composant vierge : rien de dessiné, aucune broche. Il s'abandonne sans question. */
+  const blank = computed(
+    () =>
+      doc.value.visual.kind === 'drawing' &&
+      doc.value.visual.primitives.length === 0 &&
+      doc.value.pins.length === 0
+  )
+
   function confirmDiscard(): boolean {
     return (
-      !dirty.value || window.confirm('Des modifications ne sont pas enregistrées. Les abandonner ?')
+      !dirty.value ||
+      blank.value ||
+      window.confirm('Des modifications ne sont pas enregistrées. Les abandonner ?')
     )
   }
 
@@ -163,9 +173,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   // Commandes du composant
 
   function setMeta(
-    patch: Partial<
-      Pick<ComponentDefinition, 'name' | 'category' | 'description' | 'textFollowsTransform'>
-    >
+    patch: Partial<Pick<ComponentDefinition, 'name' | 'category' | 'description'>>
   ): void {
     apply('Modifier les propriétés', (draft) => {
       Object.assign(draft, patch)

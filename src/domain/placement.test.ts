@@ -11,7 +11,8 @@ import {
   projectBounds,
   rectsIntersect,
   rotatedInstance,
-  instanceTextBoxes
+  instanceTextPlacements,
+  textPlacementTransform
 } from './placement'
 import { DEFAULT_PROFILE } from './profile'
 import { absolutePinPosition, createEmptyProject, type ComponentInstance } from './project'
@@ -143,7 +144,7 @@ describe('repères et identifiants', () => {
   })
 })
 
-describe('textes droits des composants posés', () => {
+describe('textes des composants posés', () => {
   it('donne la boîte d’un texte dans le repère du montage, rotation et miroir compris', () => {
     const def = createEmptyComponent('motor', 'Moteur')
     def.visual = {
@@ -162,29 +163,65 @@ describe('textes droits des composants posés', () => {
           variable: false,
           defaultValue: '',
           unit: '',
-          bold: true
+          bold: true,
+          followsRotation: false
         }
       ]
     }
     const base = { id: 'c1', defId: 'motor', x: 10, y: 5, label: '', fields: {} }
-    expect(instanceTextBoxes({ ...base, rotation: 0, mirror: false }, def)[0]?.box).toEqual({
+    expect(instanceTextPlacements({ ...base, rotation: 0, mirror: false }, def)[0]?.box).toEqual({
       x: 11,
       y: 5.5,
       w: 2,
       h: 1
     })
     // Quart de tour : la boîte 2 × 1 devient 1 × 2, toujours alignée sur la grille.
-    expect(instanceTextBoxes({ ...base, rotation: 90, mirror: false }, def)[0]?.box).toEqual({
+    expect(instanceTextPlacements({ ...base, rotation: 90, mirror: false }, def)[0]?.box).toEqual({
       x: 10.5,
       y: 6,
       w: 1,
       h: 2
     })
-    expect(instanceTextBoxes({ ...base, rotation: 0, mirror: true }, def)[0]?.box).toEqual({
+    expect(instanceTextPlacements({ ...base, rotation: 0, mirror: true }, def)[0]?.box).toEqual({
       x: 11,
       y: 5.5,
       w: 2,
       h: 1
     })
+  })
+
+  it('un texte qui suit la rotation tourne autour du centre de sa boîte, jamais en miroir', () => {
+    const def = createEmptyComponent('motor', 'Moteur')
+    def.visual = {
+      kind: 'drawing',
+      primitives: [
+        {
+          kind: 'text',
+          x: 4,
+          y: 2,
+          w: 8,
+          h: 4,
+          text: 'M',
+          size: 1,
+          anchor: 'middle',
+          color: '#000000',
+          variable: false,
+          defaultValue: '',
+          unit: '',
+          bold: true,
+          followsRotation: true
+        }
+      ]
+    }
+    const base = { id: 'c1', defId: 'motor', x: 10, y: 5, label: '', fields: {} }
+    // Miroir seul : même boîte qu'un texte droit, aucune rotation, donc pas de transformation.
+    const mirrored = instanceTextPlacements({ ...base, rotation: 0, mirror: true }, def)[0]
+    expect(mirrored).toMatchObject({ box: { x: 11, y: 5.5, w: 2, h: 1 }, rotation: 0 })
+    expect(mirrored && textPlacementTransform(mirrored)).toBeUndefined()
+    // Quart de tour : la boîte transformée fait 1 × 2 ; le texte garde sa boîte 2 × 1, centrée
+    // dessus et tournée de 90° autour de ce centre.
+    const turned = instanceTextPlacements({ ...base, rotation: 90, mirror: true }, def)[0]
+    expect(turned).toMatchObject({ box: { x: 10, y: 6.5, w: 2, h: 1 }, rotation: 90 })
+    expect(turned && textPlacementTransform(turned)).toBe('rotate(90 11 7)')
   })
 })
