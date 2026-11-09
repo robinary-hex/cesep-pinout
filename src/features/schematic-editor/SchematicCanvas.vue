@@ -19,6 +19,7 @@ import {
   rotatedSize,
   routeLAuto,
   textContent,
+  textStyleAttrs,
   textLabelBounds,
   wireEndLabelPlacement,
   wireIntersectsRect,
@@ -315,18 +316,21 @@ const pins = computed(() => {
 const instanceTexts = computed(() =>
   store.placed.flatMap((item) => {
     const { dx, dy } = offsetOf(item.instance.id)
+    const stale = store.staleDefIds.has(item.def.id)
     return instanceTextPlacements(item.instance, item.def).map((placement, index) => {
       const box = { ...placement.box, x: placement.box.x + dx, y: placement.box.y + dy }
-      const { primitive } = placement
+      const { primitive, anchor } = placement
       return {
         key: `${item.instance.id}:${index}`,
         primitive,
+        anchor,
+        fill: stale ? 'var(--stale)' : screenColor(primitive.color),
         transform: textPlacementTransform({ ...placement, box }),
         layout: layoutTextBox(
           box,
           textContent(primitive, item.instance.fields),
           primitive.size,
-          primitive.anchor
+          anchor
         )
       }
     })
@@ -1069,19 +1073,19 @@ const cursorClass = computed(() => {
             @dblclick="onInstanceDoubleClick(item.instance.id, $event)"
             @contextmenu="onContextMenu($event, { kind: 'instance', id: item.instance.id })"
           >
-            <rect
-              v-if="store.staleDefIds.has(item.def.id)"
-              class="stale"
-              :width="item.def.size.widthCells"
-              :height="item.def.size.heightCells"
-              rx="0.2"
-            />
             <ComponentGraphic
               :def="item.def"
               :cell-px="1"
               :stroke-base="profile.componentStroke"
               :fields="item.instance.fields"
+              :ink="store.staleDefIds.has(item.def.id) ? 'var(--stale)' : null"
               skip-texts
+            />
+            <rect
+              v-if="store.staleDefIds.has(item.def.id) && item.def.visual.kind === 'png'"
+              class="stale-frame"
+              :width="item.def.size.widthCells"
+              :height="item.def.size.heightCells"
             />
             <rect
               class="hit"
@@ -1097,10 +1101,9 @@ const cursorClass = computed(() => {
               :key="entry.key"
               :transform="entry.transform"
               :font-size="entry.primitive.size"
-              :text-anchor="entry.primitive.anchor"
-              :fill="screenColor(entry.primitive.color)"
-              :font-weight="entry.primitive.bold ? 'bold' : undefined"
-              font-family="'Segoe UI', sans-serif"
+              :text-anchor="entry.anchor"
+              :fill="entry.fill"
+              v-bind="textStyleAttrs(entry.primitive)"
             >
               <tspan
                 v-for="(line, l) in entry.layout.lines"
@@ -1467,9 +1470,13 @@ const cursorClass = computed(() => {
 }
 
 .labels text,
-/* Composant dont la bibliothèque a une version plus récente : fond teinté. */
-.instance .stale {
-  fill: var(--stale);
+/* Composant PNG dont la bibliothèque a une version plus récente : cadre teinté, ses traits ne
+   pouvant pas être recolorés comme ceux d'un dessin. */
+.instance .stale-frame {
+  fill: none;
+  stroke: var(--stale);
+  stroke-width: 0.12;
+  stroke-dasharray: 0.3 0.2;
 }
 
 .instance-texts text {

@@ -1,6 +1,7 @@
 import {
   layoutTextBox,
   type ComponentDefinition,
+  type TextAnchor,
   type TextBoxLayout,
   type TextPrimitive
 } from './component'
@@ -195,24 +196,37 @@ export function nextNumberedId(prefix: string, taken: Iterable<string>): string 
   }
 }
 
-/** Texte d'un composant posé, tel que le montage le dessine : boîte de mise en page et rotation. */
+/** Texte d'un composant posé, tel que le montage le dessine : boîte, rotation, alignement. */
 export interface InstanceTextPlacement {
   primitive: TextPrimitive
   /**
-   * Boîte de mise en page, en cellules du montage. Pour un texte qui tourne avec le composant,
-   * c'est sa boîte dans son propre repère, tournée de `rotation` autour de son centre ; sinon la
-   * boîte droite que la transformation lui donne.
+   * Boîte de mise en page, en cellules du montage. Pour un texte vertical, c'est sa boîte dans son
+   * propre repère, tournée de `rotation` autour de son centre ; sinon la boîte droite que la
+   * transformation lui donne.
    */
   box: Box
-  /** Rotation horaire du texte en degrés ; toujours 0 pour un texte qui reste horizontal. */
+  /** Rotation horaire du texte : 0 ou 90, jamais tête en bas ; toujours 0 pour un texte horizontal. */
   rotation: Rotation
+  /** Alignement effectif : inversé quand la transformation retourne l'axe de lecture du dessin. */
+  anchor: TextAnchor
+}
+
+/** Rotation d'un texte qui suit le composant : vertical aux quarts de tour, horizontal sinon. */
+function textRotation(rotation: Rotation): Rotation {
+  return rotation === 90 || rotation === 270 ? 90 : 0
+}
+
+function flippedAnchor(anchor: TextAnchor): TextAnchor {
+  return anchor === 'start' ? 'end' : anchor === 'end' ? 'start' : anchor
 }
 
 /**
  * Textes d'un composant posé, dessinés hors de la transformation de l'instance : les rotations
  * sont des quarts de tour, donc la boîte transformée reste un rectangle aligné sur la grille.
- * Un texte qui reste horizontal est mis en page dans cette boîte ; un texte qui suit la rotation
- * tourne avec le composant mais n'est jamais en miroir : il reste lisible dans tous les cas.
+ * Un texte horizontal est mis en page dans cette boîte. Un texte qui suit la rotation est vertical
+ * quand le composant est tourné d'un quart de tour (90° ou 270°), horizontal sinon : jamais à
+ * l'envers, jamais en miroir. Quand la transformation retourne l'axe de lecture du dessin (miroir,
+ * demi-tour), l'alignement gauche/droite s'inverse pour que le texte reste collé au même bord.
  */
 export function instanceTextPlacements(
   instance: ComponentInstance,
@@ -220,7 +234,7 @@ export function instanceTextPlacements(
 ): InstanceTextPlacement[] {
   if (def.visual.kind !== 'drawing') return []
   const matrix = instanceMatrix(instance, def)
-  return def.visual.primitives.flatMap((primitive) => {
+  return def.visual.primitives.flatMap((primitive): InstanceTextPlacement[] => {
     if (primitive.kind !== 'text') return []
     const { x, y, w, h } = primitive
     const corners = [
@@ -236,19 +250,21 @@ export function instanceTextPlacements(
     const x1 = Math.min(...xs)
     const y1 = Math.min(...ys)
     const placed: Box = { x: x1, y: y1, w: Math.max(...xs) - x1, h: Math.max(...ys) - y1 }
-    if (!primitive.followsRotation) return [{ primitive, box: placed, rotation: 0 }]
-    // Boîte dans le repère du texte : mêmes proportions qu'au dessin, centrée là où la
-    // transformation l'a mise ; un quart de tour échange largeur et hauteur.
-    const quarterTurn = instance.rotation === 90 || instance.rotation === 270
-    const width = quarterTurn ? placed.h : placed.w
-    const height = quarterTurn ? placed.w : placed.h
+    const rotation = primitive.followsRotation ? textRotation(instance.rotation) : 0
+    // L'axe x du dessin, transformé, va-t-il à l'encontre du sens de lecture du texte dessiné ?
+    const reversed = (rotation === 0 ? matrix.a : matrix.b) < 0
+    const anchor = reversed ? flippedAnchor(primitive.anchor) : primitive.anchor
+    if (rotation === 0) return [{ primitive, box: placed, rotation, anchor }]
+    // Texte vertical : sa boîte dans son propre repère garde les proportions du dessin, centrée
+    // là où la transformation l'a mise ; le quart de tour échange largeur et hauteur.
     const centerX = placed.x + placed.w / 2
     const centerY = placed.y + placed.h / 2
     return [
       {
         primitive,
-        box: { x: centerX - width / 2, y: centerY - height / 2, w: width, h: height },
-        rotation: instance.rotation
+        box: { x: centerX - placed.h / 2, y: centerY - placed.w / 2, w: placed.h, h: placed.w },
+        rotation,
+        anchor
       }
     ]
   })

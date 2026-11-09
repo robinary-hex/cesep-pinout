@@ -445,7 +445,11 @@ function onPointerDown(event: PointerEvent): void {
           defaultValue: '',
           unit: '',
           bold: false,
-          followsRotation: false
+          followsRotation: false,
+          italic: false,
+          underline: false,
+          strike: false,
+          mono: false
         },
         'Ajouter un texte'
       )

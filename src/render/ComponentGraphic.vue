@@ -8,6 +8,7 @@ import {
   pointsAttribute,
   QUARTERS_PER_CELL,
   strokeWidthCells,
+  textStyleAttrs,
   trimForArrows,
   type Arrows,
   type ComponentDefinition,
@@ -38,6 +39,8 @@ const props = withDefaults(
     preview?: { index: number; primitive: Primitive } | null
     /** Montage : les textes sont dessinés ailleurs, hors de la transformation (droits ou tournés, jamais en miroir). */
     skipTexts?: boolean
+    /** Couleur imposée aux traits et aux textes (composant dont la bibliothèque a une version plus récente). */
+    ink?: string | null
   }>(),
   {
     strokeBase: 0.1,
@@ -45,7 +48,8 @@ const props = withDefaults(
     interactive: false,
     moving: null,
     preview: null,
-    skipTexts: false
+    skipTexts: false,
+    ink: null
   }
 )
 
@@ -73,11 +77,20 @@ function strokePx(style: ShapeStyle): number {
   return strokeWidthCells(style, props.strokeBase) * props.cellPx
 }
 
+/** Couleur à l'écran, ou l'encre imposée quand la couleur est visible. */
+function inkFor(color: string): string {
+  return props.ink && color !== 'none' ? props.ink : screenColor(color)
+}
+
 function shapeAttrs(style: ShapeStyle): Record<string, string | number> {
   return {
-    stroke: screenColor(style.stroke),
+    stroke: inkFor(style.stroke),
     'stroke-width': strokePx(style),
-    fill: screenColor(style.fill),
+    // Un remplissage de la couleur du trait fait partie du trait (forme pleine).
+    fill:
+      props.ink && style.fill !== 'none' && style.fill === style.stroke
+        ? props.ink
+        : screenColor(style.fill),
     'stroke-linecap': 'round',
     'stroke-linejoin': 'round'
   }
@@ -158,6 +171,13 @@ function arrowHeads(primitive: Stroked): string[] {
 
 function textLayout(primitive: TextPrimitive): ReturnType<typeof layoutText> {
   return layoutText(primitive, props.fields)
+}
+
+/** Style du texte ; dans l'éditeur, un texte variable sans valeur s'affiche en italique. */
+function textAttrs(primitive: TextPrimitive): Record<string, string | undefined> {
+  const attributes = textStyleAttrs(primitive)
+  if (primitive.variable && !props.fields) attributes['font-style'] = 'italic'
+  return attributes
 }
 
 function down(index: number, event: PointerEvent): void {
@@ -250,7 +270,7 @@ function down(index: number, event: PointerEvent): void {
           v-for="(head, h) in arrowHeads(p)"
           :key="h"
           :points="head"
-          :fill="screenColor(p.style.stroke)"
+          :fill="inkFor(p.style.stroke)"
         />
         <line
           v-if="interactive"
@@ -270,7 +290,7 @@ function down(index: number, event: PointerEvent): void {
           v-for="(head, h) in arrowHeads(p)"
           :key="h"
           :points="head"
-          :fill="screenColor(p.style.stroke)"
+          :fill="inkFor(p.style.stroke)"
         />
         <polyline
           v-if="interactive"
@@ -285,10 +305,8 @@ function down(index: number, event: PointerEvent): void {
         <text
           :font-size="p.size * cellPx"
           :text-anchor="p.anchor"
-          :fill="screenColor(p.color)"
-          :font-weight="p.bold ? 'bold' : undefined"
-          font-family="'Segoe UI', sans-serif"
-          :font-style="p.variable && !fields ? 'italic' : undefined"
+          :fill="inkFor(p.color)"
+          v-bind="textAttrs(p)"
         >
           <tspan
             v-for="(line, l) in textLayout(p).lines"

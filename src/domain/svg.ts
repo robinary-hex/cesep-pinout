@@ -8,7 +8,8 @@ import {
   NO_ARROWS,
   layoutText,
   layoutTextBox,
-  textContent
+  textContent,
+  textStyleAttrs
 } from './component'
 import { computeConnectivity, projectPins, type FreeEnd } from './connectivity'
 import { crossingPieces } from './crossings'
@@ -64,8 +65,6 @@ function attrs(values: Record<string, string | number | undefined>): string {
 }
 
 const q = (quarters: number): number => quarters / QUARTERS_PER_CELL
-
-const FONT_STACK = "'Segoe UI', sans-serif"
 
 /** Pointes de flèche d'une ligne ou d'une polyligne ouverte, en unités de cellule. */
 function arrowsSvg(
@@ -126,10 +125,9 @@ export function primitiveSvg(
       .join('')
     return `<text ${attrs({
       'font-size': primitive.size,
-      'font-weight': primitive.bold ? 'bold' : undefined,
       'text-anchor': primitive.anchor,
       fill: primitive.color,
-      'font-family': FONT_STACK
+      ...textStyleAttrs(primitive)
     })}>${spans}</text>`
   }
   const width = strokeWidthCells(primitive.style, componentStroke)
@@ -368,7 +366,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
         box,
         textContent(primitive, instance.fields),
         primitive.size,
-        primitive.anchor
+        placement.anchor
       )
       const spans = layout.lines
         .map(
@@ -376,7 +374,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
         )
         .join('')
       componentTextParts.push(
-        `<text ${attrs({ 'font-size': primitive.size, 'font-weight': primitive.bold ? 'bold' : undefined, 'text-anchor': primitive.anchor, fill: primitive.color, 'font-family': FONT_STACK, transform: textPlacementTransform(placement) })}>${spans}</text>`
+        `<text ${attrs({ 'font-size': primitive.size, 'text-anchor': placement.anchor, fill: primitive.color, ...textStyleAttrs(primitive), transform: textPlacementTransform(placement) })}>${spans}</text>`
       )
     }
     if (options.labels && instance.label.length > 0) {

@@ -90,7 +90,11 @@ describe('export SVG', () => {
           defaultValue: '',
           unit: '',
           bold: false,
-          followsRotation: false
+          followsRotation: false,
+          italic: false,
+          underline: false,
+          strike: false,
+          mono: false
         },
         0.1
       )
@@ -113,7 +117,11 @@ describe('export SVG', () => {
         defaultValue: '10 kΩ',
         unit: '',
         bold: false,
-        followsRotation: false
+        followsRotation: false,
+        italic: false,
+        underline: false,
+        strike: false,
+        mono: false
       },
       0.1
     )
@@ -134,7 +142,11 @@ describe('export SVG', () => {
           defaultValue: '10 kΩ',
           unit: '',
           bold: false,
-          followsRotation: false
+          followsRotation: false,
+          italic: false,
+          underline: false,
+          strike: false,
+          mono: false
         },
         0.1,
         { valeur: '4,7 kΩ' }

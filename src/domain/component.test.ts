@@ -137,13 +137,27 @@ describe('textes variables', () => {
       defaultValue: '10',
       unit: 'kΩ',
       bold: false,
-      followsRotation: false
+      followsRotation: false,
+      italic: false,
+      underline: false,
+      strike: false,
+      mono: false
     }
     const nbsp = String.fromCharCode(0xa0)
     expect(textContent(base, { R: '4,7' })).toBe(`4,7${nbsp}kΩ`)
     expect(textContent(base, {})).toBe(`10${nbsp}kΩ`)
     expect(
-      textContent({ ...base, defaultValue: '', unit: '', bold: false, followsRotation: false })
+      textContent({
+        ...base,
+        defaultValue: '',
+        unit: '',
+        bold: false,
+        followsRotation: false,
+        italic: false,
+        underline: false,
+        strike: false,
+        mono: false
+      })
     ).toBe('{R}')
     expect(textContent({ ...base, variable: false })).toBe('R')
     expect(

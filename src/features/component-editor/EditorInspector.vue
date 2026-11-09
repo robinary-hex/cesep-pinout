@@ -12,6 +12,7 @@ import {
   type PngFit
 } from '@/domain'
 import Icon from '@/ui/Icon.vue'
+import type { IconName } from '@/ui/icons'
 import { pickPng, resizePng } from './pngImport'
 import { useComponentEditorStore } from './store'
 
@@ -232,11 +233,28 @@ function setTextColor(event: Event): void {
   })
 }
 
-function setBold(event: Event): void {
-  const bold = checked(event)
-  store.updatePrimitive(primitiveIndex.value, bold ? 'Texte en gras' : 'Texte normal', (p) => {
-    if (p.kind === 'text') p.bold = bold
-  })
+type TextStyleKey = 'bold' | 'italic' | 'underline' | 'strike' | 'mono'
+
+/** Styles de texte, un bouton à pictogramme chacun ; `label` sert d'infobulle et de libellé d'annulation. */
+const TEXT_STYLE_OPTIONS: { key: TextStyleKey; label: string; icon: IconName }[] = [
+  { key: 'bold', label: 'Gras', icon: 'bold' },
+  { key: 'italic', label: 'Italique', icon: 'italic' },
+  { key: 'underline', label: 'Souligné', icon: 'underline' },
+  { key: 'strike', label: 'Barré', icon: 'strikethrough' },
+  { key: 'mono', label: 'Chasse fixe (code)', icon: 'code' }
+]
+
+function toggleTextStyle(option: (typeof TEXT_STYLE_OPTIONS)[number]): void {
+  const current = primitive.value
+  if (!current || current.kind !== 'text') return
+  const on = !current[option.key]
+  store.updatePrimitive(
+    primitiveIndex.value,
+    `${option.label} ${on ? 'activé' : 'retiré'}`,
+    (p) => {
+      if (p.kind === 'text') p[option.key] = on
+    }
+  )
 }
 
 function setFollowsRotation(event: Event): void {
@@ -335,10 +353,22 @@ function setClosed(event: Event): void {
             <span>Couleur</span>
             <input type="color" :value="primitive.color" @change="setTextColor" />
           </label>
-          <label class="check">
-            <input type="checkbox" :checked="primitive.bold" @change="setBold" />
-            <span>Gras</span>
-          </label>
+          <div class="field">
+            <span>Style</span>
+            <div class="toggles">
+              <button
+                v-for="option in TEXT_STYLE_OPTIONS"
+                :key="option.key"
+                type="button"
+                class="toggle"
+                :class="{ active: primitive[option.key] }"
+                :title="option.label"
+                @click="toggleTextStyle(option)"
+              >
+                <Icon :name="option.icon" />
+              </button>
+            </div>
+          </div>
         </div>
         <label
           class="check"
@@ -683,6 +713,24 @@ function setClosed(event: Event): void {
   margin-bottom: 8px;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+/* Styles de texte : un bouton à pictogramme par style, allumé quand il est actif. */
+.toggles {
+  display: flex;
+  gap: 2px;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 6px;
+}
+
+.toggle.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent);
 }
 
 .pin-row {

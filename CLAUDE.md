@@ -34,8 +34,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   centre de gravité, fin), le trait
   s'arrêtant à la base des pointes d'extrémité
   (`trimForArrows`), à l'écran comme à l'export. Un texte `variable` a pour contenu le nom du champ ; l'instance
-  posée fournit la valeur (`instance.fields`), sinon `defaultValue` s'affiche ; `bold` met le
-  texte en gras, comme sur les étiquettes du montage. Un texte occupe une boîte (`x`, `y`, `w`, `h` en
+  posée fournit la valeur (`instance.fields`), sinon `defaultValue` s'affiche ; `bold`, `italic`,
+  `underline`, `strike` et `mono` (chasse fixe) stylent le texte (`textStyleAttrs`, boutons à
+  pictogramme dans le panneau) ; les étiquettes du montage n'ont que le gras. Un texte occupe une boîte (`x`, `y`, `w`, `h` en
   quarts) redimensionnable par poignées : lignes (retours à la ligne permis) centrées
   verticalement, alignées à gauche, au centre ou à droite selon `anchor` (`layoutTextBox`, ligne de base
   placée pour centrer les capitales). Les étiquettes texte du montage suivent le même modèle,
@@ -43,9 +44,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   de la police des repères (×1 à ×3). Sur le montage, les textes d'un composant sont dessinés hors
   de la transformation (`instanceTextPlacements`) : par défaut ils restent horizontaux dans la
   boîte que celle-ci leur donne ; un texte dont `followsRotation` est coché (case « Tourne avec le
-  composant » dans l'éditeur) tourne avec le composant autour du centre de sa boîte. Dans les deux
-  cas un miroir ne reflète jamais un texte. L'`unit` éventuelle suit toujours la valeur (espace
-  insécable).
+  composant » dans l'éditeur) est vertical quand le composant est tourné d'un quart de tour (90°
+  ou 270°) et horizontal sinon, tourné autour du centre de sa boîte : jamais à l'envers. Dans les
+  deux cas un miroir ne reflète jamais un texte, et l'alignement gauche/droite s'inverse quand la
+  transformation retourne l'axe de lecture, pour que le texte reste collé au même bord. L'`unit`
+  éventuelle suit toujours la valeur (espace insécable).
 - PNG de composant : 80 px par cellule (4× la cellule d'affichage de 20 px).
 - Orientation d'une instance : miroir local puis rotation horaire (`transformLocalPoint`,
   `instanceMatrix`). Un miroir à l'écran bascule `mirror` et inverse la rotation
@@ -104,7 +107,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   exporter, paramètres, raccourcis, quitter) construit avec `ContextMenu` et appelant les actions
   que `SchematicEditor` / `ComponentEditor` exposent par `defineExpose` selon le mode. Les barres
   d'outils ne portent plus d'actions de fichier ; dans le montage, rotation, miroir, duplication,
-  suppression et ordre des fils ne sont accessibles que par le menu contextuel et le clavier. Pictogrammes : `src/ui/Icon.vue` dessine les
+  suppression et ordre des fils ne sont accessibles que par le menu contextuel et le clavier. Les outils des deux barres sont des
+  boutons à pictogramme seul (raccourci dans l'infobulle) ; quand la place manque, la partie gauche
+  passe à la ligne, le nom du document et le bouton de droite restent sur la première ligne. Un
+  composant dont la bibliothèque a une version plus récente se dessine dans `--stale` (traits
+  rouges en clair, jaunes en sombre ; cadre pour un PNG). Pictogrammes : `src/ui/Icon.vue` dessine les
   tracés de `src/ui/icons.ts` (SVG inline, trait de la couleur courante, pas de police d'icônes).
 - Thème clair ou sombre choisi dans les paramètres (`theme`) : `src/ui/theme.ts` pose
   `data-theme` sur `<html>` et toutes les couleurs de l'interface passent par les variables CSS de
@@ -152,7 +159,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     revient à la sélection dès qu'un texte est posé, dans les deux éditeurs.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 8, projet 11, paramètres 7
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 9, projet 12, paramètres 7
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

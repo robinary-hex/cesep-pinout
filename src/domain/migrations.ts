@@ -209,7 +209,10 @@ export const componentMigrations: MigrationTable = {
     5: migrateComponentV5,
     // v6 → v7 : textes droits sur le montage par défaut.
     6: (raw) => ({ textFollowsTransform: false, ...raw }),
-    7: migrateComponentV7
+    7: migrateComponentV7,
+    // v8 → v9 : italique, souligné, barré et chasse fixe sur les textes, désactivés.
+    8: (raw) =>
+      withTextDefaults(raw, { italic: false, underline: false, strike: false, mono: false })
   }
 }
 
@@ -305,7 +308,9 @@ export const projectMigrations: MigrationTable = {
     // Projet v9 → v10 : définitions embarquées migrées (textes droits).
     9: migrateEmbeddedDefs,
     // Projet v10 → v11 : définitions embarquées migrées (orientation texte par texte).
-    10: migrateEmbeddedDefs
+    10: migrateEmbeddedDefs,
+    // Projet v11 → v12 : définitions embarquées migrées (styles de texte).
+    11: migrateEmbeddedDefs
   }
 }
 

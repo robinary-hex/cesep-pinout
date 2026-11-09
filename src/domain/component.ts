@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { hexColorSchema } from './color'
 import { isOnBorder, PNG_PX_PER_CELL, QUARTERS_PER_CELL, sizeSchema, type Size } from './grid'
 
-export const COMPONENT_SCHEMA_VERSION = 8
+export const COMPONENT_SCHEMA_VERSION = 9
 
 export const pinKindSchema = z.enum(['in', 'out', 'io', 'power'])
 export type PinKind = z.infer<typeof pinKindSchema>
@@ -116,7 +116,12 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
     unit: z.string(),
     bold: z.boolean(),
     /** Sur le montage, le texte tourne avec le composant (jamais en miroir) ; sinon il reste horizontal. */
-    followsRotation: z.boolean()
+    followsRotation: z.boolean(),
+    /** Styles : italique, souligné, barré, chasse fixe (code). */
+    italic: z.boolean(),
+    underline: z.boolean(),
+    strike: z.boolean(),
+    mono: z.boolean()
   })
 ])
 export type Primitive = z.infer<typeof primitiveSchema>
@@ -140,6 +145,22 @@ export function textContent(primitive: TextPrimitive, fields?: FieldValues): str
   const NO_BREAK_SPACE = String.fromCharCode(0xa0)
   // L'unité suit la valeur, séparée par une espace insécable.
   return primitive.unit.length > 0 ? `${shown}${NO_BREAK_SPACE}${primitive.unit}` : shown
+}
+
+export const TEXT_FONT_FAMILY = "'Segoe UI', sans-serif"
+export const MONO_FONT_FAMILY = "Consolas, 'Courier New', monospace"
+
+/** Attributs SVG du style d'un texte : graisse, italique, décorations, famille ; à l'écran comme à l'export. */
+export function textStyleAttrs(primitive: TextPrimitive): Record<string, string | undefined> {
+  const decorations: string[] = []
+  if (primitive.underline) decorations.push('underline')
+  if (primitive.strike) decorations.push('line-through')
+  return {
+    'font-weight': primitive.bold ? 'bold' : undefined,
+    'font-style': primitive.italic ? 'italic' : undefined,
+    'text-decoration': decorations.length > 0 ? decorations.join(' ') : undefined,
+    'font-family': primitive.mono ? MONO_FONT_FAMILY : TEXT_FONT_FAMILY
+  }
 }
 
 export const visualSchema = z.discriminatedUnion('kind', [

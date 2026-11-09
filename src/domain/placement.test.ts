@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createEmptyComponent, type ComponentDefinition } from './component'
-import { ROTATIONS } from './grid'
+import { ROTATIONS, type Rotation } from './grid'
 import {
   applyMatrix,
   flippedInstance,
@@ -12,7 +12,8 @@ import {
   rectsIntersect,
   rotatedInstance,
   instanceTextPlacements,
-  textPlacementTransform
+  textPlacementTransform,
+  type InstanceTextPlacement
 } from './placement'
 import { DEFAULT_PROFILE } from './profile'
 import { absolutePinPosition, createEmptyProject, type ComponentInstance } from './project'
@@ -164,7 +165,11 @@ describe('textes des composants posés', () => {
           defaultValue: '',
           unit: '',
           bold: true,
-          followsRotation: false
+          followsRotation: false,
+          italic: false,
+          underline: false,
+          strike: false,
+          mono: false
         }
       ]
     }
@@ -190,7 +195,7 @@ describe('textes des composants posés', () => {
     })
   })
 
-  it('un texte qui suit la rotation tourne autour du centre de sa boîte, jamais en miroir', () => {
+  it('un texte qui suit la rotation tourne avec le composant, jamais à l’envers ni en miroir', () => {
     const def = createEmptyComponent('motor', 'Moteur')
     def.visual = {
       kind: 'drawing',
@@ -203,25 +208,51 @@ describe('textes des composants posés', () => {
           h: 4,
           text: 'M',
           size: 1,
-          anchor: 'middle',
+          anchor: 'start',
           color: '#000000',
           variable: false,
           defaultValue: '',
           unit: '',
           bold: true,
-          followsRotation: true
+          followsRotation: true,
+          italic: false,
+          underline: false,
+          strike: false,
+          mono: false
         }
       ]
     }
     const base = { id: 'c1', defId: 'motor', x: 10, y: 5, label: '', fields: {} }
-    // Miroir seul : même boîte qu'un texte droit, aucune rotation, donc pas de transformation.
-    const mirrored = instanceTextPlacements({ ...base, rotation: 0, mirror: true }, def)[0]
-    expect(mirrored).toMatchObject({ box: { x: 11, y: 5.5, w: 2, h: 1 }, rotation: 0 })
+    const place = (rotation: Rotation, mirror: boolean): InstanceTextPlacement | undefined =>
+      instanceTextPlacements({ ...base, rotation, mirror }, def)[0]
+    // Miroir seul : même boîte, pas de rotation ; l'alignement s'inverse pour rester collé au même bord.
+    const mirrored = place(0, true)
+    expect(mirrored).toMatchObject({
+      box: { x: 11, y: 5.5, w: 2, h: 1 },
+      rotation: 0,
+      anchor: 'end'
+    })
     expect(mirrored && textPlacementTransform(mirrored)).toBeUndefined()
     // Quart de tour : la boîte transformée fait 1 × 2 ; le texte garde sa boîte 2 × 1, centrée
-    // dessus et tournée de 90° autour de ce centre.
-    const turned = instanceTextPlacements({ ...base, rotation: 90, mirror: true }, def)[0]
-    expect(turned).toMatchObject({ box: { x: 10, y: 6.5, w: 2, h: 1 }, rotation: 90 })
+    // dessus et tournée de 90° autour de ce centre, lu de haut en bas.
+    const turned = place(90, false)
+    expect(turned).toMatchObject({
+      box: { x: 10, y: 6.5, w: 2, h: 1 },
+      rotation: 90,
+      anchor: 'start'
+    })
     expect(turned && textPlacementTransform(turned)).toBe('rotate(90 11 7)')
+    // Demi-tour : le texte reste horizontal et à l'endroit, collé au bord opposé.
+    expect(place(180, false)).toMatchObject({
+      box: { x: 11, y: 5.5, w: 2, h: 1 },
+      rotation: 0,
+      anchor: 'end'
+    })
+    // Trois quarts de tour : vertical comme à 90°, l'axe de lecture du dessin étant retourné.
+    expect(place(270, false)).toMatchObject({
+      box: { x: 10, y: 6.5, w: 2, h: 1 },
+      rotation: 90,
+      anchor: 'end'
+    })
   })
 })

@@ -179,11 +179,6 @@ function setLabelBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
   store.setLabelBox(label.id, { x: label.x, y: label.y, w: label.w, h: label.h, [key]: value })
 }
 
-function setLabelBold(event: Event): void {
-  const label = singleLabel.value
-  if (label) store.setLabelBold(label.id, (event.target as HTMLInputElement).checked)
-}
-
 /** Tailles proposées : multiples de la taille des repères du profil, plus la taille actuelle. */
 const labelSizeChoices = computed(() => {
   const base = profile.value.labelFont.size
@@ -288,10 +283,6 @@ function setLabelSize(event: Event): void {
         <Icon name="refresh" :size="16" class="notice-icon" />
         <div class="notice-body">
           <strong>Version plus récente dans la bibliothèque</strong>
-          <p>
-            Ce montage garde sa propre copie du composant. La mettre à jour remplace cette copie
-            pour tous les « {{ single.def.name }} » du montage ; les fils suivent les broches.
-          </p>
           <button
             type="button"
             class="primary small with-icon"
@@ -504,10 +495,20 @@ function setLabelSize(event: Event): void {
             </option>
           </select>
         </label>
-        <label class="check">
-          <input type="checkbox" :checked="singleLabel.bold" @change="setLabelBold" />
-          <span>Gras</span>
-        </label>
+        <div class="field">
+          <span>Style</span>
+          <div class="toggles">
+            <button
+              type="button"
+              class="toggle"
+              :class="{ active: singleLabel.bold }"
+              title="Gras"
+              @click="store.setLabelBold(singleLabel.id, !singleLabel.bold)"
+            >
+              <Icon name="bold" />
+            </button>
+          </div>
+        </div>
       </div>
       <div class="row">
         <label v-for="side in BOX_FIELDS" :key="side.key" class="field">
@@ -666,6 +667,24 @@ function setLabelSize(event: Event): void {
   padding-bottom: 6px;
 }
 
+/* Styles de texte : un bouton à pictogramme par style, allumé quand il est actif. */
+.toggles {
+  display: flex;
+  gap: 2px;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 6px;
+}
+
+.toggle.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
 .facts {
   margin: 0 0 8px;
   padding-left: 18px;
@@ -715,11 +734,6 @@ function setLabelSize(event: Event): void {
 
 .notice-body strong {
   color: var(--text);
-}
-
-.notice-body p {
-  margin: 0;
-  color: var(--text-muted);
 }
 
 .notice-body button {
