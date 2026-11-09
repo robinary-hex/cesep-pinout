@@ -25,6 +25,8 @@ const launchFile =
 let dirty = false
 /** Vrai une fois la fermeture acceptée : la fenêtre se ferme sans redemander. */
 let quitting = false
+/** Fermeture forcée si le rendu ne répond pas après « Ne pas enregistrer ». */
+let quitFallback: ReturnType<typeof setTimeout> | null = null
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -114,8 +116,14 @@ function registerIpc(): void {
   })
 
   ipcMain.handle(IPC.confirmQuit, (event) => {
+    if (quitFallback) clearTimeout(quitFallback)
     quitting = true
     BrowserWindow.fromWebContents(event.sender)?.close()
+  })
+
+  ipcMain.handle(IPC.cancelQuit, () => {
+    if (quitFallback) clearTimeout(quitFallback)
+    quitFallback = null
   })
 }
 
@@ -143,31 +151,34 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
-  // Garde à la fermeture : avec des modifications non enregistrées, on demande confirmation,
-  // puis le rendu écrit la copie de secours avant que la fenêtre ne se ferme.
+  // Garde à la fermeture : avec des modifications non enregistrées, on propose d'enregistrer ;
+  // le rendu enregistre (ou écrit la copie de secours) puis confirme, ou annule si l'utilisateur
+  // renonce au choix du fichier.
   mainWindow.on('close', (event) => {
     if (quitting || !dirty) return
     event.preventDefault()
     const choice = dialog.showMessageBoxSync(mainWindow, {
       type: 'warning',
       title: 'Pinout',
-      message: 'Des modifications ne sont pas enregistrées.',
-      detail:
-        'Une copie de secours sera gardée et proposée au prochain lancement. Quitter quand même ?',
-      buttons: ['Quitter quand même', 'Annuler'],
-      defaultId: 1,
-      cancelId: 1,
+      message: 'Enregistrer les modifications avant de quitter ?',
+      detail: 'Une copie de secours du montage est gardée dans tous les cas.',
+      buttons: ['Enregistrer', 'Ne pas enregistrer', 'Annuler'],
+      defaultId: 0,
+      cancelId: 2,
       noLink: true
     })
-    if (choice !== 0) return
-    const request: AppRequest = 'autosave-then-quit'
+    if (choice === 2) return
+    const request: AppRequest = choice === 0 ? 'save-then-quit' : 'autosave-then-quit'
     mainWindow.webContents.send(IPC.appRequest, request)
-    setTimeout(() => {
-      if (!quitting && !mainWindow.isDestroyed()) {
-        quitting = true
-        mainWindow.destroy()
-      }
-    }, QUIT_FALLBACK_MS)
+    // Un enregistrement peut attendre un choix de fichier : pas de délai dans ce cas.
+    if (request === 'autosave-then-quit') {
+      quitFallback = setTimeout(() => {
+        if (!quitting && !mainWindow.isDestroyed()) {
+          quitting = true
+          mainWindow.destroy()
+        }
+      }, QUIT_FALLBACK_MS)
+    }
   })
 
   const devUrl = process.env['ELECTRON_RENDERER_URL']

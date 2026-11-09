@@ -23,6 +23,7 @@ const api: PinoutApi = {
   getLaunchFile: () => ipcRenderer.invoke(IPC.launchFile),
   setDirty: (dirty) => ipcRenderer.invoke(IPC.setDirty, dirty),
   confirmQuit: () => ipcRenderer.invoke(IPC.confirmQuit),
+  cancelQuit: () => ipcRenderer.invoke(IPC.cancelQuit),
   onAppRequest: (handler) => {
     const listener = (_event: IpcRendererEvent, request: AppRequest): void => handler(request)
     ipcRenderer.on(IPC.appRequest, listener)

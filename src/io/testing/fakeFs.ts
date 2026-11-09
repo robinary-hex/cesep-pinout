@@ -101,6 +101,10 @@ export class FakeFs implements PinoutApi {
     this.quitConfirmed = true
   }
 
+  async cancelQuit(): Promise<void> {
+    this.quitConfirmed = false
+  }
+
   onAppRequest(handler: (request: AppRequest) => void): () => void {
     this.requestHandlers.add(handler)
     return () => this.requestHandlers.delete(handler)

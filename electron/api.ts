@@ -36,7 +36,7 @@ export interface DirEntry {
 }
 
 /** Demandes du processus principal au rendu. */
-export type AppRequest = 'autosave-then-quit'
+export type AppRequest = 'autosave-then-quit' | 'save-then-quit'
 
 export interface PinoutApi {
   readTextFile(path: string): Promise<string>
@@ -60,8 +60,10 @@ export interface PinoutApi {
   getLaunchFile(): Promise<string | null>
   /** Informe le principal qu'il y a des modifications non enregistrées (garde à la fermeture). */
   setDirty(dirty: boolean): Promise<void>
-  /** Après la copie de secours, autorise la fermeture demandée par l'utilisateur. */
+  /** Après la copie de secours ou l'enregistrement, autorise la fermeture demandée. */
   confirmQuit(): Promise<void>
+  /** L'enregistrement demandé avant de quitter a été abandonné : la fenêtre reste ouverte. */
+  cancelQuit(): Promise<void>
   /** Écoute les demandes du principal ; retourne la fonction qui désabonne. */
   onAppRequest(handler: (request: AppRequest) => void): () => void
 }
@@ -81,5 +83,6 @@ export const IPC = {
   launchFile: 'app:launch-file',
   setDirty: 'app:set-dirty',
   confirmQuit: 'app:confirm-quit',
+  cancelQuit: 'app:cancel-quit',
   appRequest: 'app:request'
 } as const
