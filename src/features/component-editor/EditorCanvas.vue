@@ -80,6 +80,7 @@ type Drag =
   | { kind: 'move-pin'; id: string; current: LocalPoint }
   | { kind: 'handle'; index: number; handleId: string; original: Primitive; preview: Primitive }
   | { kind: 'band'; start: LocalPoint; current: LocalPoint; base: number[] }
+  | { kind: 'pan'; lastX: number; lastY: number }
 
 type Preview =
   | { kind: 'rect'; x: number; y: number; width: number; height: number }
@@ -438,9 +439,12 @@ function onPointerDown(event: PointerEvent): void {
     if (event.timeStamp - lastMiddleDown < DOUBLE_CLICK_MS) {
       lastMiddleDown = 0
       void fitAndCenter()
-    } else {
-      lastMiddleDown = event.timeStamp
+      return
     }
+    lastMiddleDown = event.timeStamp
+    // Bouton du milieu maintenu : déplacement de la vue, comme sur le montage (les ascenseurs suivent).
+    drag.value = { kind: 'pan', lastX: event.clientX, lastY: event.clientY }
+    capture(event)
     return
   }
   if (event.button !== 0) return
@@ -534,6 +538,16 @@ function onPointerMove(event: PointerEvent): void {
     case 'band':
       current.current = cells
       break
+    case 'pan': {
+      const container = scroller.value
+      if (container) {
+        container.scrollLeft -= event.clientX - current.lastX
+        container.scrollTop -= event.clientY - current.lastY
+      }
+      current.lastX = event.clientX
+      current.lastY = event.clientY
+      break
+    }
     default:
       current.current = toQuarters(cells)
       if (current.kind === 'box') current.square = event.shiftKey

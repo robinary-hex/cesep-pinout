@@ -143,8 +143,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   SmartScreen au premier lancement, normal). Un `.json` passé en argument s'ouvre au lancement.
   - Éditeur de composants : V sélection, R rectangle, O ellipse, L ligne, P polyligne, E texte,
     B broche, Suppr, Échap, Entrée (termine une polyligne), Ctrl+Z / Ctrl+Y, Ctrl+S, Ctrl+N,
-    Ctrl+molette = zoom centré sur le curseur (boutons −/+/Ajuster dans la barre), double-clic du
-    bouton du milieu = ajuster à la fenêtre. Le composant est centré dans la zone et ajusté à la fenêtre à
+    Ctrl+molette = zoom centré sur le curseur (boutons −/+/Ajuster dans la barre), bouton du milieu
+    maintenu = déplacer la vue, double-clic du bouton du milieu = ajuster à la fenêtre. Le composant est centré dans la zone et ajusté à la fenêtre à
     l'ouverture (premier affichage, nouveau composant, composant chargé), sans ascenseur. La forme
     sélectionnée montre ses poignées (`src/domain/handles.ts`) ; Ctrl+glisser sur une forme saisit
     la poignée la plus proche. Redimensionner le composant supprime les broches qui ne sont plus sur
@@ -167,7 +167,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 
 ## Git
 
-- Dépôt GitHub : https://github.com/robinary-hex/cesep-pinout (public). Publier une version :
+- Dépôt GitHub : https://github.com/robinary-hex/cesep-pinout (public). Une version ne se publie
+  qu'à la demande explicite de Robin (décision du 9 novembre 2026) : un lot de retours se termine
+  par un commit, sans montée de version, ni build, ni release. Publier une version :
   monter `version` dans package.json, commit, tag `vX.Y.Z`, `pnpm build:win`, puis
   `gh release create vX.Y.Z release/pinout-X.Y.Z-setup.exe release/pinout-X.Y.Z-setup.exe.blockmap
 release/latest.yml release/pinout-X.Y.Z-portable.exe --latest` avec des notes qui donnent les

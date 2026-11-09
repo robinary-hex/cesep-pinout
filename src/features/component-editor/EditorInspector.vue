@@ -305,7 +305,7 @@ function setClosed(event: Event): void {
       <template v-if="primitive.kind === 'text'">
         <label class="check">
           <input type="checkbox" :checked="primitive.variable" @change="setVariable" />
-          <span>Texte variable (valeur propre à chaque composant posé)</span>
+          <span>Texte variable</span>
         </label>
         <label class="field">
           <span>{{ primitive.variable ? 'Nom du champ' : 'Texte' }}</span>

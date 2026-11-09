@@ -184,10 +184,11 @@ async function remove(entry: LibraryEntry): Promise<void> {
                 <ComponentThumbnail
                   v-if="entry.def"
                   :def="entry.def"
-                  :size="52"
+                  :size="48"
                   :stroke-base="library.defaultProfile.componentStroke"
                 />
                 <span v-else class="thumb-missing">?</span>
+                <span class="tile-name">{{ entry.def?.name ?? baseName(entry.folder) }}</span>
               </button>
               <div v-if="mode === 'edit'" class="tile-actions">
                 <button
@@ -446,7 +447,8 @@ async function remove(entry: LibraryEntry): Promise<void> {
   white-space: nowrap;
 }
 
-/* Grille : des vignettes carrées, le nom dans l'infobulle ; actions au survol dans le coin. */
+/* Grille : des vignettes avec le nom en petit dessous, le détail dans l'infobulle ; actions au
+   survol dans le coin. */
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
@@ -460,10 +462,11 @@ async function remove(entry: LibraryEntry): Promise<void> {
 
 .tile-open {
   width: 100%;
-  aspect-ratio: 1;
-  display: grid;
-  place-items: center;
-  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 2px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
@@ -482,6 +485,20 @@ async function remove(entry: LibraryEntry): Promise<void> {
 .tile.current .tile-open {
   background: var(--accent-soft);
   border-color: var(--accent-border);
+}
+
+.tile-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--text-muted);
+}
+
+.tile.broken .tile-name {
+  color: var(--danger);
 }
 
 .tile-actions {

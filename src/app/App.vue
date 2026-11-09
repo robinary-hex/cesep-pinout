@@ -31,6 +31,7 @@ type Mode = 'components' | 'schematic'
 const library = useLibraryStore()
 const schematic = useSchematicStore()
 const editor = useComponentEditorStore()
+// Au lancement, le montage ; l'onglet Composants est pourtant le premier de la barre.
 const mode = ref<Mode>('schematic')
 const showSettings = ref(false)
 const showHelp = ref(false)
@@ -274,15 +275,15 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
         Fichier <Icon name="chevron-down" :size="14" />
       </button>
       <nav class="modes">
-        <button type="button" :class="{ active: mode === 'schematic' }" @click="mode = 'schematic'">
-          Montage
-        </button>
         <button
           type="button"
           :class="{ active: mode === 'components' }"
           @click="mode = 'components'"
         >
           Composants
+        </button>
+        <button type="button" :class="{ active: mode === 'schematic' }" @click="mode = 'schematic'">
+          Montage
         </button>
       </nav>
       <div class="spacer" />

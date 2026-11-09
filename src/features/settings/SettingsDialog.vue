@@ -135,16 +135,6 @@ async function save(): Promise<void> {
               <Icon name="moon" :size="14" /> Sombre
             </label>
           </div>
-          <label class="check">
-            <input
-              type="checkbox"
-              :checked="draft.autoOpenInspector"
-              @change="
-                draft = { ...draft, autoOpenInspector: ($event.target as HTMLInputElement).checked }
-              "
-            />
-            <span>Ouvrir le panneau de propriétés à la sélection</span>
-          </label>
           <div class="row">
             <span class="hint">Bibliothèque :</span>
             <label class="radio">
@@ -166,6 +156,16 @@ async function save(): Promise<void> {
               Grille
             </label>
           </div>
+          <label class="check spaced">
+            <input
+              type="checkbox"
+              :checked="draft.autoOpenInspector"
+              @change="
+                draft = { ...draft, autoOpenInspector: ($event.target as HTMLInputElement).checked }
+              "
+            />
+            <span>Ouvrir le panneau de propriétés à la sélection</span>
+          </label>
         </section>
 
         <section class="block">
@@ -449,6 +449,11 @@ async function save(): Promise<void> {
   gap: 6px;
   font-size: 13px;
   padding: 2px 0;
+}
+
+/* Un peu d'air entre les choix d'apparence et la case à cocher. */
+.check.spaced {
+  margin-top: 10px;
 }
 
 .errors {

@@ -50,6 +50,8 @@
   --stale: #d1242f;
   /* Entourage de l'aperçu d'export : gris, pour que la zone exportée se détache. */
   --preview-bg: #d8dde4;
+  --scrollbar: #c3cad2;
+  --scrollbar-hover: #a9b2bc;
 }
 
 :root[data-theme='dark'] {
@@ -99,6 +101,8 @@
   /* Jaune en sombre : le rouge se perdrait sur le papier gris-bleu. */
   --stale: #e3b341;
   --preview-bg: #262c35;
+  --scrollbar: #3d4650;
+  --scrollbar-hover: #525d6a;
 }
 
 * {
@@ -267,4 +271,26 @@ textarea {
 input[type='checkbox'],
 input[type='radio'] {
   accent-color: var(--accent);
+}
+
+/* Ascenseurs discrets (Chromium) : glissière transparente, curseur fin et arrondi. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar);
+  border: 3px solid transparent;
+  border-radius: 8px;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-hover);
 }
