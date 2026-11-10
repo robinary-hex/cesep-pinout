@@ -3,11 +3,13 @@ import { computed } from 'vue'
 import { COMPONENT_FILE } from '@/io/library'
 import { baseName } from '@/io/paths'
 import Icon from '@/ui/Icon.vue'
+import ToolbarBasics from '@/ui/ToolbarBasics.vue'
 import { useComponentEditorStore } from './store'
 import { TOOLS } from './tools'
 
-// Barre d'outils de l'éditeur de composants : outils de dessin (pictogramme seul, raccourci dans
-// l'infobulle), annuler/rétablir, zoom ; à droite, le nom du composant avec son fichier, puis
+// Barre d'outils de l'éditeur de composants. D'abord le début commun aux trois éditeurs
+// (`ToolbarBasics` : zoom, annuler, rétablir, corbeille), puis les outils de dessin (pictogramme
+// seul, raccourci dans l'infobulle) ; à droite, le nom du composant avec son fichier, puis
 // Enregistrer (aussi dans le menu Fichier). Quand la place manque, la partie gauche passe à la
 // ligne ; la droite reste sur la première.
 
@@ -22,6 +24,20 @@ const fileLabel = computed(() =>
 <template>
   <div class="toolbar">
     <div class="main">
+      <ToolbarBasics
+        :zoom="`${store.zoomPercent} %`"
+        :undo-label="store.undoLabel"
+        :redo-label="store.redoLabel"
+        :can-delete="store.selection !== null"
+        @zoom-out="store.zoomBy(1 / 1.25)"
+        @zoom-in="store.zoomBy(1.25)"
+        @zoom-reset="store.resetZoom()"
+        @fit="store.fitToViewport()"
+        @undo="store.undo()"
+        @redo="store.redo()"
+        @remove="store.removeSelection()"
+      />
+
       <div class="group tools">
         <button
           v-for="tool in TOOLS"
@@ -33,55 +49,6 @@ const fileLabel = computed(() =>
           @click="store.tool = tool.id"
         >
           <Icon :name="tool.icon" :size="18" />
-        </button>
-      </div>
-
-      <div class="group">
-        <button
-          type="button"
-          class="icon-only"
-          :disabled="store.undoLabel === null"
-          :title="store.undoLabel ? `Annuler : ${store.undoLabel} (Ctrl+Z)` : 'Rien à annuler'"
-          @click="store.undo()"
-        >
-          <Icon name="undo" />
-        </button>
-        <button
-          type="button"
-          class="icon-only"
-          :disabled="store.redoLabel === null"
-          :title="store.redoLabel ? `Rétablir : ${store.redoLabel} (Ctrl+Y)` : 'Rien à rétablir'"
-          @click="store.redo()"
-        >
-          <Icon name="redo" />
-        </button>
-      </div>
-
-      <div class="group">
-        <button
-          type="button"
-          class="icon-only"
-          title="Zoom arrière (Ctrl+molette)"
-          @click="store.zoomBy(1 / 1.25)"
-        >
-          <Icon name="zoom-out" />
-        </button>
-        <span class="zoom">{{ store.cellPx }} px</span>
-        <button
-          type="button"
-          class="icon-only"
-          title="Zoom avant (Ctrl+molette)"
-          @click="store.zoomBy(1.25)"
-        >
-          <Icon name="zoom-in" />
-        </button>
-        <button
-          type="button"
-          class="icon-only"
-          title="Ajuster le composant à la fenêtre"
-          @click="store.fitToViewport()"
-        >
-          <Icon name="fit" />
         </button>
       </div>
     </div>

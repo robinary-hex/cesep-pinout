@@ -483,9 +483,6 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
         <button type="button" class="with-icon" @click="store.duplicateSelection()">
           <Icon name="duplicate" /> Dupliquer
         </button>
-        <button type="button" class="danger with-icon" @click="store.removeSelection()">
-          <Icon name="trash" /> Supprimer
-        </button>
       </div>
     </section>
 
@@ -544,9 +541,6 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
         </button>
         <button type="button" class="with-icon" @click="store.duplicateSelection()">
           <Icon name="duplicate" /> Dupliquer
-        </button>
-        <button type="button" class="danger with-icon" @click="store.removeSelection()">
-          <Icon name="trash" /> Supprimer
         </button>
       </div>
     </section>
@@ -617,9 +611,6 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
         <button type="button" class="with-icon" @click="store.duplicateSelection()">
           <Icon name="duplicate" /> Dupliquer
         </button>
-        <button type="button" class="danger with-icon" @click="store.removeSelection()">
-          <Icon name="trash" /> Supprimer
-        </button>
       </div>
     </section>
 
@@ -642,9 +633,6 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
       <div class="row">
         <button type="button" class="with-icon" @click="store.duplicateSelection()">
           <Icon name="duplicate" /> Dupliquer
-        </button>
-        <button type="button" class="danger with-icon" @click="store.removeSelection()">
-          <Icon name="trash" /> Supprimer
         </button>
       </div>
     </section>

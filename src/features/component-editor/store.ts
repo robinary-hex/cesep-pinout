@@ -635,6 +635,13 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     setCellPx(cellPx.value * factor)
   }
 
+  /** Zoom affiché : 100 % = la taille de cellule de départ de l'éditeur. */
+  const zoomPercent = computed(() => Math.round((cellPx.value / DEFAULT_CELL_PX) * 100))
+
+  function resetZoom(): void {
+    setCellPx(DEFAULT_CELL_PX)
+  }
+
   /**
    * Taille de cellule qui fait tenir le composant dans la zone visible, avec sa marge (une
    * cellule, ou la place des repères de broche qui dépassent) : arrondie vers le bas et avec une
@@ -715,6 +722,8 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     duplicatePrimitivesAt,
     setCellPx,
     zoomBy,
+    zoomPercent,
+    resetZoom,
     fitToViewport
   }
 })

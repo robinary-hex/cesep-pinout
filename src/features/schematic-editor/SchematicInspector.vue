@@ -439,9 +439,6 @@ function setLabelVertical(event: Event): void {
         >
           <Icon name="flip-v" />
         </button>
-        <button type="button" class="danger with-icon" @click="store.removeSelection()">
-          <Icon name="trash" /> Supprimer
-        </button>
       </div>
     </section>
 
@@ -525,9 +522,6 @@ function setLabelVertical(event: Event): void {
         >
           <Icon name="arrow-up-line" />
         </button>
-        <button type="button" class="danger with-icon" @click="store.removeSelection()">
-          <Icon name="trash" /> Supprimer
-        </button>
       </div>
     </section>
 
@@ -597,9 +591,6 @@ function setLabelVertical(event: Event): void {
         <button type="button" class="with-icon" @click="store.duplicateSelection()">
           <Icon name="duplicate" /> Dupliquer
         </button>
-        <button type="button" class="danger with-icon" @click="store.removeSelection()">
-          <Icon name="trash" /> Supprimer
-        </button>
       </div>
     </section>
 
@@ -648,9 +639,6 @@ function setLabelVertical(event: Event): void {
         </button>
         <button type="button" class="with-icon" @click="store.duplicateSelection()">
           <Icon name="duplicate" /> Dupliquer
-        </button>
-        <button type="button" class="danger with-icon" @click="store.removeSelection()">
-          <Icon name="trash" /> Supprimer
         </button>
       </div>
       <p v-if="!rotatable" class="hint">Rotation et miroir s’appliquent aux composants seuls.</p>

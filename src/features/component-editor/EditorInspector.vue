@@ -603,10 +603,6 @@ function setClosed(event: Event): void {
           <span>Fermée (polygone)</span>
         </label>
       </template>
-
-      <button type="button" class="danger with-icon" @click="store.removeSelection()">
-        <Icon name="trash" /> Supprimer la forme
-      </button>
     </section>
 
     <!-- Plusieurs éléments : formes, broches, ou les deux -->
@@ -622,9 +618,6 @@ function setClosed(event: Event): void {
           ✕
         </button>
       </div>
-      <button type="button" class="danger with-icon" @click="store.removeSelection()">
-        <Icon name="trash" /> Supprimer la sélection
-      </button>
     </section>
 
     <!-- Rien de sélectionné, ou une broche : le composant, la broche en évidence dans la liste -->
@@ -702,14 +695,6 @@ function setClosed(event: Event): void {
               {{ PIN_KIND_LABELS[kind] }}
             </option>
           </select>
-          <button
-            type="button"
-            class="small danger"
-            title="Supprimer la broche"
-            @click.stop="store.removePin(pin.id)"
-          >
-            ✕
-          </button>
         </div>
       </section>
 

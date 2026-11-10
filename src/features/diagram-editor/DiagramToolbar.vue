@@ -11,11 +11,13 @@ import {
 import DiagramNodeGraphic from '@/render/DiagramNodeGraphic.vue'
 import { baseName } from '@/io/paths'
 import Icon from '@/ui/Icon.vue'
+import ToolbarBasics from '@/ui/ToolbarBasics.vue'
 import { useDiagramStore } from './store'
 
-// Barre d'outils du diagramme : outils (pictogramme seul, raccourci dans l'infobulle), palette,
-// fond des nœuds, style des liens, annuler/rétablir, vue ; à droite, le nom du document et le
-// bouton du panneau de propriétés. La palette, le fond et le style des liens règlent ce que
+// Barre d'outils du diagramme. D'abord le début commun aux trois éditeurs (`ToolbarBasics` :
+// zoom, annuler, rétablir, corbeille), puis les outils (pictogramme seul, raccourci dans
+// l'infobulle), le fond des nœuds, le style des liens et, tout à la fin, la palette ; à droite,
+// le nom du document et le bouton du panneau de propriétés. La palette, le fond et le style des liens règlent ce que
 // seront les prochains éléments et changent aussi la sélection. Les formes se posent depuis la
 // bibliothèque, à gauche ; les actions de fichier passent par le menu Fichier.
 
@@ -97,6 +99,20 @@ function toggleEndArrow(): void {
 <template>
   <div class="toolbar">
     <div class="main">
+      <ToolbarBasics
+        :zoom="`${Math.round(store.view.zoom * 100)} %`"
+        :undo-label="store.undoLabel"
+        :redo-label="store.redoLabel"
+        :can-delete="store.hasSelection"
+        @zoom-out="store.zoomAround(1 / 1.25)"
+        @zoom-in="store.zoomAround(1.25)"
+        @zoom-reset="store.resetZoom()"
+        @fit="store.fitToContent()"
+        @undo="store.undo()"
+        @redo="store.redo()"
+        @remove="store.removeSelection()"
+      />
+
       <div class="group">
         <button
           type="button"
@@ -125,30 +141,6 @@ function toggleEndArrow(): void {
         >
           <Icon name="type" :size="18" />
         </button>
-      </div>
-
-      <div
-        class="group palette"
-        :title="
-          store.paletteOnLinks
-            ? 'Couleur des prochains liens ; recolore aussi la sélection'
-            : 'Couleur des prochains nœuds ; recolore aussi la sélection'
-        "
-      >
-        <button
-          v-for="swatch in store.colorChoices"
-          :key="swatch.hex"
-          type="button"
-          class="swatch"
-          :class="{ current: isCurrent(swatch.hex) }"
-          :style="{ background: swatch.hex }"
-          :title="swatch.name"
-          @click="store.setCurrentColor(swatch.hex)"
-        />
-        <label class="custom" title="Couleur personnalisée, gardée dans ce diagramme">
-          <input type="color" :value="store.currentColor" @change="pickCustom" />
-          <span>+</span>
-        </label>
       </div>
 
       <div class="group fills">
@@ -198,54 +190,28 @@ function toggleEndArrow(): void {
         </button>
       </div>
 
-      <div class="group">
+      <div
+        class="group palette"
+        :title="
+          store.paletteOnLinks
+            ? 'Couleur des prochains liens ; recolore aussi la sélection'
+            : 'Couleur des prochains nœuds ; recolore aussi la sélection'
+        "
+      >
         <button
+          v-for="swatch in store.colorChoices"
+          :key="swatch.hex"
           type="button"
-          class="icon-only"
-          :disabled="store.undoLabel === null"
-          :title="store.undoLabel ? `Annuler : ${store.undoLabel} (Ctrl+Z)` : 'Rien à annuler'"
-          @click="store.undo()"
-        >
-          <Icon name="undo" />
-        </button>
-        <button
-          type="button"
-          class="icon-only"
-          :disabled="store.redoLabel === null"
-          :title="store.redoLabel ? `Rétablir : ${store.redoLabel} (Ctrl+Y)` : 'Rien à rétablir'"
-          @click="store.redo()"
-        >
-          <Icon name="redo" />
-        </button>
-      </div>
-
-      <div class="group">
-        <button
-          type="button"
-          class="icon-only"
-          title="Zoom arrière (molette)"
-          @click="store.zoomAround(1 / 1.25)"
-        >
-          <Icon name="zoom-out" />
-        </button>
-        <span class="zoom">{{ Math.round(store.view.zoom * 100) }} %</span>
-        <button
-          type="button"
-          class="icon-only"
-          title="Zoom avant (molette)"
-          @click="store.zoomAround(1.25)"
-        >
-          <Icon name="zoom-in" />
-        </button>
-        <button
-          type="button"
-          class="icon-only"
-          title="Ajuster au contenu (0)"
-          @click="store.fitToContent()"
-        >
-          <Icon name="fit" />
-        </button>
-        <button type="button" title="Zoom 100 % (1)" @click="store.resetZoom()">100 %</button>
+          class="swatch"
+          :class="{ current: isCurrent(swatch.hex) }"
+          :style="{ background: swatch.hex }"
+          :title="swatch.name"
+          @click="store.setCurrentColor(swatch.hex)"
+        />
+        <label class="custom" title="Couleur personnalisée, gardée dans ce diagramme">
+          <input type="color" :value="store.currentColor" @change="pickCustom" />
+          <span>+</span>
+        </label>
       </div>
     </div>
 
@@ -369,13 +335,6 @@ function toggleEndArrow(): void {
   background: var(--paper);
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
-}
-
-.zoom {
-  min-width: 44px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-muted);
 }
 
 .doc-name {

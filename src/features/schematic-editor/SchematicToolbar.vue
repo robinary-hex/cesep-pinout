@@ -2,10 +2,12 @@
 import { computed } from 'vue'
 import { baseName } from '@/io/paths'
 import Icon from '@/ui/Icon.vue'
+import ToolbarBasics from '@/ui/ToolbarBasics.vue'
 import { useSchematicStore } from './store'
 
-// Barre d'outils du montage : outils (pictogramme seul, raccourci dans l'infobulle), palette,
-// annuler/rétablir, vue ; à droite, le nom du document et le bouton du panneau de propriétés.
+// Barre d'outils du montage. D'abord le début commun aux trois éditeurs (`ToolbarBasics` : zoom,
+// annuler, rétablir, corbeille), puis les outils (pictogramme seul, raccourci dans l'infobulle),
+// la palette et l'affichage des broches ; à droite, le nom du document et le bouton du panneau.
 // Quand la place manque, la partie gauche passe à la ligne ; la droite reste sur la première.
 // Rotation, miroir, duplication, suppression et ordre des fils passent par le menu contextuel et
 // le clavier ; les actions de fichier par le menu Fichier.
@@ -31,6 +33,20 @@ function pickCustom(event: Event): void {
 <template>
   <div class="toolbar">
     <div class="main">
+      <ToolbarBasics
+        :zoom="`${Math.round(store.view.zoom * 100)} %`"
+        :undo-label="store.undoLabel"
+        :redo-label="store.redoLabel"
+        :can-delete="store.hasSelection"
+        @zoom-out="store.zoomAround(1 / 1.25)"
+        @zoom-in="store.zoomAround(1.25)"
+        @zoom-reset="store.resetZoom()"
+        @fit="store.fitToContent()"
+        @undo="store.undo()"
+        @redo="store.redo()"
+        @remove="store.removeSelection()"
+      />
+
       <div class="group">
         <button
           type="button"
@@ -82,53 +98,6 @@ function pickCustom(event: Event): void {
       </div>
 
       <div class="group">
-        <button
-          type="button"
-          class="icon-only"
-          :disabled="store.undoLabel === null"
-          :title="store.undoLabel ? `Annuler : ${store.undoLabel} (Ctrl+Z)` : 'Rien à annuler'"
-          @click="store.undo()"
-        >
-          <Icon name="undo" />
-        </button>
-        <button
-          type="button"
-          class="icon-only"
-          :disabled="store.redoLabel === null"
-          :title="store.redoLabel ? `Rétablir : ${store.redoLabel} (Ctrl+Y)` : 'Rien à rétablir'"
-          @click="store.redo()"
-        >
-          <Icon name="redo" />
-        </button>
-      </div>
-
-      <div class="group">
-        <button
-          type="button"
-          class="icon-only"
-          title="Zoom arrière (molette)"
-          @click="store.zoomAround(1 / 1.25)"
-        >
-          <Icon name="zoom-out" />
-        </button>
-        <span class="zoom">{{ Math.round(store.view.zoom * 100) }} %</span>
-        <button
-          type="button"
-          class="icon-only"
-          title="Zoom avant (molette)"
-          @click="store.zoomAround(1.25)"
-        >
-          <Icon name="zoom-in" />
-        </button>
-        <button
-          type="button"
-          class="icon-only"
-          title="Ajuster au contenu (0)"
-          @click="store.fitToContent()"
-        >
-          <Icon name="fit" />
-        </button>
-        <button type="button" title="Zoom 100 % (1)" @click="store.resetZoom()">100 %</button>
         <label class="check" title="Afficher les broches des composants">
           <input v-model="store.showPins" type="checkbox" />
           Broches
@@ -240,18 +209,10 @@ function pickCustom(event: Event): void {
   cursor: pointer;
 }
 
-.zoom {
-  min-width: 44px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-muted);
-}
-
 .check {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-left: 6px;
   font-size: 12px;
   color: var(--text-muted);
 }

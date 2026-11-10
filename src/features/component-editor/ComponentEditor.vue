@@ -73,6 +73,11 @@ function onKeyDown(event: KeyboardEvent): void {
     event.preventDefault()
     return
   }
+  if (event.code === 'Digit1' || event.code === 'Numpad1') {
+    store.resetZoom()
+    event.preventDefault()
+    return
+  }
   const arrow = ARROWS[key]
   if (arrow) {
     // D'un quart de cellule, le pas des formes ; d'une cellule dès qu'une broche est du voyage.
