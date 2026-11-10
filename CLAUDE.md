@@ -180,7 +180,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     l'origine, les broches qui sortent disparaissent). Redimensionner le composant supprime les broches qui sortent de la
     boîte ; les noms numériques des broches suivent toujours leur ordre (`renumberPins`). Le repère
     d'une broche se met du côté libre le plus proche du bord (`pinLabelSide`, contours et traits
-    évités), sinon du côté du bord le plus proche.
+    évités), sinon du côté du bord le plus proche. Tout l'espace de travail a la couleur du
+    papier ; la marge du canevas vaut une cellule ou la place des repères qui dépassent, et
+    l'ajustement à la fenêtre en tient compte (`pinLabelLayout.ts`).
     Sélection multiple : lasso dans le vide, Maj+clic ajoute ou retire une forme, glisser déplace
     toutes les formes sélectionnées, Alt+glisser en dépose une copie, Ctrl+C / V / D copient,
     collent (décalées d'une cellule) et dupliquent ; le panneau de droite ne montre que l'élément

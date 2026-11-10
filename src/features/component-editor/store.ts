@@ -20,6 +20,7 @@ import {
   type StackMove
 } from '@/domain'
 import { History } from '@/state/history'
+import { fittingCellPx } from './pinLabelLayout'
 import type { ToolId } from './tools'
 
 /** Sélection : une ou plusieurs formes (indices, triés), ou une broche. */
@@ -463,19 +464,17 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   }
 
   /**
-   * Taille de cellule qui fait tenir le composant, avec sa marge d'une cellule, dans la zone
-   * visible : arrondie vers le bas et avec une petite réserve, pour ne jamais faire apparaître
-   * d'ascenseur.
+   * Taille de cellule qui fait tenir le composant dans la zone visible, avec sa marge (une
+   * cellule, ou la place des repères de broche qui dépassent) : arrondie vers le bas et avec une
+   * petite réserve, pour ne jamais faire apparaître d'ascenseur.
    */
   function fitToViewport(): void {
-    const columns = doc.value.size.widthCells + 2
-    const rows = doc.value.size.heightCells + 2
     setCellPx(
-      Math.floor(
-        Math.min(
-          (viewport.value.width - FIT_PADDING_PX - FIT_SAFETY_PX) / columns,
-          (viewport.value.height - FIT_PADDING_PX - FIT_SAFETY_PX) / rows
-        )
+      fittingCellPx(
+        doc.value,
+        viewport.value.width - FIT_PADDING_PX - FIT_SAFETY_PX,
+        viewport.value.height - FIT_PADDING_PX - FIT_SAFETY_PX,
+        cellPx.value
       )
     )
   }

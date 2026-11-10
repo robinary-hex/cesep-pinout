@@ -4,7 +4,6 @@ import {
   DEFAULT_SHAPE_STYLE,
   dragHandle,
   nearestInsidePoint,
-  pinLabelSide,
   nearestHandle,
   NO_ARROWS,
   primitiveBounds,
@@ -15,7 +14,6 @@ import {
   translatePrimitive,
   type ComponentDefinition,
   type Box,
-  type LabelSide,
   type LocalPoint,
   type Pin,
   type PinKind,
@@ -23,6 +21,14 @@ import {
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import ComponentGraphic from '@/render/ComponentGraphic.vue'
+import {
+  canvasMargins,
+  PIN_LABEL_FONT_PX,
+  PIN_LABEL_OFFSETS,
+  pinLabelSideAt,
+  pinLabelText,
+  type LabelOffset
+} from './pinLabelLayout'
 import { useComponentEditorStore } from './store'
 
 // Canevas SVG de l'éditeur de composants : grille, formes, broches, poignées, lasso, copies
@@ -34,7 +40,6 @@ const library = useLibraryStore()
 const svg = ref<SVGSVGElement | null>(null)
 const scroller = ref<HTMLDivElement | null>(null)
 
-const MARGIN_CELLS = 1
 const SCROLL_PADDING_PX = 24
 const PIN_SNAP_CELLS = 0.75
 const ZOOM_STEP = 1.1
@@ -48,12 +53,15 @@ const PIN_COLORS: Record<PinKind, string> = {
 
 const cell = computed(() => store.cellPx)
 const quarter = computed(() => cell.value / QUARTERS_PER_CELL)
-const origin = computed(() => MARGIN_CELLS * cell.value)
+/** Marges autour de la boîte du composant : une cellule, ou la place des repères de broche. */
+const margins = computed(() => canvasMargins(store.doc, cell.value))
+const originX = computed(() => margins.value.x)
+const originY = computed(() => margins.value.y)
 const size = computed(() => store.doc.size)
 const boxWidth = computed(() => size.value.widthCells * cell.value)
 const boxHeight = computed(() => size.value.heightCells * cell.value)
-const svgWidth = computed(() => boxWidth.value + 2 * origin.value)
-const svgHeight = computed(() => boxHeight.value + 2 * origin.value)
+const svgWidth = computed(() => boxWidth.value + 2 * originX.value)
+const svgHeight = computed(() => boxHeight.value + 2 * originY.value)
 const strokeBase = computed(() => library.defaultProfile.componentStroke)
 
 interface QPoint {
@@ -152,8 +160,8 @@ function pointerCells(event: PointerEvent | WheelEvent): LocalPoint {
   if (!element) return { x: 0, y: 0 }
   const rect = element.getBoundingClientRect()
   return {
-    x: (event.clientX - rect.left - origin.value) / cell.value,
-    y: (event.clientY - rect.top - origin.value) / cell.value
+    x: (event.clientX - rect.left - originX.value) / cell.value,
+    y: (event.clientY - rect.top - originY.value) / cell.value
   }
 }
 
@@ -203,47 +211,10 @@ function pinPosition(pin: Pin): LocalPoint {
 }
 
 // Repère d'une broche : du côté libre le plus proche du bord, sinon du bord le plus proche
-// (les broches peuvent être n'importe où dans la boîte). Boîtes estimées en cellules.
-
-type LabelOffset = { dx: number; dy: number; anchor: 'start' | 'middle' | 'end' }
-
-const PIN_LABEL_FONT_PX = 22
-/** Décalage du repère en pixels, par côté, depuis le centre de la broche. */
-const PIN_LABEL_OFFSETS: Record<LabelSide, LabelOffset> = {
-  left: { dx: -16, dy: 0, anchor: 'end' },
-  right: { dx: 16, dy: 0, anchor: 'start' },
-  top: { dx: 0, dy: -22, anchor: 'middle' },
-  bottom: { dx: 0, dy: 24, anchor: 'middle' }
-}
-
-function pinLabelText(pin: Pin, index: number): string {
-  return `${index + 1}${pin.name !== String(index + 1) ? ` · ${pin.name}` : ''}`
-}
-
-/** Boîte du repère pour un côté, en cellules, d'après une largeur de caractère moyenne. */
-function pinLabelBox(point: LocalPoint, text: string, side: LabelSide): Box {
-  const width = (text.length * 0.55 * PIN_LABEL_FONT_PX) / cell.value
-  const height = (PIN_LABEL_FONT_PX * 1.1) / cell.value
-  const offset = PIN_LABEL_OFFSETS[side]
-  const centerX = point.x + offset.dx / cell.value
-  const centerY = point.y + offset.dy / cell.value
-  const x =
-    offset.anchor === 'start'
-      ? centerX
-      : offset.anchor === 'end'
-        ? centerX - width
-        : centerX - width / 2
-  return { x, y: centerY - height / 2, w: width, h: height }
-}
+// (mise en page dans pinLabelLayout.ts, partagée avec l'ajustement à la fenêtre).
 
 function pinLabel(pin: Pin, index: number): LabelOffset {
-  const point = pinPosition(pin)
-  const text = pinLabelText(pin, index)
-  const primitives = store.doc.visual.kind === 'drawing' ? store.doc.visual.primitives : []
-  const side = pinLabelSide(point, size.value, primitives, (candidate) =>
-    pinLabelBox(point, text, candidate)
-  )
-  return PIN_LABEL_OFFSETS[side]
+  return PIN_LABEL_OFFSETS[pinLabelSideAt(store.doc, pin, index, pinPosition(pin), cell.value)]
 }
 
 const pinLabels = computed(() => store.doc.pins.map((pin, index) => pinLabel(pin, index)))
@@ -809,8 +780,8 @@ async function onWheel(event: WheelEvent): Promise<void> {
   store.zoomBy(event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP)
   if (cell.value === before) return
   await nextTick()
-  const newX = world.x * cell.value + origin.value
-  const newY = world.y * cell.value + origin.value
+  const newX = world.x * cell.value + originX.value
+  const newY = world.y * cell.value + originY.value
   container.scrollLeft = containerRect.left + SCROLL_PADDING_PX - event.clientX + newX
   container.scrollTop = containerRect.top + SCROLL_PADDING_PX - event.clientY + newY
 }
@@ -853,7 +824,7 @@ defineExpose({ cancel, finishPolyline })
           </pattern>
         </defs>
 
-        <g :transform="`translate(${origin} ${origin})`">
+        <g :transform="`translate(${originX} ${originY})`">
           <rect :width="boxWidth" :height="boxHeight" fill="url(#cell-grid)" />
           <rect
             :width="boxWidth"
@@ -1016,7 +987,9 @@ defineExpose({ cancel, finishPolyline })
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: var(--paper-margin);
+  /* Tout l'espace de travail a la couleur du papier : les repères des broches débordent sans
+     coupure visible autour de la boîte du composant. */
+  background: var(--paper);
 }
 
 .canvas-scroll {
@@ -1034,8 +1007,8 @@ defineExpose({ cancel, finishPolyline })
      n'apparaîtrait jamais ; la hauteur, elle, débordait déjà. */
   flex: none;
   margin: auto;
+  overflow: visible;
   background: var(--paper);
-  box-shadow: 0 1px 4px var(--shadow);
   touch-action: none;
   user-select: none;
 }
