@@ -337,110 +337,115 @@ function setLabelVertical(event: Event): void {
       </section>
     </template>
 
-    <section v-else-if="single" class="block">
-      <h3>{{ single.def.name }}</h3>
-      <div v-if="libraryUpdate" class="notice">
-        <Icon name="refresh" :size="16" class="notice-icon" />
-        <div class="notice-body">
-          <strong>Version plus récente dans la bibliothèque</strong>
-          <button
-            type="button"
-            class="primary small with-icon"
-            @click="store.updateDefinition(libraryUpdate)"
-          >
-            <Icon name="refresh" :size="13" /> Mettre à jour dans ce montage
-          </button>
+    <template v-else-if="single">
+      <section class="block">
+        <h3>{{ single.def.name }}</h3>
+        <div v-if="libraryUpdate" class="notice">
+          <Icon name="refresh" :size="16" class="notice-icon" />
+          <div class="notice-body">
+            <strong>Version plus récente dans la bibliothèque</strong>
+            <button
+              type="button"
+              class="primary small with-icon"
+              @click="store.updateDefinition(libraryUpdate)"
+            >
+              <Icon name="refresh" :size="13" /> Mettre à jour dans ce montage
+            </button>
+          </div>
         </div>
-      </div>
-      <label class="field">
-        <span>Libellé</span>
-        <input
-          type="text"
-          :value="single.instance.label"
-          placeholder="R1, U2…"
-          @change="store.setInstanceLabel(single.instance.id, inputValue($event).trim())"
-        />
-      </label>
-      <template v-if="fields.length > 0">
-        <label v-for="field in fields" :key="field.name" class="field">
-          <span>{{ field.name }}{{ field.unit.length > 0 ? ` (${field.unit})` : '' }}</span>
+        <label class="field">
+          <span>Libellé</span>
           <input
             type="text"
-            :value="single.instance.fields[field.name] ?? ''"
-            :placeholder="field.defaultValue.length > 0 ? field.defaultValue : '(vide)'"
-            @change="setField(field.name, $event)"
+            :value="single.instance.label"
+            placeholder="R1, U2…"
+            @change="store.setInstanceLabel(single.instance.id, inputValue($event).trim())"
           />
         </label>
-      </template>
-      <div class="row">
-        <label class="field">
-          <span>X (cellules)</span>
-          <input
-            type="number"
-            step="1"
-            :value="single.instance.x"
-            @change="setPosition('x', $event)"
-          />
-        </label>
-        <label class="field">
-          <span>Y (cellules)</span>
-          <input
-            type="number"
-            step="1"
-            :value="single.instance.y"
-            @change="setPosition('y', $event)"
-          />
-        </label>
-      </div>
-      <div class="row">
-        <label class="field">
-          <span>Rotation</span>
-          <select :value="single.instance.rotation" @change="setRotation">
-            <option v-for="rotation in ROTATIONS" :key="rotation" :value="rotation">
-              {{ rotation }}°
-            </option>
-          </select>
-        </label>
-        <label class="check">
-          <input type="checkbox" :checked="single.instance.mirror" @change="setMirror" />
-          <span>Miroir</span>
-        </label>
-      </div>
-      <div class="row">
-        <button
-          type="button"
-          class="icon-only"
-          title="Rotation antihoraire (Maj+R)"
-          @click="store.rotate('ccw')"
-        >
-          <Icon name="rotate-ccw" />
-        </button>
-        <button
-          type="button"
-          class="icon-only"
-          title="Rotation horaire (R)"
-          @click="store.rotate('cw')"
-        >
-          <Icon name="rotate-cw" />
-        </button>
-        <button
-          type="button"
-          class="icon-only"
-          title="Miroir horizontal (T)"
-          @click="store.flip('horizontal')"
-        >
-          <Icon name="flip-h" />
-        </button>
-        <button
-          type="button"
-          class="icon-only"
-          title="Miroir vertical (Maj+T)"
-          @click="store.flip('vertical')"
-        >
-          <Icon name="flip-v" />
-        </button>
-      </div>
-    </section>
+        <template v-if="fields.length > 0">
+          <label v-for="field in fields" :key="field.name" class="field">
+            <span>{{ field.name }}{{ field.unit.length > 0 ? ` (${field.unit})` : '' }}</span>
+            <input
+              type="text"
+              :value="single.instance.fields[field.name] ?? ''"
+              :placeholder="field.defaultValue.length > 0 ? field.defaultValue : '(vide)'"
+              @change="setField(field.name, $event)"
+            />
+          </label>
+        </template>
+      </section>
+      <section class="block">
+        <h3>Position et orientation</h3>
+        <div class="row">
+          <label class="field">
+            <span>X (cellules)</span>
+            <input
+              type="number"
+              step="1"
+              :value="single.instance.x"
+              @change="setPosition('x', $event)"
+            />
+          </label>
+          <label class="field">
+            <span>Y (cellules)</span>
+            <input
+              type="number"
+              step="1"
+              :value="single.instance.y"
+              @change="setPosition('y', $event)"
+            />
+          </label>
+        </div>
+        <div class="row">
+          <label class="field">
+            <span>Rotation</span>
+            <select :value="single.instance.rotation" @change="setRotation">
+              <option v-for="rotation in ROTATIONS" :key="rotation" :value="rotation">
+                {{ rotation }}°
+              </option>
+            </select>
+          </label>
+          <label class="check">
+            <input type="checkbox" :checked="single.instance.mirror" @change="setMirror" />
+            <span>Miroir</span>
+          </label>
+        </div>
+        <div class="row">
+          <button
+            type="button"
+            class="icon-only"
+            title="Rotation antihoraire (Maj+R)"
+            @click="store.rotate('ccw')"
+          >
+            <Icon name="rotate-ccw" />
+          </button>
+          <button
+            type="button"
+            class="icon-only"
+            title="Rotation horaire (R)"
+            @click="store.rotate('cw')"
+          >
+            <Icon name="rotate-cw" />
+          </button>
+          <button
+            type="button"
+            class="icon-only"
+            title="Miroir horizontal (T)"
+            @click="store.flip('horizontal')"
+          >
+            <Icon name="flip-h" />
+          </button>
+          <button
+            type="button"
+            class="icon-only"
+            title="Miroir vertical (Maj+T)"
+            @click="store.flip('vertical')"
+          >
+            <Icon name="flip-v" />
+          </button>
+        </div>
+      </section>
+    </template>
 
     <section v-else-if="singleWire || wiresOnly" class="block">
       <h3>{{ singleWire ? 'Fil' : `${selectedWireList.length} fils` }}</h3>
@@ -525,74 +530,79 @@ function setLabelVertical(event: Event): void {
       </div>
     </section>
 
-    <section v-else-if="singleLabel" class="block">
-      <h3>Étiquette</h3>
-      <label class="field">
-        <span>Texte</span>
-        <textarea rows="3" :value="singleLabel.text" @change="setLabelText" />
-      </label>
-      <div class="row">
+    <template v-else-if="singleLabel">
+      <section class="block">
+        <h3>Étiquette</h3>
         <label class="field">
-          <span>Alignement</span>
-          <select :value="singleLabel.anchor" @change="setLabelAnchor">
-            <option value="start">Gauche</option>
-            <option value="middle">Centre</option>
-            <option value="end">Droite</option>
-          </select>
+          <span>Texte</span>
+          <textarea rows="3" :value="singleLabel.text" @change="setLabelText" />
         </label>
-        <label class="field">
-          <span>Taille</span>
-          <select :value="singleLabel.size" @change="setLabelSize">
-            <option v-for="choice in labelSizeChoices" :key="choice.size" :value="choice.size">
-              ×{{ choice.scale }}
-            </option>
-          </select>
-        </label>
-      </div>
-      <div class="row">
-        <label class="field">
-          <span>Couleur</span>
-          <input type="color" :value="singleLabel.color" @change="setLabelColor" />
-        </label>
-        <div class="field">
-          <span>Style</span>
-          <div class="toggles">
-            <button
-              v-for="option in LABEL_STYLE_OPTIONS"
-              :key="option.key"
-              type="button"
-              class="toggle"
-              :class="{ active: singleLabel[option.key] }"
-              :title="option.label"
-              @click="toggleLabelStyle(option)"
-            >
-              <Icon :name="option.icon" />
-            </button>
+        <div class="row">
+          <label class="field">
+            <span>Alignement</span>
+            <select :value="singleLabel.anchor" @change="setLabelAnchor">
+              <option value="start">Gauche</option>
+              <option value="middle">Centre</option>
+              <option value="end">Droite</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Taille</span>
+            <select :value="singleLabel.size" @change="setLabelSize">
+              <option v-for="choice in labelSizeChoices" :key="choice.size" :value="choice.size">
+                ×{{ choice.scale }}
+              </option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label class="field">
+            <span>Couleur</span>
+            <input type="color" :value="singleLabel.color" @change="setLabelColor" />
+          </label>
+          <div class="field">
+            <span>Style</span>
+            <div class="toggles">
+              <button
+                v-for="option in LABEL_STYLE_OPTIONS"
+                :key="option.key"
+                type="button"
+                class="toggle"
+                :class="{ active: singleLabel[option.key] }"
+                :title="option.label"
+                @click="toggleLabelStyle(option)"
+              >
+                <Icon :name="option.icon" />
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-      <label class="check" title="Le texte est tourné de 90° et se lit de haut en bas">
-        <input type="checkbox" :checked="singleLabel.vertical" @change="setLabelVertical" />
-        <span>Vertical</span>
-      </label>
-      <div class="row">
-        <label v-for="side in BOX_FIELDS" :key="side.key" class="field">
-          <span>{{ side.label }}</span>
-          <input
-            type="number"
-            step="1"
-            :min="side.key === 'w' || side.key === 'h' ? 1 : undefined"
-            :value="singleLabel[side.key]"
-            @change="setLabelBox(side.key, $event)"
-          />
+        <label class="check" title="Le texte est tourné de 90° et se lit de haut en bas">
+          <input type="checkbox" :checked="singleLabel.vertical" @change="setLabelVertical" />
+          <span>Vertical</span>
         </label>
-      </div>
-      <div class="row">
-        <button type="button" class="with-icon" @click="store.duplicateSelection()">
-          <Icon name="duplicate" /> Dupliquer
-        </button>
-      </div>
-    </section>
+        <div class="row">
+          <button type="button" class="with-icon" @click="store.duplicateSelection()">
+            <Icon name="duplicate" /> Dupliquer
+          </button>
+        </div>
+      </section>
+      <section class="block">
+        <h3>Position et taille</h3>
+        <div class="row">
+          <label v-for="side in BOX_FIELDS" :key="side.key" class="field">
+            <span>{{ side.label }}</span>
+            <input
+              type="number"
+              step="1"
+              :min="side.key === 'w' || side.key === 'h' ? 1 : undefined"
+              :value="singleLabel[side.key]"
+              @change="setLabelBox(side.key, $event)"
+            />
+          </label>
+        </div>
+      </section>
+    </template>
 
     <section v-else class="block">
       <h3>{{ mixedCount }} élément(s) sélectionné(s)</h3>

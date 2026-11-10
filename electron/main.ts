@@ -32,6 +32,16 @@ function fileArgument(argv: readonly string[]): string | null {
   )
 }
 
+/**
+ * Textes des dialogues « enregistrer ? ». Windows règle la largeur de la boîte sur la ligne de
+ * détail : elle est assez longue pour que la question, en gros caractères au-dessus, tienne sur
+ * une seule ligne. Les espaces insécables gardent de toute façon « avant de quitter ? » ensemble.
+ */
+const NBSP = String.fromCharCode(0xa0)
+const QUIT_QUESTION = `Enregistrer les modifications avant${NBSP}de${NBSP}quitter${NBSP}?`
+const UNSAVED_DETAIL =
+  'Sans enregistrement, tout ce qui a changé depuis la dernière sauvegarde sera perdu.'
+
 /** Fichier passé au lancement (double-clic sur un montage, « Ouvrir avec », ligne de commande). */
 const launchFile = fileArgument(process.argv)
 /** La fenêtre de l'application, pour lui transmettre les fichiers d'un second lancement. */
@@ -125,7 +135,7 @@ function registerIpc(): void {
       type: 'warning' as const,
       title: 'Pinout',
       message: `Enregistrer les modifications de « ${name} » ?`,
-      detail: 'Sans enregistrement, les modifications sont perdues.',
+      detail: UNSAVED_DETAIL,
       buttons: ['Enregistrer', 'Ne pas enregistrer', 'Annuler'],
       defaultId: 0,
       cancelId: 2,
@@ -251,8 +261,8 @@ function createWindow(): void {
     const choice = dialog.showMessageBoxSync(mainWindow, {
       type: 'warning',
       title: 'Pinout',
-      message: 'Enregistrer les modifications avant de quitter ?',
-      detail: 'Sans enregistrement, les modifications sont perdues.',
+      message: QUIT_QUESTION,
+      detail: UNSAVED_DETAIL,
       buttons: ['Enregistrer', 'Ne pas enregistrer', 'Annuler'],
       defaultId: 0,
       cancelId: 2,

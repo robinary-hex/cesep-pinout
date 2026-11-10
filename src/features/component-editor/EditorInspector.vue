@@ -644,6 +644,12 @@ function setClosed(event: Event): void {
             @change="store.setMeta({ description: inputValue($event) })"
           />
         </label>
+        <p v-if="store.folder" class="hint">Dossier : {{ store.folder }}</p>
+        <p v-else class="hint">Pas encore enregistré ; l’identifiant sera dérivé du nom.</p>
+      </section>
+
+      <section class="block">
+        <h3>Taille</h3>
         <div class="row">
           <label class="field">
             <span>Largeur (cellules)</span>
@@ -666,8 +672,6 @@ function setClosed(event: Event): void {
             />
           </label>
         </div>
-        <p v-if="store.folder" class="hint">Dossier : {{ store.folder }}</p>
-        <p v-else class="hint">Pas encore enregistré ; l’identifiant sera dérivé du nom.</p>
       </section>
 
       <section class="block">

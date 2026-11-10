@@ -386,119 +386,124 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
       </p>
     </section>
 
-    <section v-else-if="singleNode" class="block">
-      <h3>{{ NODE_SPECS[singleNode.shape].label }}</h3>
-      <label class="field">
-        <span>Forme</span>
-        <select :value="singleNode.shape" @change="setNodeShape">
-          <option v-for="shape in NODE_SHAPES" :key="shape" :value="shape">
-            {{ NODE_SPECS[shape].label }}
-          </option>
-        </select>
-      </label>
-      <template v-if="NODE_SPECS[singleNode.shape].text">
+    <template v-else-if="singleNode">
+      <section class="block">
+        <h3>{{ NODE_SPECS[singleNode.shape].label }}</h3>
         <label class="field">
-          <span>Titre</span>
-          <textarea rows="2" :value="singleNode.title" @change="setNodeTitle" />
+          <span>Forme</span>
+          <select :value="singleNode.shape" @change="setNodeShape">
+            <option v-for="shape in NODE_SHAPES" :key="shape" :value="shape">
+              {{ NODE_SPECS[shape].label }}
+            </option>
+          </select>
         </label>
+        <template v-if="NODE_SPECS[singleNode.shape].text">
+          <label class="field">
+            <span>Titre</span>
+            <textarea rows="2" :value="singleNode.title" @change="setNodeTitle" />
+          </label>
+          <label class="field">
+            <span>Sous-titre</span>
+            <textarea rows="2" :value="singleNode.subtitle" @change="setNodeSubtitle" />
+          </label>
+          <div class="row">
+            <div class="field">
+              <span title="Gras, italique, souligné et barré stylent le titre">Style du texte</span>
+              <div class="toggles">
+                <button
+                  v-for="option in NODE_TEXT_OPTIONS"
+                  :key="option.key"
+                  type="button"
+                  class="toggle"
+                  :class="{ active: singleNode[option.key] }"
+                  :title="`${option.label} (titre)`"
+                  @click="toggleNodeText(option)"
+                >
+                  <Icon :name="option.icon" />
+                </button>
+                <button
+                  type="button"
+                  class="toggle"
+                  :class="{ active: nodeIsMono }"
+                  title="Chasse fixe, pour du code (titre et sous-titre)"
+                  @click="toggleNodeMono"
+                >
+                  <Icon name="code" />
+                </button>
+              </div>
+            </div>
+            <label class="field scale">
+              <span>Taille</span>
+              <select :value="singleNode.textScale" @change="setNodeScale">
+                <option v-for="scale in nodeScaleChoices" :key="scale" :value="scale">
+                  ×{{ scale }}
+                </option>
+              </select>
+            </label>
+          </div>
+        </template>
+        <div class="field">
+          <span>Couleur</span>
+          <div class="swatches">
+            <button
+              v-for="choice in store.colorChoices"
+              :key="choice.hex"
+              type="button"
+              class="swatch"
+              :class="{ current: sameColor(choice.hex, singleNode.color) }"
+              :style="{ background: choice.hex }"
+              :title="choice.name"
+              @click="store.setCurrentColor(choice.hex)"
+            />
+          </div>
+        </div>
         <label class="field">
-          <span>Sous-titre</span>
-          <textarea rows="2" :value="singleNode.subtitle" @change="setNodeSubtitle" />
+          <span>Fond</span>
+          <select :value="singleNode.fill" @change="setNodeFill">
+            <option v-for="fill in FILLS" :key="fill.value" :value="fill.value">
+              {{ fill.label }}
+            </option>
+          </select>
         </label>
         <div class="row">
-          <div class="field">
-            <span title="Gras, italique, souligné et barré stylent le titre">Style du texte</span>
-            <div class="toggles">
-              <button
-                v-for="option in NODE_TEXT_OPTIONS"
-                :key="option.key"
-                type="button"
-                class="toggle"
-                :class="{ active: singleNode[option.key] }"
-                :title="`${option.label} (titre)`"
-                @click="toggleNodeText(option)"
-              >
-                <Icon :name="option.icon" />
-              </button>
-              <button
-                type="button"
-                class="toggle"
-                :class="{ active: nodeIsMono }"
-                title="Chasse fixe, pour du code (titre et sous-titre)"
-                @click="toggleNodeMono"
-              >
-                <Icon name="code" />
-              </button>
-            </div>
-          </div>
-          <label class="field scale">
-            <span>Taille</span>
-            <select :value="singleNode.textScale" @change="setNodeScale">
-              <option v-for="scale in nodeScaleChoices" :key="scale" :value="scale">
-                ×{{ scale }}
-              </option>
-            </select>
+          <button
+            v-if="NODE_SPECS[singleNode.shape].text"
+            type="button"
+            class="with-icon"
+            title="Ajuste la taille du nœud à son texte, au plus près"
+            @click="store.fitNodeToText(singleNode.id)"
+          >
+            <Icon name="fit" /> Ajuster
+          </button>
+          <button
+            v-if="NODE_SPECS[singleNode.shape].line"
+            type="button"
+            class="with-icon"
+            title="Tourner la barre d'un quart de tour (R)"
+            @click="store.turnBar(singleNode.id)"
+          >
+            <Icon name="rotate-cw" /> Tourner
+          </button>
+          <button type="button" class="with-icon" @click="store.duplicateSelection()">
+            <Icon name="duplicate" /> Dupliquer
+          </button>
+        </div>
+      </section>
+      <section class="block">
+        <h3>Position et taille</h3>
+        <div class="row">
+          <label v-for="side in BOX_FIELDS" :key="side.key" class="field">
+            <span>{{ side.label }}</span>
+            <input
+              type="number"
+              step="1"
+              :value="singleNode[side.key]"
+              @change="setNodeBox(side.key, $event)"
+            />
           </label>
         </div>
-      </template>
-      <div class="field">
-        <span>Couleur</span>
-        <div class="swatches">
-          <button
-            v-for="choice in store.colorChoices"
-            :key="choice.hex"
-            type="button"
-            class="swatch"
-            :class="{ current: sameColor(choice.hex, singleNode.color) }"
-            :style="{ background: choice.hex }"
-            :title="choice.name"
-            @click="store.setCurrentColor(choice.hex)"
-          />
-        </div>
-      </div>
-      <label class="field">
-        <span>Fond</span>
-        <select :value="singleNode.fill" @change="setNodeFill">
-          <option v-for="fill in FILLS" :key="fill.value" :value="fill.value">
-            {{ fill.label }}
-          </option>
-        </select>
-      </label>
-      <div class="row">
-        <label v-for="side in BOX_FIELDS" :key="side.key" class="field">
-          <span>{{ side.label }}</span>
-          <input
-            type="number"
-            step="1"
-            :value="singleNode[side.key]"
-            @change="setNodeBox(side.key, $event)"
-          />
-        </label>
-      </div>
-      <div class="row">
-        <button
-          v-if="NODE_SPECS[singleNode.shape].text"
-          type="button"
-          class="with-icon"
-          title="Ajuste la taille du nœud à son texte, au plus près"
-          @click="store.fitNodeToText(singleNode.id)"
-        >
-          <Icon name="fit" /> Ajuster
-        </button>
-        <button
-          v-if="NODE_SPECS[singleNode.shape].line"
-          type="button"
-          class="with-icon"
-          title="Tourner la barre d'un quart de tour (R)"
-          @click="store.turnBar(singleNode.id)"
-        >
-          <Icon name="rotate-cw" /> Tourner
-        </button>
-        <button type="button" class="with-icon" @click="store.duplicateSelection()">
-          <Icon name="duplicate" /> Dupliquer
-        </button>
-      </div>
-    </section>
+      </section>
+    </template>
 
     <section v-else-if="singleLink" class="block">
       <h3>Lien</h3>
@@ -582,74 +587,79 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
       </div>
     </section>
 
-    <section v-else-if="singleText" class="block">
-      <h3>Texte</h3>
-      <label class="field">
-        <span>Texte</span>
-        <textarea rows="3" :value="singleText.text" @change="setTextContent" />
-      </label>
-      <div class="row">
+    <template v-else-if="singleText">
+      <section class="block">
+        <h3>Texte</h3>
         <label class="field">
-          <span>Alignement</span>
-          <select :value="singleText.anchor" @change="setTextAnchor">
-            <option value="start">Gauche</option>
-            <option value="middle">Centre</option>
-            <option value="end">Droite</option>
-          </select>
+          <span>Texte</span>
+          <textarea rows="3" :value="singleText.text" @change="setTextContent" />
         </label>
-        <label class="field">
-          <span>Taille</span>
-          <select :value="singleText.size" @change="setTextSize">
-            <option v-for="choice in textSizeChoices" :key="choice.size" :value="choice.size">
-              ×{{ choice.scale }}
-            </option>
-          </select>
-        </label>
-      </div>
-      <div class="row">
-        <label class="field">
-          <span>Couleur</span>
-          <input type="color" :value="singleText.color" @change="setTextColor" />
-        </label>
-        <div class="field">
-          <span>Style</span>
-          <div class="toggles">
-            <button
-              v-for="option in TEXT_STYLE_OPTIONS"
-              :key="option.key"
-              type="button"
-              class="toggle"
-              :class="{ active: singleText[option.key] }"
-              :title="option.label"
-              @click="toggleTextStyle(option)"
-            >
-              <Icon :name="option.icon" />
-            </button>
+        <div class="row">
+          <label class="field">
+            <span>Alignement</span>
+            <select :value="singleText.anchor" @change="setTextAnchor">
+              <option value="start">Gauche</option>
+              <option value="middle">Centre</option>
+              <option value="end">Droite</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Taille</span>
+            <select :value="singleText.size" @change="setTextSize">
+              <option v-for="choice in textSizeChoices" :key="choice.size" :value="choice.size">
+                ×{{ choice.scale }}
+              </option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label class="field">
+            <span>Couleur</span>
+            <input type="color" :value="singleText.color" @change="setTextColor" />
+          </label>
+          <div class="field">
+            <span>Style</span>
+            <div class="toggles">
+              <button
+                v-for="option in TEXT_STYLE_OPTIONS"
+                :key="option.key"
+                type="button"
+                class="toggle"
+                :class="{ active: singleText[option.key] }"
+                :title="option.label"
+                @click="toggleTextStyle(option)"
+              >
+                <Icon :name="option.icon" />
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-      <label class="check" title="Le texte est tourné de 90° et se lit de haut en bas">
-        <input type="checkbox" :checked="singleText.vertical" @change="setTextVertical" />
-        <span>Vertical</span>
-      </label>
-      <div class="row">
-        <label v-for="side in BOX_FIELDS" :key="side.key" class="field">
-          <span>{{ side.label }}</span>
-          <input
-            type="number"
-            step="1"
-            :min="side.key === 'w' || side.key === 'h' ? 1 : undefined"
-            :value="singleText[side.key]"
-            @change="setTextBox(side.key, $event)"
-          />
+        <label class="check" title="Le texte est tourné de 90° et se lit de haut en bas">
+          <input type="checkbox" :checked="singleText.vertical" @change="setTextVertical" />
+          <span>Vertical</span>
         </label>
-      </div>
-      <div class="row">
-        <button type="button" class="with-icon" @click="store.duplicateSelection()">
-          <Icon name="duplicate" /> Dupliquer
-        </button>
-      </div>
-    </section>
+        <div class="row">
+          <button type="button" class="with-icon" @click="store.duplicateSelection()">
+            <Icon name="duplicate" /> Dupliquer
+          </button>
+        </div>
+      </section>
+      <section class="block">
+        <h3>Position et taille</h3>
+        <div class="row">
+          <label v-for="side in BOX_FIELDS" :key="side.key" class="field">
+            <span>{{ side.label }}</span>
+            <input
+              type="number"
+              step="1"
+              :min="side.key === 'w' || side.key === 'h' ? 1 : undefined"
+              :value="singleText[side.key]"
+              @change="setTextBox(side.key, $event)"
+            />
+          </label>
+        </div>
+      </section>
+    </template>
 
     <section v-else class="block">
       <h3>{{ count }} éléments</h3>
