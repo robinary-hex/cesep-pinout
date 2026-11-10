@@ -137,7 +137,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   `tabStates` (historique, fichier, vue, sélection, couleur courante) ; `activateTab` range l'un et
   charge l'autre. Nouveau et Ouvrir créent un onglet, ou prennent la place de l'onglet actif s'il
   est vierge (`pristine` : jamais enregistré, jamais modifié) ; rouvrir un fichier déjà ouvert
-  ramène son onglet. Un montage vierge n'est pas « modifié ». Le presse-papiers est commun :
+  ramène son onglet. Un montage n'est « modifié » que s'il a quelque chose à enregistrer : pas
+  s'il est intact, ni s'il n'a jamais eu de fichier et qu'il est vide (`needsSaving`) ; de même un
+  composant jamais enregistré et vierge. L'application se quitte alors sans question. Le presse-papiers est commun :
   coller dans un autre montage y embarque les définitions qui manquent.
 - Thème clair ou sombre choisi dans les paramètres (`theme`) : `src/ui/theme.ts` pose
   `data-theme` sur `<html>` et toutes les couleurs de l'interface passent par les variables CSS de

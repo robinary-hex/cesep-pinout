@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PROFILE, profileDifferences, sameProfile, styleProfileSchema } from './profile'
-import { createEmptyProject, projectSchema } from './project'
+import { createEmptyProject, isEmptyProject, projectSchema } from './project'
 import { DEFAULT_PALETTE, DEFAULT_SETTINGS, settingsSchema } from './settings'
 
 describe('profil de style et paramètres', () => {
@@ -33,6 +33,19 @@ describe('profil de style et paramètres', () => {
     const project = createEmptyProject('Nouveau montage', DEFAULT_PROFILE)
     expect(projectSchema.safeParse(project).success).toBe(true)
     expect(project.profile).not.toBe(DEFAULT_PROFILE)
+    expect(isEmptyProject(project)).toBe(true)
+    const label = {
+      id: 't1',
+      x: 0,
+      y: 0,
+      w: 4,
+      h: 1,
+      anchor: 'middle' as const,
+      text: 'Texte',
+      size: 11,
+      bold: false
+    }
+    expect(isEmptyProject({ ...project, labels: [label] })).toBe(false)
   })
 
   it('liste les réglages où un profil s’écarte du profil général', () => {

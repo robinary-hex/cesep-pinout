@@ -63,7 +63,20 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   const undoLabel = ref<string | null>(null)
   const redoLabel = ref<string | null>(null)
 
-  const dirty = computed(() => doc.value !== savedDoc.value)
+  /** Composant vierge : rien de dessiné, aucune broche. */
+  const blank = computed(
+    () =>
+      doc.value.visual.kind === 'drawing' &&
+      doc.value.visual.primitives.length === 0 &&
+      doc.value.pins.length === 0
+  )
+  /**
+   * Des modifications à enregistrer ? Un composant jamais enregistré et encore vierge n'en a pas :
+   * on le quitte, et on quitte l'application, sans question.
+   */
+  const dirty = computed(
+    () => doc.value !== savedDoc.value && !(folder.value === null && blank.value)
+  )
   const issues = computed(() => componentIssues(doc.value))
   const hasErrors = computed(() => issues.value.some((issue) => issue.level === 'error'))
   const selectedIndexes = computed<readonly number[]>(() =>
@@ -140,19 +153,9 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     folder.value = savedFolder
   }
 
-  /** Composant vierge : rien de dessiné, aucune broche. Il s'abandonne sans question. */
-  const blank = computed(
-    () =>
-      doc.value.visual.kind === 'drawing' &&
-      doc.value.visual.primitives.length === 0 &&
-      doc.value.pins.length === 0
-  )
-
   function confirmDiscard(): boolean {
     return (
-      !dirty.value ||
-      blank.value ||
-      window.confirm('Des modifications ne sont pas enregistrées. Les abandonner ?')
+      !dirty.value || window.confirm('Des modifications ne sont pas enregistrées. Les abandonner ?')
     )
   }
 

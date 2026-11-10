@@ -161,6 +161,13 @@ export const projectSchema = projectShape.superRefine((project, ctx) => {
   }
 })
 
+/** Montage sans contenu : ni composant, ni fil, ni étiquette (son nom et son style ne comptent pas). */
+export function isEmptyProject(project: Project): boolean {
+  return (
+    project.components.length === 0 && project.wires.length === 0 && project.labels.length === 0
+  )
+}
+
 export function createEmptyProject(name: string, profile: StyleProfile): Project {
   return {
     schemaVersion: PROJECT_SCHEMA_VERSION,

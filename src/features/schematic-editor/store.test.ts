@@ -577,12 +577,33 @@ describe('onglets de montage', () => {
     store.newProject()
     expect(store.tabs).toHaveLength(1)
     store.setProjectName('Alim')
+    store.addLabel(0, 0)
     expect(store.pristine).toBe(false)
     store.newProject()
     expect(store.tabs.map((tab) => [tab.name, tab.dirty])).toEqual([
       ['Alim', true],
       ['Nouveau montage', false]
     ])
+  })
+
+  it('un montage sans fichier et sans contenu n’a rien à enregistrer, même après des essais', () => {
+    const store = useSchematicStore()
+    store.startPlacing(resistor())
+    const id = store.placeAt(0, 0)
+    store.stopPlacing()
+    expect(store.dirty).toBe(true)
+    store.selection = id ? [id] : []
+    store.removeSelection()
+    store.setProjectName('Essai')
+    // Vide de nouveau : rien à enregistrer, mais ce n'est plus un onglet vierge (historique).
+    expect(store.dirty).toBe(false)
+    expect(store.anyDirty).toBe(false)
+    expect(store.dirtyDocuments()).toEqual([])
+    expect(store.pristine).toBe(false)
+    // Le même montage vidé, s'il a un fichier, doit être enregistré.
+    store.markSaved('D:/Docs/essai.pinout')
+    store.setProjectName('Essai 2')
+    expect(store.dirty).toBe(true)
   })
 
   it('garde un document, un historique et une sélection par onglet', () => {
@@ -712,6 +733,7 @@ describe('onglets de montage', () => {
   it('liste les montages modifiés pour la copie de secours, onglet par onglet', () => {
     const store = useSchematicStore()
     store.setProjectName('A')
+    store.addLabel(0, 0)
     const first = store.activeTabId
     store.newProject()
     expect(store.anyDirty).toBe(true)

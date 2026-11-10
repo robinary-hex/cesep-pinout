@@ -30,6 +30,7 @@ describe('fermer un onglet de montage', () => {
   it('« Annuler » garde l’onglet et ses modifications', async () => {
     const store = useSchematicStore()
     store.setProjectName('Brouillon')
+    store.addLabel(0, 0)
     fs.confirmSaveAnswers.push('cancel')
     expect(await closeTabAsking(store, useLibraryStore(), store.activeTabId)).toBe(false)
     expect(store.doc.name).toBe('Brouillon')
@@ -38,6 +39,7 @@ describe('fermer un onglet de montage', () => {
   it('« Ne pas enregistrer » ferme et efface la copie de secours du montage', async () => {
     const store = useSchematicStore()
     store.setProjectName('Brouillon')
+    store.addLabel(0, 0)
     await syncAutosaves(store.dirtyDocuments())
     expect(await readAutosaves()).toHaveLength(1)
     fs.confirmSaveAnswers.push('discard')
@@ -50,6 +52,7 @@ describe('fermer un onglet de montage', () => {
     const store = useSchematicStore()
     const library = useLibraryStore()
     store.setProjectName('Alim')
+    store.addLabel(0, 0)
     fs.confirmSaveAnswers.push('save')
     fs.saveDialogAnswers.push(null)
     expect(await closeTabAsking(store, library, store.activeTabId)).toBe(false)
@@ -65,6 +68,7 @@ describe('fermer un onglet de montage', () => {
   it('enregistre le montage fermé, même s’il n’était pas affiché', async () => {
     const store = useSchematicStore()
     store.setProjectName('A')
+    store.addLabel(0, 0)
     const a = store.activeTabId
     store.newProject()
     store.setProjectName('B')

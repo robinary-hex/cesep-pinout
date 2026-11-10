@@ -63,6 +63,21 @@ describe('éditeur de composants : formes et zoom', () => {
     expect(store.selectedPrimitive).toMatchObject({ x2: 8 })
   })
 
+  it('un composant neuf et vierge n’est pas « modifié » ; le premier trait le rend modifié', () => {
+    const store = useComponentEditorStore()
+    expect(store.dirty).toBe(false)
+    store.setMeta({ name: 'Renommé' })
+    expect(store.dirty).toBe(false)
+    store.addPrimitive({ kind: 'dot', x: 4, y: 4, scale: 1, color: '#000000' }, 'Ajouter un point')
+    expect(store.dirty).toBe(true)
+    // Enregistré puis vidé : cette fois il y a bien une modification à enregistrer.
+    store.markSaved('C:/lib/renomme')
+    expect(store.dirty).toBe(false)
+    store.selectPrimitives([0])
+    store.removeSelection()
+    expect(store.dirty).toBe(true)
+  })
+
   it('borne le zoom et ajuste au cadre', () => {
     const store = useComponentEditorStore()
     store.zoomBy(100)

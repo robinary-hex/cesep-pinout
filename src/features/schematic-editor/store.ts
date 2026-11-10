@@ -7,6 +7,7 @@ import {
   createEmptyProject,
   crossingPieces,
   flippedInstance,
+  isEmptyProject,
   instanceBounds,
   nearestCrossing,
   nextNumberedId,
@@ -190,9 +191,17 @@ export const useSchematicStore = defineStore('schematic', () => {
   const undoLabel = ref<string | null>(null)
   const redoLabel = ref<string | null>(null)
 
-  const dirty = computed(() => doc.value !== savedDoc.value)
-  /** Onglet vierge : jamais enregistré, jamais modifié. Un montage qu'on ouvre prend sa place. */
-  const pristine = computed(() => filePath.value === null && !dirty.value)
+  /**
+   * Un montage a-t-il quelque chose à enregistrer ? Pas s'il est intact, ni s'il n'a jamais eu de
+   * fichier et qu'il est vide : on le ferme et on quitte alors sans question.
+   */
+  function needsSaving(project: Project, saved: Project | null, path: string | null): boolean {
+    return project !== saved && !(path === null && isEmptyProject(project))
+  }
+
+  const dirty = computed(() => needsSaving(doc.value, savedDoc.value, filePath.value))
+  /** Onglet vierge : jamais enregistré, jamais touché. Un montage qu'on ouvre prend sa place. */
+  const pristine = computed(() => filePath.value === null && doc.value === savedDoc.value)
   const tabs = computed<TabInfo[]>(() =>
     tabStates.value.map((tab) =>
       tab.id === activeTabId.value
@@ -201,7 +210,7 @@ export const useSchematicStore = defineStore('schematic', () => {
             id: tab.id,
             name: tab.history.value.name,
             filePath: tab.filePath,
-            dirty: tab.history.value !== tab.savedDoc
+            dirty: needsSaving(tab.history.value, tab.savedDoc, tab.filePath)
           }
     )
   )
@@ -499,9 +508,8 @@ export const useSchematicStore = defineStore('schematic', () => {
       const active = tab.id === activeTabId.value
       const project = active ? doc.value : tab.history.value
       const saved = active ? savedDoc.value : tab.savedDoc
-      return project === saved
-        ? []
-        : [{ key: tab.id, project, originalPath: active ? filePath.value : tab.filePath }]
+      const path = active ? filePath.value : tab.filePath
+      return needsSaving(project, saved, path) ? [{ key: tab.id, project, originalPath: path }] : []
     })
   }
 
