@@ -394,3 +394,24 @@ describe('éditeur de composants : images', () => {
     expect(files()).toEqual(['image.png', 'image-2.png', 'image-2.png'])
   })
 })
+
+describe('éditeur de composants : coller à un endroit', () => {
+  it('amène le coin supérieur gauche de la copie au point demandé', () => {
+    const store = useComponentEditorStore()
+    store.addPrimitive(
+      { kind: 'rect', x: 4, y: 2, w: 8, h: 4, rx: 0, style: DEFAULT_SHAPE_STYLE },
+      'Ajouter un rectangle'
+    )
+    store.addPrimitive({ kind: 'dot', x: 14, y: 8, scale: 1, color: '#000000' }, 'Ajouter un point')
+    store.selectAll()
+    store.copySelection()
+    store.pasteClipboardAt(20, 10)
+    // Le rectangle donne le coin de l'ensemble ; le point garde son écart.
+    expect(store.doc.visual.primitives.slice(2)).toMatchObject([
+      { kind: 'rect', x: 20, y: 10 },
+      { kind: 'dot', x: 30, y: 16 }
+    ])
+    expect(store.selectedIndexes).toEqual([2, 3])
+    expect(store.undoLabel).toBe('Coller')
+  })
+})

@@ -7,17 +7,21 @@ import { createEmptyProject, wireGeometryProblem, type Wire } from './project'
 import {
   dragVertex,
   horizontalFirstFor,
+  insertVertex,
   locateOnWire,
   moveSegment,
   nearestSegmentIndex,
+  nearestWirePoint,
   normalizePoints,
   pointOnSegment,
+  removeVertex,
   routeDiagonal,
   routeL,
   routeLAuto,
   routeWire,
   segmentCoordinate,
   simplifyPoints,
+  splitPoints,
   wireIntersectsRect,
   wirePathData
 } from './wires'
@@ -601,5 +605,117 @@ describe('fils en diagonale à 45°', () => {
     const result = computeConnectivity([carrier, branch], [])
     expect(result.wireNet.get('carrier')).toBe(result.wireNet.get('branch'))
     expect(result.junctions).toEqual([{ point: [4, 1], carrierWireId: 'carrier', branches: 3 }])
+  })
+})
+
+describe('sommets d’un fil, au clic droit', () => {
+  const corner: GridPoint[] = [
+    [0, 0],
+    [4, 0],
+    [4, 3]
+  ]
+
+  it('trouve le point de grille le plus proche d’un clic et dit où il est sur le fil', () => {
+    expect(nearestWirePoint(corner, { x: 2.2, y: 0.3 })).toEqual({
+      point: [2, 0],
+      location: { kind: 'segment', index: 0 }
+    })
+    expect(nearestWirePoint(corner, { x: 3.8, y: 0.2 })).toEqual({
+      point: [4, 0],
+      location: { kind: 'vertex', index: 1 }
+    })
+    expect(nearestWirePoint(corner, { x: -0.3, y: 0.1 })?.location).toEqual({
+      kind: 'end',
+      index: 0
+    })
+    // Sur une diagonale, le pas de grille le plus proche le long d'elle.
+    expect(
+      nearestWirePoint(
+        [
+          [0, 0],
+          [3, 3]
+        ],
+        { x: 1.2, y: 0.9 }
+      )?.point
+    ).toEqual([1, 1])
+  })
+
+  it('ajoute un sommet au milieu d’un segment, nulle part ailleurs', () => {
+    expect(insertVertex(corner, [2, 0])).toEqual([
+      [0, 0],
+      [2, 0],
+      [4, 0],
+      [4, 3]
+    ])
+    expect(insertVertex(corner, [4, 0])).toBeNull()
+    expect(insertVertex(corner, [2, 1])).toBeNull()
+  })
+
+  it('retire un sommet : ses voisins se rejoignent, ce qui n’est pas toujours un fil valide', () => {
+    expect(
+      removeVertex(
+        [
+          [0, 0],
+          [2, 0],
+          [4, 0],
+          [4, 3]
+        ],
+        1
+      )
+    ).toEqual(corner)
+    // Un coin retiré donne un biais : valide seulement à 45°.
+    expect(wireGeometryProblem(removeVertex(corner, 1) ?? [])).toMatch(/ni à 45°/)
+    expect(
+      wireGeometryProblem(
+        removeVertex(
+          [
+            [0, 0],
+            [3, 0],
+            [3, 3]
+          ],
+          1
+        ) ?? []
+      )
+    ).toBeNull()
+    // Une extrémité retirée raccourcit le fil ; il garde toujours deux sommets.
+    expect(removeVertex(corner, 0)).toEqual([
+      [4, 0],
+      [4, 3]
+    ])
+    expect(
+      removeVertex(
+        [
+          [0, 0],
+          [4, 0]
+        ],
+        0
+      )
+    ).toBeNull()
+  })
+
+  it('coupe un fil en deux morceaux qui se touchent', () => {
+    expect(splitPoints(corner, [2, 0])).toEqual([
+      [
+        [0, 0],
+        [2, 0]
+      ],
+      [
+        [2, 0],
+        [4, 0],
+        [4, 3]
+      ]
+    ])
+    expect(splitPoints(corner, [4, 0])).toEqual([
+      [
+        [0, 0],
+        [4, 0]
+      ],
+      [
+        [4, 0],
+        [4, 3]
+      ]
+    ])
+    expect(splitPoints(corner, [0, 0])).toBeNull()
+    expect(splitPoints(corner, [9, 9])).toBeNull()
   })
 })

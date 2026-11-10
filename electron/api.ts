@@ -68,6 +68,8 @@ export interface PinoutApi {
   deleteFile(path: string): Promise<void>
   /** Supprime un dossier de composant ; refusé s'il ne contient pas component.json. */
   removeComponentFolder(path: string): Promise<void>
+  /** Montre un fichier ou un dossier dans l'Explorateur de fichiers, sélectionné. */
+  showInFolder(path: string): Promise<void>
   /** Retourne le chemin choisi, ou null si l'utilisateur annule. */
   showOpenDialog(options?: OpenDialogOptions): Promise<string | null>
   /** Retourne le chemin choisi, ou null si l'utilisateur annule. */
@@ -109,6 +111,7 @@ export const IPC = {
   pathExists: 'fs:path-exists',
   deleteFile: 'fs:delete-file',
   removeComponentFolder: 'fs:remove-component-folder',
+  showInFolder: 'shell:show-in-folder',
   showOpenDialog: 'dialog:open',
   showSaveDialog: 'dialog:save',
   getAppPaths: 'app:paths',

@@ -915,3 +915,132 @@ describe('montage : panneau de propriétés', () => {
     expect(store.inspectorOpen).toBe(false)
   })
 })
+
+describe('montage : sommets, coupe et net d’un fil', () => {
+  function wireOf(store: ReturnType<typeof useSchematicStore>, points: [number, number][]): string {
+    const id = store.addWire(points)
+    if (!id) throw new Error('fil attendu')
+    return id
+  }
+
+  it('ajoute puis retire un sommet ; un coin que rien ne remplace reste', () => {
+    const store = useSchematicStore()
+    const id = wireOf(store, [
+      [0, 0],
+      [6, 0]
+    ])
+    store.addWireVertex(id, [3, 0])
+    expect(store.doc.wires[0]?.points).toEqual([
+      [0, 0],
+      [3, 0],
+      [6, 0]
+    ])
+    expect(store.undoLabel).toBe('Ajouter un sommet')
+    store.removeWireVertex(id, 1)
+    expect(store.doc.wires[0]?.points).toHaveLength(2)
+    expect(store.undoLabel).toBe('Supprimer un sommet')
+    const bent = wireOf(store, [
+      [0, 4],
+      [5, 4],
+      [5, 6]
+    ])
+    store.removeWireVertex(bent, 1)
+    expect(store.doc.wires[1]?.points).toHaveLength(3)
+    expect(store.undoLabel).toBe('Tracer un fil')
+  })
+
+  it('coupe un fil en deux sans rien déplacer : jonction, rang et étiquette suivent le bon morceau', () => {
+    const store = useSchematicStore()
+    const trunk = wireOf(store, [
+      [0, 0],
+      [10, 0]
+    ])
+    const branch = wireOf(store, [
+      [8, 0],
+      [8, 5]
+    ])
+    store.setWireEndLabel(trunk, 1, 'VCC')
+    const second = store.splitWire(trunk, [4, 0])
+    expect(second).not.toBeNull()
+    expect(store.doc.wires.map((wire) => [wire.id, wire.points, wire.stack])).toEqual([
+      [
+        trunk,
+        [
+          [0, 0],
+          [4, 0]
+        ],
+        0
+      ],
+      [
+        branch,
+        [
+          [8, 0],
+          [8, 5]
+        ],
+        2
+      ],
+      [
+        second,
+        [
+          [4, 0],
+          [10, 0]
+        ],
+        1
+      ]
+    ])
+    expect(store.doc.wires[0]?.endLabels).toEqual({ start: '', end: '' })
+    expect(store.doc.wires[2]?.endLabels).toEqual({ start: '', end: 'VCC' })
+    // Tout reste relié : les deux morceaux se touchent, la branche tient au second.
+    const nets = store.connectivity.wireNet
+    expect(new Set([nets.get(trunk), nets.get(branch), nets.get(second ?? '')]).size).toBe(1)
+    expect(store.undoLabel).toBe('Couper le fil')
+    store.undo()
+    expect(store.doc.wires).toHaveLength(2)
+    // Pas de coupe à une extrémité.
+    expect(store.splitWire(trunk, [0, 0])).toBeNull()
+  })
+
+  it('sélectionne tout un net, ou un composant avec les fils posés sur ses broches', () => {
+    const store = useSchematicStore()
+    const a = wireOf(store, [
+      [0, 0],
+      [5, 0]
+    ])
+    const b = wireOf(store, [
+      [5, 0],
+      [5, 4]
+    ])
+    wireOf(store, [
+      [0, 9],
+      [4, 9]
+    ])
+    store.selectNet(a)
+    expect(store.selectedWires).toEqual([a, b])
+    // Résistance en (10, 3) : broches en (10, 4) et (14, 4).
+    store.startPlacing(resistor())
+    const instance = store.placeAt(10, 3)
+    store.stopPlacing()
+    if (!instance) throw new Error('composant attendu')
+    const lead = wireOf(store, [
+      [14, 4],
+      [18, 4]
+    ])
+    store.selectConnectedWires(instance)
+    expect(store.selection).toEqual([instance])
+    expect(store.selectedWires).toEqual([lead])
+  })
+
+  it('sait s’il y a un croisement près d’un point', () => {
+    const store = useSchematicStore()
+    wireOf(store, [
+      [0, 5],
+      [10, 5]
+    ])
+    wireOf(store, [
+      [5, 0],
+      [5, 10]
+    ])
+    expect(store.crossingNear(5.2, 4.9)).toBe(true)
+    expect(store.crossingNear(8, 5)).toBe(false)
+  })
+})

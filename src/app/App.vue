@@ -108,6 +108,22 @@ watch(
 
 watch(() => library.theme, applyTheme, { immediate: true })
 
+/**
+ * « Modifier dans l'éditeur de composants » d'un composant posé : sa définition s'ouvre dans
+ * l'éditeur, depuis la bibliothèque si elle y est, sinon comme un composant à enregistrer.
+ */
+function editComponentOf(defId: string): void {
+  const entry = library.entries.find((candidate) => candidate.def?.id === defId)
+  if (entry?.def) {
+    editor.open(entry.def, entry.folder)
+  } else {
+    const embedded = schematic.doc.embeddedDefs[defId]
+    if (!embedded) return
+    editor.open(structuredClone(embedded), null)
+  }
+  mode.value = 'components'
+}
+
 // Onglets, à droite des boutons de mode : ceux des composants ouverts en mode Composants, ceux
 // des montages ouverts en mode Montage. Les deux éditeurs offrent la même chose : activer,
 // fermer (avec la question à trois boutons si l'onglet est modifié), créer, réordonner.
@@ -117,6 +133,8 @@ interface StripTab {
   name: string
   /** Infobulle : le fichier ou le dossier, sinon « pas encore enregistré ». */
   title: string
+  /** Fichier du montage ou du diagramme, dossier du composant ; null avant le premier enregistrement. */
+  path: string | null
   dirty: boolean
 }
 
@@ -142,6 +160,8 @@ interface ModeAdapter {
   cycle: (step: 1 | -1) => void
   /** Enregistre le document affiché ; faux si Robin renonce ou si l'écriture échoue. */
   saveActive: () => Promise<boolean>
+  /** Enregistre le document affiché sous un autre nom ; absent quand le mode n'a pas de fichier à choisir. */
+  saveActiveAs?: () => Promise<boolean>
   setStatus: (message: string) => void
 }
 
@@ -159,6 +179,7 @@ const modes: Record<Mode, ModeAdapter> = {
         id: tab.id,
         name: tab.name,
         title: tab.folder ?? NOT_SAVED,
+        path: tab.folder,
         dirty: tab.dirty
       })),
     activeId: () => editor.activeTabId,
@@ -184,6 +205,7 @@ const modes: Record<Mode, ModeAdapter> = {
         id: tab.id,
         name: tab.name,
         title: tab.filePath ?? NOT_SAVED,
+        path: tab.filePath,
         dirty: tab.dirty
       })),
     activeId: () => schematic.activeTabId,
@@ -194,6 +216,7 @@ const modes: Record<Mode, ModeAdapter> = {
     move: (id, toIndex) => schematic.moveTab(id, toIndex),
     cycle: (step) => schematic.cycleTab(step),
     saveActive: () => saveProject(schematic, library),
+    saveActiveAs: () => saveProject(schematic, library, true),
     setStatus: (message) => {
       schematic.status = message
     }
@@ -209,6 +232,7 @@ const modes: Record<Mode, ModeAdapter> = {
         id: tab.id,
         name: tab.name,
         title: tab.filePath ?? NOT_SAVED,
+        path: tab.filePath,
         dirty: tab.dirty
       })),
     activeId: () => diagram.activeTabId,
@@ -219,6 +243,7 @@ const modes: Record<Mode, ModeAdapter> = {
     move: (id, toIndex) => diagram.moveTab(id, toIndex),
     cycle: (step) => diagram.cycleTab(step),
     saveActive: () => saveDiagram(diagram, library),
+    saveActiveAs: () => saveDiagram(diagram, library, true),
     setStatus: (message) => {
       diagram.status = message
     }
@@ -247,6 +272,61 @@ function newTab(): void {
 /** Ferme un onglet ; s'il est modifié, la question vient d'abord : enregistrer, ne pas enregistrer, annuler. */
 async function closeTab(id: number): Promise<void> {
   await current.value.close(id)
+}
+
+// Clic droit sur un onglet : enregistrer, montrer le fichier, fermer celui-ci ou les autres.
+
+const tabMenu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
+
+/** Enregistre le document d'un onglet : il est d'abord affiché, comme pour le fermer. */
+async function saveTab(id: number, as: boolean): Promise<void> {
+  const adapter = current.value
+  adapter.activate(id)
+  if (as && adapter.saveActiveAs) await adapter.saveActiveAs()
+  else await adapter.saveActive()
+}
+
+/** Ferme tous les onglets sauf un ; s'arrête dès qu'une fermeture est annulée. */
+async function closeOtherTabs(keepId: number): Promise<void> {
+  const adapter = current.value
+  for (const tab of adapter.tabs()) {
+    if (tab.id === keepId) continue
+    if (!(await adapter.close(tab.id))) break
+  }
+  adapter.activate(keepId)
+}
+
+function openTabMenu(tab: StripTab, event: MouseEvent): void {
+  event.preventDefault()
+  const adapter = current.value
+  const path = tab.path
+  const items: MenuItem[] = [
+    heading(tab.name),
+    item('Enregistrer', () => void saveTab(tab.id, false), { hint: 'Ctrl+S', icon: 'save' })
+  ]
+  if (adapter.saveActiveAs) {
+    items.push(
+      item('Enregistrer sous…', () => void saveTab(tab.id, true), {
+        hint: 'Ctrl+Maj+S',
+        icon: 'save-as'
+      })
+    )
+  }
+  items.push(
+    item(
+      'Afficher dans l’Explorateur',
+      () => {
+        if (path !== null) void bridge().showInFolder(path)
+      },
+      { icon: 'folder-open', disabled: path === null }
+    ),
+    SEPARATOR,
+    item('Fermer', () => void closeTab(tab.id)),
+    item('Fermer les autres', () => void closeOtherTabs(tab.id), {
+      disabled: strip.value.tabs.length < 2
+    })
+  )
+  tabMenu.value = { x: event.clientX, y: event.clientY, items }
 }
 
 function closeTabOnMiddle(id: number, event: MouseEvent): void {
@@ -708,6 +788,7 @@ onUnmounted(() => {
           @keydown.enter="showTab(tab.id)"
           @mousedown.middle.prevent
           @auxclick.prevent="closeTabOnMiddle(tab.id, $event)"
+          @contextmenu="openTabMenu(tab, $event)"
         >
           <span class="doc-tab-label">
             <span class="doc-tab-name">{{ tab.name }}</span>
@@ -772,10 +853,14 @@ onUnmounted(() => {
     </header>
     <main class="workspace">
       <DiagramLibrary v-if="mode === 'diagram'" />
-      <LibraryPanel v-else :mode="mode === 'components' ? 'edit' : 'place'" />
+      <LibraryPanel
+        v-else
+        :mode="mode === 'components' ? 'edit' : 'place'"
+        @edit="mode = 'components'"
+      />
       <ComponentEditor v-if="mode === 'components'" ref="componentEditor" />
       <DiagramEditor v-else-if="mode === 'diagram'" ref="diagramEditor" />
-      <SchematicEditor v-else ref="schematicEditor" />
+      <SchematicEditor v-else ref="schematicEditor" @edit-component="editComponentOf" />
     </main>
     <SettingsDialog v-if="showSettings" @close="showSettings = false" />
     <ProfileDialog
@@ -791,6 +876,13 @@ onUnmounted(() => {
       :y="fileMenu.y"
       :items="fileMenu.items"
       @close="fileMenu = null"
+    />
+    <ContextMenu
+      v-if="tabMenu"
+      :x="tabMenu.x"
+      :y="tabMenu.y"
+      :items="tabMenu.items"
+      @close="tabMenu = null"
     />
     <DialogHost />
   </div>

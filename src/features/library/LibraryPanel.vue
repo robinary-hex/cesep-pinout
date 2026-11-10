@@ -2,22 +2,27 @@
 import { ref } from 'vue'
 import { useComponentEditorStore } from '@/features/component-editor/store'
 import { useSchematicStore } from '@/features/schematic-editor/store'
-import { deleteComponent, type LibraryEntry } from '@/io/library'
-import { baseName } from '@/io/paths'
+import { bridge } from '@/io/bridge'
+import { deleteComponent, saveComponent, type LibraryEntry } from '@/io/library'
+import { baseName, samePath } from '@/io/paths'
 import ComponentThumbnail from '@/render/ComponentThumbnail.vue'
 import ContextMenu from '@/ui/ContextMenu.vue'
 import { heading, item, SEPARATOR, type MenuItem } from '@/ui/contextMenu'
 import { confirmAction } from '@/ui/dialogs'
 import Icon from '@/ui/Icon.vue'
+import PromptDialog from '@/ui/PromptDialog.vue'
 import { useLibraryStore } from './store'
 
 // Panneau de gauche : la bibliothèque de composants sur disque, en liste (nom, broches) ou en
 // grille de vignettes (nom au survol) selon le paramètre `libraryView`.
-// En mode « edit », un clic ouvre le composant dans l'éditeur et un clic droit propose de le
-// dupliquer ou de le supprimer ; en mode « place », un clic le pose sur le montage. Un nouveau
-// composant se crée par le « + » des onglets (ou Ctrl+N), pas ici.
+// En mode « edit », un clic ouvre le composant dans l'éditeur ; en mode « place », il le pose sur
+// le montage. Un clic droit ouvre un menu : sur un composant (ouvrir, dupliquer, renommer,
+// catégorie, supprimer ; dans le montage, poser ou modifier), ou dans le vide (nouveau composant,
+// liste ou grille, dossier). Pas de boutons sur les composants, ni de bouton « Nouveau ».
 
 const props = defineProps<{ mode: 'edit' | 'place' }>()
+/** `edit` : le composant visé vient d'être ouvert dans l'éditeur, à montrer. */
+const emit = defineEmits<{ edit: [] }>()
 
 const library = useLibraryStore()
 const editor = useComponentEditorStore()
@@ -94,24 +99,155 @@ function duplicate(entry: LibraryEntry): void {
   editor.open(copy, null)
 }
 
-// Menu contextuel d'un composant de la bibliothèque (mode « edit »).
+// Menus contextuels et saisies
 
 const menu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
+const prompt = ref<{
+  title: string
+  label: string
+  value: string
+  placeholder?: string
+  onSubmit: (value: string) => void
+} | null>(null)
 
+function describe(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/** Ouvre le composant dans l'éditeur de composants, depuis le montage. */
+function editInEditor(entry: LibraryEntry): void {
+  if (!entry.def) return
+  editor.open(entry.def, entry.folder)
+  emit('edit')
+}
+
+/**
+ * Change le nom ou la catégorie d'un composant de la bibliothèque. S'il est ouvert dans un onglet,
+ * c'est ce document qu'on modifie, comme depuis son panneau : il reste à enregistrer. Sinon son
+ * fichier est réécrit tout de suite.
+ */
+async function changeMeta(
+  entry: LibraryEntry,
+  patch: { name?: string; category?: string }
+): Promise<void> {
+  const def = entry.def
+  if (!def) return
+  const tab = editor.tabs.find(
+    (candidate) => candidate.folder !== null && samePath(candidate.folder, entry.folder)
+  )
+  if (tab) {
+    editor.activateTab(tab.id)
+    editor.setMeta(patch)
+    editor.status = 'Modifié dans l’onglet ouvert : enregistre pour l’écrire dans la bibliothèque.'
+    return
+  }
+  try {
+    await saveComponent(library.libraryDir, { ...def, ...patch })
+    await library.refresh()
+  } catch (error) {
+    library.problem = `Modification impossible : ${describe(error)}`
+  }
+}
+
+function rename(entry: LibraryEntry): void {
+  const def = entry.def
+  if (!def) return
+  prompt.value = {
+    title: 'Renommer le composant',
+    label: 'Nom',
+    value: def.name,
+    onSubmit: (value) => {
+      const name = value.trim()
+      if (name.length > 0 && name !== def.name) void changeMeta(entry, { name })
+    }
+  }
+}
+
+function recategorize(entry: LibraryEntry): void {
+  const def = entry.def
+  if (!def) return
+  prompt.value = {
+    title: def.name,
+    label: 'Catégorie',
+    value: def.category,
+    placeholder: 'Divers',
+    onSubmit: (value) => {
+      const category = value.trim()
+      if (category !== def.category) void changeMeta(entry, { category })
+    }
+  }
+}
+
+/** Clic droit sur un composant. */
 function openMenu(entry: LibraryEntry, event: MouseEvent): void {
-  if (props.mode !== 'edit') return
   event.preventDefault()
+  event.stopPropagation()
   const def = entry.def
   const items: MenuItem[] = [heading(def?.name ?? baseName(entry.folder))]
-  if (def) {
+  const reveal = item(
+    'Afficher dans l’Explorateur',
+    () => void bridge().showInFolder(entry.folder),
+    { icon: 'folder-open' }
+  )
+  if (props.mode === 'place') {
+    if (def) {
+      items.push(
+        item('Poser sur le montage', () => pick(entry), { icon: 'plus' }),
+        item('Modifier dans l’éditeur de composants', () => editInEditor(entry), { icon: 'edit' })
+      )
+    }
+    items.push(reveal)
+  } else {
+    if (def) {
+      items.push(
+        item('Ouvrir', () => pick(entry), { icon: 'edit' }),
+        item('Dupliquer', () => duplicate(entry), { icon: 'duplicate' }),
+        item('Renommer…', () => rename(entry), { icon: 'type' }),
+        item('Catégorie…', () => recategorize(entry), { icon: 'tag' })
+      )
+    }
     items.push(
-      item('Ouvrir', () => pick(entry), { icon: 'edit' }),
-      item('Dupliquer', () => duplicate(entry), { icon: 'duplicate' }),
-      SEPARATOR
+      reveal,
+      SEPARATOR,
+      item('Supprimer…', () => void remove(entry), { icon: 'trash', danger: true })
     )
   }
-  items.push(item('Supprimer…', () => void remove(entry), { icon: 'trash', danger: true }))
   menu.value = { x: event.clientX, y: event.clientY, items }
+}
+
+/** Clic droit dans le vide de la liste (ou sur une catégorie). */
+function openListMenu(event: MouseEvent): void {
+  event.preventDefault()
+  const view = library.libraryView
+  menu.value = {
+    x: event.clientX,
+    y: event.clientY,
+    items: [
+      item(
+        'Nouveau composant',
+        () => {
+          editor.newComponent()
+          emit('edit')
+        },
+        { icon: 'file-plus' }
+      ),
+      SEPARATOR,
+      heading('Affichage'),
+      item('Liste', () => void library.updateSettings({ libraryView: 'list' }), {
+        checked: view === 'list'
+      }),
+      item('Grille', () => void library.updateSettings({ libraryView: 'grid' }), {
+        checked: view === 'grid'
+      }),
+      SEPARATOR,
+      item('Changer de dossier…', () => void library.chooseDir(), { icon: 'folder-open' }),
+      item(
+        'Afficher le dossier dans l’Explorateur',
+        () => void bridge().showInFolder(library.libraryDir),
+        { disabled: library.libraryDir.length === 0 }
+      )
+    ]
+  }
 }
 
 async function remove(entry: LibraryEntry): Promise<void> {
@@ -129,7 +265,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
     editor.closeFolderTabs(entry.folder)
     await library.refresh()
   } catch (error) {
-    library.problem = `Suppression impossible : ${error instanceof Error ? error.message : String(error)}`
+    library.problem = `Suppression impossible : ${describe(error)}`
   }
 }
 </script>
@@ -154,7 +290,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
 
     <p v-if="library.problem" class="problem">{{ library.problem }}</p>
 
-    <div class="list">
+    <div class="list" @contextmenu="openListMenu">
       <p v-if="library.loading" class="hint">Lecture…</p>
       <p v-else-if="library.entries.length === 0" class="hint">
         Aucun composant. Dessine-en un dans le mode Composants, puis Enregistrer.
@@ -255,6 +391,15 @@ async function remove(entry: LibraryEntry): Promise<void> {
       </section>
     </div>
     <ContextMenu v-if="menu" :x="menu.x" :y="menu.y" :items="menu.items" @close="menu = null" />
+    <PromptDialog
+      v-if="prompt"
+      :title="prompt.title"
+      :label="prompt.label"
+      :value="prompt.value"
+      :placeholder="prompt.placeholder"
+      @submit="prompt.onSubmit($event)"
+      @close="prompt = null"
+    />
   </aside>
 </template>
 

@@ -10,7 +10,9 @@ import {
   fittingView,
   flippedInstance,
   isEmptyProject,
+  insertVertex,
   instanceBounds,
+  locateOnWire,
   nearestCrossing,
   nextNumberedId,
   normalizePoints,
@@ -19,9 +21,11 @@ import {
   profileDifferences,
   projectPins,
   pruneCrossingOverrides,
+  removeVertex,
   rotatedInstance,
   sameProfile,
   simplifyPoints,
+  splitPoints,
   textLabelBounds,
   toggledOverrides,
   translatePoints,
@@ -768,6 +772,98 @@ export const useSchematicStore = defineStore('schematic', () => {
     })
   }
 
+  /** Ajoute un sommet au milieu d'un segment du fil : rien ne bouge, il reste à le glisser. */
+  function addWireVertex(id: string, point: GridPoint): void {
+    const wire = doc.value.wires.find((candidate) => candidate.id === id)
+    const points = wire ? insertVertex(wire.points, point) : null
+    if (!points) return
+    apply('Ajouter un sommet', (draft) => {
+      const target = draft.wires.find((candidate) => candidate.id === id)
+      if (target) target.points = castDraft(points)
+    })
+  }
+
+  /** Retire un sommet du fil, si ses voisins peuvent se rejoindre tout droit ou à 45°. */
+  function removeWireVertex(id: string, index: number): void {
+    const wire = doc.value.wires.find((candidate) => candidate.id === id)
+    const points = wire ? removeVertex(wire.points, index) : null
+    if (!points || wireGeometryProblem(points) !== null) return
+    apply('Supprimer un sommet', (draft) => {
+      const target = draft.wires.find((candidate) => candidate.id === id)
+      if (target) target.points = castDraft(points)
+    })
+  }
+
+  /**
+   * Coupe un fil en deux à un point qui lui appartient. Rien ne change à l'œil : les deux morceaux
+   * se touchent, donc restent reliés, mais chacun se sélectionne, se déplace ou se supprime seul.
+   * Le second morceau passe juste au-dessus du premier et garde l'étiquette de l'arrivée ; les
+   * exceptions de croisement posées sur lui le suivent. Retourne son identifiant.
+   */
+  function splitWire(id: string, point: GridPoint): string | null {
+    const wire = doc.value.wires.find((candidate) => candidate.id === id)
+    const parts = wire ? splitPoints(wire.points, point) : null
+    if (!wire || !parts) return null
+    const [head, tail] = parts
+    const newId = nextWireId()
+    // Sans le suivi des jonctions : aucun tracé ne bouge, les extrémités posées sur le second
+    // morceau doivent y rester.
+    base.apply('Couper le fil', (draft) => {
+      const target = draft.wires.find((candidate) => candidate.id === id)
+      if (!target) return
+      for (const other of draft.wires) if (other.stack > wire.stack) other.stack += 1
+      target.points = castDraft(head)
+      target.endLabels.end = ''
+      draft.wires.push({
+        id: newId,
+        color: wire.color,
+        points: castDraft(tail),
+        stack: wire.stack + 1,
+        freeEnds: wire.freeEnds,
+        endLabels: { start: '', end: wire.endLabels.end }
+      })
+      for (const override of draft.crossingOverrides) {
+        if (override.topWireId !== id) continue
+        const spot: GridPoint = [override.x, override.y]
+        if (!locateOnWire(head, spot) && locateOnWire(tail, spot)) override.topWireId = newId
+      }
+    })
+    status.value = 'Fil coupé en deux.'
+    return newId
+  }
+
+  /** Sélectionne tous les fils du net d'un fil : ceux qui lui sont reliés, de proche en proche. */
+  function selectNet(wireId: string): void {
+    const nets = connectivity.value.wireNet
+    const net = nets.get(wireId)
+    if (net === undefined) return
+    clearSelection()
+    selectedWires.value = doc.value.wires
+      .filter((wire) => nets.get(wire.id) === net)
+      .map((wire) => wire.id)
+  }
+
+  /** Sélectionne un composant avec les fils dont une extrémité est sur une de ses broches. */
+  function selectConnectedWires(instanceId: string): void {
+    const spots = new Set(
+      pinRefs.value
+        .filter((pin) => pin.instanceId === instanceId)
+        .map((pin) => `${pin.point[0]},${pin.point[1]}`)
+    )
+    const onPin = (point: GridPoint | undefined): boolean =>
+      point !== undefined && spots.has(`${point[0]},${point[1]}`)
+    selection.value = [instanceId]
+    selectedLabels.value = []
+    selectedWires.value = doc.value.wires
+      .filter((wire) => onPin(wire.points[0]) || onPin(wire.points.at(-1)))
+      .map((wire) => wire.id)
+  }
+
+  /** Y a-t-il un croisement de fils à portée de ce point ? */
+  function crossingNear(x: number, y: number): boolean {
+    return nearestCrossing(crossings.value, x, y, CROSSING_PICK_CELLS) !== null
+  }
+
   function recolorWires(ids: readonly string[], color: string): void {
     if (ids.length === 0) return
     apply('Colorer les fils', (draft) => {
@@ -1287,6 +1383,12 @@ export const useSchematicStore = defineStore('schematic', () => {
     finishWire,
     stopWireDrawing,
     setWirePoints,
+    addWireVertex,
+    removeWireVertex,
+    splitWire,
+    selectNet,
+    selectConnectedWires,
+    crossingNear,
     recolorWires,
     setCurrentColor,
     addCustomColor,

@@ -8,6 +8,7 @@ import {
   isInsideBox,
   naturalImageSize,
   pinsInside,
+  primitiveBounds,
   QUARTERS_PER_CELL,
   renumberPins,
   reorderItem,
@@ -653,6 +654,18 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     insertPrimitiveCopies(clipboard.value, QUARTERS_PER_CELL, QUARTERS_PER_CELL, 'Coller')
   }
 
+  /**
+   * Colle pour que le coin supérieur gauche de ce qui a été copié arrive au point donné (quarts
+   * de cellule) : « Coller ici » du menu contextuel.
+   */
+  function pasteClipboardAt(x: number, y: number): void {
+    const boxes = clipboard.value.map(primitiveBounds)
+    if (boxes.length === 0) return
+    const left = Math.min(...boxes.map((box) => box.x1))
+    const top = Math.min(...boxes.map((box) => box.y1))
+    insertPrimitiveCopies(clipboard.value, Math.round(x - left), Math.round(y - top), 'Coller')
+  }
+
   function duplicateSelection(): void {
     insertPrimitiveCopies(
       primitivesAt(selectedIndexes.value),
@@ -764,6 +777,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     clipboardEmpty,
     copySelection,
     pasteClipboard,
+    pasteClipboardAt,
     duplicateSelection,
     duplicatePrimitivesAt,
     setCellPx,

@@ -57,7 +57,11 @@ const props = withDefaults(
   }
 )
 
-const emit = defineEmits<{ primitiveDown: [index: number, event: PointerEvent] }>()
+const emit = defineEmits<{
+  primitiveDown: [index: number, event: PointerEvent]
+  /** Clic droit sur une forme cliquable. */
+  primitiveMenu: [index: number, event: MouseEvent]
+}>()
 
 type Stroked = Extract<Primitive, { kind: 'line' | 'polyline' }>
 
@@ -202,6 +206,10 @@ function textAttrs(primitive: TextPrimitive): Record<string, string | undefined>
 function down(index: number, event: PointerEvent): void {
   if (props.interactive) emit('primitiveDown', index, event)
 }
+
+function menu(index: number, event: MouseEvent): void {
+  if (props.interactive) emit('primitiveMenu', index, event)
+}
 </script>
 
 <template>
@@ -212,6 +220,7 @@ function down(index: number, event: PointerEvent): void {
       :transform="transformFor(i)"
       :class="{ interactive }"
       @pointerdown="down(i, $event)"
+      @contextmenu="menu(i, $event)"
     >
       <template v-if="p.kind === 'rect'">
         <rect

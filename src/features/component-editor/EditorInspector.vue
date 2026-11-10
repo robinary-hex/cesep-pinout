@@ -5,6 +5,7 @@ import {
   naturalImageSize,
   PIN_KIND_LABELS,
   PIN_KINDS,
+  PRIMITIVE_KIND_LABELS,
   STROKE_WEIGHTS,
   TEXT_BASE_SIZE_CELLS,
   TEXT_SCALES,
@@ -86,16 +87,6 @@ const weightChoices = computed(() => {
   if (current !== undefined && !list.includes(current)) list.push(current)
   return list.sort((a, b) => a - b)
 })
-
-const KIND_LABELS: Record<string, string> = {
-  rect: 'Rectangle',
-  ellipse: 'Ellipse',
-  line: 'Ligne',
-  polyline: 'Polyligne',
-  dot: 'Point',
-  text: 'Texte',
-  image: 'Image'
-}
 
 // Image : sa taille à l'écran, et le retour à sa taille d'origine (80 px par cellule).
 
@@ -333,7 +324,7 @@ function setClosed(event: Event): void {
 
     <!-- Une forme seule -->
     <section v-if="primitive" class="block">
-      <h3>{{ KIND_LABELS[primitive.kind] }}</h3>
+      <h3>{{ PRIMITIVE_KIND_LABELS[primitive.kind] }}</h3>
       <div class="row order">
         <span class="hint">Ordre {{ primitiveIndex + 1 }} / {{ primitiveCount }}</span>
         <div class="toggles">

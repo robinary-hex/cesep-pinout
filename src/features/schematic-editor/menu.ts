@@ -1,4 +1,4 @@
-import type { GridPoint } from '@/domain'
+import type { GridPoint, LocalPoint } from '@/domain'
 
 /** Ce que vise un clic droit sur le canevas du montage. */
 export type MenuTarget =
@@ -12,5 +12,7 @@ export interface MenuRequest {
   x: number
   y: number
   cell: GridPoint
+  /** Point exact du clic, en cellules : pour savoir quel sommet ou quel segment d'un fil est visé. */
+  point: LocalPoint
   target: MenuTarget
 }

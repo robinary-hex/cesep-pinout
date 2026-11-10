@@ -1125,7 +1125,13 @@ function onContextMenu(event: MouseEvent, target: MenuTarget): void {
     store.selectedLabels = [target.id]
   }
   const world = toWorld(screenPoint(event))
-  emit('openMenu', { x: event.clientX, y: event.clientY, cell: snapGrid(world), target })
+  emit('openMenu', {
+    x: event.clientX,
+    y: event.clientY,
+    cell: snapGrid(world),
+    point: world,
+    target
+  })
 }
 
 function onWheel(event: WheelEvent): void {

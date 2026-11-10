@@ -337,8 +337,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   liste (nom, broches) ou en grille de vignettes (nom en petit dessous) selon `libraryView`
   (paramètres) ; catégories repliables. Le panneau n'a pas de bouton « Nouveau » (un composant ou
   un montage se crée par le « + » des onglets ou Ctrl+N) et ses composants ne portent pas de
-  boutons : en mode Composants, un clic droit propose Ouvrir, Dupliquer, Supprimer (`openMenu`
-  de `LibraryPanel.vue`).
+  boutons : tout passe par le clic droit (`openMenu` et `openListMenu` de `LibraryPanel.vue`,
+  voir « Menus contextuels »). Renommer ou changer de catégorie réécrit le fichier du composant,
+  sauf s'il est ouvert dans un onglet : c'est alors le document ouvert qu'on modifie
+  (`changeMeta`).
 - Panneau de propriétés : le même fonctionnement dans les trois éditeurs (décision du 11
   novembre 2026 ; `useInspectorPanel` de `src/state/inspector.ts`, `inspectorOpen` et
   `revealInspector` de chaque store). Replié au départ. La touche I, le bouton tout à droite de
@@ -358,8 +360,35 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   surligne pas (`user-select: none`).
 - Boîtes de dialogue : `src/ui/ModalDialog.vue` ; tant qu'une est ouverte (`openModals`), les
   éditeurs ignorent leurs raccourcis. `src/ui/PromptDialog.vue` (saisie d'une valeur) et
-  `src/ui/ContextMenu.vue` (menu contextuel, entrées décrites dans `contextMenu.ts`) comptent aussi
+  `src/ui/ContextMenu.vue` (menu contextuel, entrées décrites dans `contextMenu.ts`, listes
+  dessinées par `MenuList.vue`) comptent aussi
   dans `openModals`. Échap ne ferme que la boîte du dessus (`modalStack`).
+- Menus contextuels (décision du 11 novembre 2026) : un clic droit partout où il y a un élément.
+  Même ordre dans tous : titre, actions propres à l'élément, style, ordre d'empilement, puis
+  Dupliquer / Copier / Propriétés, et Supprimer en dernier ; rien n'existe que dans un menu. Une
+  famille de choix se range dans un sous-menu (`submenu` de `contextMenu.ts`, un seul niveau,
+  ouvert au survol ou au clic) : Ordre, Style, Alignement, Forme, Texte, Fond, Type,
+  Extrémités libres. Un texte se saisit dans `PromptDialog` avec `multiline` (Maj+Entrée va à
+  la ligne).
+  - Éditeur de composants (`openMenu` de `ComponentEditor.vue`, demande émise par
+    `EditorCanvas`, types dans `menu.ts`) : forme (texte, flèches, fermeture, taille d'origine
+    d'une image), broche (renommer, type), vide (coller ici : `pasteClipboardAt`, importer une
+    image, vue, panneau). Un clic droit pendant un tracé le termine, sans menu.
+  - Onglets (`openTabMenu` de `App.vue`) : enregistrer, enregistrer sous, afficher dans
+    l'Explorateur (`showInFolder` du pont), fermer, fermer les autres.
+  - Bibliothèque : sur un composant, ouvrir, dupliquer, renommer, catégorie, afficher dans
+    l'Explorateur, supprimer ; dans le montage, poser ou modifier dans l'éditeur de composants ;
+    dans le vide, nouveau composant, liste ou grille, dossier.
+  - Montage : sur un fil, ce qui dépend de l'endroit du clic (`nearestWirePoint`) : ajouter un
+    sommet (`insertVertex`), supprimer ce sommet si ses voisins peuvent se rejoindre
+    (`removeVertex`), couper le fil (`splitPoints`, `splitWire` : rien ne bouge, les deux
+    morceaux se touchent), inverser l'ordre à un croisement proche ; sélectionner tout le net.
+    Sur un composant : modifier dans l'éditeur de composants (`editComponent`, traité par
+    `App.vue`), sélectionner les fils reliés. Sur une étiquette : style, alignement.
+  - Diagramme : nœud (forme, texte, fond, ordre), lien (étiquette : côté, fond, retrait ;
+    sommets, sans diagonale), texte (style, alignement), vide (poser une des dix formes à
+    l'endroit du clic).
+    Dans les tests, `src/ui/testing/menus.ts` lit et actionne le menu ouvert.
 - Questions et alertes : jamais les boîtes de message de Windows ni `window.confirm` (décision du
   10 novembre 2026). `ask` de `src/ui/dialogs.ts` rend une promesse tenue par le bouton choisi
   (`askToSave`, `askToSaveBeforeQuit`, `confirmAction`) ; `src/ui/DialogHost.vue`, monté une

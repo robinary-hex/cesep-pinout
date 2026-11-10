@@ -6,6 +6,7 @@ import { useDiagramStore } from '@/features/diagram-editor/store'
 import { useSchematicStore } from '@/features/schematic-editor/store'
 import { setBridge } from '@/io/bridge'
 import { FakeFs } from '@/io/testing/fakeFs'
+import { menuEntry, menuLabels, rightClick } from '@/ui/testing/menus'
 import App from './App.vue'
 
 // Fumée : la coque se monte, passe d'un mode à l'autre et montre l'éditeur, les onglets et la
@@ -106,6 +107,47 @@ describe('coque de l’application', () => {
     await flushPromises()
     await choose('Ne pas enregistrer')
     expect(fs.quitConfirmed).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('au clic droit sur un onglet : enregistrer, montrer le fichier, fermer les autres', async () => {
+    const wrapper = mount(App, { attachTo: document.body })
+    await flushPromises()
+    const schematic = useSchematicStore()
+    schematic.addLabel(0, 0)
+    await flushPromises()
+    const open = async (index: number): Promise<void> => {
+      rightClick(wrapper.findAll('.doc-tab')[index]?.element ?? document.body, 300, 20)
+      await flushPromises()
+    }
+    await open(0)
+    expect(menuLabels()).toEqual([
+      'Enregistrer',
+      'Enregistrer sous…',
+      'Afficher dans l’Explorateur',
+      'Fermer',
+      'Fermer les autres'
+    ])
+    // Jamais enregistré : pas de fichier à montrer ; seul onglet : pas d'autres à fermer.
+    expect(menuEntry('Afficher dans l’Explorateur').disabled).toBe(true)
+    expect(menuEntry('Fermer les autres').disabled).toBe(true)
+    // Enregistrer depuis le menu : le dialogue de fichier, puis le fichier se montre.
+    fs.saveDialogAnswers.push('C:/Docs/essai.pinout')
+    menuEntry('Enregistrer').click()
+    await flushPromises()
+    expect(schematic.filePath).toBe('C:/Docs/essai.pinout')
+    await open(0)
+    menuEntry('Afficher dans l’Explorateur').click()
+    expect(fs.shownInFolder).toEqual(['C:/Docs/essai.pinout'])
+    // Un second onglet, puis « Fermer les autres » depuis le premier.
+    await wrapper.get('button[title^="Nouveau montage"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('.doc-tab')).toHaveLength(2)
+    await open(0)
+    menuEntry('Fermer les autres').click()
+    await flushPromises()
+    expect(wrapper.findAll('.doc-tab')).toHaveLength(1)
+    expect(schematic.filePath).toBe('C:/Docs/essai.pinout')
     wrapper.unmount()
   })
 })

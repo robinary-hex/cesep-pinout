@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { DEFAULT_SHAPE_STYLE } from '@/domain'
 import { setBridge } from '@/io/bridge'
 import { FakeFs } from '@/io/testing/fakeFs'
+import { menuEntry, menuLabels, rightClick, subMenuLabels } from '@/ui/testing/menus'
 import ComponentEditor from './ComponentEditor.vue'
 import { useComponentEditorStore } from './store'
 
@@ -121,6 +122,145 @@ describe('éditeur de composants : clic hors de la feuille', () => {
     expect(store.tool).toBe('select')
     expect(store.doc.visual.primitives).toHaveLength(1)
     expect(store.doc.visual.primitives[0]).toMatchObject({ kind: 'polyline', closed: false })
+    wrapper.unmount()
+  })
+})
+
+describe('éditeur de composants : menu contextuel', () => {
+  it('sur une forme : ordre en sous-menu, puis dupliquer, copier, propriétés, supprimer', async () => {
+    const store = withRectangle()
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    rightClick(wrapper.get('.component-graphic .interactive').element)
+    await flushPromises()
+    // La forme visée entre dans la sélection.
+    expect(store.selectedIndexes).toEqual([0])
+    expect(menuLabels()).toEqual(['Ordre', 'Dupliquer', 'Copier', 'Propriétés', 'Supprimer'])
+    menuEntry('Ordre').click()
+    await flushPromises()
+    expect(subMenuLabels()).toEqual(['Avancer', 'Reculer', 'Premier plan', 'Arrière-plan'])
+    menuEntry('Dupliquer').click()
+    await flushPromises()
+    expect(store.doc.visual.primitives).toHaveLength(2)
+    wrapper.unmount()
+  })
+
+  it('sur une ligne : ses flèches ; sur un texte : son texte, sur plusieurs lignes', async () => {
+    const store = useComponentEditorStore()
+    store.addPrimitive(
+      {
+        kind: 'line',
+        x1: 0,
+        y1: 4,
+        x2: 8,
+        y2: 4,
+        arrows: { start: false, middle: false, end: false },
+        style: DEFAULT_SHAPE_STYLE
+      },
+      'Ajouter une ligne'
+    )
+    store.addPrimitive(
+      {
+        kind: 'text',
+        x: 0,
+        y: 0,
+        w: 8,
+        h: 4,
+        text: 'R',
+        size: 0.5,
+        anchor: 'middle',
+        color: '#000000',
+        variable: false,
+        defaultValue: '',
+        unit: '',
+        bold: false,
+        followsRotation: false,
+        italic: false,
+        underline: false,
+        strike: false,
+        vertical: false
+      },
+      'Ajouter un texte'
+    )
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    const shapes = wrapper.findAll('.component-graphic .interactive')
+    rightClick(shapes[0]?.element ?? document.body)
+    await flushPromises()
+    expect(menuLabels().slice(0, 3)).toEqual([
+      'Flèche au départ',
+      'Flèche au centre',
+      'Flèche à l’arrivée'
+    ])
+    menuEntry('Flèche à l’arrivée').click()
+    await flushPromises()
+    expect(store.doc.visual.primitives[0]).toMatchObject({ arrows: { end: true, start: false } })
+    rightClick(shapes[1]?.element ?? document.body)
+    await flushPromises()
+    menuEntry('Modifier le texte…').click()
+    await flushPromises()
+    const area = wrapper.get('.prompt textarea')
+    await area.setValue('10 k\nΩ')
+    await area.trigger('keydown', { key: 'Enter' })
+    expect(store.doc.visual.primitives[1]).toMatchObject({ kind: 'text', text: '10 k\nΩ' })
+    wrapper.unmount()
+  })
+
+  it('sur une broche : la renommer, changer son type', async () => {
+    const store = useComponentEditorStore()
+    const id = store.addPin({ x: 0, y: 1 })
+    store.selection = null
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    const open = async (): Promise<void> => {
+      rightClick(wrapper.get('.pin').element)
+      await flushPromises()
+    }
+    await open()
+    expect(store.selectedPinIds).toEqual([id])
+    expect(menuLabels().slice(0, 2)).toEqual(['Renommer…', 'Type'])
+    menuEntry('Type').click()
+    await flushPromises()
+    expect(subMenuLabels()).toEqual(['Entrée', 'Sortie', 'Bidirectionnelle', 'Alimentation'])
+    menuEntry('Alimentation').click()
+    await flushPromises()
+    expect(store.doc.pins[0]?.kind).toBe('power')
+    await open()
+    menuEntry('Renommer…').click()
+    await flushPromises()
+    await wrapper.get('.prompt input').setValue('VCC')
+    await wrapper.get('.prompt').trigger('submit')
+    expect(store.doc.pins[0]?.name).toBe('VCC')
+    wrapper.unmount()
+  })
+
+  it('dans le vide : coller à l’endroit du clic, importer une image, vue et panneau', async () => {
+    const store = withRectangle()
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    const open = async (): Promise<void> => {
+      rightClick(wrapper.get('svg.canvas').element, 200, 120)
+      await flushPromises()
+    }
+    await open()
+    expect(menuLabels()).toEqual([
+      'Coller ici',
+      'Tout sélectionner',
+      'Importer une image…',
+      'Ajuster à la fenêtre',
+      'Zoom 100 %',
+      'Panneau de propriétés'
+    ])
+    expect(menuEntry('Coller ici').disabled).toBe(true)
+    menuEntry('Tout sélectionner').click()
+    await flushPromises()
+    store.copySelection()
+    await open()
+    menuEntry('Coller ici').click()
+    await flushPromises()
+    expect(store.doc.visual.primitives).toHaveLength(2)
+    // La copie a son coin supérieur gauche là où l'on a cliqué, pas une cellule plus loin.
+    const [original, copy] = store.doc.visual.primitives
+    expect(copy).not.toMatchObject({
+      x: (original?.kind === 'rect' ? original.x : 0) + 4,
+      y: (original?.kind === 'rect' ? original.y : 0) + 4
+    })
     wrapper.unmount()
   })
 })

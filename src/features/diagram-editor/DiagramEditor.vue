@@ -2,16 +2,29 @@
 import { onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
 import {
   buildDiagramSvg,
+  insertVertex,
   isEmptyDiagram,
+  nearestWirePoint,
+  NODE_SHAPES,
   NODE_SPECS,
+  NODE_TEXT_SCALES,
+  nodeFont,
+  removeVertex,
+  wireGeometryProblem,
+  type DiagramLink,
+  type DiagramNode,
   type ExportSettings,
-  type SvgExport
+  type LocalPoint,
+  type NodeShape,
+  type SvgExport,
+  type TextAnchor
 } from '@/domain'
 import ExportDialog from '@/features/export/ExportDialog.vue'
 import { useLibraryStore } from '@/features/library/store'
 import { chooseDiagramToOpen } from '@/io/diagramFiles'
 import ContextMenu from '@/ui/ContextMenu.vue'
-import { heading, item, SEPARATOR, type MenuItem } from '@/ui/contextMenu'
+import { heading, item, SEPARATOR, submenu, type MenuItem } from '@/ui/contextMenu'
+import type { IconName } from '@/ui/icons'
 import { openModals } from '@/ui/modalState'
 import PromptDialog from '@/ui/PromptDialog.vue'
 import { lastDiagramDir, saveDiagram } from './diagramActions'
@@ -35,6 +48,7 @@ interface PromptState {
   value: string
   placeholder?: string
   hint?: string
+  multiline?: boolean
   onSubmit: (value: string) => void
 }
 
@@ -94,6 +108,7 @@ function editText(id: string): void {
     title: 'Texte',
     label: 'Texte',
     value: text.text,
+    multiline: true,
     onSubmit: (value) => store.setTextContent(id, value)
   }
 }
@@ -147,6 +162,98 @@ function orderItems(): MenuItem[] {
   ]
 }
 
+/** Sous-menu « Texte » d'un nœud : styles, chasse fixe, taille ; pour tous les nœuds visés. */
+function nodeTextMenu(node: DiagramNode, ids: readonly string[]): MenuItem {
+  const toggle = (
+    key: 'bold' | 'italic' | 'underline' | 'strike',
+    name: string,
+    icon: IconName
+  ): MenuItem =>
+    item(
+      name,
+      () =>
+        store.setNodesTextStyle(ids, `${name} ${node[key] ? 'retiré' : 'activé'}`, {
+          [key]: !node[key]
+        }),
+      { checked: node[key], icon }
+    )
+  const mono = nodeFont(node, store.doc.style) === 'mono'
+  const wanted = mono ? 'sans' : 'mono'
+  return submenu(
+    'Texte',
+    [
+      toggle('bold', 'Gras', 'bold'),
+      toggle('italic', 'Italique', 'italic'),
+      toggle('underline', 'Souligné', 'underline'),
+      toggle('strike', 'Barré', 'strikethrough'),
+      item(
+        'Chasse fixe',
+        () =>
+          store.setNodesTextStyle(
+            ids,
+            wanted === 'mono' ? 'Texte en chasse fixe' : 'Texte en police normale',
+            // Revenu à la police du diagramme, le nœud la suit de nouveau.
+            { font: wanted === store.doc.style.font ? null : wanted }
+          ),
+        { checked: mono, icon: 'code' }
+      ),
+      SEPARATOR,
+      heading('Taille'),
+      ...NODE_TEXT_SCALES.map((scale) =>
+        item(
+          `×${String(scale).replace('.', ',')}`,
+          () => store.setNodesTextStyle(ids, 'Taille du texte du nœud', { textScale: scale }),
+          { checked: node.textScale === scale }
+        )
+      )
+    ],
+    { icon: 'type' }
+  )
+}
+
+/** Entrées qui dépendent de l'endroit du lien où l'on a cliqué : un sommet ou un segment. */
+function linkSpotItems(link: DiagramLink, point: LocalPoint): MenuItem[] {
+  const spot = nearestWirePoint(link.points, point)
+  if (!spot) return []
+  if (spot.location.kind === 'segment') {
+    const added = insertVertex(link.points, spot.point)
+    return [
+      item(
+        'Ajouter un sommet ici',
+        () => {
+          if (added) store.setLinkPoints(link.id, added)
+        },
+        { icon: 'plus', disabled: added === null }
+      )
+    ]
+  }
+  // Un lien n'a pas de diagonales : le sommet ne s'en va que si ses voisins sont alignés.
+  const rest = removeVertex(link.points, spot.location.index)
+  const valid = rest !== null && wireGeometryProblem(rest, true) === null
+  return [
+    item(
+      'Supprimer ce sommet',
+      () => {
+        if (rest) store.setLinkPoints(link.id, rest)
+      },
+      { disabled: !valid }
+    )
+  ]
+}
+
+/** Pose une forme centrée sur un point, et ouvre aussitôt la saisie de son texte. */
+function placeShape(shape: NodeShape, x: number, y: number): void {
+  const size = NODE_SPECS[shape].defaultSize
+  const id = store.addNode(shape, Math.round(x - size.w / 2), Math.round(y - size.h / 2))
+  canvas.value?.openEditor(id)
+}
+
+const ANCHOR_LABELS: readonly [TextAnchor, string][] = [
+  ['start', 'Gauche'],
+  ['middle', 'Centre'],
+  ['end', 'Droite']
+]
+
 function openMenu(request: DiagramMenuRequest): void {
   const items: MenuItem[] = []
   const count = store.selectedNodes.length + store.selectedLinks.length + store.selectedTexts.length
@@ -157,6 +264,7 @@ function openMenu(request: DiagramMenuRequest): void {
     const node = store.doc.nodes.find((candidate) => candidate.id === target.id)
     if (!node) return
     const spec = NODE_SPECS[node.shape]
+    const ids = multi ? store.selectedNodes : [node.id]
     items.push(heading(multi ? `${count} éléments` : spec.label))
     if (!multi && spec.text) {
       items.push(
@@ -167,21 +275,39 @@ function openMenu(request: DiagramMenuRequest): void {
     if (!multi && spec.line) {
       items.push(item('Tourner', () => store.turnBar(node.id), { hint: 'R', icon: 'rotate-cw' }))
     }
+    if (!multi) {
+      items.push(
+        submenu(
+          'Forme',
+          NODE_SHAPES.map((shape) =>
+            item(NODE_SPECS[shape].label, () => store.setNodeShape(node.id, shape), {
+              checked: node.shape === shape
+            })
+          ),
+          { icon: 'square' }
+        )
+      )
+    }
+    if (spec.text) items.push(nodeTextMenu(node, ids))
     items.push(
       swatchItem(multi ? null : node.color),
       SEPARATOR,
-      heading('Fond'),
-      item('Contour', () => store.setCurrentFill('none'), {
-        checked: !multi && node.fill === 'none'
-      }),
-      item('Teinté', () => store.setCurrentFill('tint'), {
-        checked: !multi && node.fill === 'tint'
-      }),
-      item('Plein', () => store.setCurrentFill('solid'), {
-        checked: !multi && node.fill === 'solid'
-      }),
-      SEPARATOR,
-      ...orderItems(),
+      submenu(
+        'Fond',
+        [
+          item('Contour', () => store.setCurrentFill('none'), {
+            checked: !multi && node.fill === 'none'
+          }),
+          item('Teinté', () => store.setCurrentFill('tint'), {
+            checked: !multi && node.fill === 'tint'
+          }),
+          item('Plein', () => store.setCurrentFill('solid'), {
+            checked: !multi && node.fill === 'solid'
+          })
+        ],
+        { icon: 'circle' }
+      ),
+      submenu('Ordre', orderItems(), { icon: 'arrow-up-line' }),
       SEPARATOR,
       ...commonItems()
     )
@@ -198,6 +324,22 @@ function openMenu(request: DiagramMenuRequest): void {
           { icon: 'tag' }
         )
       )
+      if (link.label.length > 0) {
+        items.push(
+          item(
+            'Étiquette de l’autre côté',
+            () => store.setLinkLabelPlacement(link.id, link.labelAt, link.labelSide === 1 ? -1 : 1),
+            { icon: 'swap' }
+          ),
+          item(
+            'Fond de l’étiquette',
+            () => store.setLinksStyle([link.id], { labelBackground: !link.labelBackground }),
+            { checked: link.labelBackground }
+          ),
+          item('Retirer l’étiquette', () => store.setLinkLabel(link.id, ''))
+        )
+      }
+      items.push(...linkSpotItems(link, request.point))
     }
     items.push(
       swatchItem(multi ? null : link.color),
@@ -224,15 +366,51 @@ function openMenu(request: DiagramMenuRequest): void {
     if (!text) return
     items.push(heading(multi ? `${count} éléments` : 'Texte'))
     if (!multi) {
+      const style = (
+        key: 'bold' | 'italic' | 'underline' | 'strike',
+        name: string,
+        icon: IconName
+      ): MenuItem =>
+        item(
+          name,
+          () =>
+            store.setTextStyle(text.id, `${name} ${text[key] ? 'retiré' : 'activé'}`, {
+              [key]: !text[key]
+            }),
+          { checked: text[key], icon }
+        )
       items.push(
         item('Modifier le texte…', () => editText(text.id), { icon: 'edit' }),
-        item(
-          'Gras',
-          () =>
-            store.setTextStyle(text.id, text.bold ? 'Gras retiré' : 'Gras activé', {
-              bold: !text.bold
+        submenu(
+          'Style',
+          [
+            style('bold', 'Gras', 'bold'),
+            style('italic', 'Italique', 'italic'),
+            style('underline', 'Souligné', 'underline'),
+            style('strike', 'Barré', 'strikethrough'),
+            SEPARATOR,
+            item('Vertical', () => store.setTextVertical(text.id, !text.vertical), {
+              checked: text.vertical
             }),
-          { checked: text.bold, icon: 'bold' }
+            item(
+              'Fond',
+              () =>
+                store.setTextStyle(text.id, text.background ? 'Texte sans fond' : 'Fond du texte', {
+                  background: !text.background
+                }),
+              { checked: text.background }
+            )
+          ],
+          { icon: 'bold' }
+        ),
+        submenu(
+          'Alignement',
+          ANCHOR_LABELS.map(([anchor, name]) =>
+            item(name, () => store.setTextAnchor(text.id, anchor), {
+              checked: text.anchor === anchor
+            })
+          ),
+          { icon: 'type' }
         ),
         SEPARATOR
       )
@@ -248,6 +426,11 @@ function openMenu(request: DiagramMenuRequest): void {
       }),
       item('Tout sélectionner', () => store.selectAll(), { hint: 'Ctrl+A', icon: 'select-all' }),
       SEPARATOR,
+      submenu(
+        'Poser une forme ici',
+        NODE_SHAPES.map((shape) => item(NODE_SPECS[shape].label, () => placeShape(shape, x, y))),
+        { icon: 'plus' }
+      ),
       item('Tracer un lien', () => store.startLinkTool(), { hint: 'F', icon: 'link' }),
       item(
         'Poser un texte ici',
@@ -498,6 +681,7 @@ defineExpose({ createNew, open, openRecent, save, openExport })
       :value="prompt.value"
       :placeholder="prompt.placeholder"
       :hint="prompt.hint"
+      :multiline="prompt.multiline"
       @submit="prompt.onSubmit($event)"
       @close="prompt = null"
     />

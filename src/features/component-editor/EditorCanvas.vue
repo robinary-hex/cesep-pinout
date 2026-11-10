@@ -31,6 +31,7 @@ import {
   pinNumberText,
   type LabelOffset
 } from './pinLabelLayout'
+import type { EditorMenuRequest, EditorMenuTarget } from './menu'
 import { useComponentEditorStore } from './store'
 
 // Canevas SVG de l'éditeur de composants : grille, formes, broches, poignées, lasso, copies
@@ -38,6 +39,7 @@ import { useComponentEditorStore } from './store'
 // puis en quarts de cellule ; le domaine ne reçoit que des entiers.
 
 const store = useComponentEditorStore()
+const emit = defineEmits<{ openMenu: [request: EditorMenuRequest] }>()
 const library = useLibraryStore()
 const svg = ref<SVGSVGElement | null>(null)
 const scroller = ref<HTMLDivElement | null>(null)
@@ -177,7 +179,7 @@ onUnmounted(() => {
   window.removeEventListener('blur', onWindowBlur)
 })
 
-function pointerCells(event: PointerEvent | WheelEvent): LocalPoint {
+function pointerCells(event: MouseEvent): LocalPoint {
   const element = svg.value
   if (!element) return { x: 0, y: 0 }
   const rect = element.getBoundingClientRect()
@@ -791,6 +793,36 @@ function pinsInBand(bandDrag: Extract<Drag, { kind: 'band' }>): string[] {
 }
 
 /**
+ * Clic droit : un tracé en cours se termine d'abord (la polyligne est gardée, le reste
+ * abandonné) ; sinon la forme ou la broche visée entre dans la sélection, si elle n'y est pas, et
+ * le menu contextuel s'ouvre.
+ */
+function onContextMenu(event: MouseEvent, target: EditorMenuTarget): void {
+  event.preventDefault()
+  event.stopPropagation()
+  if (drag.value) {
+    finishPolyline()
+    drag.value = null
+    return
+  }
+  if (target.kind === 'primitive' && !store.selectedIndexes.includes(target.index)) {
+    store.selectPrimitives([target.index])
+  } else if (target.kind === 'pin' && !store.selectedPinIds.includes(target.id)) {
+    store.selectPin(target.id)
+  }
+  emit('openMenu', {
+    x: event.clientX,
+    y: event.clientY,
+    point: toQuarters(pointerCells(event)),
+    target
+  })
+}
+
+function onPrimitiveMenu(index: number, event: MouseEvent): void {
+  onContextMenu(event, { kind: 'primitive', index })
+}
+
+/**
  * Clic dans l'espace de travail, hors de la feuille. En sélection, la sélection tombe, comme sur
  * la feuille. Avec un outil de dessin, on le quitte : le tracé en cours se termine (une polyligne
  * d'au moins deux points est gardée) et l'éditeur revient à l'outil Sélection.
@@ -932,6 +964,7 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
       @wheel="onWheel"
       @pointerdown.capture="onPanDown"
       @pointerdown.self="onOutsideDown"
+      @contextmenu.self="onContextMenu($event, { kind: 'empty' })"
     >
       <svg
         ref="svg"
@@ -944,7 +977,7 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
         @pointerup="onPointerUp"
         @pointerleave="hover = null"
         @dblclick="finishPolyline"
-        @contextmenu.prevent
+        @contextmenu="onContextMenu($event, { kind: 'empty' })"
       >
         <defs>
           <pattern id="cell-grid" :width="cell" :height="cell" patternUnits="userSpaceOnUse">
@@ -983,6 +1016,7 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
             :moving="moving"
             :preview="handlePreview"
             @primitive-down="onPrimitiveDown"
+            @primitive-menu="onPrimitiveMenu"
           />
 
           <ComponentGraphic
@@ -1027,6 +1061,7 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
             :class="{ selected: isSelectedPin(pin.id), hovered: store.hoverPinId === pin.id }"
             :transform="`translate(${pinPosition(pin).x * cell} ${pinPosition(pin).y * cell})`"
             @pointerdown="onPinDown(pin.id, $event)"
+            @contextmenu="onContextMenu($event, { kind: 'pin', id: pin.id })"
             @pointerenter="store.hoverPinId = pin.id"
             @pointerleave="store.hoverPinId = null"
           >

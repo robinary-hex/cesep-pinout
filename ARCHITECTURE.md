@@ -103,6 +103,11 @@ boîte ouverte en mode `montage`.
 fermer, confirmer une suppression) dans ses propres boîtes : une promesse par question, aucune
 boîte de message du système.
 
+`ContextMenu.vue` affiche les menus contextuels de toute l'application à partir d'une simple
+liste d'entrées (`contextMenu.ts` : action, titre, séparateur, pastilles, sous-menu) : chaque
+éditeur construit sa liste, le composant s'occupe de la placer, des sous-menus et de la
+fermeture.
+
 `ToolbarBasics.vue` ouvre les trois barres d'outils par les mêmes boutons, dans le même ordre
 (zoom, puis annuler, rétablir et corbeille) : l'ordre est tenu par le composant, pas recopié
 dans chaque éditeur.

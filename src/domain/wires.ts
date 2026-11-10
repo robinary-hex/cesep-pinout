@@ -378,6 +378,68 @@ export function dragVertex(
   ])
 }
 
+/**
+ * Point de la grille le plus proche sur un fil, pour un point quelconque (un clic) : le segment le
+ * plus proche, puis le pas de grille le plus proche le long de lui. Dit aussi où il se trouve sur
+ * le fil (extrémité, sommet, intérieur d'un segment). Null pour un fil sans segment.
+ */
+export function nearestWirePoint(
+  points: readonly GridPoint[],
+  p: LocalPoint
+): { point: GridPoint; location: WireLocation } | null {
+  const index = nearestSegmentIndex(points, p)
+  const a = points[index]
+  const b = points[index + 1]
+  const step = a && b ? segmentStep(a, b) : null
+  if (!a || !b || !step) return null
+  const steps = Math.max(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]))
+  const along =
+    ((p.x - a[0]) * step[0] + (p.y - a[1]) * step[1]) / (step[0] * step[0] + step[1] * step[1])
+  const at = Math.min(steps, Math.max(0, Math.round(along)))
+  const point: GridPoint = [a[0] + at * step[0], a[1] + at * step[1]]
+  const location = locateOnWire(points, point)
+  return location ? { point, location } : null
+}
+
+/**
+ * Ajoute un sommet sur un fil, à un point strictement à l'intérieur d'un de ses segments : rien
+ * ne change à l'œil, mais il y a là un sommet à glisser. Null si le point n'y est pas.
+ */
+export function insertVertex(points: readonly GridPoint[], point: GridPoint): GridPoint[] | null {
+  const location = locateOnWire(points, point)
+  if (!location || location.kind !== 'segment') return null
+  return [...points.slice(0, location.index + 1), point, ...points.slice(location.index + 1)]
+}
+
+/**
+ * Retire un sommet : ses deux voisins se rejoignent tout droit (une extrémité retirée raccourcit
+ * le fil). Le résultat n'est pas forcément un fil valide : à l'appelant de le vérifier
+ * (`wireGeometryProblem`). Null s'il ne resterait pas deux sommets.
+ */
+export function removeVertex(points: readonly GridPoint[], index: number): GridPoint[] | null {
+  if (index < 0 || index >= points.length) return null
+  const rest = normalizePoints([...points.slice(0, index), ...points.slice(index + 1)])
+  return rest.length >= 2 ? rest : null
+}
+
+/**
+ * Coupe un fil en deux à un point qui lui appartient, sommet ou intérieur d'un segment : les deux
+ * morceaux se touchent en ce point. Null à une extrémité ou hors du fil.
+ */
+export function splitPoints(
+  points: readonly GridPoint[],
+  point: GridPoint
+): [GridPoint[], GridPoint[]] | null {
+  const location = locateOnWire(points, point)
+  if (!location || location.kind === 'end') return null
+  // Sur un sommet, il termine le premier morceau et commence le second.
+  const headEnd = location.kind === 'vertex' ? location.index : location.index + 1
+  return [
+    [...points.slice(0, headEnd), point],
+    [point, ...points.slice(location.index + 1)]
+  ]
+}
+
 export function wireBounds(points: readonly GridPoint[]): GridRect | null {
   const first = points[0]
   if (!first) return null

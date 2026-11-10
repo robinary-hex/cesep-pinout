@@ -1,18 +1,32 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, useTemplateRef } from 'vue'
-import { QUARTERS_PER_CELL } from '@/domain'
+import { onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
+import {
+  naturalImageSize,
+  PIN_KIND_LABELS,
+  PIN_KINDS,
+  PRIMITIVE_KIND_LABELS,
+  QUARTERS_PER_CELL,
+  type Arrows,
+  type Primitive
+} from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
+import ContextMenu from '@/ui/ContextMenu.vue'
+import { heading, item, SEPARATOR, submenu, type MenuItem } from '@/ui/contextMenu'
+import type { IconName } from '@/ui/icons'
 import { openModals } from '@/ui/modalState'
+import PromptDialog from '@/ui/PromptDialog.vue'
 import { saveComponentDoc } from './componentActions'
 import EditorCanvas from './EditorCanvas.vue'
 import EditorInspector from './EditorInspector.vue'
 import EditorToolbar from './EditorToolbar.vue'
+import type { EditorMenuRequest } from './menu'
+import { importImage } from './pngImport'
 import { useComponentEditorStore } from './store'
 import { TOOL_BY_KEY } from './tools'
 
 // Éditeur de composants : barre d'outils, canevas, inspecteur (replié par défaut, comme dans les
 // autres éditeurs), raccourcis clavier,
-// enregistrement dans la bibliothèque. Les touches communes aux trois éditeurs (flèches, Ctrl+A,
+// menu contextuel (forme, broche, vide), enregistrement dans la bibliothèque. Les touches communes aux trois éditeurs (flèches, Ctrl+A,
 // 0, Retour arrière pendant un tracé) font ici la même chose qu'ailleurs.
 
 const store = useComponentEditorStore()
@@ -25,6 +39,230 @@ async function save(): Promise<void> {
 
 function createNew(): void {
   store.newComponent()
+}
+
+// Saisies et menu contextuel
+
+interface PromptState {
+  title: string
+  label: string
+  value: string
+  multiline?: boolean
+  onSubmit: (value: string) => void
+}
+
+const menu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
+const prompt = ref<PromptState | null>(null)
+
+function editText(index: number): void {
+  const primitive = store.doc.visual.primitives[index]
+  if (primitive?.kind !== 'text') return
+  prompt.value = {
+    title: 'Texte',
+    label: primitive.variable ? 'Nom du champ' : 'Texte',
+    value: primitive.text,
+    multiline: !primitive.variable,
+    onSubmit: (value) =>
+      store.updatePrimitive(index, 'Modifier le texte', (target) => {
+        if (target.kind === 'text') target.text = value
+      })
+  }
+}
+
+function renamePin(id: string): void {
+  const pin = store.doc.pins.find((candidate) => candidate.id === id)
+  if (!pin) return
+  prompt.value = {
+    title: 'Broche',
+    label: 'Nom',
+    value: pin.name,
+    onSubmit: (value) => {
+      const name = value.trim()
+      if (name.length > 0) store.updatePin(id, { name })
+    }
+  }
+}
+
+/** Entrées propres à une forme : son texte, ses flèches, sa fermeture, la taille de son image. */
+function shapeItems(index: number, primitive: Primitive): MenuItem[] {
+  const items: MenuItem[] = []
+  if (primitive.kind === 'text') {
+    items.push(
+      item(primitive.variable ? 'Nom du champ…' : 'Modifier le texte…', () => editText(index), {
+        icon: 'edit'
+      })
+    )
+  }
+  if (primitive.kind === 'line' || (primitive.kind === 'polyline' && !primitive.closed)) {
+    const arrow = (end: keyof Arrows, label: string, icon?: IconName): MenuItem => {
+      const on = !primitive.arrows[end]
+      return item(
+        label,
+        () =>
+          store.updatePrimitive(
+            index,
+            on ? 'Ajouter une flèche' : 'Retirer la flèche',
+            (target) => {
+              if (target.kind === 'line' || target.kind === 'polyline') target.arrows[end] = on
+            }
+          ),
+        { checked: !on, ...(icon ? { icon } : {}) }
+      )
+    }
+    items.push(
+      arrow('start', 'Flèche au départ', 'arrow-left'),
+      arrow('middle', 'Flèche au centre'),
+      arrow('end', 'Flèche à l’arrivée', 'arrow-right')
+    )
+  }
+  if (primitive.kind === 'polyline') {
+    const closed = !primitive.closed
+    items.push(
+      item(
+        'Fermée (polygone)',
+        () =>
+          store.updatePrimitive(
+            index,
+            closed ? 'Fermer la polyligne' : 'Ouvrir la polyligne',
+            (target) => {
+              if (target.kind === 'polyline') target.closed = closed
+            }
+          ),
+        { checked: !closed }
+      )
+    )
+  }
+  if (primitive.kind === 'image') {
+    const natural = naturalImageSize(primitive)
+    items.push(
+      item('Taille d’origine', () => store.resetImageSize(index), {
+        icon: 'fit',
+        disabled: !natural || (natural.w === primitive.w && natural.h === primitive.h)
+      })
+    )
+  }
+  return items
+}
+
+function orderMenu(): MenuItem {
+  return submenu(
+    'Ordre',
+    [
+      item('Avancer', () => store.reorderPrimitive('up'), {
+        hint: 'Ctrl+Page haut',
+        icon: 'arrow-up'
+      }),
+      item('Reculer', () => store.reorderPrimitive('down'), {
+        hint: 'Ctrl+Page bas',
+        icon: 'arrow-down'
+      }),
+      item('Premier plan', () => store.reorderPrimitive('top'), {
+        hint: 'Ctrl+Maj+Page haut',
+        icon: 'arrow-up-line'
+      }),
+      item('Arrière-plan', () => store.reorderPrimitive('bottom'), {
+        hint: 'Ctrl+Maj+Page bas',
+        icon: 'arrow-down-line'
+      })
+    ],
+    { icon: 'arrow-up-line' }
+  )
+}
+
+/** Fin de tout menu d'élément, dans le même ordre que dans les autres éditeurs. */
+function commonItems(): MenuItem[] {
+  const noShape = store.selectedIndexes.length === 0
+  return [
+    item('Dupliquer', () => store.duplicateSelection(), {
+      hint: 'Ctrl+D',
+      icon: 'duplicate',
+      disabled: noShape
+    }),
+    item('Copier', () => store.copySelection(), {
+      hint: 'Ctrl+C',
+      icon: 'copy',
+      disabled: noShape
+    }),
+    item(
+      'Propriétés',
+      () => {
+        store.inspectorOpen = true
+      },
+      { hint: 'I', icon: 'panel' }
+    ),
+    SEPARATOR,
+    item('Supprimer', () => store.removeSelection(), {
+      hint: 'Suppr',
+      icon: 'trash',
+      danger: true
+    })
+  ]
+}
+
+function openMenu(request: EditorMenuRequest): void {
+  const items: MenuItem[] = []
+  const count = store.selectedIndexes.length + store.selectedPinIds.length
+  const multi = count > 1
+  const target = request.target
+
+  if (target.kind === 'primitive') {
+    const primitive = store.doc.visual.primitives[target.index]
+    if (!primitive) return
+    items.push(heading(multi ? `${count} éléments` : PRIMITIVE_KIND_LABELS[primitive.kind]))
+    if (!multi) {
+      const own = shapeItems(target.index, primitive)
+      if (own.length > 0) items.push(...own, SEPARATOR)
+      items.push(orderMenu(), SEPARATOR)
+    }
+    items.push(...commonItems())
+  } else if (target.kind === 'pin') {
+    const pin = store.doc.pins.find((candidate) => candidate.id === target.id)
+    if (!pin) return
+    items.push(heading(multi ? `${count} éléments` : `Broche ${pin.name}`))
+    if (!multi) {
+      items.push(
+        item('Renommer…', () => renamePin(pin.id), { icon: 'edit' }),
+        submenu(
+          'Type',
+          PIN_KINDS.map((kind) =>
+            item(PIN_KIND_LABELS[kind], () => store.updatePin(pin.id, { kind }), {
+              checked: pin.kind === kind
+            })
+          ),
+          { icon: 'pin' }
+        ),
+        SEPARATOR
+      )
+    }
+    items.push(...commonItems())
+  } else {
+    const { x, y } = request.point
+    items.push(
+      item('Coller ici', () => store.pasteClipboardAt(x, y), {
+        hint: 'Ctrl+V',
+        icon: 'clipboard',
+        disabled: store.clipboardEmpty
+      }),
+      item('Tout sélectionner', () => store.selectAll(), { hint: 'Ctrl+A', icon: 'select-all' }),
+      SEPARATOR,
+      item('Importer une image…', () => void importImage(store), { icon: 'image' }),
+      SEPARATOR,
+      item('Ajuster à la fenêtre', () => void canvas.value?.fitAndCenter(), {
+        hint: '0',
+        icon: 'fit'
+      }),
+      item('Zoom 100 %', () => store.resetZoom(), { hint: '1', icon: 'zoom-in' }),
+      SEPARATOR,
+      item(
+        'Panneau de propriétés',
+        () => {
+          store.inspectorOpen = !store.inspectorOpen
+        },
+        { hint: 'I', icon: 'panel', checked: store.inspectorOpen }
+      )
+    )
+  }
+  menu.value = { x: request.x, y: request.y, items }
 }
 
 const ARROWS: Record<string, readonly [number, number]> = {
@@ -130,9 +368,19 @@ defineExpose({ save, createNew })
   <section class="editor">
     <EditorToolbar @save="save" />
     <div class="editor-body">
-      <EditorCanvas ref="canvas" />
+      <EditorCanvas ref="canvas" @open-menu="openMenu" />
       <EditorInspector v-if="store.inspectorOpen" :class="{ floating: store.inspectorFloating }" />
     </div>
+    <ContextMenu v-if="menu" :x="menu.x" :y="menu.y" :items="menu.items" @close="menu = null" />
+    <PromptDialog
+      v-if="prompt"
+      :title="prompt.title"
+      :label="prompt.label"
+      :value="prompt.value"
+      :multiline="prompt.multiline"
+      @submit="prompt.onSubmit($event)"
+      @close="prompt = null"
+    />
   </section>
 </template>
 

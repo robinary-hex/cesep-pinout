@@ -64,7 +64,10 @@ const sections: { title: string; rows: Row[] }[] = [
         'Double-clic',
         'Valeur d’un composant, texte d’une étiquette, étiquette d’une extrémité libre'
       ],
-      ['Clic droit', 'Menu contextuel : composant, fil, étiquette ou vide'],
+      [
+        'Clic droit',
+        'Menu contextuel : composant, fil (sommet ou coupe à l’endroit du clic, net, croisement), étiquette ou vide'
+      ],
       ...VIEW,
       [
         'I',
@@ -74,7 +77,7 @@ const sections: { title: string; rows: Row[] }[] = [
       ['Ctrl+E', 'Exporter en PNG ou SVG'],
       [
         'Ctrl+Tab / Ctrl+Maj+Tab',
-        'Montage suivant / précédent ; clic du milieu sur un onglet : le fermer'
+        'Montage suivant / précédent ; sur un onglet, clic du milieu : le fermer, clic droit : enregistrer, fermer les autres'
       ],
       [
         'Glisser un fichier',
@@ -110,7 +113,10 @@ const sections: { title: string; rows: Row[] }[] = [
         'Double-clic',
         'Texte d’un nœud (Entrée valide, Maj+Entrée va à la ligne), étiquette d’un lien, texte libre'
       ],
-      ['Clic droit', 'Menu contextuel : nœud, lien, texte ou vide'],
+      [
+        'Clic droit',
+        'Menu contextuel : nœud (forme, texte), lien (étiquette, sommets), texte, ou vide pour poser une forme'
+      ],
       ...VIEW,
       [
         'I',
@@ -120,7 +126,7 @@ const sections: { title: string; rows: Row[] }[] = [
       ['Ctrl+E', 'Exporter en PNG ou SVG'],
       [
         'Ctrl+Tab / Ctrl+Maj+Tab',
-        'Diagramme suivant / précédent ; clic du milieu sur un onglet : le fermer'
+        'Diagramme suivant / précédent ; sur un onglet, clic du milieu : le fermer, clic droit : enregistrer, fermer les autres'
       ]
     ]
   },
@@ -146,7 +152,11 @@ const sections: { title: string; rows: Row[] }[] = [
         'Clic hors de la feuille',
         'Désélectionner ; avec un outil de dessin, le quitter et revenir à la sélection'
       ],
-      ['Clic droit dans la bibliothèque', 'Ouvrir, dupliquer ou supprimer un composant'],
+      ['Clic droit', 'Menu contextuel : forme, broche ou vide'],
+      [
+        'Clic droit dans la bibliothèque',
+        'Ouvrir, dupliquer, renommer, changer de catégorie ou supprimer un composant'
+      ],
       ...VIEW,
       [
         'I',
@@ -155,7 +165,7 @@ const sections: { title: string; rows: Row[] }[] = [
       ['Ctrl+N / S', 'Nouveau / enregistrer dans la bibliothèque'],
       [
         'Ctrl+Tab / Ctrl+Maj+Tab',
-        'Composant suivant / précédent ; clic du milieu sur un onglet : le fermer'
+        'Composant suivant / précédent ; sur un onglet, clic du milieu : le fermer, clic droit : enregistrer, fermer les autres'
       ]
     ]
   }

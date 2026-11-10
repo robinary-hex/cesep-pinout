@@ -3,11 +3,16 @@ import { onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
 import {
   buildProjectSvg,
   componentFields,
+  nearestWirePoint,
+  removeVertex,
+  wireGeometryProblem,
   type ComponentDefinition,
   type ComponentField,
   type ComponentInstance,
   type ExportSettings,
+  type LocalPoint,
   type SvgExport,
+  type TextAnchor,
   type Wire
 } from '@/domain'
 import ExportDialog from '@/features/export/ExportDialog.vue'
@@ -15,7 +20,8 @@ import { useLibraryStore } from '@/features/library/store'
 import ProfileDialog from '@/features/settings/ProfileDialog.vue'
 import { chooseProjectToOpen } from '@/io/projectFiles'
 import ContextMenu from '@/ui/ContextMenu.vue'
-import { heading, item, SEPARATOR, type MenuItem } from '@/ui/contextMenu'
+import { heading, item, SEPARATOR, submenu, type MenuItem } from '@/ui/contextMenu'
+import type { IconName } from '@/ui/icons'
 import { openModals } from '@/ui/modalState'
 import PromptDialog from '@/ui/PromptDialog.vue'
 import type { MenuRequest } from './menu'
@@ -30,6 +36,8 @@ import { useSchematicStore } from './store'
 
 const store = useSchematicStore()
 const library = useLibraryStore()
+/** `editComponent` : ouvrir la définition d'un composant posé dans l'éditeur de composants. */
+const emit = defineEmits<{ editComponent: [defId: string] }>()
 const canvas = useTemplateRef<InstanceType<typeof SchematicCanvas>>('canvas')
 const showExport = ref(false)
 const showProfile = ref(false)
@@ -40,6 +48,7 @@ interface PromptState {
   value: string
   placeholder?: string
   hint?: string
+  multiline?: boolean
   onSubmit: (value: string) => void
 }
 
@@ -130,6 +139,7 @@ function editLabelText(id: string): void {
     title: 'Étiquette',
     label: 'Texte',
     value: label.text,
+    multiline: true,
     onSubmit: (value) => store.setLabelText(id, value)
   }
 }
@@ -196,6 +206,54 @@ function commonItems(): MenuItem[] {
   ]
 }
 
+/** Entrées qui dépendent de l'endroit du fil où l'on a cliqué : sommet, segment, croisement. */
+function wireSpotItems(wire: Wire, point: LocalPoint): MenuItem[] {
+  const items: MenuItem[] = []
+  const spot = nearestWirePoint(wire.points, point)
+  if (spot) {
+    const { location } = spot
+    if (location.kind === 'segment') {
+      items.push(
+        item('Ajouter un sommet ici', () => store.addWireVertex(wire.id, spot.point), {
+          icon: 'plus'
+        })
+      )
+    } else {
+      const rest = removeVertex(wire.points, location.index)
+      items.push(
+        item('Supprimer ce sommet', () => store.removeWireVertex(wire.id, location.index), {
+          disabled: rest === null || wireGeometryProblem(rest) !== null
+        })
+      )
+    }
+    if (location.kind !== 'end') {
+      items.push(
+        item('Couper le fil ici', () => {
+          store.splitWire(wire.id, spot.point)
+        })
+      )
+    }
+  }
+  if (store.crossingNear(point.x, point.y)) {
+    items.push(
+      item(
+        'Inverser l’ordre à ce croisement',
+        () => {
+          store.toggleCrossing(point.x, point.y)
+        },
+        { hint: 'Alt+clic', icon: 'swap' }
+      )
+    )
+  }
+  return items
+}
+
+const ANCHOR_LABELS: readonly [TextAnchor, string][] = [
+  ['start', 'Gauche'],
+  ['middle', 'Centre'],
+  ['end', 'Droite']
+]
+
 function openMenu(request: MenuRequest): void {
   const items: MenuItem[] = []
   const count = store.selection.length + store.selectedWires.length + store.selectedLabels.length
@@ -224,7 +282,15 @@ function openMenu(request: MenuRequest): void {
           })
         )
       }
-      items.push(SEPARATOR)
+      items.push(
+        item('Modifier dans l’éditeur de composants', () => emit('editComponent', def.id), {
+          icon: 'chip'
+        }),
+        item('Sélectionner les fils reliés', () => store.selectConnectedWires(instance.id), {
+          icon: 'wire'
+        }),
+        SEPARATOR
+      )
     }
     items.push(
       item('Rotation horaire', () => store.rotate('cw'), { hint: 'R', icon: 'rotate-cw' }),
@@ -254,42 +320,56 @@ function openMenu(request: MenuRequest): void {
     items.push(swatchItem(multi ? null : wire.color))
     if (!multi) {
       const last = wire.points.length - 1
+      const spot = wireSpotItems(wire, request.point)
+      items.push(SEPARATOR, ...spot)
+      if (spot.length > 0) items.push(SEPARATOR)
       items.push(
-        SEPARATOR,
-        heading('Extrémités libres'),
-        item('Nettes', () => store.setWireFreeEnds(wire.id, 'flat'), {
-          checked: wire.freeEnds === 'flat'
-        }),
-        item('En flèche', () => store.setWireFreeEnds(wire.id, 'arrow'), {
-          checked: wire.freeEnds === 'arrow',
-          icon: 'arrow-right'
-        }),
-        item('En pointillés', () => store.setWireFreeEnds(wire.id, 'dotted'), {
-          checked: wire.freeEnds === 'dotted',
-          icon: 'dots'
-        }),
-        item(endLabelTitle(wire, 0), () => editWireEnd(wire.id, 0), { icon: 'tag' }),
-        item(endLabelTitle(wire, last), () => editWireEnd(wire.id, last), { icon: 'tag' })
+        submenu(
+          'Extrémités libres',
+          [
+            item('Nettes', () => store.setWireFreeEnds(wire.id, 'flat'), {
+              checked: wire.freeEnds === 'flat'
+            }),
+            item('En flèche', () => store.setWireFreeEnds(wire.id, 'arrow'), {
+              checked: wire.freeEnds === 'arrow',
+              icon: 'arrow-right'
+            }),
+            item('En pointillés', () => store.setWireFreeEnds(wire.id, 'dotted'), {
+              checked: wire.freeEnds === 'dotted',
+              icon: 'dots'
+            }),
+            SEPARATOR,
+            item(endLabelTitle(wire, 0), () => editWireEnd(wire.id, 0), { icon: 'tag' }),
+            item(endLabelTitle(wire, last), () => editWireEnd(wire.id, last), { icon: 'tag' })
+          ],
+          { icon: 'arrow-right' }
+        ),
+        item('Sélectionner tout le net', () => store.selectNet(wire.id), { icon: 'select-all' })
       )
     }
     items.push(
-      SEPARATOR,
-      item('Avancer', () => store.reorderWires('up'), {
-        hint: 'Ctrl+Page haut',
-        icon: 'arrow-up'
-      }),
-      item('Reculer', () => store.reorderWires('down'), {
-        hint: 'Ctrl+Page bas',
-        icon: 'arrow-down'
-      }),
-      item('Premier plan', () => store.reorderWires('top'), {
-        hint: 'Ctrl+Maj+Page haut',
-        icon: 'arrow-up-line'
-      }),
-      item('Arrière-plan', () => store.reorderWires('bottom'), {
-        hint: 'Ctrl+Maj+Page bas',
-        icon: 'arrow-down-line'
-      }),
+      submenu(
+        'Ordre',
+        [
+          item('Avancer', () => store.reorderWires('up'), {
+            hint: 'Ctrl+Page haut',
+            icon: 'arrow-up'
+          }),
+          item('Reculer', () => store.reorderWires('down'), {
+            hint: 'Ctrl+Page bas',
+            icon: 'arrow-down'
+          }),
+          item('Premier plan', () => store.reorderWires('top'), {
+            hint: 'Ctrl+Maj+Page haut',
+            icon: 'arrow-up-line'
+          }),
+          item('Arrière-plan', () => store.reorderWires('bottom'), {
+            hint: 'Ctrl+Maj+Page bas',
+            icon: 'arrow-down-line'
+          })
+        ],
+        { icon: 'arrow-up-line' }
+      ),
       SEPARATOR,
       ...commonItems()
     )
@@ -298,12 +378,54 @@ function openMenu(request: MenuRequest): void {
     if (!label) return
     items.push(heading(multi ? `${count} éléments` : 'Étiquette'))
     if (!multi) {
+      const style = (
+        key: 'bold' | 'italic' | 'underline' | 'strike',
+        name: string,
+        icon: IconName
+      ): MenuItem =>
+        item(
+          name,
+          () =>
+            store.setLabelStyle(label.id, `${name} ${label[key] ? 'retiré' : 'activé'}`, {
+              [key]: !label[key]
+            }),
+          { checked: label[key], icon }
+        )
       items.push(
         item('Modifier le texte…', () => editLabelText(label.id), { icon: 'edit' }),
-        item('Gras', () => store.setLabelBold(label.id, !label.bold), {
-          checked: label.bold,
-          icon: 'bold'
-        }),
+        submenu(
+          'Style',
+          [
+            style('bold', 'Gras', 'bold'),
+            style('italic', 'Italique', 'italic'),
+            style('underline', 'Souligné', 'underline'),
+            style('strike', 'Barré', 'strikethrough'),
+            SEPARATOR,
+            item('Vertical', () => store.setLabelVertical(label.id, !label.vertical), {
+              checked: label.vertical
+            }),
+            item(
+              'Fond',
+              () =>
+                store.setLabelStyle(
+                  label.id,
+                  label.background ? 'Étiquette sans fond' : 'Fond de l’étiquette',
+                  { background: !label.background }
+                ),
+              { checked: label.background }
+            )
+          ],
+          { icon: 'bold' }
+        ),
+        submenu(
+          'Alignement',
+          ANCHOR_LABELS.map(([anchor, name]) =>
+            item(name, () => store.setLabelAnchor(label.id, anchor), {
+              checked: label.anchor === anchor
+            })
+          ),
+          { icon: 'type' }
+        ),
         SEPARATOR
       )
     }
@@ -564,6 +686,7 @@ defineExpose({ createNew, open, openRecent, save, openExport })
       :value="prompt.value"
       :placeholder="prompt.placeholder"
       :hint="prompt.hint"
+      :multiline="prompt.multiline"
       @submit="prompt.onSubmit($event)"
       @close="prompt = null"
     />

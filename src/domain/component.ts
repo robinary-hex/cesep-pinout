@@ -161,6 +161,16 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
 ])
 export type Primitive = z.infer<typeof primitiveSchema>
 export type PrimitiveKind = Primitive['kind']
+/** Nom de chaque forme dans l'interface (panneau, menu contextuel). */
+export const PRIMITIVE_KIND_LABELS: Readonly<Record<PrimitiveKind, string>> = {
+  rect: 'Rectangle',
+  ellipse: 'Ellipse',
+  line: 'Ligne',
+  polyline: 'Polyligne',
+  dot: 'Point',
+  text: 'Texte',
+  image: 'Image'
+}
 export type TextPrimitive = Extract<Primitive, { kind: 'text' }>
 export type DotPrimitive = Extract<Primitive, { kind: 'dot' }>
 export type ImagePrimitive = Extract<Primitive, { kind: 'image' }>

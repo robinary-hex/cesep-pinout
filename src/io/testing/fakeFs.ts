@@ -80,6 +80,13 @@ export class FakeFs implements PinoutApi {
     }
   }
 
+  /** Chemins montrés dans l'Explorateur de fichiers. */
+  readonly shownInFolder: string[] = []
+
+  async showInFolder(path: string): Promise<void> {
+    this.shownInFolder.push(this.norm(path))
+  }
+
   async showOpenDialog(): Promise<string | null> {
     return this.openDialogAnswers.shift() ?? null
   }

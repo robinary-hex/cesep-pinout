@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { access, mkdir, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, join, normalize } from 'node:path'
 import {
   IPC,
   type AppPaths,
@@ -109,6 +109,10 @@ function registerIpc(): void {
       throw new Error(`Le dossier ${path} ne contient pas de component.json : suppression refusée`)
     }
     await rm(path, { recursive: true, force: true })
+  })
+
+  ipcMain.handle(IPC.showInFolder, (_event, path: string) => {
+    shell.showItemInFolder(normalize(path))
   })
 
   ipcMain.handle(IPC.showOpenDialog, async (event, options: OpenDialogOptions = {}) => {
