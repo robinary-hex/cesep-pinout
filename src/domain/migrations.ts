@@ -1,4 +1,5 @@
 import { COMPONENT_SCHEMA_VERSION } from './component'
+import { DIAGRAM_SCHEMA_VERSION } from './diagram'
 import { DEFAULT_COMPONENT_STROKE, DEFAULT_END_LABEL_SIZE } from './profile'
 import { PROJECT_SCHEMA_VERSION } from './project'
 import { DEFAULT_AUTOSAVE_SECONDS, DEFAULT_EXPORT, SETTINGS_SCHEMA_VERSION } from './settings'
@@ -439,6 +440,12 @@ export const projectMigrations: MigrationTable = {
     17: migrateEmbeddedDefs,
     18: migrateProjectV18
   }
+}
+
+/** Diagrammes : première version du format, aucune migration encore. */
+export const diagramMigrations: MigrationTable = {
+  current: DIAGRAM_SCHEMA_VERSION,
+  steps: {}
 }
 
 // Paramètres v1 → v2 : export et copie de secours ; v2 → v3 : trait des composants du profil ;

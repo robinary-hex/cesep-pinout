@@ -6,6 +6,10 @@ import {
   saveComponentDoc
 } from '@/features/component-editor/componentActions'
 import { useComponentEditorStore } from '@/features/component-editor/store'
+import { closeDiagramTabAsking, saveDiagram } from '@/features/diagram-editor/diagramActions'
+import DiagramEditor from '@/features/diagram-editor/DiagramEditor.vue'
+import DiagramLibrary from '@/features/diagram-editor/DiagramLibrary.vue'
+import { useDiagramStore } from '@/features/diagram-editor/store'
 import LibraryPanel from '@/features/library/LibraryPanel.vue'
 import { useLibraryStore } from '@/features/library/store'
 import { closeTabAsking, saveProject } from '@/features/schematic-editor/projectActions'
@@ -13,8 +17,15 @@ import SchematicEditor from '@/features/schematic-editor/SchematicEditor.vue'
 import { useSchematicStore } from '@/features/schematic-editor/store'
 import ProfileDialog from '@/features/settings/ProfileDialog.vue'
 import SettingsDialog from '@/features/settings/SettingsDialog.vue'
-import { clearAutosave, readAutosaves, syncAutosaves } from '@/io/autosave'
+import {
+  clearAutosave,
+  readAutosaves,
+  readDiagramAutosaves,
+  syncAutosaves,
+  syncDiagramAutosaves
+} from '@/io/autosave'
 import { bridge } from '@/io/bridge'
+import { isDiagramPath } from '@/io/diagramFiles'
 import { baseName } from '@/io/paths'
 import ContextMenu from '@/ui/ContextMenu.vue'
 import { heading, item, SEPARATOR, type MenuItem } from '@/ui/contextMenu'
@@ -33,11 +44,12 @@ import { updateButtonLabel, updateButtonTitle } from './update'
 // appelle les actions exposées par l'éditeur visible. Ce que la coque demande à chaque mode
 // (onglets, enregistrement, statut) passe par son `ModeAdapter`.
 
-type Mode = 'components' | 'schematic'
+type Mode = 'components' | 'schematic' | 'diagram'
 
 const library = useLibraryStore()
 const schematic = useSchematicStore()
 const editor = useComponentEditorStore()
+const diagram = useDiagramStore()
 // Au lancement, le montage ; l'onglet Composants est pourtant le premier de la barre.
 const mode = ref<Mode>('schematic')
 const showSettings = ref(false)
@@ -46,6 +58,7 @@ const showHelp = ref(false)
 
 const schematicEditor = useTemplateRef<InstanceType<typeof SchematicEditor>>('schematicEditor')
 const componentEditor = useTemplateRef<InstanceType<typeof ComponentEditor>>('componentEditor')
+const diagramEditor = useTemplateRef<InstanceType<typeof DiagramEditor>>('diagramEditor')
 const fileButton = ref<HTMLButtonElement | null>(null)
 const fileMenu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
 
@@ -77,7 +90,7 @@ async function onUpdateClick(): Promise<void> {
   }
 }
 
-const anyDirty = computed(() => schematic.anyDirty || editor.anyDirty)
+const anyDirty = computed(() => schematic.anyDirty || editor.anyDirty || diagram.anyDirty)
 
 watch(
   anyDirty,
@@ -116,6 +129,8 @@ interface ModeAdapter {
   kind: string
   /** Infobulle du point « modifié » sur le bouton du mode quand on en regarde un autre. */
   dirtyTitle: string
+  /** Section de l'aide (F1) montrée d'abord dans ce mode. */
+  helpSection: string
   tabs: () => StripTab[]
   activeId: () => number
   anyDirty: () => boolean
@@ -138,6 +153,7 @@ const modes: Record<Mode, ModeAdapter> = {
     icon: 'chip',
     kind: 'composant',
     dirtyTitle: "Un composant ouvert n'est pas enregistré",
+    helpSection: 'Éditeur de composants',
     tabs: () =>
       editor.tabs.map((tab) => ({
         id: tab.id,
@@ -162,6 +178,7 @@ const modes: Record<Mode, ModeAdapter> = {
     icon: 'schematic',
     kind: 'montage',
     dirtyTitle: "Un montage ouvert n'est pas enregistré",
+    helpSection: 'Montage',
     tabs: () =>
       schematic.tabs.map((tab) => ({
         id: tab.id,
@@ -180,12 +197,37 @@ const modes: Record<Mode, ModeAdapter> = {
     setStatus: (message) => {
       schematic.status = message
     }
+  },
+  diagram: {
+    label: 'Diagramme',
+    icon: 'diagram',
+    kind: 'diagramme',
+    dirtyTitle: "Un diagramme ouvert n'est pas enregistré",
+    helpSection: 'Diagramme',
+    tabs: () =>
+      diagram.tabs.map((tab) => ({
+        id: tab.id,
+        name: tab.name,
+        title: tab.filePath ?? NOT_SAVED,
+        dirty: tab.dirty
+      })),
+    activeId: () => diagram.activeTabId,
+    anyDirty: () => diagram.anyDirty,
+    activate: (id) => diagram.activateTab(id),
+    create: () => diagram.newDiagram(),
+    close: (id) => closeDiagramTabAsking(diagram, library, id),
+    move: (id, toIndex) => diagram.moveTab(id, toIndex),
+    cycle: (step) => diagram.cycleTab(step),
+    saveActive: () => saveDiagram(diagram, library),
+    setStatus: (message) => {
+      diagram.status = message
+    }
   }
 }
 /** Ordre des boutons de mode dans la barre. */
-const MODE_ORDER: Mode[] = ['components', 'schematic']
+const MODE_ORDER: Mode[] = ['components', 'schematic', 'diagram']
 /** Ordre des enregistrements avant de quitter : les montages d'abord. */
-const SAVE_ORDER: Mode[] = ['schematic', 'components']
+const SAVE_ORDER: Mode[] = ['schematic', 'diagram', 'components']
 
 const current = computed(() => modes[mode.value])
 const strip = computed<{ tabs: StripTab[]; activeId: number; kind: string }>(() => ({
@@ -290,7 +332,45 @@ function fileMenuItems(): MenuItem[] {
       ...common
     ]
   }
-  const recents = library.recentFiles.slice(0, MAX_RECENT_IN_MENU)
+  if (mode.value === 'diagram') {
+    const recentDiagrams = library.recentFiles.filter(isDiagramPath).slice(0, MAX_RECENT_IN_MENU)
+    return [
+      item('Nouveau diagramme', () => diagramEditor.value?.createNew(), {
+        hint: 'Ctrl+N',
+        icon: 'file-plus'
+      }),
+      item('Ouvrir…', () => void diagramEditor.value?.open(), {
+        hint: 'Ctrl+O',
+        icon: 'folder-open'
+      }),
+      heading('Récents'),
+      ...(recentDiagrams.length === 0
+        ? [item('Aucun diagramme récent', () => undefined, { disabled: true })]
+        : recentDiagrams.map((path) =>
+            item(baseName(path), () => void diagramEditor.value?.openRecent(path), {
+              icon: 'clock'
+            })
+          )),
+      SEPARATOR,
+      item('Enregistrer', () => void diagramEditor.value?.save(false), {
+        hint: 'Ctrl+S',
+        icon: 'save'
+      }),
+      item('Enregistrer sous…', () => void diagramEditor.value?.save(true), {
+        hint: 'Ctrl+Maj+S',
+        icon: 'save-as'
+      }),
+      item('Exporter en PNG ou SVG…', () => diagramEditor.value?.openExport(), {
+        hint: 'Ctrl+E',
+        icon: 'export'
+      }),
+      ...common
+    ]
+  }
+  // Les fichiers récents mêlent montages et diagrammes : chaque mode ne montre que les siens.
+  const recents = library.recentFiles
+    .filter((path) => !isDiagramPath(path))
+    .slice(0, MAX_RECENT_IN_MENU)
   return [
     item('Nouveau montage', () => schematicEditor.value?.createNew(), {
       hint: 'Ctrl+N',
@@ -343,8 +423,11 @@ async function autosaveTick(): Promise<void> {
   autosaveBusy = true
   try {
     await syncAutosaves(schematic.dirtyDocuments())
+    await syncDiagramAutosaves(diagram.dirtyDocuments())
   } catch (error) {
-    schematic.status = `Copie de secours impossible : ${error instanceof Error ? error.message : String(error)}`
+    current.value.setStatus(
+      `Copie de secours impossible : ${error instanceof Error ? error.message : String(error)}`
+    )
   } finally {
     autosaveBusy = false
   }
@@ -359,19 +442,24 @@ watch(() => library.autosaveSeconds, scheduleAutosave, { immediate: true })
 
 /** Au lancement : chaque copie de secours trouvée retrouve son onglet, si Robin le veut. */
 async function proposeRecovery(): Promise<void> {
-  const found = await readAutosaves()
-  if (found.length === 0) return
-  const lines = found.map(({ meta }) => {
-    const when = new Date(meta.savedAt).toLocaleString('fr-BE')
-    return `« ${meta.name} » (${when}, ${meta.originalPath ?? 'montage jamais enregistré'})`
-  })
+  const projects = await readAutosaves()
+  const diagrams = await readDiagramAutosaves()
+  const count = projects.length + diagrams.length
+  if (count === 0) return
+  const describe = (meta: { name: string; savedAt: string; originalPath: string | null }): string =>
+    `« ${meta.name} » (${new Date(meta.savedAt).toLocaleString('fr-BE')}, ${meta.originalPath ?? 'jamais enregistré'})`
+  const lines = [
+    ...projects.map(({ meta }) => `Montage ${describe(meta)}`),
+    ...diagrams.map(({ meta }) => `Diagramme ${describe(meta)}`)
+  ]
   const question =
-    found.length === 1
-      ? `Une copie de secours du montage ${lines.join('')} existe. La récupérer ?`
-      : `Des copies de secours de ${found.length} montages existent :\n${lines.join('\n')}\nLes récupérer ?`
+    count === 1
+      ? `Une copie de secours existe : ${lines.join('')}. La récupérer ?`
+      : `Des copies de secours de ${count} documents existent :\n${lines.join('\n')}\nLes récupérer ?`
   if (window.confirm(question)) {
-    for (const { project, meta } of found) schematic.restoreProject(project, meta.originalPath)
-    mode.value = 'schematic'
+    for (const { project, meta } of projects) schematic.restoreProject(project, meta.originalPath)
+    for (const entry of diagrams) diagram.restoreDiagram(entry.diagram, entry.meta.originalPath)
+    mode.value = projects.length > 0 ? 'schematic' : 'diagram'
   } else {
     await clearAutosave()
   }
@@ -380,9 +468,10 @@ async function proposeRecovery(): Promise<void> {
 // Fichiers venus de l'extérieur : passés au lancement, double-cliqués pendant que l'application
 // tourne, ou déposés dans la fenêtre. Un montage prend un onglet, un composant l'éditeur.
 async function openExternal(path: string): Promise<void> {
-  const result = await openExternalFile(path, { schematic, editor, library })
+  const result = await openExternalFile(path, { schematic, editor, diagram, library })
   if (result.kind !== null) {
-    mode.value = result.kind === 'project' ? 'schematic' : 'components'
+    mode.value =
+      result.kind === 'project' ? 'schematic' : result.kind === 'diagram' ? 'diagram' : 'components'
   } else if (result.message.length > 0) {
     // Le refus s'affiche dans la barre d'état de l'éditeur visible.
     current.value.setStatus(result.message)
@@ -629,13 +718,19 @@ onUnmounted(() => {
       </div>
     </header>
     <main class="workspace">
-      <LibraryPanel :mode="mode === 'components' ? 'edit' : 'place'" @create="createComponent" />
+      <DiagramLibrary v-if="mode === 'diagram'" />
+      <LibraryPanel
+        v-else
+        :mode="mode === 'components' ? 'edit' : 'place'"
+        @create="createComponent"
+      />
       <ComponentEditor v-if="mode === 'components'" ref="componentEditor" />
+      <DiagramEditor v-else-if="mode === 'diagram'" ref="diagramEditor" />
       <SchematicEditor v-else ref="schematicEditor" />
     </main>
     <SettingsDialog v-if="showSettings" @close="showSettings = false" />
     <ProfileDialog v-if="showProfile" target="general" @close="showProfile = false" />
-    <ShortcutsHelp v-if="showHelp" @close="showHelp = false" />
+    <ShortcutsHelp v-if="showHelp" :initial="current.helpSection" @close="showHelp = false" />
     <ContextMenu
       v-if="fileMenu"
       :x="fileMenu.x"

@@ -21,9 +21,15 @@ const isDev = !app.isPackaged
 const QUIT_FALLBACK_MS = 3000
 const RELEASES_URL = 'https://github.com/robinary-hex/cesep-pinout/releases/latest'
 
-/** Fichier Pinout parmi des arguments de ligne de commande : un montage (.pinout) ou un .json. */
+/**
+ * Fichier Pinout parmi des arguments de ligne de commande : un montage (.pinout), un diagramme
+ * (.pinuml) ou un .json.
+ */
 function fileArgument(argv: readonly string[]): string | null {
-  return argv.slice(1).find((arg) => /\.(pinout|json)$/i.test(arg) && !arg.startsWith('-')) ?? null
+  return (
+    argv.slice(1).find((arg) => /\.(pinout|pinuml|json)$/i.test(arg) && !arg.startsWith('-')) ??
+    null
+  )
 }
 
 /** Fichier passé au lancement (double-clic sur un montage, « Ouvrir avec », ligne de commande). */

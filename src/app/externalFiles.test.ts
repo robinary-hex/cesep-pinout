@@ -2,12 +2,15 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   createEmptyComponent,
+  createEmptyDiagram,
   createEmptyProject,
   DEFAULT_PROFILE,
   serializeComponentDefinition,
+  serializeDiagram,
   serializeProject
 } from '@/domain'
 import { useComponentEditorStore } from '@/features/component-editor/store'
+import { useDiagramStore } from '@/features/diagram-editor/store'
 import { useLibraryStore } from '@/features/library/store'
 import { useSchematicStore } from '@/features/schematic-editor/store'
 import { setBridge } from '@/io/bridge'
@@ -31,6 +34,7 @@ function stores(): Parameters<typeof openExternalFile>[1] {
   return {
     schematic: useSchematicStore(),
     editor: useComponentEditorStore(),
+    diagram: useDiagramStore(),
     library: useLibraryStore()
   }
 }
@@ -41,6 +45,7 @@ describe('fichiers venus de l’extérieur', () => {
     const component = serializeComponentDefinition(createEmptyComponent('led', 'LED'))
     expect(externalFileKind(project)).toBe('project')
     expect(externalFileKind(component)).toBe('component')
+    expect(externalFileKind(serializeDiagram(createEmptyDiagram('Boucle')))).toBe('diagram')
     expect(externalFileKind('{ "autre": 1 }')).toBeNull()
     expect(externalFileKind('pas du JSON')).toBeNull()
   })
@@ -55,6 +60,15 @@ describe('fichiers venus de l’extérieur', () => {
     expect(all.schematic.doc.name).toBe('Alim')
     expect(all.schematic.filePath).toBe('D:/Docs/alim.pinout')
     expect(all.library.recentFiles[0]).toBe('D:/Docs/alim.pinout')
+  })
+
+  it('ouvre un diagramme dans un onglet de son éditeur', async () => {
+    await fs.writeTextFile('D:/Docs/boucle.pinuml', serializeDiagram(createEmptyDiagram('Boucle')))
+    const all = stores()
+    expect(await openExternalFile('D:/Docs/boucle.pinuml', all)).toEqual({ kind: 'diagram' })
+    expect(all.diagram.doc.name).toBe('Boucle')
+    expect(all.diagram.filePath).toBe('D:/Docs/boucle.pinuml')
+    expect(all.schematic.pristine).toBe(true)
   })
 
   it('ouvre tel quel un composant de la bibliothèque', async () => {

@@ -24,14 +24,15 @@ const pointKey = (p: GridPoint): string => `${p[0]},${p[1]}`
 /**
  * Fils après un mouvement de composants. `pinsBefore` et `pinsAfter` décrivent les mêmes broches
  * (même clé) avant et après ; `translated` donne, par identifiant, le vecteur des fils déplacés
- * en bloc. Un fil qui ne change pas est retourné tel quel (même objet).
+ * en bloc. Un fil qui ne change pas est retourné tel quel (même objet). Vaut pour tout ce qui a
+ * la géométrie d'un fil : les liens d'un diagramme suivent ainsi les points d'accroche des nœuds.
  */
-export function wiresFollowingPins(
-  wires: readonly Wire[],
+export function wiresFollowingPins<W extends { id: string; points: GridPoint[] }>(
+  wires: readonly W[],
   pinsBefore: readonly PinRef[],
   pinsAfter: readonly PinRef[],
   translated: ReadonlyMap<string, GridPoint> = new Map()
-): Wire[] {
+): W[] {
   const after = new Map(pinsAfter.map((pin) => [pin.key, pin.point]))
   /** Positions d'arrivée des broches qui partaient de chaque point. */
   const targetsByPoint = new Map<string, GridPoint[]>()

@@ -1,6 +1,12 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
 import ModalDialog from '@/ui/ModalDialog.vue'
 
+// Aide : les raccourcis d'un éditeur à la fois, celui qu'on regarde d'abord ; des onglets mènent
+// aux autres.
+
+/** `initial` : titre de la section montrée à l'ouverture. */
+const props = defineProps<{ initial?: string }>()
 const emit = defineEmits<{ close: [] }>()
 
 const sections: { title: string; rows: [string, string][] }[] = [
@@ -47,6 +53,44 @@ const sections: { title: string; rows: [string, string][] }[] = [
     ]
   },
   {
+    title: 'Diagramme',
+    rows: [
+      [
+        'Bibliothèque',
+        'Clic sur une forme puis sur le diagramme, ou glisser-déposer ; le texte se tape aussitôt'
+      ],
+      ['V', 'Sélection ; arrête la pose ou le tracé'],
+      [
+        'F',
+        'Tracer un lien : un clic par coude, Maj inverse le L ; arriver sur un nœud le termine'
+      ],
+      [
+        'Glisser depuis le bord d’un nœud',
+        'En sélection : tire un lien de ce point d’accroche jusqu’au point de relâchement'
+      ],
+      ['Entrée / double-clic', 'Terminer le lien ; sur un nœud sélectionné, taper son texte'],
+      [
+        'Double-clic',
+        'Texte d’un nœud (Entrée valide, Maj+Entrée va à la ligne), étiquette d’un lien, texte libre'
+      ],
+      ['E', 'Texte libre : deux clics ou un glisser pour les deux coins de sa boîte'],
+      ['R', 'Tourner une barre de fourche d’un quart de tour'],
+      ['Flèches', 'Déplacer la sélection d’une cellule ; les liens accrochés suivent'],
+      ['Suppr', 'Supprimer la sélection'],
+      ['Ctrl+A / D', 'Tout sélectionner / dupliquer'],
+      ['Ctrl+C / V', 'Copier / coller (aussi dans un autre diagramme)'],
+      ['Alt+glisser', 'Déposer une copie de la sélection'],
+      ['Ctrl+Page haut / bas', 'Avancer / reculer les nœuds (Maj : premier / arrière-plan)'],
+      ['Ctrl+Z / Y', 'Annuler / rétablir'],
+      ['Ctrl+N / O / S', 'Nouveau / ouvrir (dans un onglet) / enregistrer en .pinuml'],
+      ['Ctrl+E', 'Exporter en PNG ou SVG'],
+      ['0 / 1', 'Ajuster au contenu / zoom 100 %'],
+      ['Molette, Espace + glisser', 'Zoom autour du curseur, déplacer la vue'],
+      ['I', 'Afficher / masquer le panneau de propriétés'],
+      ['Clic droit', 'Menu contextuel : nœud, lien, texte ou vide']
+    ]
+  },
+  {
     title: 'Éditeur de composants',
     rows: [
       [
@@ -76,41 +120,51 @@ const sections: { title: string; rows: [string, string][] }[] = [
     ]
   }
 ]
+
+/** Section montrée : celle demandée à l'ouverture, sinon la première. */
+const current = ref(
+  sections.find((section) => section.title === props.initial)?.title ?? sections[0]?.title ?? ''
+)
+const rows = computed(() => sections.find((section) => section.title === current.value)?.rows ?? [])
 </script>
 
 <template>
   <ModalDialog title="Raccourcis clavier" wide @close="emit('close')">
-    <div class="columns">
-      <section v-for="section in sections" :key="section.title">
-        <h3>{{ section.title }}</h3>
-        <table>
-          <tbody>
-            <tr v-for="[keys, action] in section.rows" :key="keys">
-              <td>
-                <kbd>{{ keys }}</kbd>
-              </td>
-              <td>{{ action }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-    </div>
+    <nav class="tabs">
+      <button
+        v-for="section in sections"
+        :key="section.title"
+        type="button"
+        :class="{ active: section.title === current }"
+        @click="current = section.title"
+      >
+        {{ section.title }}
+      </button>
+    </nav>
+    <table>
+      <tbody>
+        <tr v-for="[keys, action] in rows" :key="keys">
+          <td>
+            <kbd>{{ keys }}</kbd>
+          </td>
+          <td>{{ action }}</td>
+        </tr>
+      </tbody>
+    </table>
   </ModalDialog>
 </template>
 
 <style scoped>
-.columns {
-  display: grid;
-  grid-template-columns: 3fr 2fr;
-  gap: 24px;
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
 }
 
-h3 {
-  margin: 0 0 8px;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
+.tabs button.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent);
 }
 
 table {

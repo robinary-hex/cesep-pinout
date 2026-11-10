@@ -61,7 +61,8 @@ function fmt(value: number): string {
   return Number.isInteger(value) ? String(value) : String(Math.round(value * 1000) / 1000)
 }
 
-function attrs(values: Record<string, string | number | undefined>): string {
+/** Attributs SVG d'un élément : les valeurs indéfinies sont omises, les nombres arrondis. */
+export function svgAttrs(values: Record<string, string | number | undefined>): string {
   return Object.entries(values)
     .filter(([, value]) => value !== undefined)
     .map(
@@ -70,6 +71,8 @@ function attrs(values: Record<string, string | number | undefined>): string {
     )
     .join(' ')
 }
+
+const attrs = svgAttrs
 
 const q = (quarters: number): number => quarters / QUARTERS_PER_CELL
 

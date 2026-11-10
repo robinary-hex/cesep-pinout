@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
 import {
+  buildProjectSvg,
   componentFields,
   type ComponentDefinition,
   type ComponentField,
   type ComponentInstance,
+  type ExportSettings,
+  type SvgExport,
   type Wire
 } from '@/domain'
 import ExportDialog from '@/features/export/ExportDialog.vue'
@@ -61,6 +64,10 @@ async function openRecent(path: string): Promise<void> {
 
 function createNew(): void {
   store.newProject()
+}
+
+function buildSvg(options: ExportSettings): SvgExport | null {
+  return buildProjectSvg(store.doc, options)
 }
 
 function openExport(): void {
@@ -520,7 +527,16 @@ defineExpose({ createNew, open, openRecent, save, openExport })
       />
     </div>
     <ProfileDialog v-if="showProfile" target="montage" @close="showProfile = false" />
-    <ExportDialog v-if="showExport" @close="showExport = false" />
+    <ExportDialog
+      v-if="showExport"
+      what="montage"
+      :name="store.doc.name"
+      :file-path="store.filePath"
+      :cell-px="store.doc.profile.cellPx"
+      with-labels
+      :build="buildSvg"
+      @close="showExport = false"
+    />
     <ContextMenu v-if="menu" :x="menu.x" :y="menu.y" :items="menu.items" @close="menu = null" />
     <PromptDialog
       v-if="prompt"

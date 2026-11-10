@@ -4,16 +4,16 @@ Le domaine ne dépend de rien ; tout le reste dépend de lui.
 
 ## Couches
 
-| Couche             | Dossier         | Contenu                                                                                                    | Peut importer                           |
-| ------------------ | --------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| Coque applicative  | `src/app/`      | Fenêtre Vue, bascule Composants / Montage                                                                  | features, state, io, render, ui, domain |
-| Fonctionnalités    | `src/features/` | `component-editor/`, `library/`, `schematic-editor/`, `export/`, `settings/` ; un store Pinia par éditeur  | state, io, render, ui, domain           |
-| État               | `src/state/`    | `History` (commandes nommées, patches Immer, undo/redo) ; `useDocumentTabs` (documents ouverts par onglet) | domain                                  |
-| Entrées / sorties  | `src/io/`       | Pont IPC (`bridge.ts`), paramètres, bibliothèque, projets, exports, profils, copie de secours, chemins     | domain                                  |
-| Rendu              | `src/render/`   | Composants Vue SVG sans état qui dessinent les objets du domaine (composants)                              | domain                                  |
-| Interface partagée | `src/ui/`       | Boutons, panneaux, palette de couleurs (rien du métier)                                                    | rien                                    |
-| Domaine            | `src/domain/`   | Types, grille, formes, placement, fils, connectivité (jonctions, nets), schémas Zod, migrations, PNG       | zod seulement                           |
-| Coque Electron     | `electron/`     | `main.ts` (fenêtre, fichiers, dialogues : seul code Node), `preload.ts` (pont), `api.ts` (contrat)         | Node, Electron                          |
+| Couche             | Dossier         | Contenu                                                                                                                      | Peut importer                           |
+| ------------------ | --------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| Coque applicative  | `src/app/`      | Fenêtre Vue, bascule Composants / Montage / Diagramme                                                                        | features, state, io, render, ui, domain |
+| Fonctionnalités    | `src/features/` | `component-editor/`, `library/`, `schematic-editor/`, `diagram-editor/`, `export/`, `settings/` ; un store Pinia par éditeur | state, io, render, ui, domain           |
+| État               | `src/state/`    | `History` (commandes nommées, patches Immer, undo/redo) ; `useDocumentTabs` (documents ouverts par onglet)                   | domain                                  |
+| Entrées / sorties  | `src/io/`       | Pont IPC (`bridge.ts`), paramètres, bibliothèque, projets, exports, profils, copie de secours, chemins                       | domain                                  |
+| Rendu              | `src/render/`   | Composants Vue SVG sans état qui dessinent les objets du domaine (composants)                                                | domain                                  |
+| Interface partagée | `src/ui/`       | Boutons, panneaux, palette de couleurs (rien du métier)                                                                      | rien                                    |
+| Domaine            | `src/domain/`   | Types, grille, formes, placement, fils, connectivité (jonctions, nets), schémas Zod, migrations, PNG                         | zod seulement                           |
+| Coque Electron     | `electron/`     | `main.ts` (fenêtre, fichiers, dialogues : seul code Node), `preload.ts` (pont), `api.ts` (contrat)                           | Node, Electron                          |
 
 La règle ESLint `no-restricted-imports` sur `src/domain/**` rend la ligne du domaine vérifiable.
 
@@ -52,6 +52,23 @@ document qu'au relâchement, par une commande. Tirer un fil d'une broche en mode
 un (`pin-wire`) : il ne passe pas par le tracé de l'outil Fil (`store.drawing`), l'aperçu vient de
 `drawingPoints` et le relâchement appelle `addWire`. `SchematicCanvas.test.ts` rejoue ces gestes
 sous jsdom avec de vrais événements de souris.
+
+## Diagrammes
+
+Un diagramme est un document à part (`src/domain/diagram.ts`, fichiers `.pinuml`) : des nœuds, des
+liens, des textes libres. Les formes des nœuds viennent d'un catalogue en dur ; `diagramShapes.ts`
+décrit ce que chacune dessine (des tracés SVG en cellules et la mise en page du titre et du
+sous-titre), et les deux peintres, `DiagramNodeGraphic.vue` à l'écran et `diagramSvg.ts` à
+l'export, ne font que colorer ces descriptions. Un lien a exactement la géométrie d'un fil : tout
+`wires.ts` sert (tracé en L, coins arrondis, déplacement d'un segment ou d'un sommet). Comme pour
+les jonctions du montage, rien ne dit dans le fichier qu'un lien est accroché à un nœud :
+`diagramLinks.ts` le déduit (une extrémité posée sur un point d'accroche) et, à chaque commande
+qui déplace, redimensionne ou change un nœud, `linksFollowingNodes` fait suivre les extrémités
+concernées en réutilisant `wiresFollowingPins`. Il n'y a pas de routage automatique : les coudes
+sont ceux que Robin pose. Le store (`diagram-editor/store.ts`) reprend la structure de celui du
+montage : commandes nommées, onglets de `useDocumentTabs`, vue de `view.ts`.
+
+## Profil de style
 
 Le profil de style est général à l'application (`defaultProfile` des paramètres) ; chaque montage
 garde dans son fichier la copie avec laquelle il se dessine (`doc.profile`). Le store du montage
@@ -144,7 +161,7 @@ Tous en JSON indenté, avec `schemaVersion`, validés par Zod à l'ouverture, mi
 (`src/domain/migrations.ts`). Un fichier d'exemple par version dans `src/domain/fixtures/`.
 Versions courantes : composant 14 (textes verticaux, angles arrondis des polylignes, forme point, opacité du remplissage, italique, souligné et barré des textes, orientation réglée texte par texte, textes droits sur le montage, boîtes de texte multilignes, flèche au milieu, graisse des textes, épaisseur en multiplicateur, flèches, textes variables avec
 unité, plus de `labelPrefix`), projet 19 (styles, sens et couleur des étiquettes texte, couleurs de fil propres au montage, étiquettes texte en boîte, police des étiquettes d'extrémité dans le profil, graisse des étiquettes, étiquettes d'extrémité des fils, `componentStroke` dans le profil, `fields` par instance,
-définitions embarquées migrées à chaque version des composants), paramètres 9 (`componentStroke`
+définitions embarquées migrées à chaque version des composants), diagramme 1 (nœuds, liens à étiquette, textes libres, style et couleurs du diagramme), paramètres 9 (`componentStroke`
 et `endLabelFont` du profil par défaut, thème sombre par défaut, ouverture du panneau, affichage de
 la bibliothèque).
 

@@ -1,17 +1,27 @@
 <script setup lang="ts">
 import { computed, onUnmounted, reactive, ref, watch } from 'vue'
-import { buildProjectSvg, EXPORT_SCALES, type ExportScale, type ExportSettings } from '@/domain'
+import { EXPORT_SCALES, type ExportScale, type ExportSettings, type SvgExport } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
-import { useSchematicStore } from '@/features/schematic-editor/store'
 import { bridge } from '@/io/bridge'
 import { chooseExportPath } from '@/io/exportFiles'
 import ModalDialog from '@/ui/ModalDialog.vue'
 import { blobToBase64, svgToPngBlob } from './svgToPng'
 
-// Export du montage : options, aperçu, puis PNG, SVG ou presse-papiers.
+// Export d'un montage ou d'un diagramme : options, aperçu, puis PNG, SVG ou presse-papiers.
+// L'éditeur qui l'ouvre dit ce qu'on exporte et fournit de quoi construire le SVG.
 
+const props = defineProps<{
+  /** Ce qu'on exporte, dans les textes : « montage », « diagramme ». */
+  what: string
+  name: string
+  filePath: string | null
+  /** Pixels par cellule à 1×. */
+  cellPx: number
+  /** Propose la case des libellés de composants (montage seulement). */
+  withLabels?: boolean
+  build: (options: ExportSettings) => SvgExport | null
+}>()
 const emit = defineEmits<{ close: [] }>()
-const store = useSchematicStore()
 const library = useLibraryStore()
 
 type BackgroundChoice = 'white' | 'transparent' | 'custom'
@@ -28,7 +38,7 @@ watch([backgroundChoice, customBackground], ([choice, custom]) => {
   options.background = choice === 'custom' ? custom : choice
 })
 
-const result = computed(() => buildProjectSvg(store.doc, { ...options }))
+const result = computed(() => props.build({ ...options }))
 const previewUrl = ref<string | null>(null)
 
 /**
@@ -96,7 +106,7 @@ function savePng(): void {
   void run(async () => {
     const current = result.value
     if (!current) return null
-    const path = await chooseExportPath('png', store.doc.name, store.filePath)
+    const path = await chooseExportPath('png', props.name, props.filePath)
     if (path === null) return null
     const blob = await svgToPngBlob(current.svg, current.widthPx, current.heightPx)
     await bridge().writeBinaryFile(path, await blobToBase64(blob))
@@ -108,7 +118,7 @@ function saveSvg(): void {
   void run(async () => {
     const current = result.value
     if (!current) return null
-    const path = await chooseExportPath('svg', store.doc.name, store.filePath)
+    const path = await chooseExportPath('svg', props.name, props.filePath)
     if (path === null) return null
     await bridge().writeTextFile(path, current.svg)
     return `SVG enregistré : ${path}`
@@ -135,7 +145,7 @@ function setMargin(event: Event): void {
 </script>
 
 <template>
-  <ModalDialog title="Exporter le montage" wide @close="emit('close')">
+  <ModalDialog :title="`Exporter le ${what}`" wide @close="emit('close')">
     <div class="layout">
       <form class="options" @submit.prevent>
         <fieldset>
@@ -147,7 +157,7 @@ function setMargin(event: Event): void {
               :checked="options.scale === scale"
               @change="setScale(scale)"
             />
-            {{ scale }}× ({{ store.doc.profile.cellPx * scale }} px par cellule)
+            {{ scale }}× ({{ cellPx * scale }} px par cellule)
           </label>
         </fieldset>
 
@@ -177,7 +187,7 @@ function setMargin(event: Event): void {
           <input v-model="options.grid" type="checkbox" />
           <span>Dessiner la grille</span>
         </label>
-        <label class="check">
+        <label v-if="withLabels" class="check">
           <input v-model="options.labels" type="checkbox" />
           <span>Libellés des composants (R1, U2…)</span>
         </label>
@@ -186,7 +196,7 @@ function setMargin(event: Event): void {
           Image de {{ result.widthPx }} × {{ result.heightPx }} px ({{ result.widthCells }} ×
           {{ result.heightCells }} cellules).
         </p>
-        <p v-else class="hint">Le montage est vide : rien à exporter.</p>
+        <p v-else class="hint">Le {{ what }} est vide : rien à exporter.</p>
       </form>
 
       <div class="preview" :class="{ transparent: options.background === 'transparent' }">

@@ -1,6 +1,8 @@
 import { componentDefinitionSchema, type ComponentDefinition } from './component'
+import { diagramSchema, type Diagram } from './diagram'
 import {
   componentMigrations,
+  diagramMigrations,
   FileFormatError,
   migrateRaw,
   projectMigrations,
@@ -70,6 +72,14 @@ export function parseComponentDefinition(text: string): ComponentDefinition {
 
 export function serializeComponentDefinition(def: ComponentDefinition): string {
   return serialize(def)
+}
+
+export function parseDiagram(text: string): Diagram {
+  return parseDocument(text, diagramSchema, diagramMigrations, 'Diagramme')
+}
+
+export function serializeDiagram(diagram: Diagram): string {
+  return serialize(diagram)
 }
 
 export function parseSettings(text: string): Settings {

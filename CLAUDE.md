@@ -1,7 +1,7 @@
 # Pinout — règles du projet
 
-Éditeur personnel de petits schémas électroniques (Electron + Vue 3 + TypeScript), un seul
-utilisateur, Windows. Le plan de conception complet (décisions, formats, feuille de route) est
+Éditeur personnel de petits schémas électroniques et de diagrammes « boîtes et flèches »
+(Electron + Vue 3 + TypeScript), un seul utilisateur, Windows. Le plan de conception complet (décisions, formats, feuille de route) est
 le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMfQhs9L6FtgtXCTa6RfNz
 
 ## Commandes
@@ -130,7 +130,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   Annuler, `cancelQuit` si l'enregistrement est abandonné ; l'enregistrement lui-même est dans
   `projectActions.ts` et `componentActions.ts`, partagé avec les éditeurs).
 - Modes (`src/app/App.vue`) : un bouton à pictogramme par mode (puce = Composants, résistance =
-  Montage ; nom en infobulle), l'application démarre sur le montage. Ce que la coque demande à un
+  Montage, organigramme = Diagramme ; nom en infobulle), l'application démarre sur le montage. Ce que la coque demande à un
   mode (onglets, fermeture, enregistrement avant de quitter, statut) passe par son `ModeAdapter`.
 - Barre d'application (`src/app/App.vue`) : menu Fichier (nouveau, ouvrir, récents, enregistrer,
   exporter, paramètres, raccourcis, quitter) construit avec `ContextMenu` et appelant les actions
@@ -165,6 +165,40 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   composants : `useDocumentTabs`, `activateTab`, `newComponent`, `open` qui ramène l'onglet d'un
   composant de la bibliothèque déjà ouvert, `closeComponentTabAsking` pour la question à trois
   boutons). Le presse-papiers des formes est commun : on copie d'un composant à l'autre.
+- Diagramme (`src/features/diagram-editor/`, domaine `src/domain/diagram.ts`,
+  `diagramShapes.ts`, `diagramLinks.ts`, `diagramSvg.ts`) : organigrammes, diagrammes d'activité,
+  schémas de communication ; pas de diagrammes de séquence ni de classes (décision du 10 novembre
+  2026). Document à part, fichier `.pinuml` (JSON, `schemaVersion` 1), même grille infinie que le
+  montage mais plus fine (`style.cellPx` = 10).
+  - Nœuds : une boîte en cellules entières, une forme du catalogue en dur (`NODE_SHAPES`,
+    `NODE_SPECS` : action arrondie, rectangle, décision, départ, fin, fin de flot, fourche, envoi,
+    réception, note), un titre et un sous-titre, une couleur et un fond (`fill` : contour, teinté,
+    plein). Pas de bibliothèque à créer : `DiagramLibrary.vue` montre le catalogue. Le domaine
+    décrit ce que chaque forme dessine (`nodeParts`, `layoutNodeText`) ; `DiagramNodeGraphic.vue`
+    à l'écran et `buildDiagramSvg` à l'export peignent la même chose. Losange et disques ont des
+    dimensions paires (pointes sur la grille), les disques sont carrés, une barre a une épaisseur
+    nulle (`fittedNodeSize`, `resizeNodeBox`). Texte à l'encre du thème, sauf sur un fond plein où
+    il contraste (`nodeTextTone`) ; un fond teinté se pose sur une sous-couche couleur papier.
+    Police du diagramme : normale (titre demi-gras) ou chasse fixe (sous-titre en italique).
+  - Liens : la géométrie des fils (`wires.ts`), coudes posés à la main, pas de routage
+    automatique. Pointe ouverte au départ et/ou à l'arrivée, trait plein ou pointillé, couleur,
+    étiquette (`label`, décalage en quarts de cellule depuis le milieu du tracé). L'accroche se
+    déduit de la géométrie, jamais stockée : une extrémité posée sur un point d'accroche d'un nœud
+    (`nodeAnchors` : tour d'un rectangle, quatre pointes d'un losange ou d'un disque, toute une
+    barre) le suit quand il bouge, change de taille ou de forme (`linksFollowingNodes`,
+    `movedAnchor`, par `wiresFollowingPins`).
+  - Couleurs : la palette de l'application puis celles du diagramme (`customColors`), comme pour
+    les fils. La palette de la barre colore la sélection et règle la couleur des prochains nœuds,
+    ou des prochains liens quand on en trace ou qu'on n'a sélectionné qu'eux (`paletteOnLinks`).
+  - Gestes : forme prise dans la bibliothèque (clic puis clic, ou glisser-déposer), le texte se
+    tape aussitôt sur place (petit éditeur HTML par-dessus le nœud : Entrée valide, Maj+Entrée va
+    à la ligne, Échap abandonne) ; double-clic ou Entrée sur un nœud pour y revenir. V sélection,
+    F lien, E texte libre (le modèle des étiquettes texte du montage), R tourne une barre, I
+    panneau, Ctrl+Page haut/bas ordre des nœuds, le reste comme le montage. En sélection, le
+    point d'accroche sous le pointeur montre un anneau : glisser depuis lui tire un lien.
+  - Onglets, copies de secours (`diagramme-<onglet>.*`), question à la fermeture, fichiers
+    récents (mêlés à ceux des montages, chaque menu ne montre que les siens), export PNG/SVG
+    (`ExportDialog` reçoit de l'éditeur ce qu'il exporte) : comme le montage.
 - Thème clair ou sombre choisi dans les paramètres (`theme`) : `src/ui/theme.ts` pose
   `data-theme` sur `<html>` et toutes les couleurs de l'interface passent par les variables CSS de
   `src/app/style.css`, jamais en dur dans les styles ; les surfaces de dessin (`--paper`) sont blanches en clair et
@@ -211,12 +245,12 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Exécutable : `pnpm icon` régénère `build/icon.png` (script sans dépendance), `pnpm build:win`
   produit l'installeur NSIS et l'exe portable dans `release/` (non signés : avertissement
   SmartScreen au premier lancement, normal). Les montages s'enregistrent en `.pinout` (du JSON ;
-  les anciens `.pinout.json` s'ouvrent toujours), extension que l'installeur associe à
-  l'application (`fileAssociations`). Un fichier passé en argument s'ouvre au lancement ; avec
+  les anciens `.pinout.json` s'ouvrent toujours) et les diagrammes en `.pinuml`, extensions que
+  l'installeur associe à l'application (`fileAssociations`). Un fichier passé en argument s'ouvre au lancement ; avec
   l'application installée déjà ouverte (verrou d'instance unique, pas en développement), il
   arrive par `onOpenFile` et prend un onglet. Un fichier déposé dans la fenêtre s'ouvre de même
-  (`pathForFile` du pont). `src/app/externalFiles.ts` reconnaît montage ou composant à son
-  contenu : montage dans un onglet, composant dans l'éditeur (tel quel s'il est dans la
+  (`pathForFile` du pont). `src/app/externalFiles.ts` reconnaît montage, diagramme ou composant à
+  son contenu : montage et diagramme dans un onglet de leur éditeur, composant dans l'éditeur (tel quel s'il est dans la
   bibliothèque, sinon comme nouveau composant).
   - Éditeur de composants : V sélection, R rectangle, O ellipse, N point (un clic par point,
     l'outil reste actif), L ligne, P polyligne, E texte,
@@ -250,7 +284,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     composant posé s'appelle « libellé » dans l'interface.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 14, projet 19, paramètres 9
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 14, projet 19, paramètres 9,
+  diagramme 1
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

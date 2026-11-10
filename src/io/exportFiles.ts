@@ -13,7 +13,7 @@ export function defaultExportName(
   const base = projectPath
     ? baseName(projectPath)
         .replace(/\.pinout\.json$/i, '')
-        .replace(/\.(pinout|json)$/i, '')
+        .replace(/\.(pinout|pinuml|json)$/i, '')
     : slugify(projectName)
   return `${base}.${kind}`
 }
