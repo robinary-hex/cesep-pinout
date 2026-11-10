@@ -294,10 +294,10 @@ function setLabelSize(event: Event): void {
             v-if="store.profileDiffs.length > 0"
             type="button"
             class="small with-icon"
-            title="Remplace le style de ce montage par le profil général (annulable)"
+            title="Rétablit le profil de style général pour ce montage (annulable)"
             @click="store.adoptGeneralProfile()"
           >
-            <Icon name="refresh" :size="13" /> Rétablir le style général
+            <Icon name="refresh" :size="13" /> Réinitialiser
           </button>
         </div>
       </section>
