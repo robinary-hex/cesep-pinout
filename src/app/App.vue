@@ -6,7 +6,7 @@ import { saveComponentDoc } from '@/features/component-editor/componentActions'
 import { useComponentEditorStore } from '@/features/component-editor/store'
 import LibraryPanel from '@/features/library/LibraryPanel.vue'
 import { useLibraryStore } from '@/features/library/store'
-import { saveProject } from '@/features/schematic-editor/projectActions'
+import { closeTabAsking, saveProject } from '@/features/schematic-editor/projectActions'
 import SchematicEditor from '@/features/schematic-editor/SchematicEditor.vue'
 import { useSchematicStore } from '@/features/schematic-editor/store'
 import SettingsDialog from '@/features/settings/SettingsDialog.vue'
@@ -100,8 +100,13 @@ function newTab(): void {
   mode.value = 'schematic'
 }
 
+/** Ferme un onglet ; un montage modifié demande d'abord : enregistrer, ne pas enregistrer, annuler. */
+async function closeTab(id: number): Promise<void> {
+  await closeTabAsking(schematic, library, id)
+}
+
 function closeTabOnMiddle(id: number, event: MouseEvent): void {
-  if (event.button === 1) schematic.closeTab(id)
+  if (event.button === 1) void closeTab(id)
 }
 
 // Glisser un onglet le réordonne : il prend la place de celui qu'il survole dès que le curseur
@@ -405,7 +410,7 @@ onUnmounted(() => {
             type="button"
             class="doc-tab-close"
             title="Fermer ce montage (ou clic du milieu sur l’onglet)"
-            @click.stop="schematic.closeTab(tab.id)"
+            @click.stop="closeTab(tab.id)"
           >
             ✕
           </button>

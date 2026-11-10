@@ -468,19 +468,13 @@ export const useSchematicStore = defineStore('schematic', () => {
   }
 
   /**
-   * Ferme un onglet, après confirmation s'il a des modifications ; vrai s'il est fermé. Fermer le
-   * dernier laisse un montage vierge.
+   * Ferme un onglet sans rien demander ; vrai s'il existait. La question « enregistrer ? » d'un
+   * montage modifié se pose avant, dans `closeTabAsking`. Fermer le dernier laisse un montage
+   * vierge.
    */
   function closeTab(id: number): boolean {
-    const info = tabs.value.find((tab) => tab.id === id)
-    if (!info) return false
-    if (
-      info.dirty &&
-      !window.confirm(`« ${info.name} » a des modifications non enregistrées. Fermer quand même ?`)
-    ) {
-      return false
-    }
     const index = tabStates.value.findIndex((tab) => tab.id === id)
+    if (index === -1) return false
     const remaining = tabStates.value.filter((tab) => tab.id !== id)
     if (id !== activeTabId.value) {
       tabStates.value = remaining

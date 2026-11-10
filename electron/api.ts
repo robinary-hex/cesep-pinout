@@ -37,6 +37,9 @@ export interface DirEntry {
   isDirectory: boolean
 }
 
+/** Réponse au dialogue « Enregistrer les modifications ? » d'un montage qu'on ferme. */
+export type SaveChoice = 'save' | 'discard' | 'cancel'
+
 /** Demandes du processus principal au rendu. */
 /** discard-then-quit : abandonner les modifications (copie de secours effacée) ; save-then-quit : enregistrer d'abord. */
 export type AppRequest = 'discard-then-quit' | 'save-then-quit'
@@ -67,6 +70,8 @@ export interface PinoutApi {
   showOpenDialog(options?: OpenDialogOptions): Promise<string | null>
   /** Retourne le chemin choisi, ou null si l'utilisateur annule. */
   showSaveDialog(options?: SaveDialogOptions): Promise<string | null>
+  /** Montage modifié qu'on ferme : Enregistrer, Ne pas enregistrer ou Annuler. */
+  confirmSave(name: string): Promise<SaveChoice>
   getAppPaths(): Promise<AppPaths>
   /** Fichier .json passé au lancement (« Ouvrir avec »), s'il existe. */
   getLaunchFile(): Promise<string | null>
@@ -97,6 +102,7 @@ export const IPC = {
   removeComponentFolder: 'fs:remove-component-folder',
   showOpenDialog: 'dialog:open',
   showSaveDialog: 'dialog:save',
+  confirmSave: 'dialog:confirm-save',
   getAppPaths: 'app:paths',
   launchFile: 'app:launch-file',
   setDirty: 'app:set-dirty',

@@ -8,6 +8,7 @@ import {
   type AppRequest,
   type DirEntry,
   type OpenDialogOptions,
+  type SaveChoice,
   type SaveDialogOptions,
   type UpdateStatus
 } from './api'
@@ -103,6 +104,25 @@ function registerIpc(): void {
       ? await dialog.showSaveDialog(owner, options)
       : await dialog.showSaveDialog(options)
     return result.canceled || !result.filePath ? null : result.filePath
+  })
+
+  // Fermeture d'un onglet modifié : le même dialogue à trois boutons que la garde à la fermeture.
+  ipcMain.handle(IPC.confirmSave, async (event, name: string): Promise<SaveChoice> => {
+    const owner = BrowserWindow.fromWebContents(event.sender)
+    const options = {
+      type: 'warning' as const,
+      title: 'Pinout',
+      message: `Enregistrer les modifications de « ${name} » ?`,
+      detail: 'Sans enregistrement, les modifications sont perdues.',
+      buttons: ['Enregistrer', 'Ne pas enregistrer', 'Annuler'],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true
+    }
+    const { response } = owner
+      ? await dialog.showMessageBox(owner, options)
+      : await dialog.showMessageBox(options)
+    return response === 0 ? 'save' : response === 1 ? 'discard' : 'cancel'
   })
 
   ipcMain.handle(IPC.getAppPaths, (): AppPaths => ({

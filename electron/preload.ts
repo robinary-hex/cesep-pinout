@@ -20,6 +20,7 @@ const api: PinoutApi = {
   removeComponentFolder: (path) => ipcRenderer.invoke(IPC.removeComponentFolder, path),
   showOpenDialog: (options?: OpenDialogOptions) => ipcRenderer.invoke(IPC.showOpenDialog, options),
   showSaveDialog: (options?: SaveDialogOptions) => ipcRenderer.invoke(IPC.showSaveDialog, options),
+  confirmSave: (name) => ipcRenderer.invoke(IPC.confirmSave, name),
   getAppPaths: () => ipcRenderer.invoke(IPC.getAppPaths),
   getLaunchFile: () => ipcRenderer.invoke(IPC.launchFile),
   setDirty: (dirty) => ipcRenderer.invoke(IPC.setDirty, dirty),

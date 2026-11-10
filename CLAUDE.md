@@ -127,8 +127,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   rouges en clair, jaunes en sombre ; cadre pour un PNG). Pictogrammes : `src/ui/Icon.vue` dessine les
   tracés de `src/ui/icons.ts` (SVG inline, trait de la couleur courante, pas de police d'icônes).
 - Onglets de montage (`App.vue`, à droite du bouton Montage) : un par montage ouvert, au nom du
-  montage, point s'il est modifié, croix ou clic du milieu pour fermer (confirmation s'il est
-  modifié), « + » pour un nouveau, Ctrl+Tab / Ctrl+Maj+Tab pour passer de l'un à l'autre,
+  montage, point s'il est modifié, croix ou clic du milieu pour fermer (s'il est
+  modifié : Enregistrer / Ne pas enregistrer / Annuler, dialogue natif `confirmSave` du pont, flux
+  dans `closeTabAsking`), « + » pour un nouveau, Ctrl+Tab / Ctrl+Maj+Tab pour passer de l'un à l'autre,
   glisser-déposer pour les réordonner (`moveTab`). Le store
   du montage reste unique : l'onglet actif vit dans ses refs, les autres sont rangés dans
   `tabStates` (historique, fichier, vue, sélection, couleur courante) ; `activateTab` range l'un et

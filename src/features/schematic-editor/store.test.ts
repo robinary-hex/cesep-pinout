@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
   absolutePinPosition,
   createEmptyComponent,
@@ -570,10 +570,6 @@ describe('montage : fin d’un tracé de fil', () => {
 })
 
 describe('onglets de montage', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
   it('un montage vierge n’est pas modifié, et un nouveau montage prend sa place', () => {
     const store = useSchematicStore()
     expect(store.dirty).toBe(false)
@@ -660,15 +656,12 @@ describe('onglets de montage', () => {
     expect(store.pristine).toBe(true)
   })
 
-  it('demande confirmation avant de fermer un onglet modifié', () => {
+  it('ferme un onglet modifié sans rien demander : la question se pose avant, dans l’action', () => {
     const store = useSchematicStore()
     store.setProjectName('Brouillon')
-    vi.stubGlobal('window', { confirm: () => false })
-    expect(store.closeTab(store.activeTabId)).toBe(false)
-    expect(store.doc.name).toBe('Brouillon')
-    vi.stubGlobal('window', { confirm: () => true })
     expect(store.closeTab(store.activeTabId)).toBe(true)
     expect(store.doc.name).toBe('Nouveau montage')
+    expect(store.closeTab(-1)).toBe(false)
   })
 
   it('réordonne les onglets sans changer celui qui est affiché', () => {

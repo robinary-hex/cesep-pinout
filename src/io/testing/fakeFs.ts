@@ -1,4 +1,4 @@
-import type { AppRequest, DirEntry, PinoutApi } from '../../../electron/api'
+import type { AppRequest, DirEntry, PinoutApi, SaveChoice } from '../../../electron/api'
 
 /**
  * Système de fichiers en mémoire qui imite le pont Electron, pour les tests.
@@ -10,6 +10,8 @@ export class FakeFs implements PinoutApi {
   /** Réponses programmées des dialogues : chaque appel consomme la première. */
   readonly openDialogAnswers: Array<string | null> = []
   readonly saveDialogAnswers: Array<string | null> = []
+  /** Réponses programmées au dialogue « Enregistrer les modifications ? » ; Annuler par défaut. */
+  readonly confirmSaveAnswers: SaveChoice[] = []
   dirty = false
   quitConfirmed = false
   private readonly requestHandlers = new Set<(request: AppRequest) => void>()
@@ -83,6 +85,10 @@ export class FakeFs implements PinoutApi {
 
   async showSaveDialog(): Promise<string | null> {
     return this.saveDialogAnswers.shift() ?? null
+  }
+
+  async confirmSave(): Promise<SaveChoice> {
+    return this.confirmSaveAnswers.shift() ?? 'cancel'
   }
 
   /** Racine OneDrive simulée ; null par défaut, comme une machine sans OneDrive. */

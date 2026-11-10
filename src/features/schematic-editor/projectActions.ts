@@ -1,12 +1,13 @@
 import { FileFormatError } from '@/domain'
 import type { useLibraryStore } from '@/features/library/store'
 import { syncAutosaves } from '@/io/autosave'
+import { bridge } from '@/io/bridge'
 import { dirOf } from '@/io/paths'
 import { chooseProjectToSave, writeProject } from '@/io/projectFiles'
 import type { useSchematicStore } from './store'
 
-// Enregistrement du montage, partagé par l'éditeur (Ctrl+S, menu Fichier, panneau) et par la
-// garde à la fermeture (« Enregistrer » avant de quitter).
+// Enregistrement du montage, partagé par l'éditeur (Ctrl+S, menu Fichier), la fermeture d'un
+// onglet et la garde à la fermeture (« Enregistrer » avant de quitter).
 
 type SchematicStore = ReturnType<typeof useSchematicStore>
 type LibraryStore = ReturnType<typeof useLibraryStore>
@@ -44,4 +45,31 @@ export async function saveProject(
     store.status = `Échec de l’enregistrement : ${describeError(error)}`
     return false
   }
+}
+
+/**
+ * Ferme un onglet. S'il a des modifications, la question est posée d'abord : Enregistrer (le
+ * montage est affiché, puis enregistré ; renoncer au choix du fichier garde l'onglet), Ne pas
+ * enregistrer, ou Annuler. Vrai si l'onglet est fermé.
+ */
+export async function closeTabAsking(
+  store: SchematicStore,
+  library: LibraryStore,
+  id: number
+): Promise<boolean> {
+  const tab = store.tabs.find((candidate) => candidate.id === id)
+  if (!tab) return false
+  if (tab.dirty) {
+    const choice = await bridge().confirmSave(tab.name)
+    if (choice === 'cancel') return false
+    if (choice === 'save') {
+      // L'enregistrement porte sur le montage affiché : on montre d'abord celui qu'on ferme.
+      store.activateTab(id)
+      if (!(await saveProject(store, library))) return false
+    }
+  }
+  store.closeTab(id)
+  // La copie de secours d'un montage abandonné disparaît avec son onglet.
+  await syncAutosaves(store.dirtyDocuments())
+  return true
 }
