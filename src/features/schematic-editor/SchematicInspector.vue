@@ -281,14 +281,14 @@ function setLabelSize(event: Event): void {
             {{ fact.text }}
           </li>
         </ul>
-        <div class="row">
+        <div class="row profile-actions">
           <button
             type="button"
             class="small with-icon"
             title="Modifier le style de ce montage seulement"
             @click="emit('editProfile')"
           >
-            <Icon name="palette" :size="13" /> Modifier le style…
+            <Icon name="brush" :size="13" /> Modifier le style…
           </button>
           <button
             v-if="store.profileDiffs.length > 0"
@@ -297,7 +297,7 @@ function setLabelSize(event: Event): void {
             title="Remplace le style de ce montage par le profil général (annulable)"
             @click="store.adoptGeneralProfile()"
           >
-            <Icon name="refresh" :size="13" /> Profil général
+            <Icon name="refresh" :size="13" /> Rétablir le style général
           </button>
         </div>
       </section>
@@ -736,6 +736,11 @@ function setLabelSize(event: Event): void {
 
 .facts li {
   margin: 2px 0;
+}
+
+/* Les boutons du style, un peu sous la liste pour ne pas la toucher. */
+.profile-actions {
+  margin-top: 12px;
 }
 
 /* Réglage qui s'écarte du profil général : rouge en clair, ambre en sombre. */
