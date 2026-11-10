@@ -44,7 +44,8 @@ function text(x: number, y: number): Primitive {
     followsRotation: false,
     italic: false,
     underline: false,
-    strike: false
+    strike: false,
+    vertical: false
   }
 }
 

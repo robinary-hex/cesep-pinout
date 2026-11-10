@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { hexColorSchema } from './color'
 import { isInsideBox, PNG_PX_PER_CELL, QUARTERS_PER_CELL, sizeSchema, type Size } from './grid'
 
-export const COMPONENT_SCHEMA_VERSION = 13
+export const COMPONENT_SCHEMA_VERSION = 14
 
 export const pinKindSchema = z.enum(['in', 'out', 'io', 'power'])
 export type PinKind = z.infer<typeof pinKindSchema>
@@ -129,7 +129,9 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
     /** Styles : italique, souligné, barré. */
     italic: z.boolean(),
     underline: z.boolean(),
-    strike: z.boolean()
+    strike: z.boolean(),
+    /** Texte tourné de 90° (sens horaire) autour du centre de sa boîte : il se lit de haut en bas. */
+    vertical: z.boolean()
   }),
   z.object({
     kind: z.literal('dot'),
@@ -285,10 +287,36 @@ export function layoutTextBox(
   }
 }
 
-/** Lignes d'un texte de composant dans sa boîte, en quarts de cellule. */
+/**
+ * Boîte dans laquelle un texte se met en page : la sienne, ou la même tournée d'un quart de tour
+ * (largeur et hauteur échangées, même centre) quand il est vertical.
+ */
+export function textLayoutBox(primitive: TextPrimitive): {
+  x: number
+  y: number
+  w: number
+  h: number
+} {
+  const { x, y, w, h } = primitive
+  if (!primitive.vertical) return { x, y, w, h }
+  return { x: x + w / 2 - h / 2, y: y + h / 2 - w / 2, w: h, h: w }
+}
+
+/**
+ * Attribut `transform` SVG d'un texte vertical : un quart de tour horaire autour du centre de sa
+ * boîte, dans l'unité voulue (`scale` par quart de cellule) ; indéfini pour un texte horizontal.
+ */
+export function textTransform(primitive: TextPrimitive, scale = 1): string | undefined {
+  if (!primitive.vertical) return undefined
+  const cx = (primitive.x + primitive.w / 2) * scale
+  const cy = (primitive.y + primitive.h / 2) * scale
+  return `rotate(90 ${cx} ${cy})`
+}
+
+/** Lignes d'un texte de composant dans sa boîte de mise en page, en quarts de cellule. */
 export function layoutText(primitive: TextPrimitive, fields?: FieldValues): TextBoxLayout {
   return layoutTextBox(
-    primitive,
+    textLayoutBox(primitive),
     textContent(primitive, fields),
     primitive.size * QUARTERS_PER_CELL,
     primitive.anchor

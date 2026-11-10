@@ -58,7 +58,6 @@ export async function openExternalFile(
     return (await schematic.openPath(path)) ? { kind } : { kind: null, message: schematic.status }
   }
   if (kind === 'component') {
-    if (!editor.confirmDiscard()) return { kind: null, message: '' }
     try {
       const folder = dirOf(path)
       const entry = samePath(baseName(path), COMPONENT_FILE)

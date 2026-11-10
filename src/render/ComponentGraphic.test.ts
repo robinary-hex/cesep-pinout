@@ -29,7 +29,8 @@ describe('ComponentGraphic', () => {
           followsRotation: false,
           italic: false,
           underline: false,
-          strike: false
+          strike: false,
+          vertical: false
         }
       ]
     }
@@ -74,7 +75,8 @@ describe('ComponentGraphic', () => {
           followsRotation: false,
           italic: false,
           underline: false,
-          strike: false
+          strike: false,
+          vertical: false
         }
       ]
     }

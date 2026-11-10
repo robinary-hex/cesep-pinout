@@ -4,6 +4,7 @@ import { computed, ref, shallowRef } from 'vue'
 import {
   componentIssues,
   createEmptyComponent,
+  isInsideBox,
   pinsInside,
   PNG_PX_PER_CELL,
   QUARTERS_PER_CELL,
@@ -19,18 +20,40 @@ import {
   type Size,
   type StackMove
 } from '@/domain'
+import { samePath } from '@/io/paths'
 import { History } from '@/state/history'
 import { fittingCellPx } from './pinLabelLayout'
 import type { ToolId } from './tools'
 
-/** Sélection : une ou plusieurs formes (indices, triés), ou une broche. */
-export type Selection =
-  { kind: 'primitives'; indexes: number[] } | { kind: 'pin'; id: string } | null
+/** Sélection : des formes (indices, triés) et des broches (identifiants), ensemble. */
+export interface Selection {
+  indexes: number[]
+  pinIds: string[]
+}
+
+/** Onglet affiché dans la barre d'application. */
+export interface ComponentTabInfo {
+  id: number
+  name: string
+  folder: string | null
+  dirty: boolean
+}
+
+/** Ce qu'un onglet garde quand il n'est pas affiché : son composant, son historique, son édition. */
+interface TabState {
+  id: number
+  history: History<ComponentDefinition>
+  savedDoc: ComponentDefinition | null
+  folder: string | null
+  selection: Selection | null
+  cellPx: number
+}
 
 const MIN_CELL_PX = 8
 const MAX_CELL_PX = 200
 const FIT_PADDING_PX = 48
 const FIT_SAFETY_PX = 2
+const DEFAULT_CELL_PX = 40
 
 function nextPinId(pins: ReadonlyArray<Pin>): string {
   const taken = new Set(pins.map((pin) => pin.id))
@@ -40,61 +63,120 @@ function nextPinId(pins: ReadonlyArray<Pin>): string {
   }
 }
 
+/** Composant vierge : rien de dessiné, aucune broche. */
+function isBlank(def: ComponentDefinition): boolean {
+  return (
+    def.visual.kind === 'drawing' && def.visual.primitives.length === 0 && def.pins.length === 0
+  )
+}
+
 /**
- * Document en cours d'édition dans l'éditeur de composants.
- * Le document est immuable ; chaque commande passe par l'historique (patches Immer).
+ * Des modifications à enregistrer ? Pas si le composant est intact, ni s'il n'a jamais été
+ * enregistré et qu'il est encore vierge : on le ferme, et on quitte l'application, sans question.
+ */
+function needsSaving(
+  def: ComponentDefinition,
+  saved: ComponentDefinition | null,
+  folder: string | null
+): boolean {
+  return def !== saved && !(folder === null && isBlank(def))
+}
+
+/**
+ * Composants ouverts dans l'éditeur, un par onglet, et celui en cours d'édition. Le document est
+ * immuable ; chaque commande passe par l'historique de son onglet (patches Immer). L'onglet actif
+ * vit dans les refs du store ; les autres attendent dans `tabStates` et `activateTab` range l'un
+ * pour charger l'autre. Le presse-papiers des formes est commun aux onglets.
  */
 export const useComponentEditorStore = defineStore('componentEditor', () => {
-  const history = new History<ComponentDefinition>(
-    createEmptyComponent('nouveau-composant', 'Nouveau composant')
-  )
+  let nextTabId = 1
+
+  function blankComponent(): ComponentDefinition {
+    return createEmptyComponent('nouveau-composant', 'Nouveau composant')
+  }
+
+  function freshTab(
+    def: ComponentDefinition,
+    saved: ComponentDefinition | null,
+    sourceFolder: string | null
+  ): TabState {
+    return {
+      id: nextTabId++,
+      history: new History<ComponentDefinition>(def),
+      savedDoc: saved,
+      folder: sourceFolder,
+      selection: null,
+      cellPx: DEFAULT_CELL_PX
+    }
+  }
+
+  /** Onglet d'un composant vierge : il n'a rien à enregistrer tant qu'on n'y touche pas. */
+  function blankTab(): TabState {
+    const blank = blankComponent()
+    return freshTab(blank, blank, null)
+  }
+
+  const firstTab = blankTab()
+  /** Historique de l'onglet actif ; remplacé à chaque changement d'onglet. */
+  let history = firstTab.history
+  /** États rangés des onglets ; celui de l'onglet actif n'y est à jour qu'après `stash`. */
+  const tabStates = shallowRef<TabState[]>([firstTab])
+  const activeTabId = ref(firstTab.id)
 
   const doc = shallowRef<ComponentDefinition>(history.value)
-  /** Dernier état enregistré (même objet que doc quand rien n'a changé) ; null = jamais enregistré. */
-  const savedDoc = shallowRef<ComponentDefinition | null>(null)
+  /** Dernier état enregistré (même objet que doc quand rien n'a changé) ; null = à enregistrer. */
+  const savedDoc = shallowRef<ComponentDefinition | null>(firstTab.savedDoc)
   const folder = ref<string | null>(null)
-  const selection = ref<Selection>(null)
+  const selection = ref<Selection | null>(null)
   const tool = ref<ToolId>('select')
   /** Pixels par cellule dans l'éditeur (zoom), continu. */
-  const cellPx = ref(40)
+  const cellPx = ref(DEFAULT_CELL_PX)
   const viewport = ref({ width: 800, height: 600 })
   const hoverPinId = ref<string | null>(null)
   const status = ref('')
   const undoLabel = ref<string | null>(null)
   const redoLabel = ref<string | null>(null)
 
-  /** Composant vierge : rien de dessiné, aucune broche. */
-  const blank = computed(
-    () =>
-      doc.value.visual.kind === 'drawing' &&
-      doc.value.visual.primitives.length === 0 &&
-      doc.value.pins.length === 0
+  const dirty = computed(() => needsSaving(doc.value, savedDoc.value, folder.value))
+  /** Onglet vierge : jamais enregistré, jamais touché. Un composant qu'on ouvre prend sa place. */
+  const pristine = computed(() => folder.value === null && doc.value === savedDoc.value)
+  const tabs = computed<ComponentTabInfo[]>(() =>
+    tabStates.value.map((tab) =>
+      tab.id === activeTabId.value
+        ? { id: tab.id, name: doc.value.name, folder: folder.value, dirty: dirty.value }
+        : {
+            id: tab.id,
+            name: tab.history.value.name,
+            folder: tab.folder,
+            dirty: needsSaving(tab.history.value, tab.savedDoc, tab.folder)
+          }
+    )
   )
-  /**
-   * Des modifications à enregistrer ? Un composant jamais enregistré et encore vierge n'en a pas :
-   * on le quitte, et on quitte l'application, sans question.
-   */
-  const dirty = computed(
-    () => doc.value !== savedDoc.value && !(folder.value === null && blank.value)
-  )
+  const anyDirty = computed(() => tabs.value.some((tab) => tab.dirty))
   const issues = computed(() => componentIssues(doc.value))
   const hasErrors = computed(() => issues.value.some((issue) => issue.level === 'error'))
-  const selectedIndexes = computed<readonly number[]>(() =>
-    selection.value?.kind === 'primitives' ? selection.value.indexes : []
-  )
-  /** La forme sélectionnée quand il y en a exactement une. */
+  const selectedIndexes = computed<readonly number[]>(() => selection.value?.indexes ?? [])
+  const selectedPinIds = computed<readonly string[]>(() => selection.value?.pinIds ?? [])
+  /** La forme sélectionnée quand la sélection se réduit à elle. */
   const selectedPrimitive = computed<Primitive | null>(() => {
     const indexes = selectedIndexes.value
     const index = indexes[0]
-    if (indexes.length !== 1 || index === undefined || doc.value.visual.kind !== 'drawing') {
+    if (
+      indexes.length !== 1 ||
+      index === undefined ||
+      selectedPinIds.value.length > 0 ||
+      doc.value.visual.kind !== 'drawing'
+    ) {
       return null
     }
     return doc.value.visual.primitives[index] ?? null
   })
+  /** La broche sélectionnée quand la sélection se réduit à elle. */
   const selectedPin = computed<Pin | null>(() => {
-    const current = selection.value
-    if (current?.kind !== 'pin') return null
-    return doc.value.pins.find((pin) => pin.id === current.id) ?? null
+    const ids = selectedPinIds.value
+    const id = ids[0]
+    if (ids.length !== 1 || id === undefined || selectedIndexes.value.length > 0) return null
+    return doc.value.pins.find((pin) => pin.id === id) ?? null
   })
 
   function sync(): void {
@@ -102,16 +184,12 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     undoLabel.value = history.undoLabel
     redoLabel.value = history.redoLabel
     const current = selection.value
-    if (current?.kind === 'primitives') {
-      const count = doc.value.visual.kind === 'drawing' ? doc.value.visual.primitives.length : 0
-      const kept = current.indexes.filter((index) => index < count)
-      if (kept.length === 0) selection.value = null
-      else if (kept.length !== current.indexes.length) {
-        selection.value = { kind: 'primitives', indexes: kept }
-      }
-    }
-    if (current?.kind === 'pin' && !doc.value.pins.some((pin) => pin.id === current.id)) {
-      selection.value = null
+    if (!current) return
+    const count = doc.value.visual.kind === 'drawing' ? doc.value.visual.primitives.length : 0
+    const indexes = current.indexes.filter((index) => index < count)
+    const pinIds = current.pinIds.filter((id) => doc.value.pins.some((pin) => pin.id === id))
+    if (indexes.length !== current.indexes.length || pinIds.length !== current.pinIds.length) {
+      select(indexes, pinIds)
     }
   }
 
@@ -135,17 +213,103 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     status.value = `Rétabli : ${label}`
   }
 
-  /** Charge un composant ; sourceFolder null = nouveau, jamais enregistré. */
-  function open(def: ComponentDefinition, sourceFolder: string | null): void {
-    history.reset(def)
-    savedDoc.value = sourceFolder === null ? null : def
-    folder.value = sourceFolder
-    selection.value = null
+  // Onglets
+
+  /** Range l'état vivant dans l'onglet actif, avant d'en montrer un autre. */
+  function stash(): void {
+    const id = activeTabId.value
+    const state: TabState = {
+      id,
+      history,
+      savedDoc: savedDoc.value,
+      folder: folder.value,
+      selection: selection.value,
+      cellPx: cellPx.value
+    }
+    tabStates.value = tabStates.value.map((tab) => (tab.id === id ? state : tab))
+  }
+
+  /** Montre un onglet : composant, historique, zoom et sélection deviennent l'état vivant. */
+  function load(tab: TabState): void {
+    history = tab.history
+    savedDoc.value = tab.savedDoc
+    folder.value = tab.folder
+    selection.value = tab.selection
+    cellPx.value = tab.cellPx
+    activeTabId.value = tab.id
     tool.value = 'select'
+    hoverPinId.value = null
     status.value = ''
     sync()
+  }
+
+  function activateTab(id: number): void {
+    if (id === activeTabId.value) return
+    const target = tabStates.value.find((tab) => tab.id === id)
+    if (!target) return
+    stash()
+    load(target)
+  }
+
+  /** Onglet suivant (1) ou précédent (-1), en boucle. */
+  function cycleTab(step: 1 | -1): void {
+    const list = tabStates.value
+    const index = list.findIndex((tab) => tab.id === activeTabId.value)
+    const next = list[(index + step + list.length) % list.length]
+    if (next) activateTab(next.id)
+  }
+
+  /** Déplace un onglet à la position donnée dans la rangée (glisser-déposer). */
+  function moveTab(id: number, toIndex: number): void {
+    const list = [...tabStates.value]
+    const from = list.findIndex((tab) => tab.id === id)
+    const [tab] = from === -1 ? [] : list.splice(from, 1)
+    if (!tab) return
+    list.splice(Math.max(0, Math.min(toIndex, list.length)), 0, tab)
+    tabStates.value = list
+  }
+
+  /** Montre un composant dans un onglet : l'onglet actif s'il est vierge, sinon un nouveau. */
+  function showInTab(
+    def: ComponentDefinition,
+    saved: ComponentDefinition | null,
+    sourceFolder: string | null
+  ): void {
+    const tab = freshTab(def, saved, sourceFolder)
+    if (pristine.value) {
+      const replaced = activeTabId.value
+      tabStates.value = tabStates.value.map((other) => (other.id === replaced ? tab : other))
+    } else {
+      stash()
+      tabStates.value = [...tabStates.value, tab]
+    }
+    load(tab)
     // Un composant qui s'ouvre occupe toute la zone d'édition.
     fitToViewport()
+  }
+
+  /** Nouveau composant vierge, dans son onglet. */
+  function newComponent(): void {
+    const blank = blankComponent()
+    showInTab(blank, blank, null)
+  }
+
+  /**
+   * Ouvre un composant dans un onglet ; `sourceFolder` null = jamais enregistré (copie, import) :
+   * il est alors à enregistrer. Un composant de la bibliothèque déjà ouvert n'est pas rechargé :
+   * son onglet revient devant.
+   */
+  function open(def: ComponentDefinition, sourceFolder: string | null): void {
+    if (sourceFolder !== null) {
+      const already = tabs.value.find(
+        (tab) => tab.folder !== null && samePath(tab.folder, sourceFolder)
+      )
+      if (already) {
+        activateTab(already.id)
+        return
+      }
+    }
+    showInTab(def, sourceFolder === null ? null : def, sourceFolder)
   }
 
   function markSaved(savedFolder: string): void {
@@ -153,10 +317,30 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     folder.value = savedFolder
   }
 
-  function confirmDiscard(): boolean {
-    return (
-      !dirty.value || window.confirm('Des modifications ne sont pas enregistrées. Les abandonner ?')
-    )
+  /**
+   * Ferme un onglet sans rien demander ; vrai s'il existait. La question « enregistrer ? » d'un
+   * composant modifié se pose avant, dans `closeComponentTabAsking`. Fermer le dernier laisse un
+   * composant vierge.
+   */
+  function closeTab(id: number): boolean {
+    const index = tabStates.value.findIndex((tab) => tab.id === id)
+    if (index === -1) return false
+    const remaining = tabStates.value.filter((tab) => tab.id !== id)
+    if (id !== activeTabId.value) {
+      tabStates.value = remaining
+      return true
+    }
+    const next = remaining[Math.min(index, remaining.length - 1)] ?? blankTab()
+    tabStates.value = remaining.length > 0 ? remaining : [next]
+    load(next)
+    return true
+  }
+
+  /** Ferme les onglets d'un composant qui vient d'être supprimé de la bibliothèque. */
+  function closeFolderTabs(removedFolder: string): void {
+    for (const tab of tabs.value) {
+      if (tab.folder !== null && samePath(tab.folder, removedFolder)) closeTab(tab.id)
+    }
   }
 
   function drawing(draft: Draft<ComponentDefinition>): Draft<Primitive>[] | null {
@@ -165,15 +349,37 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
 
   // Sélection
 
+  /** Sélectionne des formes et des broches ; rien du tout vide la sélection. */
+  function select(indexes: readonly number[], pinIds: readonly string[] = []): void {
+    const uniqueIndexes = [...new Set(indexes)].sort((a, b) => a - b)
+    const uniquePins = [...new Set(pinIds)]
+    selection.value =
+      uniqueIndexes.length > 0 || uniquePins.length > 0
+        ? { indexes: uniqueIndexes, pinIds: uniquePins }
+        : null
+  }
+
   function selectPrimitives(indexes: readonly number[]): void {
-    const unique = [...new Set(indexes)].sort((a, b) => a - b)
-    selection.value = unique.length > 0 ? { kind: 'primitives', indexes: unique } : null
+    select(indexes, [])
+  }
+
+  function selectPin(id: string): void {
+    select([], [id])
   }
 
   function togglePrimitive(index: number): void {
     const current = selectedIndexes.value
-    selectPrimitives(
-      current.includes(index) ? current.filter((other) => other !== index) : [...current, index]
+    select(
+      current.includes(index) ? current.filter((other) => other !== index) : [...current, index],
+      selectedPinIds.value
+    )
+  }
+
+  function togglePin(id: string): void {
+    const current = selectedPinIds.value
+    select(
+      selectedIndexes.value,
+      current.includes(id) ? current.filter((other) => other !== id) : [...current, id]
     )
   }
 
@@ -303,24 +509,72 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     })
   }
 
-  /** Déplace plusieurs formes d'un même vecteur, en quarts de cellule. */
-  function movePrimitives(indexes: readonly number[], dx: number, dy: number): void {
-    if ((dx === 0 && dy === 0) || indexes.length === 0) return
-    apply(indexes.length > 1 ? 'Déplacer les formes' : 'Déplacer la forme', (draft) => {
+  /**
+   * Déplace des formes et des broches d'un même vecteur, en quarts de cellule, en une commande.
+   * Avec des broches, le vecteur doit tomber sur des cellules entières, et une broche qui
+   * sortirait du composant ou en rejoindrait une autre annule tout. Vrai si le déplacement est
+   * fait.
+   */
+  function moveSelection(
+    indexes: readonly number[],
+    pinIds: readonly string[],
+    dx: number,
+    dy: number
+  ): boolean {
+    if (dx === 0 && dy === 0) return false
+    if (indexes.length === 0 && pinIds.length === 0) return false
+    const moving = new Set(pinIds)
+    const cellsX = dx / QUARTERS_PER_CELL
+    const cellsY = dy / QUARTERS_PER_CELL
+    if (moving.size > 0) {
+      if (!Number.isInteger(cellsX) || !Number.isInteger(cellsY)) return false
+      const taken = new Set<string>()
+      for (const pin of doc.value.pins) {
+        const point = moving.has(pin.id) ? { x: pin.x + cellsX, y: pin.y + cellsY } : pin
+        const key = `${point.x},${point.y}`
+        if (!isInsideBox(point, doc.value.size) || taken.has(key)) {
+          status.value =
+            'Déplacement refusé : une broche sortirait du composant ou en rejoindrait une autre.'
+          return false
+        }
+        taken.add(key)
+      }
+    }
+    const count = indexes.length + pinIds.length
+    const label =
+      moving.size === 0
+        ? count > 1
+          ? 'Déplacer les formes'
+          : 'Déplacer la forme'
+        : count > 1
+          ? 'Déplacer la sélection'
+          : 'Déplacer la broche'
+    return apply(label, (draft) => {
       const list = drawing(draft)
-      if (!list) return
-      for (const index of indexes) {
-        const primitive = list[index]
-        if (primitive) list[index] = castDraft(translatePrimitive(primitive, dx, dy))
+      if (list) {
+        for (const index of indexes) {
+          const primitive = list[index]
+          if (primitive) list[index] = castDraft(translatePrimitive(primitive, dx, dy))
+        }
+      }
+      for (const pin of draft.pins) {
+        if (!moving.has(pin.id)) continue
+        pin.x += cellsX
+        pin.y += cellsY
       }
     })
+  }
+
+  /** Déplace plusieurs formes d'un même vecteur, en quarts de cellule. */
+  function movePrimitives(indexes: readonly number[], dx: number, dy: number): void {
+    moveSelection(indexes, [], dx, dy)
   }
 
   /** Ordre d'empilement de la forme sélectionnée (seule) ; la sélection la suit. */
   function reorderPrimitive(move: StackMove): void {
     const indexes = selectedIndexes.value
     const index = indexes[0]
-    if (indexes.length !== 1 || index === undefined) return
+    if (indexes.length !== 1 || index === undefined || selectedPinIds.value.length > 0) return
     const list = doc.value.visual.kind === 'drawing' ? doc.value.visual.primitives : null
     if (!list) return
     const result = reorderItem(list, index, move)
@@ -335,7 +589,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
       const target = drawing(draft)
       if (target) target.splice(0, target.length, ...castDraft(result.list))
     })
-    selection.value = { kind: 'primitives', indexes: [result.index] }
+    selectPrimitives([result.index])
   }
 
   function removePrimitives(indexes: readonly number[]): void {
@@ -361,7 +615,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
         y: point.y
       })
     })
-    selection.value = { kind: 'pin', id }
+    selectPin(id)
     return id
   }
 
@@ -391,13 +645,28 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     selection.value = null
   }
 
+  /** Supprime les formes et les broches sélectionnées, en une commande. */
   function removeSelection(): void {
     const current = selection.value
-    if (current?.kind === 'primitives') removePrimitives(current.indexes)
-    else if (current?.kind === 'pin') removePin(current.id)
+    if (!current) return
+    const { indexes, pinIds } = current
+    const onlyPin = pinIds[0]
+    if (pinIds.length === 0) {
+      removePrimitives(indexes)
+    } else if (indexes.length === 0 && pinIds.length === 1 && onlyPin !== undefined) {
+      removePin(onlyPin)
+    } else {
+      const remaining = doc.value.pins.filter((pin) => !pinIds.includes(pin.id))
+      apply('Supprimer la sélection', (draft) => {
+        const list = drawing(draft)
+        if (list) for (const index of [...indexes].sort((a, b) => b - a)) list.splice(index, 1)
+        draft.pins = castDraft(renumberPins(remaining))
+      })
+      selection.value = null
+    }
   }
 
-  // Presse-papiers des formes
+  // Presse-papiers des formes, commun aux onglets : on copie d'un composant à l'autre.
 
   const clipboard = shallowRef<Primitive[]>([])
   const clipboardEmpty = computed(() => clipboard.value.length === 0)
@@ -485,6 +754,10 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   return {
     doc,
     folder,
+    tabs,
+    activeTabId,
+    anyDirty,
+    pristine,
     selection,
     tool,
     cellPx,
@@ -497,15 +770,24 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     issues,
     hasErrors,
     selectedIndexes,
+    selectedPinIds,
     selectedPrimitive,
     selectedPin,
     undo,
     redo,
+    newComponent,
     open,
     markSaved,
-    confirmDiscard,
+    activateTab,
+    cycleTab,
+    moveTab,
+    closeTab,
+    closeFolderTabs,
+    select,
     selectPrimitives,
+    selectPin,
     togglePrimitive,
+    togglePin,
     setMeta,
     setId,
     setSize,
@@ -516,6 +798,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     updatePrimitive,
     setPrimitive,
     updateStyle,
+    moveSelection,
     movePrimitives,
     removePrimitives,
     reorderPrimitive,

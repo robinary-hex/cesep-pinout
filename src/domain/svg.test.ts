@@ -94,7 +94,8 @@ describe('export SVG', () => {
           followsRotation: false,
           italic: false,
           underline: false,
-          strike: false
+          strike: false,
+          vertical: false
         },
         0.1
       )
@@ -124,6 +125,35 @@ describe('export SVG', () => {
     )
   })
 
+  it('tourne un texte vertical d’un quart de tour autour du centre de sa boîte', () => {
+    const text = primitiveSvg(
+      {
+        kind: 'text',
+        x: 4,
+        y: 2,
+        w: 8,
+        h: 4,
+        text: 'M',
+        size: 1,
+        anchor: 'middle',
+        color: '#000000',
+        variable: false,
+        defaultValue: '',
+        unit: '',
+        bold: false,
+        followsRotation: false,
+        italic: false,
+        underline: false,
+        strike: false,
+        vertical: true
+      },
+      0.1
+    )
+    // Boîte de 2 × 1 cellules en (1 ; 0,5) : centre (2 ; 1).
+    expect(text).toContain('transform="rotate(90 2 1)"')
+    expect(text).toContain('<tspan x="2"')
+  })
+
   it('dessine un point en disque plein, de rayon un trait fois sa taille', () => {
     expect(primitiveSvg({ kind: 'dot', x: 4, y: 2, scale: 2, color: '#d62828' }, 0.1)).toBe(
       '<circle cx="1" cy="0.5" r="0.2" fill="#d62828"/>'
@@ -149,7 +179,8 @@ describe('export SVG', () => {
         followsRotation: false,
         italic: false,
         underline: false,
-        strike: false
+        strike: false,
+        vertical: false
       },
       0.1
     )
@@ -173,7 +204,8 @@ describe('export SVG', () => {
           followsRotation: false,
           italic: false,
           underline: false,
-          strike: false
+          strike: false,
+          vertical: false
         },
         0.1,
         { valeur: '4,7 kΩ' }

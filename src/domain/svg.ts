@@ -10,7 +10,8 @@ import {
   layoutText,
   layoutTextBox,
   textContent,
-  textStyleAttrs
+  textStyleAttrs,
+  textTransform
 } from './component'
 import { computeConnectivity, projectPins, type FreeEnd } from './connectivity'
 import { crossingPieces } from './crossings'
@@ -132,7 +133,8 @@ export function primitiveSvg(
       'font-size': primitive.size,
       'text-anchor': primitive.anchor,
       fill: primitive.color,
-      ...textStyleAttrs(primitive)
+      ...textStyleAttrs(primitive),
+      transform: textTransform(primitive, 1 / QUARTERS_PER_CELL)
     })}>${spans}</text>`
   }
   if (primitive.kind === 'dot') {

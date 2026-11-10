@@ -21,6 +21,7 @@ export const TOOLS: readonly ToolInfo[] = [
   },
   { id: 'rect', label: 'Rectangle', key: 'r', hint: 'Glisser pour tracer', icon: 'square' },
   { id: 'ellipse', label: 'Ellipse', key: 'o', hint: 'Glisser pour tracer', icon: 'circle' },
+  { id: 'dot', label: 'Point', key: 'n', hint: 'Cliquer pour poser un point', icon: 'dot' },
   { id: 'line', label: 'Ligne', key: 'l', hint: 'Glisser du départ à l’arrivée', icon: 'line' },
   {
     id: 'polyline',
@@ -29,7 +30,6 @@ export const TOOLS: readonly ToolInfo[] = [
     hint: 'Cliquer chaque sommet ; double-clic ou Entrée pour terminer',
     icon: 'polyline'
   },
-  { id: 'dot', label: 'Point', key: 'n', hint: 'Cliquer pour poser un point', icon: 'dot' },
   { id: 'text', label: 'Texte', key: 'e', hint: 'Cliquer pour poser un texte', icon: 'type' },
   { id: 'pin', label: 'Broche', key: 'b', hint: 'Cliquer une intersection du bord', icon: 'pin' }
 ]

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
-import { createEmptyComponent } from '@/domain'
 import ComponentEditor from '@/features/component-editor/ComponentEditor.vue'
-import { saveComponentDoc } from '@/features/component-editor/componentActions'
+import {
+  closeComponentTabAsking,
+  saveComponentDoc
+} from '@/features/component-editor/componentActions'
 import { useComponentEditorStore } from '@/features/component-editor/store'
 import LibraryPanel from '@/features/library/LibraryPanel.vue'
 import { useLibraryStore } from '@/features/library/store'
@@ -72,7 +74,7 @@ async function onUpdateClick(): Promise<void> {
   }
 }
 
-const anyDirty = computed(() => schematic.anyDirty || editor.dirty)
+const anyDirty = computed(() => schematic.anyDirty || editor.anyDirty)
 
 watch(
   anyDirty,
@@ -84,28 +86,62 @@ watch(
 
 watch(() => library.theme, applyTheme, { immediate: true })
 
-/** Bouton « Nouveau » du panneau des composants : ouvre un composant vierge dans l'éditeur. */
+/** Bouton « Nouveau » du panneau des composants : un composant vierge, dans son onglet. */
 function createComponent(): void {
-  if (!editor.confirmDiscard()) return
-  editor.open(createEmptyComponent('nouveau-composant', 'Nouveau composant'), null)
+  editor.newComponent()
   mode.value = 'components'
 }
 
-// Onglets de montage : à droite du bouton Montage, un par montage ouvert.
+// Onglets, à droite des boutons de mode : ceux des composants ouverts en mode Composants, ceux
+// des montages ouverts en mode Montage. Les deux éditeurs offrent la même chose : activer,
+// fermer (avec la question à trois boutons si l'onglet est modifié), créer, réordonner.
+
+interface StripTab {
+  id: number
+  name: string
+  /** Infobulle : le fichier ou le dossier, sinon « pas encore enregistré ». */
+  title: string
+  dirty: boolean
+}
+
+const strip = computed<{ tabs: StripTab[]; activeId: number; kind: string }>(() =>
+  mode.value === 'components'
+    ? {
+        tabs: editor.tabs.map((tab) => ({
+          id: tab.id,
+          name: tab.name,
+          title: tab.folder ?? 'Pas encore enregistré',
+          dirty: tab.dirty
+        })),
+        activeId: editor.activeTabId,
+        kind: 'composant'
+      }
+    : {
+        tabs: schematic.tabs.map((tab) => ({
+          id: tab.id,
+          name: tab.name,
+          title: tab.filePath ?? 'Pas encore enregistré',
+          dirty: tab.dirty
+        })),
+        activeId: schematic.activeTabId,
+        kind: 'montage'
+      }
+)
 
 function showTab(id: number): void {
-  schematic.activateTab(id)
-  mode.value = 'schematic'
+  if (mode.value === 'components') editor.activateTab(id)
+  else schematic.activateTab(id)
 }
 
 function newTab(): void {
-  schematic.newProject()
-  mode.value = 'schematic'
+  if (mode.value === 'components') editor.newComponent()
+  else schematic.newProject()
 }
 
-/** Ferme un onglet ; un montage modifié demande d'abord : enregistrer, ne pas enregistrer, annuler. */
+/** Ferme un onglet ; s'il est modifié, la question vient d'abord : enregistrer, ne pas enregistrer, annuler. */
 async function closeTab(id: number): Promise<void> {
-  await closeTabAsking(schematic, library, id)
+  if (mode.value === 'components') await closeComponentTabAsking(editor, library, id)
+  else await closeTabAsking(schematic, library, id)
 }
 
 function closeTabOnMiddle(id: number, event: MouseEvent): void {
@@ -132,13 +168,15 @@ function onTabDragOver(id: number, event: DragEvent): void {
   if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
   const target = event.currentTarget
   if (dragged === id || !(target instanceof HTMLElement)) return
-  const ids = schematic.tabs.map((tab) => tab.id)
+  const ids = strip.value.tabs.map((tab) => tab.id)
   const from = ids.indexOf(dragged)
   const to = ids.indexOf(id)
   if (from === -1 || to === -1) return
   const rect = target.getBoundingClientRect()
   const pastMiddle = event.clientX > rect.left + rect.width / 2
-  if (from < to ? pastMiddle : !pastMiddle) schematic.moveTab(dragged, to)
+  if (from < to ? !pastMiddle : pastMiddle) return
+  if (mode.value === 'components') editor.moveTab(dragged, to)
+  else schematic.moveTab(dragged, to)
 }
 
 /** La molette fait défiler la rangée d'onglets quand elle déborde. */
@@ -329,17 +367,27 @@ onMounted(async () => {
   unsubscribe = bridge().onAppRequest((request) => {
     void (async () => {
       if (request === 'save-then-quit') {
-        // « Enregistrer » avant de quitter : chaque montage modifié, affiché à son tour, puis le
-        // composant ; un refus garde la fenêtre.
+        // « Enregistrer » avant de quitter : chaque montage modifié, puis chaque composant
+        // modifié, affiché à son tour ; un refus garde la fenêtre.
         let saved = true
         for (const tab of schematic.tabs.filter((candidate) => candidate.dirty)) {
-          showTab(tab.id)
+          mode.value = 'schematic'
+          schematic.activateTab(tab.id)
           if (!(await saveProject(schematic, library))) {
             saved = false
             break
           }
         }
-        if (saved && editor.dirty) saved = await saveComponentDoc(editor, library)
+        if (saved) {
+          for (const tab of editor.tabs.filter((candidate) => candidate.dirty)) {
+            mode.value = 'components'
+            editor.activateTab(tab.id)
+            if (!(await saveComponentDoc(editor, library))) {
+              saved = false
+              break
+            }
+          }
+        }
         if (saved) await bridge().confirmQuit()
         else await bridge().cancelQuit()
         return
@@ -378,15 +426,12 @@ function onKeyDown(event: KeyboardEvent): void {
   if (event.key === 'F1') {
     event.preventDefault()
     if (openModals.value === 0) showHelp.value = true
-  } else if (
-    event.key === 'Tab' &&
-    event.ctrlKey &&
-    mode.value === 'schematic' &&
-    openModals.value === 0
-  ) {
-    // Ctrl+Tab / Ctrl+Maj+Tab : montage suivant / précédent.
+  } else if (event.key === 'Tab' && event.ctrlKey && openModals.value === 0) {
+    // Ctrl+Tab / Ctrl+Maj+Tab : onglet suivant / précédent, dans l'éditeur visible.
     event.preventDefault()
-    schematic.cycleTab(event.shiftKey ? -1 : 1)
+    const step = event.shiftKey ? -1 : 1
+    if (mode.value === 'components') editor.cycleTab(step)
+    else schematic.cycleTab(step)
   }
 }
 
@@ -446,17 +491,14 @@ onUnmounted(() => {
       </nav>
       <div class="doc-tabs" @wheel.prevent="onTabsWheel">
         <div
-          v-for="tab in schematic.tabs"
-          :key="tab.id"
+          v-for="tab in strip.tabs"
+          :key="`${strip.kind}-${tab.id}`"
           class="doc-tab"
-          :class="{
-            active: mode === 'schematic' && tab.id === schematic.activeTabId,
-            dragging: tab.id === draggedTabId
-          }"
+          :class="{ active: tab.id === strip.activeId, dragging: tab.id === draggedTabId }"
           role="tab"
           tabindex="0"
           draggable="true"
-          :title="tab.filePath ?? 'Pas encore enregistré'"
+          :title="tab.title"
           @dragstart="onTabDragStart(tab.id, $event)"
           @dragover="onTabDragOver(tab.id, $event)"
           @drop.prevent
@@ -473,7 +515,7 @@ onUnmounted(() => {
           <button
             type="button"
             class="doc-tab-close"
-            title="Fermer ce montage (ou clic du milieu sur l’onglet)"
+            :title="`Fermer ce ${strip.kind} (ou clic du milieu sur l’onglet)`"
             @click.stop="closeTab(tab.id)"
           >
             ✕
@@ -482,7 +524,7 @@ onUnmounted(() => {
         <button
           type="button"
           class="ghost icon-only"
-          title="Nouveau montage (Ctrl+N)"
+          :title="`Nouveau ${strip.kind} (Ctrl+N)`"
           @click="newTab"
         >
           <Icon name="plus" :size="16" />

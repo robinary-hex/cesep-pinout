@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { createEmptyComponent } from '@/domain'
 import { useComponentEditorStore } from '@/features/component-editor/store'
 import { useSchematicStore } from '@/features/schematic-editor/store'
 import { deleteComponent, type LibraryEntry } from '@/io/library'
@@ -57,7 +56,7 @@ function pick(entry: LibraryEntry): void {
     schematic.startPlacing(entry.def)
     return
   }
-  if (isCurrent(entry) || !editor.confirmDiscard()) return
+  // Chaque composant a son onglet ; déjà ouvert, le sien revient devant.
   editor.open(entry.def, entry.folder)
 }
 
@@ -86,7 +85,7 @@ function onDragEnd(): void {
 }
 
 function duplicate(entry: LibraryEntry): void {
-  if (!entry.def || !editor.confirmDiscard()) return
+  if (!entry.def) return
   const copy = structuredClone(entry.def)
   copy.name = `${copy.name} (copie)`
   editor.open(copy, null)
@@ -98,9 +97,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
   if (!window.confirm(message)) return
   try {
     await deleteComponent(entry.folder)
-    if (editor.folder === entry.folder) {
-      editor.open(createEmptyComponent('nouveau-composant', 'Nouveau composant'), null)
-    }
+    editor.closeFolderTabs(entry.folder)
     await library.refresh()
   } catch (error) {
     library.problem = `Suppression impossible : ${error instanceof Error ? error.message : String(error)}`

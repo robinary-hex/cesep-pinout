@@ -45,10 +45,17 @@ const sections: { title: string; rows: [string, string][] }[] = [
   {
     title: 'Éditeur de composants',
     rows: [
-      ['V', 'Sélection : glisser déplace une forme ou une broche'],
+      [
+        'V',
+        'Sélection : glisser déplace les formes et les broches sélectionnées ; lasso dans le vide'
+      ],
+      [
+        'Ctrl+Tab / Ctrl+Maj+Tab',
+        'Composant suivant / précédent ; clic du milieu sur un onglet : le fermer'
+      ],
       ['Ctrl (sans sélection)', 'Poignées de la boîte du composant : glisser un coin ou un côté'],
-      ['R / O / L / P', 'Rectangle / ellipse / ligne / polyligne'],
-      ['N', 'Point : un clic par point ; taille ×1 à ×3 dans le panneau'],
+      ['R / O / N', 'Rectangle / ellipse / point (un clic par point)'],
+      ['L / P', 'Ligne / polyligne'],
       ['E / B', 'Texte / broche (sur une intersection du composant)'],
       ['Ctrl+Page haut / bas', 'Avancer / reculer la forme (Maj : premier / arrière-plan)'],
       ['Bouton du milieu', 'Glisser : déplacer la vue ; double-clic : ajuster à la fenêtre'],

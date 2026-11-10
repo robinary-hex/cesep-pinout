@@ -42,7 +42,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   s'arrêtant à la base des pointes d'extrémité
   (`trimForArrows`), à l'écran comme à l'export. Un texte `variable` a pour contenu le nom du champ ; l'instance
   posée fournit la valeur (`instance.fields`), sinon `defaultValue` s'affiche ; `bold`, `italic`,
-  `underline` et `strike` stylent le texte (`textStyleAttrs`, boutons à
+  `underline` et `strike` stylent le texte, `vertical` le tourne de 90° autour du centre de sa
+  boîte (`textLayoutBox`, `textTransform`) (`textStyleAttrs`, boutons à
   pictogramme dans le panneau) ; les étiquettes du montage n'ont que le gras. Un texte occupe une boîte (`x`, `y`, `w`, `h` en
   quarts) redimensionnable par poignées : lignes (retours à la ligne permis) centrées
   verticalement, alignées à gauche, au centre ou à droite selon `anchor` (`layoutTextBox`, ligne de base
@@ -144,6 +145,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   s'il est intact, ni s'il n'a jamais eu de fichier et qu'il est vide (`needsSaving`) ; de même un
   composant jamais enregistré et vierge. L'application se quitte alors sans question. Le presse-papiers est commun :
   coller dans un autre montage y embarque les définitions qui manquent.
+- Onglets de composants : en mode Composants, la rangée d'onglets de la barre d'application montre
+  les composants ouverts (même mécanique que les montages, dans le store de l'éditeur de
+  composants : `tabStates`, `activateTab`, `newComponent`, `open` qui ramène l'onglet d'un
+  composant de la bibliothèque déjà ouvert, `closeComponentTabAsking` pour la question à trois
+  boutons). Le presse-papiers des formes est commun : on copie d'un composant à l'autre.
 - Thème clair ou sombre choisi dans les paramètres (`theme`) : `src/ui/theme.ts` pose
   `data-theme` sur `<html>` et toutes les couleurs de l'interface passent par les variables CSS de
   `src/app/style.css`, jamais en dur dans les styles ; les surfaces de dessin (`--paper`) sont blanches en clair et
@@ -197,8 +203,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   (`pathForFile` du pont). `src/app/externalFiles.ts` reconnaît montage ou composant à son
   contenu : montage dans un onglet, composant dans l'éditeur (tel quel s'il est dans la
   bibliothèque, sinon comme nouveau composant).
-  - Éditeur de composants : V sélection, R rectangle, O ellipse, L ligne, P polyligne, N point
-    (un clic par point, l'outil reste actif), E texte,
+  - Éditeur de composants : V sélection, R rectangle, O ellipse, N point (un clic par point,
+    l'outil reste actif), L ligne, P polyligne, E texte,
     B broche, Suppr, Échap, Entrée (termine une polyligne), Ctrl+Z / Ctrl+Y, Ctrl+S, Ctrl+N,
     Ctrl+Page haut/bas (Maj pour premier/arrière-plan) = ordre d'empilement de la forme
     sélectionnée (`reorderItem`, aussi par boutons dans le panneau),
@@ -214,8 +220,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     évités), sinon du côté du bord le plus proche. Tout l'espace de travail a la couleur du
     papier ; la marge du canevas vaut une cellule ou la place des repères qui dépassent, et
     l'ajustement à la fenêtre en tient compte (`pinLabelLayout.ts`).
-    Sélection multiple : lasso dans le vide, Maj+clic ajoute ou retire une forme, glisser déplace
-    toutes les formes sélectionnées, Alt+glisser en dépose une copie, Ctrl+C / V / D copient,
+    Sélection multiple : lasso dans le vide (formes et broches), Maj+clic ajoute ou retire une forme
+    ou une broche, glisser déplace tout ce qui est sélectionné (par cellules entières dès qu'une
+    broche en fait partie, `moveSelection`), un clic hors de la feuille désélectionne, Alt+glisser en dépose une copie, Ctrl+C / V / D copient,
     collent (décalées d'une cellule) et dupliquent ; le panneau de droite ne montre que l'élément
     sélectionné (forme, formes ou broche), sinon le composant.
     Maj pendant le tracé d'un rectangle ou d'une ellipse impose un carré ou un cercle. Tailles des
@@ -227,7 +234,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     composant posé s'appelle « libellé » dans l'interface.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 13, projet 17, paramètres 9
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 14, projet 18, paramètres 9
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

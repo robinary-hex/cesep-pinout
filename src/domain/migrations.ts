@@ -280,7 +280,9 @@ export const componentMigrations: MigrationTable = {
     // v11 → v12 : forme « point ». Rien à convertir ; la version monte pour qu'une application
     // plus ancienne refuse proprement un fichier qui en contient.
     11: (raw) => raw,
-    12: migrateComponentV12
+    12: migrateComponentV12,
+    // v13 → v14 : textes verticaux, horizontaux par défaut.
+    13: (raw) => withTextDefaults(raw, { vertical: false })
   }
 }
 
@@ -410,7 +412,9 @@ export const projectMigrations: MigrationTable = {
     // Projet v15 → v16 : définitions embarquées migrées (angles arrondis).
     15: migrateEmbeddedDefs,
     // Projet v16 → v17 : couleurs de fil propres au montage, aucune au départ.
-    16: (raw) => ({ customColors: [], ...raw })
+    16: (raw) => ({ customColors: [], ...raw }),
+    // Projet v17 → v18 : définitions embarquées migrées (textes verticaux).
+    17: migrateEmbeddedDefs
   }
 }
 

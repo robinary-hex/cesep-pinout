@@ -153,3 +153,135 @@ describe('éditeur de composants : copier, coller, dupliquer', () => {
     expect(store.doc.visual.primitives).toHaveLength(2)
   })
 })
+
+describe('éditeur de composants : onglets', () => {
+  const dot: Primitive = { kind: 'dot', x: 4, y: 4, scale: 1, color: '#000000' }
+
+  it('ouvre chaque composant dans son onglet ; un onglet vierge cède sa place', () => {
+    const store = useComponentEditorStore()
+    expect(store.tabs).toHaveLength(1)
+    expect(store.pristine).toBe(true)
+    store.newComponent()
+    expect(store.tabs).toHaveLength(1)
+    store.addPrimitive(dot, 'Ajouter un point')
+    store.setMeta({ name: 'LED' })
+    store.newComponent()
+    expect(store.tabs.map((tab) => [tab.name, tab.dirty])).toEqual([
+      ['LED', true],
+      ['Nouveau composant', false]
+    ])
+    expect(store.anyDirty).toBe(true)
+  })
+
+  it('garde un historique et une sélection par onglet, et copie des formes de l’un à l’autre', () => {
+    const store = useComponentEditorStore()
+    store.addPrimitive(dot, 'Ajouter un point')
+    store.copySelection()
+    const first = store.activeTabId
+
+    store.newComponent()
+    expect(store.undoLabel).toBeNull()
+    store.pasteClipboard()
+    expect(store.doc.visual.kind === 'drawing' && store.doc.visual.primitives).toHaveLength(1)
+    expect(store.undoLabel).toBe('Coller')
+
+    store.activateTab(first)
+    expect(store.undoLabel).toBe('Ajouter un point')
+    expect(store.selectedIndexes).toEqual([0])
+    store.cycleTab(1)
+    expect(store.undoLabel).toBe('Coller')
+  })
+
+  it('ramène l’onglet d’un composant de la bibliothèque déjà ouvert', () => {
+    const store = useComponentEditorStore()
+    const led = { ...store.doc, id: 'led', name: 'LED' }
+    store.open(led, 'C:/lib/led')
+    expect(store.tabs).toHaveLength(1)
+    expect(store.dirty).toBe(false)
+    store.newComponent()
+    store.open(led, 'c:\\LIB\\led')
+    expect(store.tabs).toHaveLength(2)
+    expect(store.folder).toBe('C:/lib/led')
+    // Une copie (sans dossier) est un composant à enregistrer, dans un nouvel onglet.
+    store.open(
+      { ...led, name: 'LED (copie)', visual: { kind: 'drawing', primitives: [dot] } },
+      null
+    )
+    expect(store.tabs).toHaveLength(3)
+    expect(store.dirty).toBe(true)
+  })
+
+  it('ferme un onglet, ceux d’un composant supprimé, et laisse un composant vierge à la fin', () => {
+    const store = useComponentEditorStore()
+    const led = { ...store.doc, id: 'led', name: 'LED' }
+    store.open(led, 'C:/lib/led')
+    store.newComponent()
+    const blank = store.activeTabId
+    store.moveTab(blank, 0)
+    expect(store.tabs.map((tab) => tab.name)).toEqual(['Nouveau composant', 'LED'])
+    store.closeFolderTabs('C:/lib/led')
+    expect(store.tabs.map((tab) => tab.name)).toEqual(['Nouveau composant'])
+    expect(store.closeTab(blank)).toBe(true)
+    expect(store.tabs).toHaveLength(1)
+    expect(store.activeTabId).not.toBe(blank)
+    expect(store.pristine).toBe(true)
+  })
+})
+
+describe('éditeur de composants : formes et broches sélectionnées ensemble', () => {
+  const rect: Primitive = {
+    kind: 'rect',
+    x: 0,
+    y: 0,
+    w: 8,
+    h: 4,
+    rx: 0,
+    style: { ...DEFAULT_SHAPE_STYLE }
+  }
+
+  it('déplace ensemble formes et broches, par cellules entières et en une commande', () => {
+    const store = useComponentEditorStore()
+    store.addPrimitive(rect, 'Ajouter un rectangle')
+    const pin = store.addPin({ x: 0, y: 1 })
+    const other = store.addPin({ x: 2, y: 1 })
+    store.select([0], [pin])
+    expect(store.selectedPrimitive).toBeNull()
+    expect(store.selectedPin).toBeNull()
+
+    expect(store.moveSelection([0], [pin], 4, 0)).toBe(true)
+    expect(store.doc.visual.kind === 'drawing' && store.doc.visual.primitives[0]).toMatchObject({
+      x: 4
+    })
+    expect(store.doc.pins.find((candidate) => candidate.id === pin)).toMatchObject({ x: 1, y: 1 })
+    expect(store.undoLabel).toBe('Déplacer la sélection')
+
+    // Une demi-cellule ne convient pas à une broche ; rejoindre une autre broche non plus.
+    expect(store.moveSelection([0], [pin], 2, 0)).toBe(false)
+    expect(store.moveSelection([0], [pin], 4, 0)).toBe(false)
+    expect(store.status).toContain('refusé')
+    // Sortir de la boîte du composant est refusé aussi.
+    expect(store.moveSelection([], [other], 40, 0)).toBe(false)
+
+    store.undo()
+    expect(store.doc.pins.find((candidate) => candidate.id === pin)).toMatchObject({ x: 0, y: 1 })
+  })
+
+  it('ajoute et retire une broche de la sélection, et supprime le tout en une commande', () => {
+    const store = useComponentEditorStore()
+    store.addPrimitive(rect, 'Ajouter un rectangle')
+    const first = store.addPin({ x: 0, y: 1 })
+    const second = store.addPin({ x: 4, y: 1 })
+    store.selectPrimitives([0])
+    store.togglePin(first)
+    store.togglePin(second)
+    store.togglePin(first)
+    expect(store.selection).toEqual({ indexes: [0], pinIds: [second] })
+
+    store.removeSelection()
+    expect(store.selection).toBeNull()
+    expect(store.doc.visual.kind === 'drawing' && store.doc.visual.primitives).toHaveLength(0)
+    expect(store.doc.pins.map((candidate) => candidate.id)).toEqual([first])
+    store.undo()
+    expect(store.doc.pins).toHaveLength(2)
+  })
+})

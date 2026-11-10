@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, useTemplateRef } from 'vue'
-import { createEmptyComponent } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import { openModals } from '@/ui/modalState'
 import { saveComponentDoc } from './componentActions'
@@ -22,8 +21,7 @@ async function save(): Promise<void> {
 }
 
 function createNew(): void {
-  if (!store.confirmDiscard()) return
-  store.open(createEmptyComponent('nouveau-composant', 'Nouveau composant'), null)
+  store.newComponent()
 }
 
 function isEditable(target: EventTarget | null): boolean {

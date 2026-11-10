@@ -146,7 +146,8 @@ describe('textes variables', () => {
       followsRotation: false,
       italic: false,
       underline: false,
-      strike: false
+      strike: false,
+      vertical: false
     }
     const nbsp = String.fromCharCode(0xa0)
     expect(textContent(base, { R: '4,7' })).toBe(`4,7${nbsp}kΩ`)
@@ -160,7 +161,8 @@ describe('textes variables', () => {
         followsRotation: false,
         italic: false,
         underline: false,
-        strike: false
+        strike: false,
+        vertical: false
       })
     ).toBe('{R}')
     expect(textContent({ ...base, variable: false })).toBe('R')

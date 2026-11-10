@@ -1,9 +1,10 @@
 import type { useLibraryStore } from '@/features/library/store'
+import { bridge } from '@/io/bridge'
 import { newComponentId, saveComponent } from '@/io/library'
 import type { useComponentEditorStore } from './store'
 
-// Enregistrement du composant en cours d'édition, partagé par l'éditeur (Ctrl+S, menu Fichier)
-// et par la garde à la fermeture.
+// Enregistrement du composant en cours d'édition, partagé par l'éditeur (Ctrl+S, menu Fichier),
+// la fermeture d'un onglet et la garde à la fermeture de l'application.
 
 type EditorStore = ReturnType<typeof useComponentEditorStore>
 type LibraryStore = ReturnType<typeof useLibraryStore>
@@ -34,4 +35,28 @@ export async function saveComponentDoc(
     store.status = `Échec de l’enregistrement : ${error instanceof Error ? error.message : String(error)}`
     return false
   }
+}
+
+/**
+ * Ferme un onglet de composant. S'il a des modifications, la question est posée d'abord :
+ * Enregistrer (le composant est affiché, puis enregistré ; un échec garde l'onglet), Ne pas
+ * enregistrer, ou Annuler. Vrai si l'onglet est fermé.
+ */
+export async function closeComponentTabAsking(
+  store: EditorStore,
+  library: LibraryStore,
+  id: number
+): Promise<boolean> {
+  const tab = store.tabs.find((candidate) => candidate.id === id)
+  if (!tab) return false
+  if (tab.dirty) {
+    const choice = await bridge().confirmSave(tab.name)
+    if (choice === 'cancel') return false
+    if (choice === 'save') {
+      store.activateTab(id)
+      if (!(await saveComponentDoc(store, library))) return false
+    }
+  }
+  store.closeTab(id)
+  return true
 }

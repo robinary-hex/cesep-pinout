@@ -168,7 +168,8 @@ describe('textes des composants posés', () => {
           followsRotation: false,
           italic: false,
           underline: false,
-          strike: false
+          strike: false,
+          vertical: false
         }
       ]
     }
@@ -216,7 +217,8 @@ describe('textes des composants posés', () => {
           followsRotation: true,
           italic: false,
           underline: false,
-          strike: false
+          strike: false,
+          vertical: false
         }
       ]
     }
@@ -252,5 +254,49 @@ describe('textes des composants posés', () => {
       rotation: 90,
       anchor: 'end'
     })
+  })
+
+  it('un texte vertical le reste ; s’il suit la rotation, un quart de tour le couche', () => {
+    const def = createEmptyComponent('motor', 'Moteur')
+    const vertical = {
+      kind: 'text',
+      x: 4,
+      y: 2,
+      w: 8,
+      h: 4,
+      text: 'M',
+      size: 1,
+      anchor: 'start',
+      color: '#000000',
+      variable: false,
+      defaultValue: '',
+      unit: '',
+      bold: true,
+      followsRotation: false,
+      italic: false,
+      underline: false,
+      strike: false,
+      vertical: true
+    } as const
+    const base = { id: 'c1', defId: 'motor', x: 10, y: 5, label: '', fields: {} }
+    const place = (
+      followsRotation: boolean,
+      rotation: Rotation
+    ): InstanceTextPlacement | undefined => {
+      def.visual = { kind: 'drawing', primitives: [{ ...vertical, followsRotation }] }
+      return instanceTextPlacements({ ...base, rotation, mirror: false }, def)[0]
+    }
+    // Composant droit : la boîte 2 × 1 porte un texte tourné, mis en page dans 1 × 2.
+    expect(place(false, 0)).toMatchObject({
+      box: { x: 11.5, y: 5, w: 1, h: 2 },
+      rotation: 90,
+      anchor: 'start'
+    })
+    // Il ne suit pas la rotation : toujours vertical, même quand le composant tourne.
+    expect(place(false, 90)).toMatchObject({ rotation: 90 })
+    // Il la suit : un quart de tour du composant le couche, à l'endroit.
+    expect(place(true, 90)).toMatchObject({ box: { x: 10.5, y: 6, w: 1, h: 2 }, rotation: 0 })
+    // Demi-tour : toujours vertical, lu de haut en bas, collé au bord opposé.
+    expect(place(true, 180)).toMatchObject({ rotation: 90, anchor: 'end' })
   })
 })

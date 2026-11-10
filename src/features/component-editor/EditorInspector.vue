@@ -91,9 +91,8 @@ async function acceptResize(): Promise<void> {
 
 // Broches
 
-const selectedPin = computed(() => store.selectedPin)
 function selectPin(id: string): void {
-  store.selection = { kind: 'pin', id }
+  store.selectPin(id)
 }
 
 function setPinName(id: string, event: Event): void {
@@ -116,7 +115,8 @@ const primitiveIndex = computed(() => store.selectedIndexes[0] ?? -1)
 const primitiveCount = computed(() =>
   doc.value.visual.kind === 'drawing' ? doc.value.visual.primitives.length : 0
 )
-const multiCount = computed(() => store.selectedIndexes.length)
+/** Formes et broches sélectionnées, ensemble. */
+const multiCount = computed(() => store.selectedIndexes.length + store.selectedPinIds.length)
 const shapeStyle = computed(() =>
   primitive.value && 'style' in primitive.value ? primitive.value.style : null
 )
@@ -299,6 +299,17 @@ function setDotColor(event: Event): void {
   })
 }
 
+function setVertical(event: Event): void {
+  const vertical = checked(event)
+  store.updatePrimitive(
+    primitiveIndex.value,
+    vertical ? 'Texte vertical' : 'Texte horizontal',
+    (p) => {
+      if (p.kind === 'text') p.vertical = vertical
+    }
+  )
+}
+
 function setRectRadius(event: Event): void {
   const rx = Math.max(0, Math.round(numberValue(event)))
   store.updatePrimitive(primitiveIndex.value, 'Arrondi du rectangle', (p) => {
@@ -460,6 +471,10 @@ function setClosed(event: Event): void {
           />
           <span>Tourne avec le composant sur le montage</span>
         </label>
+        <label class="check" title="Le texte est tourné de 90° et se lit de haut en bas">
+          <input type="checkbox" :checked="primitive.vertical" @change="setVertical" />
+          <span>Vertical</span>
+        </label>
       </template>
 
       <template v-else-if="primitive.kind === 'dot'">
@@ -590,10 +605,10 @@ function setClosed(event: Event): void {
       </button>
     </section>
 
-    <!-- Plusieurs formes -->
+    <!-- Plusieurs éléments : formes, broches, ou les deux -->
     <section v-else-if="multiCount > 1" class="block">
       <div class="head-row">
-        <h3>{{ multiCount }} formes sélectionnées</h3>
+        <h3>{{ multiCount }} éléments sélectionnés</h3>
         <button
           type="button"
           class="small"
@@ -604,7 +619,7 @@ function setClosed(event: Event): void {
         </button>
       </div>
       <button type="button" class="danger with-icon" @click="store.removeSelection()">
-        <Icon name="trash" /> Supprimer les formes
+        <Icon name="trash" /> Supprimer la sélection
       </button>
     </section>
 
@@ -665,7 +680,7 @@ function setClosed(event: Event): void {
           v-for="(pin, index) in doc.pins"
           :key="pin.id"
           class="pin-row"
-          :class="{ selected: selectedPin?.id === pin.id }"
+          :class="{ selected: store.selectedPinIds.includes(pin.id) }"
           @pointerenter="store.hoverPinId = pin.id"
           @pointerleave="store.hoverPinId = null"
           @click="selectPin(pin.id)"

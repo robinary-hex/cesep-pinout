@@ -11,6 +11,7 @@ import {
   roundedPathData,
   strokeWidthCells,
   textStyleAttrs,
+  textTransform,
   trimForArrows,
   type Arrows,
   type ComponentDefinition,
@@ -338,6 +339,7 @@ function down(index: number, event: PointerEvent): void {
           :font-size="p.size * cellPx"
           :text-anchor="p.anchor"
           :fill="inkFor(p.color)"
+          :transform="textTransform(p, cellPx / QUARTERS_PER_CELL)"
           v-bind="textAttrs(p)"
         >
           <tspan

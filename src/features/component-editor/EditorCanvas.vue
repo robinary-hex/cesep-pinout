@@ -82,6 +82,8 @@ type Drag =
   | {
       kind: 'move-primitives'
       indexes: number[]
+      /** Broches emmenées avec les formes : le déplacement se fait alors par cellules entières. */
+      pinIds: string[]
       start: QPoint
       current: QPoint
       /** Alt+glisser : les originaux restent, une copie se dépose à l'arrivée. */
@@ -89,7 +91,7 @@ type Drag =
     }
   | { kind: 'move-pin'; id: string; current: LocalPoint }
   | { kind: 'handle'; index: number; handleId: string; original: Primitive; preview: Primitive }
-  | { kind: 'band'; start: LocalPoint; current: LocalPoint; base: number[] }
+  | { kind: 'band'; start: LocalPoint; current: LocalPoint; base: number[]; basePins: string[] }
   | { kind: 'pan'; lastX: number; lastY: number }
   | { kind: 'text-box'; start: QPoint; current: QPoint }
   | { kind: 'resize-box'; handleId: string; preview: Box }
@@ -200,14 +202,23 @@ const pinTarget = computed<LocalPoint | null>(() => {
 })
 
 function isSelectedPin(id: string): boolean {
-  return store.selection?.kind === 'pin' && store.selection.id === id
+  return store.selectedPinIds.includes(id)
 }
 
 function pinPosition(pin: Pin): LocalPoint {
   const current = drag.value
-  return current?.kind === 'move-pin' && current.id === pin.id
-    ? current.current
-    : { x: pin.x, y: pin.y }
+  if (current?.kind === 'move-pin' && current.id === pin.id) return current.current
+  if (
+    current?.kind === 'move-primitives' &&
+    !current.duplicate &&
+    current.pinIds.includes(pin.id)
+  ) {
+    return {
+      x: pin.x + (current.current.x - current.start.x) / QUARTERS_PER_CELL,
+      y: pin.y + (current.current.y - current.start.y) / QUARTERS_PER_CELL
+    }
+  }
+  return { x: pin.x, y: pin.y }
 }
 
 // Repère d'une broche : du côté libre le plus proche du bord, sinon du bord le plus proche
@@ -291,7 +302,13 @@ const selectionBoxes = computed(() => {
 const handles = computed(() => {
   const indexes = store.selectedIndexes
   const index = indexes[0]
-  if (indexes.length !== 1 || index === undefined || store.tool !== 'select' || drag.value) {
+  if (
+    indexes.length !== 1 ||
+    index === undefined ||
+    store.selectedPinIds.length > 0 ||
+    store.tool !== 'select' ||
+    drag.value
+  ) {
     return []
   }
   const primitive = shownPrimitive(index)
@@ -457,6 +474,7 @@ function onPrimitiveDown(index: number, event: PointerEvent): void {
   drag.value = {
     kind: 'move-primitives',
     indexes: [...store.selectedIndexes],
+    pinIds: [...store.selectedPinIds],
     start,
     current: start,
     duplicate: event.altKey
@@ -497,7 +515,8 @@ function commitTextBox(start: QPoint, end: QPoint): void {
       followsRotation: false,
       italic: false,
       underline: false,
-      strike: false
+      strike: false,
+      vertical: false
     },
     'Ajouter un texte'
   )
@@ -507,6 +526,7 @@ function commitTextBox(start: QPoint, end: QPoint): void {
 function onHandleDown(handleId: string, event: PointerEvent): void {
   const index = store.selectedIndexes[0]
   if (event.button !== 0 || index === undefined || store.selectedIndexes.length !== 1) return
+  if (store.selectedPinIds.length > 0) return
   event.stopPropagation()
   startHandleDrag(index, handleId, event)
 }
@@ -516,8 +536,28 @@ function onPinDown(id: string, event: PointerEvent): void {
   event.stopPropagation()
   const pin = store.doc.pins.find((candidate) => candidate.id === id)
   if (!pin) return
-  store.selection = { kind: 'pin', id }
-  drag.value = { kind: 'move-pin', id, current: { x: pin.x, y: pin.y } }
+  if (event.shiftKey) {
+    store.togglePin(id)
+    return
+  }
+  const grouped =
+    store.selectedPinIds.includes(id) &&
+    store.selectedPinIds.length + store.selectedIndexes.length > 1
+  if (grouped) {
+    // La broche fait partie d'une sélection : tout se déplace ensemble, par cellules entières.
+    const start = toQuarters(pointerCells(event))
+    drag.value = {
+      kind: 'move-primitives',
+      indexes: [...store.selectedIndexes],
+      pinIds: [...store.selectedPinIds],
+      start,
+      current: start,
+      duplicate: false
+    }
+  } else {
+    store.selectPin(id)
+    drag.value = { kind: 'move-pin', id, current: { x: pin.x, y: pin.y } }
+  }
   capture(event)
 }
 
@@ -550,8 +590,9 @@ function onPointerDown(event: PointerEvent): void {
     case 'select': {
       // Clic dans le vide : lasso ; Maj garde la sélection et y ajoute.
       const base = event.shiftKey ? [...store.selectedIndexes] : []
+      const basePins = event.shiftKey ? [...store.selectedPinIds] : []
       if (!event.shiftKey) store.selection = null
-      drag.value = { kind: 'band', start: cells, current: cells, base }
+      drag.value = { kind: 'band', start: cells, current: cells, base, basePins }
       capture(event)
       break
     }
@@ -642,6 +683,16 @@ function onPointerMove(event: PointerEvent): void {
       current.lastY = event.clientY
       break
     }
+    case 'move-primitives': {
+      // Avec des broches, tout se déplace par cellules entières : elles restent sur la grille.
+      const q = toQuarters(cells)
+      const step = current.pinIds.length > 0 ? QUARTERS_PER_CELL : 1
+      current.current = {
+        x: current.start.x + Math.round((q.x - current.start.x) / step) * step,
+        y: current.start.y + Math.round((q.y - current.start.y) / step) * step
+      }
+      break
+    }
     default:
       current.current = toQuarters(cells)
       if (current.kind === 'box') current.square = event.shiftKey
@@ -697,6 +748,22 @@ function primitivesInBand(bandDrag: Extract<Drag, { kind: 'band' }>): number[] {
   })
 }
 
+/** Broches posées dans le lasso (en cellules). */
+function pinsInBand(bandDrag: Extract<Drag, { kind: 'band' }>): string[] {
+  const x1 = Math.min(bandDrag.start.x, bandDrag.current.x)
+  const y1 = Math.min(bandDrag.start.y, bandDrag.current.y)
+  const x2 = Math.max(bandDrag.start.x, bandDrag.current.x)
+  const y2 = Math.max(bandDrag.start.y, bandDrag.current.y)
+  return store.doc.pins
+    .filter((pin) => pin.x >= x1 && pin.x <= x2 && pin.y >= y1 && pin.y <= y2)
+    .map((pin) => pin.id)
+}
+
+/** Clic dans l'espace de travail, hors de la feuille : la sélection tombe, comme sur la feuille. */
+function onOutsideDown(event: PointerEvent): void {
+  if (event.button === 0 && store.tool === 'select') store.selection = null
+}
+
 function samePrimitive(a: Primitive, b: Primitive): boolean {
   return JSON.stringify(a) === JSON.stringify(b)
 }
@@ -728,7 +795,7 @@ function onPointerUp(event: PointerEvent): void {
       const dx = current.current.x - current.start.x
       const dy = current.current.y - current.start.y
       if (current.duplicate) store.duplicatePrimitivesAt(current.indexes, dx, dy)
-      else store.movePrimitives(current.indexes, dx, dy)
+      else store.moveSelection(current.indexes, current.pinIds, dx, dy)
       break
     }
     case 'move-pin':
@@ -742,7 +809,12 @@ function onPointerUp(event: PointerEvent): void {
     case 'band': {
       const wide = Math.abs(current.current.x - current.start.x) > BAND_MIN_CELLS
       const tall = Math.abs(current.current.y - current.start.y) > BAND_MIN_CELLS
-      if (wide || tall) store.selectPrimitives([...current.base, ...primitivesInBand(current)])
+      if (wide || tall) {
+        store.select(
+          [...current.base, ...primitivesInBand(current)],
+          [...current.basePins, ...pinsInBand(current)]
+        )
+      }
       break
     }
   }
@@ -799,7 +871,7 @@ defineExpose({ cancel, finishPolyline })
 
 <template>
   <div class="canvas-wrap">
-    <div ref="scroller" class="canvas-scroll" @wheel="onWheel">
+    <div ref="scroller" class="canvas-scroll" @wheel="onWheel" @pointerdown.self="onOutsideDown">
       <svg
         ref="svg"
         class="canvas"

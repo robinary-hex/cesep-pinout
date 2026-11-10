@@ -211,11 +211,6 @@ export interface InstanceTextPlacement {
   anchor: TextAnchor
 }
 
-/** Rotation d'un texte qui suit le composant : vertical aux quarts de tour, horizontal sinon. */
-function textRotation(rotation: Rotation): Rotation {
-  return rotation === 90 || rotation === 270 ? 90 : 0
-}
-
 function flippedAnchor(anchor: TextAnchor): TextAnchor {
   return anchor === 'start' ? 'end' : anchor === 'end' ? 'start' : anchor
 }
@@ -223,9 +218,9 @@ function flippedAnchor(anchor: TextAnchor): TextAnchor {
 /**
  * Textes d'un composant posé, dessinés hors de la transformation de l'instance : les rotations
  * sont des quarts de tour, donc la boîte transformée reste un rectangle aligné sur la grille.
- * Un texte horizontal est mis en page dans cette boîte. Un texte qui suit la rotation est vertical
- * quand le composant est tourné d'un quart de tour (90° ou 270°), horizontal sinon : jamais à
- * l'envers, jamais en miroir. Quand la transformation retourne l'axe de lecture du dessin (miroir,
+ * Un texte s'y met en page tel qu'il est dessiné, horizontal ou vertical. S'il suit la rotation,
+ * un quart de tour du composant (90° ou 270°) échange les deux orientations : jamais à l'envers,
+ * jamais en miroir. Quand la transformation retourne l'axe de lecture du dessin (miroir,
  * demi-tour), l'alignement gauche/droite s'inverse pour que le texte reste collé au même bord.
  */
 export function instanceTextPlacements(
@@ -250,9 +245,15 @@ export function instanceTextPlacements(
     const x1 = Math.min(...xs)
     const y1 = Math.min(...ys)
     const placed: Box = { x: x1, y: y1, w: Math.max(...xs) - x1, h: Math.max(...ys) - y1 }
-    const rotation = primitive.followsRotation ? textRotation(instance.rotation) : 0
-    // L'axe x du dessin, transformé, va-t-il à l'encontre du sens de lecture du texte dessiné ?
-    const reversed = (rotation === 0 ? matrix.a : matrix.b) < 0
+    // Un texte vertical l'est au dessin ; s'il suit la rotation, un quart de tour du composant
+    // l'échange (vertical devient horizontal, et inversement). Jamais à l'envers, jamais en miroir.
+    const quarterTurn = instance.rotation === 90 || instance.rotation === 270
+    const rotation: Rotation =
+      primitive.vertical !== (primitive.followsRotation && quarterTurn) ? 90 : 0
+    // Sens de lecture du dessin, transformé : s'il va à l'encontre du texte dessiné, l'alignement
+    // s'inverse.
+    const reading = primitive.vertical ? { x: matrix.c, y: matrix.d } : { x: matrix.a, y: matrix.b }
+    const reversed = (rotation === 0 ? reading.x : reading.y) < 0
     const anchor = reversed ? flippedAnchor(primitive.anchor) : primitive.anchor
     if (rotation === 0) return [{ primitive, box: placed, rotation, anchor }]
     // Texte vertical : sa boîte dans son propre repère garde les proportions du dessin, centrée
