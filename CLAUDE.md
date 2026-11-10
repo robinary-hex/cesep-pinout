@@ -152,6 +152,15 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Modes (`src/app/App.vue`) : un bouton à pictogramme par mode (puce = Composants, résistance =
   Montage, organigramme = Diagramme ; nom en infobulle), l'application démarre sur le montage. Ce que la coque demande à un
   mode (onglets, fermeture, enregistrement avant de quitter, statut) passe par son `ModeAdapter`.
+- Barres d'outils des trois éditeurs : elles commencent toutes par `src/ui/ToolbarBasics.vue`,
+  dans cet ordre (décision du 10 novembre 2026) : zoom arrière, valeur du zoom (un clic ou la
+  touche 1 revient à 100 %), zoom avant, ajuster ; séparateur vertical ; annuler, rétablir,
+  corbeille (grisée sans sélection) ; séparateur ; puis les outils propres à l'éditeur. Dans le
+  diagramme, les fonds des nœuds et le style des liens viennent avant la palette, qui ferme la
+  barre. Supprimer ne se trouve pas dans les panneaux de propriétés : corbeille, touche Suppr
+  ou menu contextuel. Dans les panneaux, X, Y, largeur et hauteur ont leur propre section
+  (« Position et taille », « Position et orientation » pour un composant posé, « Taille » pour
+  un composant).
 - Barre d'application (`src/app/App.vue`) : menu Fichier (nouveau, ouvrir, récents, enregistrer,
   exporter, paramètres, raccourcis, quitter) construit avec `ContextMenu` et appelant les actions
   que `SchematicEditor` / `ComponentEditor` exposent par `defineExpose` selon le mode. Enregistrer
@@ -188,7 +197,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Diagramme (`src/features/diagram-editor/`, domaine `src/domain/diagram.ts`,
   `diagramShapes.ts`, `diagramLinks.ts`, `diagramSvg.ts`) : organigrammes, diagrammes d'activité,
   schémas de communication ; pas de diagrammes de séquence ni de classes (décision du 10 novembre
-  2026). Document à part, fichier `.pinuml` (JSON, `schemaVersion` 2), même grille infinie que le
+  2026). Document à part, fichier `.pinuml` (JSON, `schemaVersion` 3), même grille infinie que le
   montage mais plus fine (`style.cellPx` = 10).
   - Nœuds : une boîte en cellules entières, une forme du catalogue en dur (`NODE_SHAPES`,
     `NODE_SPECS` : action arrondie, rectangle, décision, départ, fin, fin de flot, fourche, envoi,
@@ -219,12 +228,27 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     plus près (`fitNodeToText`, `nodeBoxForText`). La largeur du texte se mesure sur un canevas
     hors écran (`src/render/textMeasure.ts`), estimée sans navigateur. Le style du diagramme
     (trait, coins, coudes, tailles de texte, police) se règle dans le panneau, sans sélection.
+    Style général (`diagramDefaults` des paramètres : le style d'un nouveau diagramme, la
+    couleur et le fond de ses nouveaux nœuds, la couleur de ses nouveaux liens) : onglet
+    « Diagrammes » du profil de style général, mêmes champs que le panneau
+    (`settings/DiagramStyleFields.vue`). Comme pour les montages, chaque diagramme garde son
+    style ; le panneau surligne en `--alert` les réglages qui s'écartent du style général et
+    propose d'y revenir (`adoptGeneralStyle`) ; changer le style général le donne aux
+    diagrammes ouverts qui le suivaient (`followGeneralStyle`), avec aperçu sur le diagramme
+    affiché (`stylePreview`).
   - Liens : la géométrie des fils (`wires.ts`), coudes posés à la main, pas de routage
-    automatique. Pointe ouverte au départ et/ou à l'arrivée, trait plein ou pointillé, couleur,
-    étiquette (`label`, décalage en quarts de cellule depuis le milieu du tracé). Au dessin
-    seulement (`linkRenderPoints`, écran et export), une extrémité qui porte une pointe s'arrête
-    un peu avant son point d'arrivée (`linkArrowGap`, 0,4 cellule) : la pointe ne touche pas la
-    forme ; les sommets enregistrés ne changent pas. L'accroche se
+    automatique. Pointe pleine et effilée (deux ailes, un creux : `linkArrowHead`) au départ
+    et/ou à l'arrivée, trait plein ou pointillé, couleur. Au dessin seulement (`linkShape`,
+    écran et export), une extrémité qui porte une pointe s'arrête un peu avant son point
+    d'arrivée (`linkArrowGap`, 0,4 cellule) : la pointe ne touche pas la forme, et le trait
+    s'arrête dans la pointe ; les sommets enregistrés ne changent pas. Étiquette (`label`) :
+    jamais libre, elle longe le tracé, d'un côté ou de l'autre, toujours à la même distance du
+    trait (`LINK_LABEL_GAP`). `labelAt` est la fraction de la longueur du tracé (0 départ, 1
+    arrivée), `labelSide` le côté (-1 au-dessus ou à gauche, 1 en dessous ou à droite) ;
+    `linkLabelPlacement` en tire la boîte et l'alignement du texte. La glisser la fait suivre
+    le pointeur le long du lien et changer de côté quand il traverse le trait
+    (`nearestOnPath`, au pas d'une demi-cellule) ; le panneau donne sa position et un bouton
+    pour changer de côté. L'accroche se
     déduit de la géométrie, jamais stockée : une extrémité posée sur un point d'accroche d'un nœud
     (`nodeAnchors` : tour d'un rectangle, quatre pointes d'un losange ou d'un disque, toute une
     barre) le suit quand il bouge, change de taille ou de forme (`linksFollowingNodes`,
@@ -259,7 +283,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Profil de style : l'application a un profil général (`defaultProfile` des paramètres) et chaque
   montage a le sien, enregistré dans son fichier, avec lequel il se dessine. Une seule boîte,
   `settings/ProfileDialog.vue`, pour les deux : `target="general"` (bouton de la barre
-  d'application entre l'aide et les paramètres, et menu Fichier) modifie le profil général, avec
+  d'application entre l'aide et les paramètres, et menu Fichier) a deux onglets, « Montages »
+  et « Diagrammes » (elle s'ouvre sur celui du mode affiché ; « Appliquer » enregistre les
+  deux), et pas d'onglet « Composants » : un composant n'a pas de style à lui, il se dessine
+  avec celui du montage où il est posé. L'onglet Montages modifie le profil général, avec
   aperçu sur le montage affiché s'il le suit, et « Appliquer » l'enregistre puis le donne aux
   montages ouverts qui suivaient l'ancien (`followGeneralProfile`) ; `target="montage"` (bouton
   « Modifier le style… » du panneau) modifie le style du montage affiché, en une commande. Le
@@ -333,8 +360,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     composant posé s'appelle « libellé » dans l'interface.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 14, projet 19, paramètres 9,
-  diagramme 2
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 14, projet 19, paramètres 10,
+  diagramme 3
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

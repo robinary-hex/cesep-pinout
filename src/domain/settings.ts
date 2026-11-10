@@ -1,8 +1,9 @@
 import { z } from 'zod'
 import { hexColorSchema } from './color'
+import { DEFAULT_DIAGRAM_STYLE, diagramStyleSchema, nodeFillSchema } from './diagram'
 import { DEFAULT_PROFILE, styleProfileSchema } from './profile'
 
-export const SETTINGS_SCHEMA_VERSION = 9
+export const SETTINGS_SCHEMA_VERSION = 10
 
 export const paletteColorSchema = z.object({
   name: z.string().min(1),
@@ -59,6 +60,27 @@ export const DEFAULT_EXPORT: ExportSettings = {
 
 export const DEFAULT_AUTOSAVE_SECONDS = 120
 
+/**
+ * Style général des diagrammes : celui d'un nouveau diagramme, et la couleur de ses nouveaux
+ * éléments. Chaque diagramme garde ensuite son propre style, comme un montage son profil.
+ */
+export const diagramDefaultsSchema = z.object({
+  style: diagramStyleSchema,
+  /** Couleur et fond d'un nœud qu'on pose. */
+  nodeColor: hexColorSchema,
+  nodeFill: nodeFillSchema,
+  /** Couleur d'un lien qu'on trace. */
+  linkColor: hexColorSchema
+})
+export type DiagramDefaults = z.infer<typeof diagramDefaultsSchema>
+
+export const DEFAULT_DIAGRAM_DEFAULTS: DiagramDefaults = {
+  style: { ...DEFAULT_DIAGRAM_STYLE },
+  nodeColor: '#000000',
+  nodeFill: 'tint',
+  linkColor: '#000000'
+}
+
 export const settingsSchema = z.object({
   schemaVersion: z.literal(SETTINGS_SCHEMA_VERSION),
   /** Dossier de la bibliothèque de composants ; vide = dossier par défaut dans userData. */
@@ -66,6 +88,7 @@ export const settingsSchema = z.object({
   palette: z.array(paletteColorSchema).min(1),
   defaultWireColor: hexColorSchema,
   defaultProfile: styleProfileSchema,
+  diagramDefaults: diagramDefaultsSchema,
   /** Chemins des derniers projets ouverts, le plus récent d'abord. */
   recentFiles: z.array(z.string()),
   export: exportSettingsSchema,
@@ -84,6 +107,7 @@ export const DEFAULT_SETTINGS: Settings = {
   palette: [...DEFAULT_PALETTE],
   defaultWireColor: '#000000',
   defaultProfile: structuredClone(DEFAULT_PROFILE),
+  diagramDefaults: structuredClone(DEFAULT_DIAGRAM_DEFAULTS),
   recentFiles: [],
   export: { ...DEFAULT_EXPORT },
   autosaveSeconds: DEFAULT_AUTOSAVE_SECONDS,

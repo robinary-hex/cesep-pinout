@@ -1,18 +1,19 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import {
-  DEFAULT_DIAGRAM_STYLE,
   NODE_SHAPES,
   NODE_SPECS,
   NODE_TEXT_SCALES,
   nodeFont,
   TEXT_SCALES,
-  type DiagramFont,
+  type DiagramStyle,
   type LinkDash,
   type NodeFill,
   type NodeShape,
   type TextAnchor
 } from '@/domain'
+import { useLibraryStore } from '@/features/library/store'
+import DiagramStyleFields from '@/features/settings/DiagramStyleFields.vue'
 import Icon from '@/ui/Icon.vue'
 import type { IconName } from '@/ui/icons'
 import { useDiagramStore } from './store'
@@ -23,7 +24,13 @@ import { useDiagramStore } from './store'
 
 const emit = defineEmits<{ exportImage: [] }>()
 const store = useDiagramStore()
+const library = useLibraryStore()
 const doc = computed(() => store.doc)
+
+/** Le style du diagramme se règle champ par champ : chaque changement est une commande. */
+function setStyle(style: DiagramStyle): void {
+  store.setStyle(style)
+}
 
 const count = computed(
   () => store.selectedNodes.length + store.selectedLinks.length + store.selectedTexts.length
@@ -55,55 +62,6 @@ function checked(event: Event): boolean {
 function setName(event: Event): void {
   const name = inputValue(event).trim()
   if (name.length > 0) store.setName(name)
-}
-
-function setFont(event: Event): void {
-  store.setStyle({ font: inputValue(event) as DiagramFont })
-}
-
-/**
- * Réglages du style, montrés en pixels (longueurs) ou en points (textes) à 100 % ; le fichier
- * garde les longueurs en cellules.
- */
-const STYLE_FIELDS = [
-  { key: 'lineWidth', label: 'Trait (px)', step: 0.5, min: 0.5, max: 8, cells: true },
-  { key: 'nodeRadius', label: 'Coins (px)', step: 1, min: 0, max: 40, cells: true },
-  { key: 'cornerRadius', label: 'Coudes (px)', step: 1, min: 0, max: 40, cells: true },
-  { key: 'titleSize', label: 'Titre (pt)', step: 1, min: 6, max: 48, cells: false },
-  { key: 'subtitleSize', label: 'Sous-titre (pt)', step: 1, min: 6, max: 48, cells: false },
-  { key: 'labelSize', label: 'Étiquettes (pt)', step: 1, min: 6, max: 48, cells: false }
-] as const
-type StyleField = (typeof STYLE_FIELDS)[number]
-
-const STYLE_TITLES: Record<StyleField['key'], string> = {
-  lineWidth: 'Épaisseur des contours et des liens',
-  nodeRadius: 'Rayon des coins des rectangles arrondis',
-  cornerRadius: 'Rayon des coudes des liens',
-  titleSize: 'Taille des titres',
-  subtitleSize: 'Taille des sous-titres',
-  labelSize: 'Taille des étiquettes de lien, et des textes libres qu’on pose'
-}
-
-function styleValue(field: StyleField): number {
-  const value = doc.value.style[field.key]
-  return field.cells ? Math.round(value * doc.value.style.cellPx * 100) / 100 : value
-}
-
-function setStyleValue(field: StyleField, event: Event): void {
-  const raw = Number(inputValue(event))
-  if (!Number.isFinite(raw)) return
-  const value = Math.min(field.max, Math.max(field.min, raw))
-  store.setStyle({ [field.key]: field.cells ? value / doc.value.style.cellPx : value })
-}
-
-const styleIsDefault = computed(() =>
-  (Object.keys(DEFAULT_DIAGRAM_STYLE) as (keyof typeof DEFAULT_DIAGRAM_STYLE)[]).every(
-    (key) => doc.value.style[key] === DEFAULT_DIAGRAM_STYLE[key]
-  )
-)
-
-function resetStyle(): void {
-  store.setStyle({ ...DEFAULT_DIAGRAM_STYLE })
 }
 
 function sameColor(a: string, b: string): boolean {
@@ -349,33 +307,17 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
 
     <section v-if="!store.hasSelection" class="block">
       <h3>Style</h3>
-      <label class="field">
-        <span title="Police de tout le diagramme ; un nœud peut choisir la sienne">Police</span>
-        <select :value="doc.style.font" @change="setFont">
-          <option value="sans">Normale</option>
-          <option value="mono">Chasse fixe (code)</option>
-        </select>
-      </label>
-      <div class="style-grid">
-        <label v-for="field in STYLE_FIELDS" :key="field.key" class="field">
-          <span :title="STYLE_TITLES[field.key]">{{ field.label }}</span>
-          <input
-            type="number"
-            :step="field.step"
-            :min="field.min"
-            :max="field.max"
-            :value="styleValue(field)"
-            :title="STYLE_TITLES[field.key]"
-            @change="setStyleValue(field, $event)"
-          />
-        </label>
-      </div>
-      <div v-if="!styleIsDefault" class="row">
+      <DiagramStyleFields
+        :model-value="doc.style"
+        :reference="library.diagramDefaults.style"
+        @update:model-value="setStyle"
+      />
+      <div v-if="!store.followsGeneralStyle" class="row">
         <button
           type="button"
           class="small with-icon"
-          title="Revient au style par défaut des diagrammes (annulable)"
-          @click="resetStyle"
+          title="Rétablit le style général des diagrammes pour celui-ci (annulable)"
+          @click="store.adoptGeneralStyle()"
         >
           <Icon name="refresh" :size="13" /> Réinitialiser
         </button>
@@ -776,18 +718,6 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
 .row .field.scale {
   flex: 0 0 70px;
   min-width: 0;
-}
-
-/* Réglages du style : trois par ligne. */
-.style-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0 8px;
-}
-
-.style-grid input {
-  width: 100%;
-  box-sizing: border-box;
 }
 
 /* Nom du diagramme et bouton d'export sur une seule ligne. */

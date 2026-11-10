@@ -3,7 +3,12 @@ import { DIAGRAM_SCHEMA_VERSION } from './diagram'
 import { pathPointAt } from './diagramLinks'
 import { DEFAULT_COMPONENT_STROKE, DEFAULT_END_LABEL_SIZE } from './profile'
 import { PROJECT_SCHEMA_VERSION } from './project'
-import { DEFAULT_AUTOSAVE_SECONDS, DEFAULT_EXPORT, SETTINGS_SCHEMA_VERSION } from './settings'
+import {
+  DEFAULT_AUTOSAVE_SECONDS,
+  DEFAULT_DIAGRAM_DEFAULTS,
+  DEFAULT_EXPORT,
+  SETTINGS_SCHEMA_VERSION
+} from './settings'
 
 /** Erreur de lecture d'un fichier : message pour l'utilisateur, détails ligne par ligne. */
 export class FileFormatError extends Error {
@@ -525,6 +530,8 @@ export const settingsMigrations: MigrationTable = {
     6: (raw) => ({ ...raw, theme: 'dark' }),
     // v7 → v8 : affichage de la bibliothèque, en liste comme avant.
     7: (raw) => ({ ...raw, libraryView: 'list' }),
-    8: migrateSettingsV8
+    8: migrateSettingsV8,
+    // v9 → v10 : style général des diagrammes, au style par défaut.
+    9: (raw) => ({ ...raw, diagramDefaults: structuredClone(DEFAULT_DIAGRAM_DEFAULTS) })
   }
 }

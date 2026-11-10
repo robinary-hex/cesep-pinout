@@ -99,6 +99,10 @@ boîte ouverte en mode `montage`.
 
 ## Interface partagée (`src/ui/`)
 
+`ToolbarBasics.vue` ouvre les trois barres d'outils par les mêmes boutons, dans le même ordre
+(zoom, puis annuler, rétablir et corbeille) : l'ordre est tenu par le composant, pas recopié
+dans chaque éditeur.
+
 `ModalDialog` (fond, Échap, compteur `openModals`), `PromptDialog` (saisie d'une valeur),
 `ContextMenu` + `contextMenu.ts` (menu flottant : entrées, titres, séparateurs, pastilles de
 couleur ; sert au clic droit du montage et au menu Fichier de la barre d'application), `Icon` +
@@ -178,7 +182,7 @@ Tous en JSON indenté, avec `schemaVersion`, validés par Zod à l'ouverture, mi
 (`src/domain/migrations.ts`). Un fichier d'exemple par version dans `src/domain/fixtures/`.
 Versions courantes : composant 14 (textes verticaux, angles arrondis des polylignes, forme point, opacité du remplissage, italique, souligné et barré des textes, orientation réglée texte par texte, textes droits sur le montage, boîtes de texte multilignes, flèche au milieu, graisse des textes, épaisseur en multiplicateur, flèches, textes variables avec
 unité, plus de `labelPrefix`), projet 19 (styles, sens et couleur des étiquettes texte, couleurs de fil propres au montage, étiquettes texte en boîte, police des étiquettes d'extrémité dans le profil, graisse des étiquettes, étiquettes d'extrémité des fils, `componentStroke` dans le profil, `fields` par instance,
-définitions embarquées migrées à chaque version des composants), diagramme 2 (style de texte par nœud ; nœuds, liens à étiquette, textes libres, style et couleurs du diagramme), paramètres 9 (`componentStroke`
+définitions embarquées migrées à chaque version des composants), diagramme 3 (étiquette d'un lien tenue le long du tracé, style de texte par nœud ; nœuds, liens, textes libres, style et couleurs du diagramme), paramètres 10 (style général des diagrammes, `componentStroke`
 et `endLabelFont` du profil par défaut, thème sombre par défaut, ouverture du panneau, affichage de
 la bibliothèque).
 

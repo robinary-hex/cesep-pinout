@@ -1,24 +1,51 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
-import { styleProfileSchema, type StyleProfile } from '@/domain'
+import {
+  diagramDefaultsSchema,
+  styleProfileSchema,
+  type DiagramDefaults,
+  type NodeFill,
+  type StyleProfile
+} from '@/domain'
+import { useDiagramStore } from '@/features/diagram-editor/store'
 import { useLibraryStore } from '@/features/library/store'
 import { useSchematicStore } from '@/features/schematic-editor/store'
 import { deleteProfile, listProfiles, saveProfile, type SavedProfile } from '@/io/profiles'
 import ModalDialog from '@/ui/ModalDialog.vue'
+import DiagramStyleFields from './DiagramStyleFields.vue'
 import ProfileFields from './ProfileFields.vue'
 
-// Boîte de profil de style, pour deux usages. `general` : le profil général de l'application ;
-// l'aperçu se voit sur le montage affiché s'il le suit, et « Appliquer » l'enregistre dans les
-// paramètres puis le donne aux montages ouverts qui suivaient l'ancien. `montage` : le style
-// propre au montage affiché ; l'aperçu est immédiat et « Appliquer » en fait une commande du
-// montage. Les profils nommés se chargent dans les deux cas ; « Annuler » ou Échap ne change rien.
+// Boîte de profil de style, pour deux usages. `general` : le style général de l'application, en
+// deux onglets, Montages et Diagrammes ; l'aperçu se voit sur le document affiché s'il suit le
+// style général, et « Appliquer » enregistre les deux dans les paramètres puis les donne aux
+// documents ouverts qui suivaient l'ancien. `montage` : le style propre au montage affiché ;
+// l'aperçu est immédiat et « Appliquer » en fait une commande du montage. Les profils nommés
+// (montages) se chargent dans les deux cas ; « Annuler » ou Échap ne change rien. Il n'y a pas
+// d'onglet pour les composants : un composant n'a pas de style à lui, il se dessine avec celui
+// du montage où il est posé.
 
-const props = defineProps<{ target: 'general' | 'montage' }>()
+const props = defineProps<{
+  target: 'general' | 'montage'
+  /** Onglet montré à l'ouverture du style général. */
+  initialTab?: 'montage' | 'diagram'
+}>()
 const emit = defineEmits<{ close: [] }>()
 const library = useLibraryStore()
 const schematic = useSchematicStore()
+const diagram = useDiagramStore()
 
 const general = props.target === 'general'
+const tab = ref<'montage' | 'diagram'>(general ? (props.initialTab ?? 'montage') : 'montage')
+/** Style général des diagrammes en cours de réglage. */
+const diagramDraft = ref<DiagramDefaults>(structuredClone(library.diagramDefaults))
+/** Le diagramme affiché ne montre l'aperçu que s'il suit le style général. */
+const diagramPreviewable = general && diagram.followsGeneralStyle
+
+const FILLS: { value: NodeFill; label: string }[] = [
+  { value: 'none', label: 'Contour' },
+  { value: 'tint', label: 'Teinté' },
+  { value: 'solid', label: 'Plein' }
+]
 const draft = ref<StyleProfile>(
   structuredClone(general ? library.defaultProfile : schematic.doc.profile)
 )
@@ -39,8 +66,17 @@ watch(
   { deep: true }
 )
 
+watch(
+  () => diagramDraft.value.style,
+  (value) => {
+    if (diagramPreviewable) diagram.stylePreview = { ...value }
+  },
+  { deep: true }
+)
+
 onUnmounted(() => {
   schematic.profilePreview = null
+  diagram.stylePreview = null
 })
 
 async function refresh(): Promise<void> {
@@ -80,10 +116,19 @@ async function apply(): Promise<void> {
   const profile = valid()
   if (!profile) return
   schematic.profilePreview = null
+  diagram.stylePreview = null
   if (general) {
+    const defaults = diagramDefaultsSchema.safeParse(diagramDraft.value)
+    if (!defaults.success) {
+      report('Style des diagrammes invalide.', true)
+      return
+    }
     const previous = library.defaultProfile
-    await library.updateSettings({ defaultProfile: profile })
+    const previousStyle = library.diagramDefaults.style
+    await library.updateSettings({ defaultProfile: profile, diagramDefaults: defaults.data })
     schematic.followGeneralProfile(previous, profile)
+    diagram.followGeneralStyle(previousStyle, defaults.data.style)
+    diagram.syncDefaults()
   } else {
     schematic.setProfile(profile)
   }
@@ -120,32 +165,74 @@ async function remove(entry: SavedProfile): Promise<void> {
 
 <template>
   <ModalDialog :title="title" @close="emit('close')">
-    <ProfileFields v-model="draft" />
-    <p v-if="!previewable" class="hint">
-      Le montage affiché a son propre style : il ne montre pas l’aperçu et ne suivra pas ces
-      réglages.
-    </p>
+    <nav v-if="general" class="tabs">
+      <button type="button" :class="{ active: tab === 'montage' }" @click="tab = 'montage'">
+        Montages
+      </button>
+      <button type="button" :class="{ active: tab === 'diagram' }" @click="tab = 'diagram'">
+        Diagrammes
+      </button>
+    </nav>
 
-    <section class="saved">
-      <h3>Profils enregistrés</h3>
-      <p v-if="saved.length === 0" class="hint">Aucun pour l'instant.</p>
-      <ul v-else>
-        <li v-for="entry in saved" :key="entry.path">
-          <span class="name">{{ entry.profile.name }}</span>
-          <span class="meta"
-            >{{ entry.profile.cellPx }} px · fils {{ entry.profile.wireWidth }} · trait
-            {{ entry.profile.componentStroke }} · rayon {{ entry.profile.cornerRadius }}</span
-          >
-          <button type="button" class="small" @click="load(entry)">Charger</button>
-          <button type="button" class="small danger" @click="remove(entry)">✕</button>
-        </li>
-      </ul>
-    </section>
+    <template v-if="tab === 'montage'">
+      <ProfileFields v-model="draft" />
+      <p v-if="!previewable" class="hint">
+        Le montage affiché a son propre style : il ne montre pas l’aperçu et ne suivra pas ces
+        réglages.
+      </p>
+
+      <section class="saved">
+        <h3>Profils enregistrés</h3>
+        <p v-if="saved.length === 0" class="hint">Aucun pour l'instant.</p>
+        <ul v-else>
+          <li v-for="entry in saved" :key="entry.path">
+            <span class="name">{{ entry.profile.name }}</span>
+            <span class="meta"
+              >{{ entry.profile.cellPx }} px · fils {{ entry.profile.wireWidth }} · trait
+              {{ entry.profile.componentStroke }} · rayon {{ entry.profile.cornerRadius }}</span
+            >
+            <button type="button" class="small" @click="load(entry)">Charger</button>
+            <button type="button" class="small danger" @click="remove(entry)">✕</button>
+          </li>
+        </ul>
+      </section>
+    </template>
+
+    <template v-else>
+      <DiagramStyleFields v-model="diagramDraft.style" />
+      <section class="saved">
+        <h3>Nouveaux éléments</h3>
+        <div class="defaults">
+          <label class="field">
+            <span>Couleur des nœuds</span>
+            <input v-model="diagramDraft.nodeColor" type="color" />
+          </label>
+          <label class="field">
+            <span>Fond des nœuds</span>
+            <select v-model="diagramDraft.nodeFill">
+              <option v-for="fill in FILLS" :key="fill.value" :value="fill.value">
+                {{ fill.label }}
+              </option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Couleur des liens</span>
+            <input v-model="diagramDraft.linkColor" type="color" />
+          </label>
+        </div>
+      </section>
+      <p v-if="!diagramPreviewable" class="hint">
+        Le diagramme affiché a son propre style : il ne montre pas l’aperçu et ne suivra pas ces
+        réglages.
+      </p>
+    </template>
 
     <p v-if="message" class="message" :class="{ failed }">{{ message }}</p>
 
     <template #footer>
-      <button type="button" @click="saveNamed">Enregistrer sous ce nom</button>
+      <button v-if="tab === 'montage'" type="button" @click="saveNamed">
+        Enregistrer sous ce nom
+      </button>
       <button type="button" @click="emit('close')">Annuler</button>
       <button type="button" class="primary" @click="apply">Appliquer</button>
     </template>
@@ -153,6 +240,52 @@ async function remove(entry: SavedProfile): Promise<void> {
 </template>
 
 <style scoped>
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.tabs button.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+/* Couleurs et fond des nouveaux éléments d'un diagramme, côte à côte. */
+.defaults {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.defaults .field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.defaults select {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+}
+
+.defaults input[type='color'] {
+  width: 56px;
+  height: 28px;
+  padding: 0 2px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+}
+
 .hint {
   margin: 8px 0;
   font-size: 12px;

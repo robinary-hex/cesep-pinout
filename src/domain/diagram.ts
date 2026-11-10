@@ -236,6 +236,20 @@ export const DEFAULT_DIAGRAM_STYLE: DiagramStyle = {
   labelSize: 12
 }
 
+/** Réglages où un style de diagramme s'écarte d'un style de référence (le style général). */
+export function diagramStyleDifferences(
+  style: DiagramStyle,
+  reference: DiagramStyle
+): (keyof DiagramStyle)[] {
+  return (Object.keys(reference) as (keyof DiagramStyle)[]).filter(
+    (key) => style[key] !== reference[key]
+  )
+}
+
+export function sameDiagramStyle(a: DiagramStyle, b: DiagramStyle): boolean {
+  return diagramStyleDifferences(a, b).length === 0
+}
+
 const diagramShape = z.object({
   schemaVersion: z.literal(DIAGRAM_SCHEMA_VERSION),
   name: z.string(),

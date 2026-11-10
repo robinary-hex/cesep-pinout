@@ -2,10 +2,12 @@ import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 import {
   DEFAULT_AUTOSAVE_SECONDS,
+  DEFAULT_DIAGRAM_DEFAULTS,
   DEFAULT_EXPORT,
   DEFAULT_PALETTE,
   DEFAULT_PROFILE,
   DEFAULT_SETTINGS,
+  type DiagramDefaults,
   type ExportSettings,
   type PaletteColor,
   type Settings,
@@ -49,6 +51,10 @@ export const useLibraryStore = defineStore('library', () => {
   /** Profil de style des nouveaux projets. */
   const defaultProfile = computed<StyleProfile>(
     () => settings.value?.defaultProfile ?? DEFAULT_PROFILE
+  )
+  /** Style général des diagrammes : celui des nouveaux diagrammes et de leurs nouveaux éléments. */
+  const diagramDefaults = computed<DiagramDefaults>(
+    () => settings.value?.diagramDefaults ?? DEFAULT_DIAGRAM_DEFAULTS
   )
   const palette = computed<readonly PaletteColor[]>(
     () => settings.value?.palette ?? DEFAULT_PALETTE
@@ -211,6 +217,7 @@ export const useLibraryStore = defineStore('library', () => {
     groups,
     ids,
     defaultProfile,
+    diagramDefaults,
     palette,
     defaultWireColor,
     recentFiles,

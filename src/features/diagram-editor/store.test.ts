@@ -1,6 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { parseDiagram, serializeDiagram } from '@/domain'
+import { DEFAULT_DIAGRAM_STYLE, parseDiagram, serializeDiagram } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import { readDiagramAutosaves, syncDiagramAutosaves } from '@/io/autosave'
 import { setBridge } from '@/io/bridge'
@@ -128,6 +128,49 @@ describe('diagramme : nœuds', () => {
     store.setStyle({ font: 'mono' })
     store.addNode('rect', 0, 30)
     expect(store.doc.nodes[1]?.bold).toBe(false)
+  })
+
+  it('part du style général, le suit quand il change, y revient sur demande', async () => {
+    const library = useLibraryStore()
+    const general = { ...DEFAULT_DIAGRAM_STYLE, lineWidth: 0.3, font: 'mono' as const }
+    await library.updateSettings({
+      diagramDefaults: {
+        style: general,
+        nodeColor: '#1d4ed8',
+        nodeFill: 'solid',
+        linkColor: '#4b5563'
+      }
+    })
+    // Un diagramme neuf prend le style général ; ses nouveaux éléments, les couleurs par défaut.
+    const store = useDiagramStore()
+    expect(store.doc.style).toEqual(general)
+    expect(store.followsGeneralStyle).toBe(true)
+    store.addNode('rounded', 0, 0)
+    store.addLink([
+      [0, 10],
+      [8, 10]
+    ])
+    expect(store.doc.nodes[0]).toMatchObject({ color: '#1d4ed8', fill: 'solid', bold: false })
+    expect(store.doc.links[0]?.color).toBe('#4b5563')
+    const first = store.activeTabId
+    // Un second diagramme se donne son propre style.
+    store.newDiagram()
+    store.setStyle({ titleSize: 20 })
+    expect(store.followsGeneralStyle).toBe(false)
+    // Le style général change : le premier diagramme suit, le second garde le sien.
+    const next = { ...general, lineWidth: 0.2 }
+    await library.updateSettings({ diagramDefaults: { ...library.diagramDefaults, style: next } })
+    store.followGeneralStyle(general, next)
+    expect(store.doc.style).toMatchObject({ lineWidth: 0.3, titleSize: 20 })
+    store.activateTab(first)
+    expect(store.doc.style.lineWidth).toBe(0.2)
+    expect(store.undoLabel).toBe('Changer le style du diagramme')
+    // « Réinitialiser » ramène un diagramme au style général, en une commande.
+    store.cycleTab(1)
+    store.adoptGeneralStyle()
+    expect(store.followsGeneralStyle).toBe(true)
+    store.undo()
+    expect(store.doc.style.titleSize).toBe(20)
   })
 
   it('règle le style du diagramme, en une commande annulable', () => {

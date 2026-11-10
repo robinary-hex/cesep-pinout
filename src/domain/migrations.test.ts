@@ -32,11 +32,13 @@ import projectV10 from './fixtures/v10/project.json?raw'
 import settingsV6 from './fixtures/v6/settings.json?raw'
 import settingsV7 from './fixtures/v7/settings.json?raw'
 import settingsV8 from './fixtures/v8/settings.json?raw'
+import settingsV9 from './fixtures/v9/settings.json?raw'
 import projectV16 from './fixtures/v16/project.json?raw'
 import projectV9 from './fixtures/v9/project.json?raw'
 import settingsV5 from './fixtures/v5/settings.json?raw'
 import settingsV4 from './fixtures/v4/settings.json?raw'
 import settingsV3 from './fixtures/v3/settings.json?raw'
+import { DEFAULT_DIAGRAM_STYLE } from './diagram'
 import {
   componentMigrations,
   FileFormatError,
@@ -488,10 +490,25 @@ describe('projet v18 → v19', () => {
   })
 })
 
+describe('paramètres v9 → v10', () => {
+  it('reçoit le style général des diagrammes par défaut et garde le reste', () => {
+    const settings = parseSettings(settingsV9)
+    expect(settings.schemaVersion).toBe(10)
+    expect(settings.diagramDefaults).toEqual({
+      style: DEFAULT_DIAGRAM_STYLE,
+      nodeColor: '#000000',
+      nodeFill: 'tint',
+      linkColor: '#000000'
+    })
+    expect(settings.theme).toBe('light')
+    expect(settings.palette).toHaveLength(3)
+  })
+})
+
 describe('paramètres v8 → v9', () => {
   it('range les couleurs personnalisées dans la palette, sans doublon', () => {
     const settings = parseSettings(settingsV8)
-    expect(settings.schemaVersion).toBe(9)
+    expect(settings.schemaVersion).toBe(10)
     expect('customColors' in settings).toBe(false)
     // #D62828 est déjà le rouge de la palette ; #ff00aa s'y ajoute sous son code.
     expect(settings.palette.map((color) => color.hex.toLowerCase())).toEqual([
@@ -507,7 +524,7 @@ describe('paramètres v8 → v9', () => {
 describe('paramètres v7 → v8', () => {
   it('affiche la bibliothèque en liste par défaut et garde le reste', () => {
     const settings = parseSettings(settingsV7)
-    expect(settings.schemaVersion).toBe(9)
+    expect(settings.schemaVersion).toBe(10)
     expect(settings.libraryView).toBe('list')
     expect(settings.theme).toBe('dark')
   })
@@ -516,7 +533,7 @@ describe('paramètres v7 → v8', () => {
 describe('paramètres v6 → v8', () => {
   it('passe au thème sombre et garde le reste', () => {
     const settings = parseSettings(settingsV6)
-    expect(settings.schemaVersion).toBe(9)
+    expect(settings.schemaVersion).toBe(10)
     expect(settings.theme).toBe('dark')
     expect(settings.autoOpenInspector).toBe(true)
     expect(settings.autosaveSeconds).toBe(120)
@@ -526,7 +543,7 @@ describe('paramètres v6 → v8', () => {
 describe('paramètres v5 → v8', () => {
   it('ouvre le panneau de propriétés à la sélection par défaut', () => {
     const settings = parseSettings(settingsV5)
-    expect(settings.schemaVersion).toBe(9)
+    expect(settings.schemaVersion).toBe(10)
     expect(settings.autoOpenInspector).toBe(true)
   })
 })
@@ -534,7 +551,7 @@ describe('paramètres v5 → v8', () => {
 describe('paramètres v4 → v8', () => {
   it('complète le profil par défaut et garde le thème', () => {
     const settings = parseSettings(settingsV4)
-    expect(settings.schemaVersion).toBe(9)
+    expect(settings.schemaVersion).toBe(10)
     expect(settings.theme).toBe('dark')
     expect(settings.defaultProfile.endLabelFont).toEqual({ family: 'Segoe UI', size: 14 })
   })
@@ -543,7 +560,7 @@ describe('paramètres v4 → v8', () => {
 describe('paramètres v1 → v8', () => {
   it('ajoute export, copie de secours, trait des composants et thème', () => {
     const settings = parseSettings(settingsV1)
-    expect(settings.schemaVersion).toBe(9)
+    expect(settings.schemaVersion).toBe(10)
     expect(settings.defaultProfile.componentStroke).toBe(0.1)
     expect(settings.export.scale).toBe(2)
     expect(settings.theme).toBe('dark')
@@ -553,7 +570,7 @@ describe('paramètres v1 → v8', () => {
 describe('paramètres v3 → v8', () => {
   it('ajoute le thème, sombre désormais, et garde le reste', () => {
     const settings = parseSettings(settingsV3)
-    expect(settings.schemaVersion).toBe(9)
+    expect(settings.schemaVersion).toBe(10)
     expect(settings.theme).toBe('dark')
     expect(settings.recentFiles).toEqual(['D:/Documents/diviseur.pinout.json'])
     expect(settings.autosaveSeconds).toBe(60)

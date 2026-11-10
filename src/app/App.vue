@@ -485,8 +485,10 @@ async function openExternal(path: string): Promise<void> {
 async function onWindowFocus(): Promise<void> {
   if (openModals.value > 0) return
   const previous = library.defaultProfile
+  const previousStyle = library.diagramDefaults.style
   if (await library.reloadSharedSettings()) {
     schematic.followGeneralProfile(previous, library.defaultProfile)
+    diagram.followGeneralStyle(previousStyle, library.diagramDefaults.style)
   }
 }
 
@@ -554,6 +556,8 @@ onMounted(async () => {
   // par défaut.
   if (schematic.pristine) schematic.newProject()
   schematic.syncCurrentColor()
+  if (diagram.pristine) diagram.newDiagram()
+  diagram.syncDefaults()
   await proposeRecovery()
   const launch = await bridge().getLaunchFile()
   if (launch) await openExternal(launch)
@@ -729,7 +733,12 @@ onUnmounted(() => {
       <SchematicEditor v-else ref="schematicEditor" />
     </main>
     <SettingsDialog v-if="showSettings" @close="showSettings = false" />
-    <ProfileDialog v-if="showProfile" target="general" @close="showProfile = false" />
+    <ProfileDialog
+      v-if="showProfile"
+      target="general"
+      :initial-tab="mode === 'diagram' ? 'diagram' : 'montage'"
+      @close="showProfile = false"
+    />
     <ShortcutsHelp v-if="showHelp" :initial="current.helpSection" @close="showHelp = false" />
     <ContextMenu
       v-if="fileMenu"

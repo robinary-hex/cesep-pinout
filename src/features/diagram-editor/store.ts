@@ -18,6 +18,7 @@ import {
   nodeBoxForText,
   normalizePoints,
   pannedView,
+  sameDiagramStyle,
   simplifyPoints,
   textLabelBounds,
   translatePoints,
@@ -105,8 +106,9 @@ const DEFAULT_COLOR = '#000000'
 export const useDiagramStore = defineStore('diagram', () => {
   const library = useLibraryStore()
 
+  /** Un nouveau diagramme part du style général de l'application. */
   function blankDiagram(): Diagram {
-    return createEmptyDiagram('Nouveau diagramme')
+    return createEmptyDiagram('Nouveau diagramme', library.diagramDefaults.style)
   }
 
   const selectedNodes = ref<string[]>([])
@@ -117,9 +119,11 @@ export const useDiagramStore = defineStore('diagram', () => {
   const placement = ref<NodeShape | null>(null)
   const drawing = shallowRef<LinkDrawing | null>(null)
   // Style des prochains éléments : celui du dernier nœud ou lien stylé.
-  const nodeColor = ref(DEFAULT_COLOR)
-  const nodeFill = ref<NodeFill>('tint')
-  const linkColor = ref(DEFAULT_COLOR)
+  const nodeColor = ref(library.diagramDefaults.nodeColor)
+  const nodeFill = ref<NodeFill>(library.diagramDefaults.nodeFill)
+  const linkColor = ref(library.diagramDefaults.linkColor)
+  /** Style en cours d'édition dans le profil général : affiché à la place de celui du diagramme. */
+  const stylePreview = shallowRef<DiagramStyle | null>(null)
   const linkDash = ref<LinkDash>('solid')
   const linkStartArrow = ref(false)
   const linkEndArrow = ref(true)
@@ -163,6 +167,7 @@ export const useDiagramStore = defineStore('diagram', () => {
       placement.value = null
       drawing.value = null
       tool.value = 'select'
+      stylePreview.value = null
     },
     // Un lien en cours de tracé est gardé s'il a deux sommets, abandonné sinon.
     beforeLeave: () => {
@@ -183,7 +188,12 @@ export const useDiagramStore = defineStore('diagram', () => {
     }))
   )
 
-  const style = computed<DiagramStyle>(() => doc.value.style)
+  /** Style effectif pour l'affichage : l'aperçu du profil général, sinon celui du diagramme. */
+  const style = computed<DiagramStyle>(() => stylePreview.value ?? doc.value.style)
+  /** Ce diagramme a-t-il encore le style général de l'application ? */
+  const followsGeneralStyle = computed(() =>
+    sameDiagramStyle(doc.value.style, library.diagramDefaults.style)
+  )
   const cellPx = computed(() => style.value.cellPx * view.value.zoom)
   /** Points d'accroche de tous les nœuds : là où un lien peut partir ou arriver. */
   const anchors = computed(() => diagramAnchors(doc.value.nodes))
@@ -340,6 +350,49 @@ export const useDiagramStore = defineStore('diagram', () => {
     apply('Changer le style du diagramme', (draft) => {
       Object.assign(draft.style, patch)
     })
+  }
+
+  /** Aligne ce diagramme sur le style général de l'application. */
+  function adoptGeneralStyle(): void {
+    setStyle({ ...library.diagramDefaults.style })
+  }
+
+  /** Couleur et fond des prochains éléments : ceux du style général. */
+  function syncDefaults(): void {
+    nodeColor.value = library.diagramDefaults.nodeColor
+    nodeFill.value = library.diagramDefaults.nodeFill
+    linkColor.value = library.diagramDefaults.linkColor
+  }
+
+  /**
+   * Le style général vient de passer de `previous` à `next` : les diagrammes ouverts qui
+   * suivaient l'ancien prennent le nouveau (une commande par onglet, annulable) ; ceux qui
+   * avaient leur propre style le gardent. Un diagramme vierge repart du nouveau style.
+   */
+  function followGeneralStyle(previous: DiagramStyle, next: DiagramStyle): void {
+    if (sameDiagramStyle(previous, next)) return
+    const label = 'Changer le style du diagramme'
+    const set = (draft: Draft<Diagram>): void => {
+      draft.style = { ...next }
+    }
+    base.updateStashedTabs((tab) => {
+      const current = tab.history.value
+      if (!sameDiagramStyle(current.style, previous)) return tab
+      if (tab.path === null && current === tab.savedDoc) {
+        const blank = createEmptyDiagram(current.name, next)
+        tab.history.reset(blank)
+        return { ...tab, savedDoc: blank }
+      }
+      tab.history.apply(label, set)
+      return { ...tab }
+    })
+    if (!sameDiagramStyle(doc.value.style, previous)) return
+    if (pristine.value) {
+      const blank = createEmptyDiagram(doc.value.name, next)
+      base.reset(blank, blank)
+    } else {
+      apply(label, set)
+    }
   }
 
   // Outils
@@ -1026,6 +1079,11 @@ export const useDiagramStore = defineStore('diagram', () => {
     dirtyDocuments,
     setName,
     setStyle,
+    adoptGeneralStyle,
+    followGeneralStyle,
+    followsGeneralStyle,
+    stylePreview,
+    syncDefaults,
     selectTool,
     startPlacing,
     stopPlacing,
