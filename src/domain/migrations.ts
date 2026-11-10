@@ -478,6 +478,16 @@ export const projectMigrations: MigrationTable = {
         ...raw,
         labels: labels.map((label) => (isRecord(label) ? { background: false, ...label } : label))
       })
+    },
+    // Projet v20 → v21 : un composant peut passer derrière les fils ; ils restent tous devant.
+    20: (raw) => {
+      const components = Array.isArray(raw['components']) ? raw['components'] : []
+      return {
+        ...raw,
+        components: components.map((instance) =>
+          isRecord(instance) ? { behindWires: false, ...instance } : instance
+        )
+      }
     }
   }
 }

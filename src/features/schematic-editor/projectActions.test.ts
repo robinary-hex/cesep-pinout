@@ -4,19 +4,24 @@ import { useLibraryStore } from '@/features/library/store'
 import { readAutosaves, syncAutosaves } from '@/io/autosave'
 import { setBridge } from '@/io/bridge'
 import { FakeFs } from '@/io/testing/fakeFs'
+import { setDialogResponder } from '@/ui/dialogs'
+import { scriptDialogs, type DialogScript } from '@/ui/testing/dialogs'
 import { closeTabAsking } from './projectActions'
 import { useSchematicStore } from './store'
 
 let fs: FakeFs
+let dialogs: DialogScript
 
 beforeEach(() => {
   fs = new FakeFs()
   setBridge(fs)
+  dialogs = scriptDialogs()
   setActivePinia(createPinia())
 })
 
 afterEach(() => {
   setBridge(null)
+  setDialogResponder(null)
 })
 
 describe('fermer un onglet de montage', () => {
@@ -31,7 +36,7 @@ describe('fermer un onglet de montage', () => {
     const store = useSchematicStore()
     store.setProjectName('Brouillon')
     store.addLabel(0, 0)
-    fs.confirmSaveAnswers.push('cancel')
+    dialogs.answers.push('cancel')
     expect(await closeTabAsking(store, useLibraryStore(), store.activeTabId)).toBe(false)
     expect(store.doc.name).toBe('Brouillon')
   })
@@ -42,7 +47,7 @@ describe('fermer un onglet de montage', () => {
     store.addLabel(0, 0)
     await syncAutosaves(store.dirtyDocuments())
     expect(await readAutosaves()).toHaveLength(1)
-    fs.confirmSaveAnswers.push('discard')
+    dialogs.answers.push('discard')
     expect(await closeTabAsking(store, useLibraryStore(), store.activeTabId)).toBe(true)
     expect(store.doc.name).toBe('Nouveau montage')
     expect(await readAutosaves()).toEqual([])
@@ -53,12 +58,12 @@ describe('fermer un onglet de montage', () => {
     const library = useLibraryStore()
     store.setProjectName('Alim')
     store.addLabel(0, 0)
-    fs.confirmSaveAnswers.push('save')
+    dialogs.answers.push('save')
     fs.saveDialogAnswers.push(null)
     expect(await closeTabAsking(store, library, store.activeTabId)).toBe(false)
     expect(store.doc.name).toBe('Alim')
 
-    fs.confirmSaveAnswers.push('save')
+    dialogs.answers.push('save')
     fs.saveDialogAnswers.push('D:/Docs/alim.pinout.json')
     expect(await closeTabAsking(store, library, store.activeTabId)).toBe(true)
     expect(fs.texts.get('D:/Docs/alim.pinout.json')).toContain('"name": "Alim"')
@@ -72,7 +77,7 @@ describe('fermer un onglet de montage', () => {
     const a = store.activeTabId
     store.newProject()
     store.setProjectName('B')
-    fs.confirmSaveAnswers.push('save')
+    dialogs.answers.push('save')
     fs.saveDialogAnswers.push('D:/Docs/a.pinout.json')
     expect(await closeTabAsking(store, useLibraryStore(), a)).toBe(true)
     expect(fs.texts.get('D:/Docs/a.pinout.json')).toContain('"name": "A"')

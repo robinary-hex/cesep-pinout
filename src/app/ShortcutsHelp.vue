@@ -43,7 +43,8 @@ const sections: { title: string; rows: Row[] }[] = [
     rows: [
       ['V', 'Sélection ; arrête la pose ou le tracé'],
       ['F', 'Tracer un fil : un clic par coude, l’axe dominant d’abord'],
-      ['Maj pendant le tracé', 'Inverser le L du fil'],
+      ['Alt pendant le tracé', 'Tracer à 45° : une diagonale, puis un segment droit'],
+      ['Maj pendant le tracé', 'Inverser l’ordre : le L du fil, ou la diagonale à l’arrivée'],
       ['Entrée / double-clic', 'Terminer le fil (finir sur une broche ou un fil le termine aussi)'],
       ['Retour arrière', 'Retirer le dernier sommet du fil en cours'],
       [
@@ -55,7 +56,10 @@ const sections: { title: string; rows: Row[] }[] = [
       ['T / Maj+T', 'Miroir horizontal / vertical'],
       ...SELECTION,
       ['Alt+clic sur un croisement', 'Inverser l’ordre des deux fils à cet endroit seulement'],
-      ['Ctrl+Page haut / bas', 'Avancer / reculer les fils (Maj : premier / arrière-plan)'],
+      [
+        'Ctrl+Page haut / bas',
+        'Avancer / reculer les fils (Maj : premier / arrière-plan) ; un composant passe devant / derrière les fils'
+      ],
       [
         'Double-clic',
         'Valeur d’un composant, texte d’une étiquette, étiquette d’une extrémité libre'

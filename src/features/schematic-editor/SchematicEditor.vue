@@ -234,6 +234,15 @@ function openMenu(request: MenuRequest): void {
       }),
       item('Miroir horizontal', () => store.flip('horizontal'), { hint: 'T', icon: 'flip-h' }),
       item('Miroir vertical', () => store.flip('vertical'), { hint: 'Maj+T', icon: 'flip-v' }),
+      item(
+        'Derrière les fils',
+        () => store.setInstancesBehindWires(store.selection, !instance.behindWires),
+        {
+          hint: instance.behindWires ? 'Ctrl+Page haut' : 'Ctrl+Page bas',
+          icon: 'arrow-down-line',
+          checked: instance.behindWires
+        }
+      ),
       SEPARATOR,
       ...commonItems()
     )
@@ -349,6 +358,8 @@ function onKeyDown(event: KeyboardEvent): void {
 
   if (key === 'shift') store.shiftHeld = true
   if (key === 'control') store.ctrlHeld = true
+  // Alt maintenue : le fil qu'on trace passe à 45° (la coque empêche Alt d'activer autre chose).
+  if (key === 'alt') store.altHeld = true
   if (openModals.value > 0) return
 
   if (key === ' ' && !editable) {
@@ -398,10 +409,10 @@ function onKeyDown(event: KeyboardEvent): void {
         store.pasteClipboard()
         break
       case 'pageup':
-        store.reorderWires(event.shiftKey ? 'top' : 'up')
+        store.restackSelection(event.shiftKey ? 'top' : 'up')
         break
       case 'pagedown':
-        store.reorderWires(event.shiftKey ? 'bottom' : 'down')
+        store.restackSelection(event.shiftKey ? 'bottom' : 'down')
         break
       default:
         return
@@ -486,12 +497,14 @@ function onKeyUp(event: KeyboardEvent): void {
   if (event.key === ' ') store.panKeyHeld = false
   if (event.key === 'Shift') store.shiftHeld = false
   if (event.key === 'Control') store.ctrlHeld = false
+  if (event.key === 'Alt') store.altHeld = false
 }
 
 function onBlur(): void {
   store.panKeyHeld = false
   store.shiftHeld = false
   store.ctrlHeld = false
+  store.altHeld = false
 }
 
 onMounted(() => {
@@ -507,6 +520,7 @@ onUnmounted(() => {
   store.panKeyHeld = false
   store.shiftHeld = false
   store.ctrlHeld = false
+  store.altHeld = false
 })
 
 // Actions de fichier appelées par le menu Fichier de la barre d'application.

@@ -161,6 +161,12 @@ function setMirror(event: Event): void {
   )
 }
 
+function setBehindWires(event: Event): void {
+  const current = single.value
+  if (!current) return
+  store.setInstancesBehindWires([current.instance.id], (event.target as HTMLInputElement).checked)
+}
+
 function setField(name: string, event: Event): void {
   const current = single.value
   if (current) store.setInstanceField(current.instance.id, name, inputValue(event))
@@ -419,6 +425,13 @@ function setLabelVertical(event: Event): void {
             <span>Miroir</span>
           </label>
         </div>
+        <label
+          class="check"
+          title="Le composant se dessine sous les fils, qui restent visibles sur son image (Ctrl+Page bas ; Ctrl+Page haut le ramène devant)"
+        >
+          <input type="checkbox" :checked="single.instance.behindWires" @change="setBehindWires" />
+          <span>Derrière les fils</span>
+        </label>
         <div class="row">
           <button
             type="button"

@@ -46,6 +46,35 @@ describe('export SVG', () => {
     expect(result.svg).toContain('>M</tspan>')
   })
 
+  it('dessine avant les fils les composants mis derrière eux, avec leurs textes', () => {
+    const front = buildProjectSvg(project, DEFAULT_EXPORT)
+    if (!front) throw new Error('export vide')
+    expect(front.svg).not.toContain('components-behind')
+    expect(front.svg.indexOf('<g class="wires">')).toBeLessThan(
+      front.svg.indexOf('<g class="components">')
+    )
+    // Le premier composant (l'image du Nano) passe derrière : il sort avant les fils.
+    const behind = buildProjectSvg(
+      {
+        ...project,
+        components: project.components.map((instance, index) =>
+          index === 0 ? { ...instance, behindWires: true } : instance
+        )
+      },
+      DEFAULT_EXPORT
+    )
+    if (!behind) throw new Error('export vide')
+    const back = behind.svg.indexOf('<g class="components-behind"><g transform=')
+    const wires = behind.svg.indexOf('<g class="wires">')
+    expect(back).toBeGreaterThan(-1)
+    expect(back).toBeLessThan(wires)
+    expect(behind.svg.indexOf('<image href=')).toBeLessThan(wires)
+    // Les autres restent après, et l'image garde les mêmes dimensions.
+    expect(wires).toBeLessThan(behind.svg.indexOf('<g class="components">'))
+    expect([behind.widthCells, behind.heightCells]).toEqual([front.widthCells, front.heightCells])
+    expect(behind.svg).toContain('>U1</text>')
+  })
+
   it('ajoute une flèche aux extrémités libres prolongées', () => {
     const result = buildProjectSvg(project, DEFAULT_EXPORT)
     if (!result) throw new Error('export vide')

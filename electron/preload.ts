@@ -20,7 +20,6 @@ const api: PinoutApi = {
   removeComponentFolder: (path) => ipcRenderer.invoke(IPC.removeComponentFolder, path),
   showOpenDialog: (options?: OpenDialogOptions) => ipcRenderer.invoke(IPC.showOpenDialog, options),
   showSaveDialog: (options?: SaveDialogOptions) => ipcRenderer.invoke(IPC.showSaveDialog, options),
-  confirmSave: (name) => ipcRenderer.invoke(IPC.confirmSave, name),
   getAppPaths: () => ipcRenderer.invoke(IPC.getAppPaths),
   getLaunchFile: () => ipcRenderer.invoke(IPC.launchFile),
   onOpenFile: (handler) => {
@@ -31,6 +30,7 @@ const api: PinoutApi = {
   pathForFile: (file) =>
     webUtils.getPathForFile(file as Parameters<typeof webUtils.getPathForFile>[0]),
   setDirty: (dirty) => ipcRenderer.invoke(IPC.setDirty, dirty),
+  quitAsked: () => ipcRenderer.invoke(IPC.quitAsked),
   confirmQuit: () => ipcRenderer.invoke(IPC.confirmQuit),
   cancelQuit: () => ipcRenderer.invoke(IPC.cancelQuit),
   onAppRequest: (handler) => {

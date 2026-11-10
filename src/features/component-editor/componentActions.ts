@@ -1,6 +1,6 @@
 import type { useLibraryStore } from '@/features/library/store'
-import { bridge } from '@/io/bridge'
 import { newComponentId, saveComponent } from '@/io/library'
+import { askToSave } from '@/ui/dialogs'
 import type { useComponentEditorStore } from './store'
 
 // Enregistrement du composant en cours d'édition, partagé par l'éditeur (Ctrl+S, menu Fichier),
@@ -50,7 +50,7 @@ export async function closeComponentTabAsking(
   const tab = store.tabs.find((candidate) => candidate.id === id)
   if (!tab) return false
   if (tab.dirty) {
-    const choice = await bridge().confirmSave(tab.name)
+    const choice = await askToSave(tab.name)
     if (choice === 'cancel') return false
     if (choice === 'save') {
       store.activateTab(id)

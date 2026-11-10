@@ -229,3 +229,91 @@ describe('canevas du montage : étiquettes texte', () => {
     expect(wrapper.find('.label-back').exists()).toBe(false)
   })
 })
+
+describe('canevas du montage : fils à 45° avec Alt', () => {
+  /** Alt enfoncée : les événements de souris la portent. */
+  const ALT = { altKey: true }
+
+  it('trace une diagonale puis un segment droit tant qu’Alt est enfoncée, l’inverse avec Maj', async () => {
+    const store = useSchematicStore()
+    store.startWireTool()
+    const wrapper = mount(SchematicCanvas)
+    const svg = wrapper.get('svg.schematic')
+    await fire(svg, 'pointerdown', at(store, 0, 0))
+    // Sans Alt, l'aperçu est un L ; avec, il part en diagonale.
+    await fire(svg, 'pointermove', at(store, 5, 2))
+    expect(wrapper.get('.drawing .pending').attributes('d')).toContain('L 5 2')
+    expect(store.altHeld).toBe(false)
+    await fire(svg, 'pointermove', at(store, 5, 2), ALT)
+    expect(store.altHeld).toBe(true)
+    const pending = wrapper.get('.drawing .pending').attributes('d') ?? ''
+    expect(pending.startsWith('M 0 0 L 1.')).toBe(true)
+    expect(pending.endsWith('L 5 2')).toBe(true)
+    await fire(svg, 'pointerdown', at(store, 5, 2), ALT)
+    expect(store.drawing?.points).toEqual([
+      [0, 0],
+      [2, 2],
+      [5, 2]
+    ])
+    // Maj inverse : le segment droit d'abord, la diagonale à l'arrivée.
+    store.shiftHeld = true
+    await fire(svg, 'pointerdown', at(store, 9, 4), ALT)
+    store.shiftHeld = false
+    expect(store.drawing?.points.slice(2)).toEqual([
+      [5, 2],
+      [7, 2],
+      [9, 4]
+    ])
+    store.finishWire()
+    expect(store.doc.wires[0]?.points).toEqual([
+      [0, 0],
+      [2, 2],
+      [7, 2],
+      [9, 4]
+    ])
+    // Relâcher Alt revient au L.
+    await fire(svg, 'pointermove', at(store, 12, 8))
+    expect(store.altHeld).toBe(false)
+  })
+
+  it('Ctrl+Alt+glisser tire d’une broche un fil à 45°', async () => {
+    const store = withResistor()
+    const wrapper = mount(SchematicCanvas)
+    const svg = wrapper.get('svg.schematic')
+    store.ctrlHeld = true
+    await fire(svg, 'pointermove', at(store, 6.2, 4), CTRL)
+    await fire(svg, 'pointerdown', at(store, 6.2, 4), CTRL)
+    await fire(svg, 'pointermove', at(store, 11, 7), { ...CTRL, ...ALT })
+    await fire(svg, 'pointerup', at(store, 11, 7), { ...CTRL, ...ALT })
+    expect(store.doc.wires[0]?.points).toEqual([
+      [6, 4],
+      [9, 7],
+      [11, 7]
+    ])
+  })
+})
+
+describe('canevas du montage : composants derrière les fils', () => {
+  it('dessine sous les fils le composant mis derrière eux, et au-dessus les autres', async () => {
+    const store = withResistor()
+    const id = store.doc.components[0]?.id
+    if (!id) throw new Error('composant attendu')
+    store.addWire([
+      [0, 4],
+      [8, 4]
+    ])
+    const wrapper = mount(SchematicCanvas)
+    const precedes = (first: string, second: string): boolean => {
+      const a = wrapper.get(first).element
+      const b = wrapper.get(second).element
+      return (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+    }
+    expect(precedes('.wires', '.instance')).toBe(true)
+    store.setInstancesBehindWires([id], true)
+    await wrapper.vm.$nextTick()
+    expect(precedes('.instance', '.wires')).toBe(true)
+    // Il reste un composant qu'on saisit et qu'on déplace.
+    await fire(wrapper.get('.instance'), 'pointerdown', at(store, 4, 3.2))
+    expect(store.selection).toEqual([id])
+  })
+})

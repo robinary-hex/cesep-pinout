@@ -4,6 +4,7 @@ import {
   absolutePinPosition,
   boxHandles,
   componentImages,
+  crossingPieceEnds,
   dragVertex,
   gridLines,
   instanceBounds,
@@ -20,8 +21,9 @@ import {
   rectsIntersect,
   resizeBox,
   rotatedSize,
-  routeLAuto,
+  routeWire,
   screenToWorld,
+  segmentCoordinate,
   textContent,
   textEmphasisAttrs,
   textStyleAttrs,
@@ -53,8 +55,9 @@ import { useSchematicStore, type PlacedInstance } from './store'
 
 // Canevas infini du montage. Tout le contenu est dessiné en unités de cellule dans un groupe
 // mis à l'échelle (zoom) et translaté (pan) ; seule la grille est calculée en pixels d'écran.
-// Ordre d'empilement : grille, fils (corps, queues pointillées, pointes), croisements (fil du
-// dessus avec liseré), points de jonction, composants, repères, étiquettes, étiquettes
+// Ordre d'empilement : grille, composants mis derrière les fils, fils (corps, queues
+// pointillées, pointes), croisements (fil du dessus avec liseré), points de jonction, les
+// autres composants, repères, étiquettes, étiquettes
 // d'extrémité, broches (et anneau de saisie de la broche survolée), surcouches de sélection et
 // d'édition, copies fantômes (Alt+glisser),
 // fantôme de pose, tracé en cours, rectangle de sélection.
@@ -356,6 +359,7 @@ const instanceTexts = computed(() =>
       const { primitive, anchor } = placement
       return {
         key: `${item.instance.id}:${index}`,
+        behind: item.instance.behindWires,
         primitive,
         anchor,
         fill: stale ? 'var(--stale)' : screenColor(primitive.color),
@@ -370,6 +374,23 @@ const instanceTexts = computed(() =>
     })
   })
 )
+
+/** Empilement du montage : les composants mis derrière les fils, les fils, les autres composants. */
+const STACK = ['back', 'wires', 'front'] as const
+
+interface ComponentLayer {
+  instances: PlacedInstance[]
+  texts: (typeof instanceTexts.value)[number][]
+}
+
+/** Composants et textes de composant de chaque couche, dans l'ordre du montage. */
+const layers = computed<Record<(typeof STACK)[number], ComponentLayer>>(() => {
+  const layer = (behind: boolean): ComponentLayer => ({
+    instances: store.placed.filter((item) => item.instance.behindWires === behind),
+    texts: instanceTexts.value.filter((entry) => entry.behind === behind)
+  })
+  return { back: layer(true), wires: { instances: [], texts: [] }, front: layer(false) }
+})
 
 // Étiquettes texte
 
@@ -465,13 +486,13 @@ const wireColorById = computed(() => new Map(store.doc.wires.map((wire) => [wire
 /** Croisements : le fil du dessus, redessiné sur une demi-cellule avec un liseré couleur papier. */
 const crossingMarks = computed(() =>
   store.pieces.map((piece) => {
-    const [x, y] = piece.point
+    const [[x1, y1], [x2, y2]] = crossingPieceEnds(piece)
     return {
-      key: `${x},${y}`,
-      x1: piece.horizontal ? x - 0.5 : x,
-      y1: piece.horizontal ? y : y - 0.5,
-      x2: piece.horizontal ? x + 0.5 : x,
-      y2: piece.horizontal ? y : y + 0.5,
+      key: `${piece.point[0]},${piece.point[1]}`,
+      x1,
+      y1,
+      x2,
+      y2,
       color: wireColorById.value.get(piece.topWireId) ?? '#000000'
     }
   })
@@ -550,8 +571,9 @@ const pinGrabReach = computed(() => Math.min(PIN_GRAB_CELLS, PIN_GRAB_PX / cell.
 
 /** Composant sous un point : le dernier dessiné dont la boîte le contient. */
 function instanceAt(point: LocalPoint): string | null {
-  for (let index = store.placed.length - 1; index >= 0; index--) {
-    const item = store.placed[index]
+  const drawn = [...layers.value.back.instances, ...layers.value.front.instances]
+  for (let index = drawn.length - 1; index >= 0; index--) {
+    const item = drawn[index]
     if (!item) continue
     const bounds = instanceBounds(item.instance, item.def)
     if (
@@ -591,6 +613,11 @@ const drawingPoints = computed<readonly GridPoint[] | null>(() => {
   return store.drawing?.points ?? null
 })
 
+/** Trajet d'un tracé jusqu'à un point : en L, à 45° tant qu'Alt est enfoncée ; Maj change l'ordre. */
+function wireRoute(from: GridPoint, to: GridPoint): GridPoint[] {
+  return routeWire(from, to, { invert: store.shiftHeld, diagonal: store.altHeld })
+}
+
 const drawingPreview = computed(() => {
   const points = drawingPoints.value
   const point = hover.value
@@ -600,7 +627,7 @@ const drawingPreview = computed(() => {
   const committed = wirePathData(points, cornerRadius.value)
   if (!point) return { committed, pending: '', end: null as GridPoint | null, onPin: false }
   const snap = wireSnap(point)
-  const route = routeLAuto(last, snap.point, store.shiftHeld)
+  const route = wireRoute(last, snap.point)
   return {
     committed,
     pending: wirePathData([...points, ...route.slice(1)], cornerRadius.value),
@@ -629,7 +656,8 @@ const ghost = computed(() => {
     rotation: current.rotation,
     mirror: current.mirror,
     label: '',
-    fields: {}
+    fields: {},
+    behindWires: false
   }
   return {
     instance,
@@ -840,6 +868,8 @@ function onPointerDown(event: PointerEvent): void {
   }
   if (event.button !== 0) return
   const world = toWorld(screenPoint(event))
+  // Alt a pu être enfoncée hors de la fenêtre : l'événement fait foi.
+  if (store.altHeld !== event.altKey) store.altHeld = event.altKey
 
   if (store.tool === 'place') {
     placeGhost()
@@ -869,7 +899,7 @@ function onPointerDown(event: PointerEvent): void {
     }
     const last = current.points.at(-1)
     if (!last) return
-    store.appendWirePoints(routeLAuto(last, snap.point, store.shiftHeld).slice(1))
+    store.appendWirePoints(wireRoute(last, snap.point).slice(1))
     if (snap.pinKey !== null || wireAt(snap.point)) store.finishWire()
     return
   }
@@ -884,6 +914,7 @@ function onPointerMove(event: PointerEvent): void {
   hover.value = world
   // Ctrl a pu être enfoncée ou relâchée hors de la fenêtre : l'événement fait foi.
   if (store.ctrlHeld !== event.ctrlKey) store.ctrlHeld = event.ctrlKey
+  if (store.altHeld !== event.altKey) store.altHeld = event.altKey
   const current = drag.value
   if (!current) return
   switch (current.kind) {
@@ -903,14 +934,10 @@ function onPointerMove(event: PointerEvent): void {
       current.current = snapGrid(world)
       break
     case 'wire-segment': {
-      const a = current.original[current.index]
-      const b = current.original[current.index + 1]
-      if (!a || !b) break
-      const horizontal = a[1] === b[1]
       current.preview = moveSegment(
         current.original,
         current.index,
-        Math.round(horizontal ? world.y : world.x)
+        segmentCoordinate(current.original, current.index, world)
       )
       break
     }
@@ -998,7 +1025,7 @@ function onPointerUp(event: PointerEvent): void {
     if (current.moved) {
       // Relâché sur la broche de départ, le fil n'a qu'un point : `addWire` le refuse.
       const snap = wireSnap(toWorld(screenPoint(event)))
-      store.addWire(routeLAuto(current.origin, snap.point, store.shiftHeld))
+      store.addWire(wireRoute(current.origin, snap.point))
     } else {
       store.clearSelection()
       store.selection = [current.instanceId]
@@ -1171,137 +1198,143 @@ const cursorClass = computed(() => {
         </g>
 
         <g :transform="`translate(${view.panX} ${view.panY}) scale(${cell})`">
-          <g class="net-glows">
-            <template v-for="item in renderedWires" :key="item.wire.id">
-              <path v-if="item.inHoverNet" :d="item.d" :stroke-width="wireWidth * 3" />
+          <template v-for="layer in STACK" :key="layer">
+            <template v-if="layer === 'wires'">
+              <g class="net-glows">
+                <template v-for="item in renderedWires" :key="item.wire.id">
+                  <path v-if="item.inHoverNet" :d="item.d" :stroke-width="wireWidth * 3" />
+                </template>
+              </g>
+              <g class="wire-selections">
+                <template v-for="item in renderedWires" :key="item.wire.id">
+                  <path v-if="item.selected" :d="item.d" :stroke-width="wireWidth + 6 / cell" />
+                </template>
+              </g>
+
+              <g class="wires">
+                <template v-for="item in renderedWires" :key="item.wire.id">
+                  <path
+                    v-if="item.body"
+                    class="wire"
+                    :d="item.body"
+                    :stroke="screenColor(item.wire.color)"
+                    :stroke-width="wireWidth"
+                  />
+                  <path
+                    v-for="(tail, t) in item.dotted"
+                    :key="`tail${t}`"
+                    class="wire wire-dotted"
+                    :d="tail"
+                    :stroke="screenColor(item.wire.color)"
+                    :stroke-width="wireWidth"
+                    :stroke-dasharray="`0 ${wireWidth * 2}`"
+                  />
+                  <polygon
+                    v-for="(head, h) in item.heads"
+                    :key="`head${h}`"
+                    class="wire-head"
+                    :points="head"
+                    :fill="screenColor(item.wire.color)"
+                  />
+                  <path
+                    class="wire-hit"
+                    :d="item.d"
+                    :stroke-width="hitWidth"
+                    @pointerdown="onWireDown(item.wire.id, $event)"
+                    @pointerenter="store.hoverWireId = item.wire.id"
+                    @pointerleave="store.hoverWireId = null"
+                    @contextmenu="onContextMenu($event, { kind: 'wire', id: item.wire.id })"
+                  />
+                </template>
+              </g>
+
+              <g class="crossings">
+                <template v-for="mark in crossingMarks" :key="mark.key">
+                  <line
+                    class="halo"
+                    :x1="mark.x1"
+                    :y1="mark.y1"
+                    :x2="mark.x2"
+                    :y2="mark.y2"
+                    :stroke-width="wireWidth * 2.2"
+                  />
+                  <line
+                    :x1="mark.x1"
+                    :y1="mark.y1"
+                    :x2="mark.x2"
+                    :y2="mark.y2"
+                    :stroke="screenColor(mark.color)"
+                    :stroke-width="wireWidth"
+                  />
+                </template>
+              </g>
+
+              <g class="junctions">
+                <circle
+                  v-for="dot in junctions"
+                  :key="dot.key"
+                  :cx="dot.x"
+                  :cy="dot.y"
+                  :r="dot.r"
+                  :fill="screenColor(dot.fill)"
+                />
+              </g>
             </template>
-          </g>
-          <g class="wire-selections">
-            <template v-for="item in renderedWires" :key="item.wire.id">
-              <path v-if="item.selected" :d="item.d" :stroke-width="wireWidth + 6 / cell" />
-            </template>
-          </g>
 
-          <g class="wires">
-            <template v-for="item in renderedWires" :key="item.wire.id">
-              <path
-                v-if="item.body"
-                class="wire"
-                :d="item.body"
-                :stroke="screenColor(item.wire.color)"
-                :stroke-width="wireWidth"
-              />
-              <path
-                v-for="(tail, t) in item.dotted"
-                :key="`tail${t}`"
-                class="wire wire-dotted"
-                :d="tail"
-                :stroke="screenColor(item.wire.color)"
-                :stroke-width="wireWidth"
-                :stroke-dasharray="`0 ${wireWidth * 2}`"
-              />
-              <polygon
-                v-for="(head, h) in item.heads"
-                :key="`head${h}`"
-                class="wire-head"
-                :points="head"
-                :fill="screenColor(item.wire.color)"
-              />
-              <path
-                class="wire-hit"
-                :d="item.d"
-                :stroke-width="hitWidth"
-                @pointerdown="onWireDown(item.wire.id, $event)"
-                @pointerenter="store.hoverWireId = item.wire.id"
-                @pointerleave="store.hoverWireId = null"
-                @contextmenu="onContextMenu($event, { kind: 'wire', id: item.wire.id })"
-              />
-            </template>
-          </g>
-
-          <g class="crossings">
-            <template v-for="mark in crossingMarks" :key="mark.key">
-              <line
-                class="halo"
-                :x1="mark.x1"
-                :y1="mark.y1"
-                :x2="mark.x2"
-                :y2="mark.y2"
-                :stroke-width="wireWidth * 2.2"
-              />
-              <line
-                :x1="mark.x1"
-                :y1="mark.y1"
-                :x2="mark.x2"
-                :y2="mark.y2"
-                :stroke="screenColor(mark.color)"
-                :stroke-width="wireWidth"
-              />
-            </template>
-          </g>
-
-          <g class="junctions">
-            <circle
-              v-for="dot in junctions"
-              :key="dot.key"
-              :cx="dot.x"
-              :cy="dot.y"
-              :r="dot.r"
-              :fill="screenColor(dot.fill)"
-            />
-          </g>
-
-          <g
-            v-for="item in store.placed"
-            :key="item.instance.id"
-            class="instance"
-            :transform="transformOf(item)"
-            @pointerdown="onInstanceDown(item.instance.id, $event)"
-            @dblclick="onInstanceDoubleClick(item.instance.id, $event)"
-            @contextmenu="onContextMenu($event, { kind: 'instance', id: item.instance.id })"
-          >
-            <ComponentGraphic
-              :def="item.def"
-              :cell-px="1"
-              :stroke-base="profile.componentStroke"
-              :fields="item.instance.fields"
-              :ink="store.staleDefIds.has(item.def.id) ? 'var(--stale)' : null"
-              skip-texts
-            />
-            <rect
-              v-if="store.staleDefIds.has(item.def.id) && componentImages(item.def).length > 0"
-              class="stale-frame"
-              :width="item.def.size.widthCells"
-              :height="item.def.size.heightCells"
-            />
-            <rect
-              class="hit"
-              :width="item.def.size.widthCells"
-              :height="item.def.size.heightCells"
-              fill="transparent"
-            />
-          </g>
-
-          <g class="instance-texts">
-            <text
-              v-for="entry in instanceTexts"
-              :key="entry.key"
-              :transform="entry.transform"
-              :font-size="entry.primitive.size"
-              :text-anchor="entry.anchor"
-              :fill="entry.fill"
-              v-bind="textStyleAttrs(entry.primitive)"
-            >
-              <tspan
-                v-for="(line, l) in entry.layout.lines"
-                :key="l"
-                :x="entry.layout.x"
-                :y="line.y"
+            <template v-else>
+              <g
+                v-for="item in layers[layer].instances"
+                :key="item.instance.id"
+                class="instance"
+                :transform="transformOf(item)"
+                @pointerdown="onInstanceDown(item.instance.id, $event)"
+                @dblclick="onInstanceDoubleClick(item.instance.id, $event)"
+                @contextmenu="onContextMenu($event, { kind: 'instance', id: item.instance.id })"
               >
-                {{ line.text }}
-              </tspan>
-            </text>
-          </g>
+                <ComponentGraphic
+                  :def="item.def"
+                  :cell-px="1"
+                  :stroke-base="profile.componentStroke"
+                  :fields="item.instance.fields"
+                  :ink="store.staleDefIds.has(item.def.id) ? 'var(--stale)' : null"
+                  skip-texts
+                />
+                <rect
+                  v-if="store.staleDefIds.has(item.def.id) && componentImages(item.def).length > 0"
+                  class="stale-frame"
+                  :width="item.def.size.widthCells"
+                  :height="item.def.size.heightCells"
+                />
+                <rect
+                  class="hit"
+                  :width="item.def.size.widthCells"
+                  :height="item.def.size.heightCells"
+                  fill="transparent"
+                />
+              </g>
+
+              <g v-if="layers[layer].texts.length > 0" class="instance-texts">
+                <text
+                  v-for="entry in layers[layer].texts"
+                  :key="entry.key"
+                  :transform="entry.transform"
+                  :font-size="entry.primitive.size"
+                  :text-anchor="entry.anchor"
+                  :fill="entry.fill"
+                  v-bind="textStyleAttrs(entry.primitive)"
+                >
+                  <tspan
+                    v-for="(line, l) in entry.layout.lines"
+                    :key="l"
+                    :x="entry.layout.x"
+                    :y="line.y"
+                  >
+                    {{ line.text }}
+                  </tspan>
+                </text>
+              </g>
+            </template>
+          </template>
 
           <g class="labels">
             <text

@@ -92,7 +92,7 @@ describe('projet : charger, valider, réenregistrer', () => {
     expect(issuesOf(() => parseProject(text))).toMatch(/plus récente/)
   })
 
-  it('refuse un fil qui n’est pas orthogonal, avec le détail', () => {
+  it('refuse un fil qui n’est ni droit ni à 45°, avec le détail, et accepte une diagonale', () => {
     const text = mutateProject((raw) => {
       must(raw.wires[0], 'fil w1').points = [
         [8, 3],
@@ -100,8 +100,16 @@ describe('projet : charger, valider, réenregistrer', () => {
       ]
     })
     expect(issuesOf(() => parseProject(text))).toMatch(
-      /wires\.0\.points : .*ni horizontal ni vertical/
+      /wires\.0\.points : .*ni horizontal, ni vertical, ni à 45°/
     )
+    const diagonal = mutateProject((raw) => {
+      must(raw.wires[0], 'fil w1').points = [
+        [8, 3],
+        [10, 5],
+        [14, 5]
+      ]
+    })
+    expect(parseProject(diagonal).wires[0]?.points).toHaveLength(3)
   })
 
   it('accepte un sommet dans un segment droit mais refuse un demi-tour', () => {

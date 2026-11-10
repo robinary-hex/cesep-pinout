@@ -37,7 +37,8 @@ const base: ComponentInstance = {
   rotation: 0,
   mirror: false,
   label: 'U1',
-  fields: {}
+  fields: {},
+  behindWires: false
 }
 
 describe('boîtes et matrices des instances', () => {
@@ -173,7 +174,15 @@ describe('textes des composants posés', () => {
         }
       ]
     }
-    const base = { id: 'c1', defId: 'motor', x: 10, y: 5, label: '', fields: {} }
+    const base = {
+      id: 'c1',
+      defId: 'motor',
+      x: 10,
+      y: 5,
+      label: '',
+      fields: {},
+      behindWires: false
+    }
     expect(instanceTextPlacements({ ...base, rotation: 0, mirror: false }, def)[0]?.box).toEqual({
       x: 11,
       y: 5.5,
@@ -222,7 +231,15 @@ describe('textes des composants posés', () => {
         }
       ]
     }
-    const base = { id: 'c1', defId: 'motor', x: 10, y: 5, label: '', fields: {} }
+    const base = {
+      id: 'c1',
+      defId: 'motor',
+      x: 10,
+      y: 5,
+      label: '',
+      fields: {},
+      behindWires: false
+    }
     const place = (rotation: Rotation, mirror: boolean): InstanceTextPlacement | undefined =>
       instanceTextPlacements({ ...base, rotation, mirror }, def)[0]
     // Miroir seul : même boîte, pas de rotation ; l'alignement s'inverse pour rester collé au même bord.
@@ -278,7 +295,15 @@ describe('textes des composants posés', () => {
       strike: false,
       vertical: true
     } as const
-    const base = { id: 'c1', defId: 'motor', x: 10, y: 5, label: '', fields: {} }
+    const base = {
+      id: 'c1',
+      defId: 'motor',
+      x: 10,
+      y: 5,
+      label: '',
+      fields: {},
+      behindWires: false
+    }
     const place = (
       followsRotation: boolean,
       rotation: Rotation

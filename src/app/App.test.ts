@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useDiagramStore } from '@/features/diagram-editor/store'
+import { useSchematicStore } from '@/features/schematic-editor/store'
 import { setBridge } from '@/io/bridge'
 import { FakeFs } from '@/io/testing/fakeFs'
 import App from './App.vue'
@@ -73,6 +74,38 @@ describe('coque de l’application', () => {
     const active = document.body.querySelector('.tabs button.active')
     expect(active?.textContent?.trim()).toBe('Diagramme')
     expect(document.body.textContent).toContain('Tracer un lien')
+    wrapper.unmount()
+  })
+
+  it('pose « enregistrer avant de quitter ? » dans sa propre boîte, pas celle de Windows', async () => {
+    const wrapper = mount(App, { attachTo: document.body })
+    await flushPromises()
+    useSchematicStore().addLabel(0, 0)
+    await flushPromises()
+    expect(fs.dirty).toBe(true)
+    const choose = async (text: string): Promise<void> => {
+      const found = wrapper.findAll('[role="dialog"] button').find((item) => item.text() === text)
+      if (!found) throw new Error(`bouton « ${text} » introuvable`)
+      await found.trigger('click')
+      await flushPromises()
+    }
+    // Le principal signale la fermeture : le rendu accuse réception et pose la question.
+    fs.emitRequest('ask-then-quit')
+    await flushPromises()
+    expect(fs.quitAskedByRenderer).toBe(true)
+    expect(wrapper.get('[role="dialog"]').text()).toContain('Enregistrer avant de quitter ?')
+    // Une seconde demande pendant la question n'en ouvre pas une autre.
+    fs.emitRequest('ask-then-quit')
+    await flushPromises()
+    expect(wrapper.findAll('[role="dialog"]')).toHaveLength(1)
+    await choose('Annuler')
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(fs.quitConfirmed).toBe(false)
+    // « Ne pas enregistrer » : la fenêtre peut se fermer.
+    fs.emitRequest('ask-then-quit')
+    await flushPromises()
+    await choose('Ne pas enregistrer')
+    expect(fs.quitConfirmed).toBe(true)
     wrapper.unmount()
   })
 })

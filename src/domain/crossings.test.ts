@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   computeCrossings,
+  crossingPieceEnds,
   crossingPieces,
   crossingTop,
   nearestCrossing,
@@ -42,7 +43,14 @@ const stackOf = (id: string): number => (id === 'h' ? 0 : 1)
 describe('croisements', () => {
   it('trouve un croisement strict et ignore les contacts aux sommets', () => {
     expect(computeCrossings([horizontal, vertical])).toEqual([
-      { point: [10, 5], horizontalWireId: 'h', verticalWireId: 'v' }
+      {
+        point: [10, 5],
+        wireIds: ['h', 'v'],
+        steps: [
+          [1, 0],
+          [0, 1]
+        ]
+      }
     ])
     const touching = wire(
       't',
@@ -94,13 +102,75 @@ describe('croisements', () => {
 
   it('décrit le morceau à redessiner et retrouve le croisement proche', () => {
     expect(crossingPieces([horizontal, vertical], [])).toEqual([
-      { point: [10, 5], topWireId: 'v', horizontal: false }
+      { point: [10, 5], topWireId: 'v', step: [0, 1] }
     ])
     expect(crossingPieces([horizontal, vertical], [{ x: 10, y: 5, topWireId: 'h' }])).toEqual([
-      { point: [10, 5], topWireId: 'h', horizontal: true }
+      { point: [10, 5], topWireId: 'h', step: [1, 0] }
     ])
     const crossings = computeCrossings([horizontal, vertical])
     expect(nearestCrossing(crossings, 10.3, 5.2, 0.6)?.point).toEqual([10, 5])
     expect(nearestCrossing(crossings, 12, 5, 0.6)).toBeNull()
+  })
+
+  it('trouve les croisements avec une diagonale, et entre deux diagonales au milieu d’une cellule', () => {
+    const rising = wire(
+      'd1',
+      [
+        [0, 0],
+        [4, 4]
+      ],
+      0
+    )
+    const falling = wire(
+      'd2',
+      [
+        [3, 0],
+        [0, 3]
+      ],
+      1
+    )
+    const flat = wire(
+      'f',
+      [
+        [0, 3],
+        [6, 3]
+      ],
+      2
+    )
+    // `falling` finit sur le départ de `flat` : un contact, pas un croisement.
+    expect(computeCrossings([rising, falling, flat])).toEqual([
+      {
+        point: [1.5, 1.5],
+        wireIds: ['d1', 'd2'],
+        steps: [
+          [1, 1],
+          [1, -1]
+        ]
+      },
+      {
+        point: [3, 3],
+        wireIds: ['f', 'd1'],
+        steps: [
+          [1, 0],
+          [1, 1]
+        ]
+      }
+    ])
+    // Le morceau redessiné suit la direction du fil du dessus, sur une cellule de long.
+    const [between, onFlat] = crossingPieces([rising, falling, flat], [])
+    expect(between).toEqual({ point: [1.5, 1.5], topWireId: 'd2', step: [1, -1] })
+    if (!between || !onFlat) throw new Error('morceaux manquants')
+    const [from, to] = crossingPieceEnds(between)
+    expect(Math.hypot(to[0] - from[0], to[1] - from[1])).toBeCloseTo(1)
+    expect(to[0] - from[0]).toBeCloseTo(-(to[1] - from[1]))
+    expect(crossingPieceEnds(onFlat)).toEqual([
+      [2.5, 3],
+      [3.5, 3]
+    ])
+    // Une exception se pose aussi sur un croisement au demi-pas.
+    const [crossing] = computeCrossings([rising, falling])
+    if (!crossing) throw new Error('croisement manquant')
+    const stacks = (id: string): number => (id === 'd1' ? 0 : 1)
+    expect(toggledOverrides([], crossing, stacks)).toEqual([{ x: 1.5, y: 1.5, topWireId: 'd1' }])
   })
 })

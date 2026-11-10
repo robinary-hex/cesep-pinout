@@ -7,6 +7,7 @@ export default defineConfig({
   resolve: { alias: { '@': resolve('src') } },
   test: {
     include: ['src/**/*.test.ts'],
-    environment: 'node'
+    environment: 'node',
+    setupFiles: ['src/testing/vueEvents.ts']
   }
 })

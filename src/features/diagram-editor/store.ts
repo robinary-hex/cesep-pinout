@@ -631,7 +631,7 @@ export const useDiagramStore = defineStore('diagram', () => {
   /** Crée un lien à partir de sommets bruts ; retourne son identifiant, ou null s'il est invalide. */
   function addLink(points: readonly GridPoint[]): string | null {
     const clean = simplifyPoints(points)
-    if (clean.length < 2 || wireGeometryProblem(clean) !== null) return null
+    if (clean.length < 2 || wireGeometryProblem(clean, true) !== null) return null
     const id = nextNumberedId(
       'l',
       doc.value.links.map((link) => link.id)
@@ -692,7 +692,7 @@ export const useDiagramStore = defineStore('diagram', () => {
 
   function setLinkPoints(id: string, points: readonly GridPoint[]): void {
     const clean = normalizePoints(points)
-    if (clean.length < 2 || wireGeometryProblem(clean) !== null) return
+    if (clean.length < 2 || wireGeometryProblem(clean, true) !== null) return
     apply('Modifier le lien', (draft) => {
       const link = draft.links.find((candidate) => candidate.id === id)
       if (link) link.points = castDraft(clean)

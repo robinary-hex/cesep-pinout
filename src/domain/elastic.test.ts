@@ -174,3 +174,42 @@ describe('jonctions qui suivent le fil porteur', () => {
     expect(wiresFollowingJunctions(wires, wires)).toEqual(wires)
   })
 })
+
+describe('élasticité des fils en diagonale', () => {
+  it('une extrémité en diagonale suit sa broche en gardant sa pente', () => {
+    const [moved] = wiresFollowingPins(
+      [
+        wire('w', [
+          [0, 0],
+          [3, 3],
+          [8, 3]
+        ])
+      ],
+      [pin('a:1', 0, 0)],
+      [pin('a:1', 1, -2)]
+    )
+    expect(moved?.points).toEqual([
+      [1, -2],
+      [6, 3],
+      [8, 3]
+    ])
+  })
+
+  it('une jonction posée sur une diagonale la suit quand elle glisse', () => {
+    expect(
+      movedJunction(
+        [
+          [0, 0],
+          [4, 4],
+          [8, 4]
+        ],
+        [
+          [0, 2],
+          [2, 4],
+          [8, 4]
+        ],
+        [2, 2]
+      )
+    ).toEqual([1, 3])
+  })
+})

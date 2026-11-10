@@ -106,6 +106,15 @@ describe('extrémités libres des fils', () => {
     ]
     expect(wireEndLabelPlacement(up, 1)).toMatchObject({ y: 0.4, baseline: 'auto' })
     expect(wireEndLabelPlacement(up, 0)).toMatchObject({ y: 5.6, baseline: 'hanging' })
+    // Arrivée en diagonale : l'étiquette part dans le coin opposé, à la même distance.
+    const slanted: GridPoint[] = [
+      [0, 0],
+      [3, 3]
+    ]
+    const corner = wireEndLabelPlacement(slanted, 1)
+    expect(corner).toMatchObject({ anchor: 'start', baseline: 'hanging' })
+    expect(Math.hypot((corner?.x ?? 0) - 3, (corner?.y ?? 0) - 3)).toBeCloseTo(0.6)
+    expect(wireEndLabelPlacement(slanted, 0)).toMatchObject({ anchor: 'end', baseline: 'auto' })
   })
 
   it('estime l’encombrement d’une étiquette d’extrémité en cellules entières', () => {

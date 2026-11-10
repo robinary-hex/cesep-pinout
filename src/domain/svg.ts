@@ -15,7 +15,7 @@ import {
   textTransform
 } from './component'
 import { computeConnectivity, projectPins, type FreeEnd } from './connectivity'
-import { crossingPieces } from './crossings'
+import { crossingPieceEnds, crossingPieces } from './crossings'
 import { QUARTERS_PER_CELL, type LocalPoint } from './grid'
 import {
   instanceBounds,
@@ -261,6 +261,56 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
     parts.push(`<g ${attrs({ stroke: '#d8dee4', 'stroke-width': stroke })}>${lines.join('')}</g>`)
   }
 
+  // Composants : dans l'ordre du montage, ceux qu'on a mis derrière les fils avant les fils, les
+  // autres après. Leurs textes les suivent ; les libellés (R1, U2) restent au-dessus de tout.
+  const labelParts: string[] = []
+  const labelSize = profile.labelFont.size / profile.cellPx
+  const componentLayer = (behind: boolean): string[] => {
+    const instanceParts: string[] = []
+    const componentTextParts: string[] = []
+    for (const instance of project.components) {
+      const def = project.embeddedDefs[instance.defId]
+      if (!def || instance.behindWires !== behind) continue
+      instanceParts.push(
+        `<g ${attrs({ transform: matrixToSvg(instanceMatrix(instance, def)) })}>${componentSvg(def, profile.componentStroke, instance.fields, { skipTexts: true })}</g>`
+      )
+      // Textes : hors de la transformation, droits ou tournés avec le composant, jamais en miroir.
+      for (const placement of instanceTextPlacements(instance, def)) {
+        const { primitive, box } = placement
+        const layout = layoutTextBox(
+          box,
+          textContent(primitive, instance.fields),
+          primitive.size,
+          placement.anchor
+        )
+        const spans = layout.lines
+          .map(
+            (line) => `<tspan ${attrs({ x: layout.x, y: line.y })}>${escapeXml(line.text)}</tspan>`
+          )
+          .join('')
+        componentTextParts.push(
+          `<text ${attrs({ 'font-size': primitive.size, 'text-anchor': placement.anchor, fill: primitive.color, ...textStyleAttrs(primitive), transform: textPlacementTransform(placement) })}>${spans}</text>`
+        )
+      }
+      if (options.labels && instance.label.length > 0) {
+        const box = instanceBounds(instance, def)
+        labelParts.push(
+          `<text ${attrs({ x: box.x, y: box.y - 0.25, 'font-size': labelSize, fill: '#1f2328' })}>${escapeXml(instance.label)}</text>`
+        )
+      }
+    }
+    const suffix = behind ? '-behind' : ''
+    const layer: string[] = []
+    if (instanceParts.length > 0 || !behind) {
+      layer.push(`<g class="components${suffix}">${instanceParts.join('')}</g>`)
+    }
+    if (componentTextParts.length > 0) {
+      layer.push(`<g class="component-texts${suffix}">${componentTextParts.join('')}</g>`)
+    }
+    return layer
+  }
+  parts.push(...componentLayer(true))
+
   const connectivity = computeConnectivity(project.wires, projectPins(project))
   const freeEndsByWire = new Map<string, FreeEnd[]>()
   for (const end of connectivity.freeEnds) {
@@ -343,11 +393,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
         : options.background
   const haloWidth = profile.wireWidth * 2.2
   const crossingParts = crossingPieces(project.wires, project.crossingOverrides).map((piece) => {
-    const [x, y] = piece.point
-    const x1 = piece.horizontal ? x - 0.5 : x
-    const x2 = piece.horizontal ? x + 0.5 : x
-    const y1 = piece.horizontal ? y : y - 0.5
-    const y2 = piece.horizontal ? y : y + 0.5
+    const [[x1, y1], [x2, y2]] = crossingPieceEnds(piece)
     const halo = haloColor
       ? `<line ${attrs({ x1, y1, x2, y2, stroke: haloColor, 'stroke-width': haloWidth })}/>`
       : ''
@@ -374,45 +420,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
   })
   parts.push(`<g class="junctions">${junctionParts.join('')}</g>`)
 
-  const instanceParts: string[] = []
-  const componentTextParts: string[] = []
-  const labelParts: string[] = []
-  const labelSize = profile.labelFont.size / profile.cellPx
-  for (const instance of project.components) {
-    const def = project.embeddedDefs[instance.defId]
-    if (!def) continue
-    instanceParts.push(
-      `<g ${attrs({ transform: matrixToSvg(instanceMatrix(instance, def)) })}>${componentSvg(def, profile.componentStroke, instance.fields, { skipTexts: true })}</g>`
-    )
-    // Textes : hors de la transformation, droits ou tournés avec le composant, jamais en miroir.
-    for (const placement of instanceTextPlacements(instance, def)) {
-      const { primitive, box } = placement
-      const layout = layoutTextBox(
-        box,
-        textContent(primitive, instance.fields),
-        primitive.size,
-        placement.anchor
-      )
-      const spans = layout.lines
-        .map(
-          (line) => `<tspan ${attrs({ x: layout.x, y: line.y })}>${escapeXml(line.text)}</tspan>`
-        )
-        .join('')
-      componentTextParts.push(
-        `<text ${attrs({ 'font-size': primitive.size, 'text-anchor': placement.anchor, fill: primitive.color, ...textStyleAttrs(primitive), transform: textPlacementTransform(placement) })}>${spans}</text>`
-      )
-    }
-    if (options.labels && instance.label.length > 0) {
-      const box = instanceBounds(instance, def)
-      labelParts.push(
-        `<text ${attrs({ x: box.x, y: box.y - 0.25, 'font-size': labelSize, fill: '#1f2328' })}>${escapeXml(instance.label)}</text>`
-      )
-    }
-  }
-  parts.push(`<g class="components">${instanceParts.join('')}</g>`)
-  if (componentTextParts.length > 0) {
-    parts.push(`<g class="component-texts">${componentTextParts.join('')}</g>`)
-  }
+  parts.push(...componentLayer(false))
   if (labelParts.length > 0) parts.push(`<g class="labels">${labelParts.join('')}</g>`)
 
   if (project.labels.length > 0) {

@@ -6,6 +6,7 @@ import {
   locateOnWire,
   pointOnSegment,
   pointsEqual,
+  segmentStep,
   simplifyPoints,
   translatePoints
 } from './wires'
@@ -100,8 +101,9 @@ function blockShift(before: readonly GridPoint[], after: readonly GridPoint[]): 
   return shifted ? [dx, dy] : null
 }
 
-function clamp(value: number, a: number, b: number): number {
-  return Math.min(Math.max(value, Math.min(a, b)), Math.max(a, b))
+/** Direction d'un segment sans son sens : la même clé pour deux segments parallèles. */
+function orientationKey(step: GridPoint): string {
+  return step[0] === 0 ? '0,1' : step[0] > 0 ? `1,${step[1]}` : `1,${-step[1]}`
 }
 
 /**
@@ -119,14 +121,13 @@ export function movedJunction(
   if (shift) return [point[0] + shift[0], point[1] + shift[1]]
   if (locateOnWire(after, point)) return point
 
-  let onHorizontal = false
-  let onVertical = false
+  /** Directions des segments qui portaient la jonction. */
+  const carried = new Set<string>()
   for (let i = 0; i + 1 < before.length; i++) {
     const a = before[i]
     const b = before[i + 1]
-    if (!a || !b || !pointOnSegment(point, a, b)) continue
-    if (a[1] === b[1]) onHorizontal = true
-    if (a[0] === b[0]) onVertical = true
+    const step = a && b ? segmentStep(a, b) : null
+    if (a && b && step && pointOnSegment(point, a, b)) carried.add(orientationKey(step))
   }
 
   let parallel: GridPoint | null = null
@@ -136,19 +137,22 @@ export function movedJunction(
   for (let i = 0; i + 1 < after.length; i++) {
     const a = after[i]
     const b = after[i + 1]
-    if (!a || !b) continue
-    const horizontal = a[1] === b[1]
-    const projected: GridPoint = horizontal
-      ? [clamp(point[0], a[0], b[0]), a[1]]
-      : [a[0], clamp(point[1], a[1], b[1])]
+    const step = a && b ? segmentStep(a, b) : null
+    if (!a || !b || !step) continue
+    // Projection sur le segment, en pas de grille : le point de la grille le plus proche.
+    const steps = Math.max(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]))
+    const along =
+      ((point[0] - a[0]) * step[0] + (point[1] - a[1]) * step[1]) /
+      (step[0] * step[0] + step[1] * step[1])
+    const at = Math.min(steps, Math.max(0, Math.round(along)))
+    const projected: GridPoint = [a[0] + at * step[0], a[1] + at * step[1]]
     const distance = Math.abs(projected[0] - point[0]) + Math.abs(projected[1] - point[1])
     if (distance < nearestDistance) {
       nearest = projected
       nearestDistance = distance
     }
-    const covers = horizontal ? projected[0] === point[0] : projected[1] === point[1]
-    const sameAxis = horizontal ? onHorizontal : onVertical
-    if (covers && sameAxis && distance < parallelDistance) {
+    const covers = along >= 0 && along <= steps
+    if (covers && carried.has(orientationKey(step)) && distance < parallelDistance) {
       parallel = projected
       parallelDistance = distance
     }

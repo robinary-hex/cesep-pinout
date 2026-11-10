@@ -15,9 +15,9 @@ import {
   type LocalPoint
 } from './grid'
 import { styleProfileSchema, type StyleProfile } from './profile'
-import { isUTurn } from './wires'
+import { isUTurn, segmentStep } from './wires'
 
-export const PROJECT_SCHEMA_VERSION = 20
+export const PROJECT_SCHEMA_VERSION = 21
 
 /** Composant posé sur le montage ; (x, y) = coin supérieur gauche de sa boîte, en grille. */
 export const componentInstanceSchema = z.object({
@@ -30,7 +30,12 @@ export const componentInstanceSchema = z.object({
   /** Repère affiché : R1, U2… (libre, vide par défaut). */
   label: z.string(),
   /** Valeurs des textes variables de la définition : nom du champ → valeur. */
-  fields: z.record(z.string(), z.string())
+  fields: z.record(z.string(), z.string()),
+  /**
+   * Dessiné sous les fils plutôt que dessus : pour un composant dont l'image, sinon, cacherait les
+   * fils qui vont à ses broches.
+   */
+  behindWires: z.boolean()
 })
 export type ComponentInstance = z.infer<typeof componentInstanceSchema>
 
@@ -39,11 +44,15 @@ export const freeEndStyleSchema = z.enum(['flat', 'arrow', 'dotted'])
 export type FreeEndStyle = z.infer<typeof freeEndStyleSchema>
 
 /**
- * Un fil valide est une polyligne d'intersections à segments horizontaux ou verticaux, sans
- * sommet confondu ni demi-tour. Un sommet au milieu d'un segment droit est permis (il sert à
- * l'édition). Retourne la première anomalie, ou null.
+ * Un fil valide est une polyligne d'intersections à segments horizontaux, verticaux ou en
+ * diagonale à 45°, sans sommet confondu ni demi-tour. Un sommet au milieu d'un segment droit est
+ * permis (il sert à l'édition). `orthogonal` refuse les diagonales : c'est la règle des liens
+ * d'un diagramme. Retourne la première anomalie, ou null.
  */
-export function wireGeometryProblem(points: ReadonlyArray<GridPoint>): string | null {
+export function wireGeometryProblem(
+  points: ReadonlyArray<GridPoint>,
+  orthogonal = false
+): string | null {
   for (let i = 1; i < points.length; i++) {
     const previous = points[i - 1]
     const current = points[i]
@@ -51,7 +60,12 @@ export function wireGeometryProblem(points: ReadonlyArray<GridPoint>): string | 
     const [ax, ay] = previous
     const [bx, by] = current
     if (ax === bx && ay === by) return `Sommets ${i - 1} et ${i} confondus`
-    if (ax !== bx && ay !== by) return `Segment ${i - 1} à ${i} ni horizontal ni vertical`
+    if (ax !== bx && ay !== by) {
+      if (orthogonal) return `Segment ${i - 1} à ${i} ni horizontal ni vertical`
+      if (segmentStep(previous, current) === null) {
+        return `Segment ${i - 1} à ${i} ni horizontal, ni vertical, ni à 45°`
+      }
+    }
     const before = points[i - 2]
     if (before !== undefined && isUTurn(before, previous, current)) {
       return `Segment ${i - 1} à ${i} revient sur le précédent`
@@ -77,10 +91,13 @@ export const wireSchema = z
   })
 export type Wire = z.infer<typeof wireSchema>
 
-/** Exception locale à l'ordre d'empilement : à ce croisement, ce fil passe au-dessus. */
+/**
+ * Exception locale à l'ordre d'empilement : à ce croisement, ce fil passe au-dessus. Deux
+ * diagonales peuvent se croiser au milieu d'une cellule : les coordonnées vont par demi-pas.
+ */
 export const crossingOverrideSchema = z.object({
-  x: gridCoordSchema,
-  y: gridCoordSchema,
+  x: z.number().multipleOf(0.5),
+  y: z.number().multipleOf(0.5),
   topWireId: z.string().min(1)
 })
 export type CrossingOverride = z.infer<typeof crossingOverrideSchema>

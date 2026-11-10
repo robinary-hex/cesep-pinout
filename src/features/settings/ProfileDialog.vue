@@ -11,6 +11,7 @@ import { useDiagramStore } from '@/features/diagram-editor/store'
 import { useLibraryStore } from '@/features/library/store'
 import { useSchematicStore } from '@/features/schematic-editor/store'
 import { deleteProfile, listProfiles, saveProfile, type SavedProfile } from '@/io/profiles'
+import { confirmAction } from '@/ui/dialogs'
 import ModalDialog from '@/ui/ModalDialog.vue'
 import DiagramStyleFields from './DiagramStyleFields.vue'
 import ProfileFields from './ProfileFields.vue'
@@ -157,7 +158,13 @@ function load(entry: SavedProfile): void {
 }
 
 async function remove(entry: SavedProfile): Promise<void> {
-  if (!window.confirm(`Supprimer le profil « ${entry.profile.name} » ?`)) return
+  const confirmed = await confirmAction({
+    title: 'Supprimer le profil ?',
+    message: `Le profil enregistré « ${entry.profile.name} » sera supprimé.`,
+    confirm: 'Supprimer',
+    danger: true
+  })
+  if (!confirmed) return
   await deleteProfile(entry.path)
   await refresh()
 }

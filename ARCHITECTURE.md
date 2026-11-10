@@ -99,6 +99,10 @@ boîte ouverte en mode `montage`.
 
 ## Interface partagée (`src/ui/`)
 
+`dialogs.ts` et `DialogHost.vue` posent les questions de l'application (enregistrer avant de
+fermer, confirmer une suppression) dans ses propres boîtes : une promesse par question, aucune
+boîte de message du système.
+
 `ToolbarBasics.vue` ouvre les trois barres d'outils par les mêmes boutons, dans le même ordre
 (zoom, puis annuler, rétablir et corbeille) : l'ordre est tenu par le composant, pas recopié
 dans chaque éditeur.
@@ -137,8 +141,8 @@ restent claires.
 
 `src/domain/connectivity.ts` dérive de la géométrie ce qui est relié : jonctions (une extrémité
 sur un sommet ou un segment d'un autre fil), extrémités libres, nets par union-find, broches
-reliées à rien. `src/domain/crossings.ts` trouve les croisements stricts (segment horizontal contre
-segment vertical, hors sommets) et décide du fil du dessus : le rang d'empilement, sauf exception
+reliées à rien. `src/domain/crossings.ts` trouve les croisements stricts (deux segments de
+directions différentes, diagonales à 45° comprises, hors sommets) et décide du fil du dessus : le rang d'empilement, sauf exception
 locale stockée dans `crossingOverrides` (Alt+clic). Le fil du dessus est redessiné sur une
 demi-cellule avec un liseré couleur de fond ; les exceptions orphelines sont élaguées à chaque
 commande. Rien de tout cela n'est stocké, sauf les exceptions.
@@ -183,7 +187,7 @@ un arrêt brutal : c'est alors qu'elles sont proposées.
 Tous en JSON indenté, avec `schemaVersion`, validés par Zod à l'ouverture, migrés étape par étape
 (`src/domain/migrations.ts`). Un fichier d'exemple par version dans `src/domain/fixtures/`.
 Versions courantes : composant 15 (image en forme du dessin, textes verticaux, angles arrondis des polylignes, forme point, opacité du remplissage, italique, souligné et barré des textes, orientation réglée texte par texte, textes droits sur le montage, boîtes de texte multilignes, flèche au milieu, graisse des textes, épaisseur en multiplicateur, flèches, textes variables avec
-unité, plus de `labelPrefix`), projet 20 (fond optionnel des étiquettes texte, styles, sens et couleur des étiquettes texte, couleurs de fil propres au montage, étiquettes texte en boîte, police des étiquettes d'extrémité dans le profil, graisse des étiquettes, étiquettes d'extrémité des fils, `componentStroke` dans le profil, `fields` par instance,
+unité, plus de `labelPrefix`), projet 21 (composants derrière les fils, fils en diagonale à 45°, fond optionnel des étiquettes texte, styles, sens et couleur des étiquettes texte, couleurs de fil propres au montage, étiquettes texte en boîte, police des étiquettes d'extrémité dans le profil, graisse des étiquettes, étiquettes d'extrémité des fils, `componentStroke` dans le profil, `fields` par instance,
 définitions embarquées migrées à chaque version des composants), diagramme 4 (fond optionnel des étiquettes de lien et des textes, étiquette d'un lien tenue le long du tracé, style de texte par nœud ; nœuds, liens, textes libres, style et couleurs du diagramme), paramètres 11 (dossier du fichier partagé au choix, style général des diagrammes, `componentStroke`
 et `endLabelFont` du profil par défaut, thème sombre par défaut, ouverture du panneau, affichage de
 la bibliothèque).

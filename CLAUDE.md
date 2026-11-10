@@ -89,8 +89,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   - Maj : ajoute à la sélection ou en retire (Maj+clic, Maj+lasso) ; pendant un tracé, le
     contraint ou le varie (carré ou cercle dans l'éditeur de composants, L inversé d'un fil ou
     d'un lien). Jamais autre chose.
-  - Alt : copie (Alt+glisser dépose une copie de la sélection) ; seule exception, Alt+clic sur un
-    croisement du montage inverse l'ordre des deux fils.
+  - Alt : copie (Alt+glisser dépose une copie de la sélection). Deux exceptions, dans le montage :
+    Alt+clic sur un croisement inverse l'ordre des deux fils ; pendant le tracé d'un fil, Alt
+    maintenue trace à 45° (décision du 10 novembre 2026 : Maj y inverse déjà l'ordre, et Ctrl
+    est prise quand on tire un fil d'une broche).
   - Ctrl : saisit le point d'attache le plus proche de ce qu'on survole, au lieu de l'élément
     entier. Éditeur de composants : Ctrl+glisser sur une forme saisit sa poignée la plus proche,
     Ctrl sans sélection montre les poignées de la boîte. Montage : Ctrl+glisser sur un composant
@@ -105,6 +107,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   ni de touches AltGr. Les deux seuls chiffres (0, 1) se lisent par touche physique (`event.code`)
   car la rangée du haut demande Maj sur ce clavier.
   - Montage : V sélection (arrête la pose ou le fil), F fil (clic par coude, Maj inverse le L,
+    Alt maintenue trace à 45° : une diagonale puis un segment droit, l'inverse avec Maj ;
     double-clic ou Entrée termine, Retour arrière retire le dernier sommet, Échap termine aussi
     dès deux sommets),
     R / Maj+R rotation, T / Maj+T miroir, Suppr, Échap, flèches = déplacer d'une cellule,
@@ -135,7 +138,12 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   extrémités libres, nets par union-find). Un fil garde ses extrémités fixes quand on déplace un
   segment ou un sommet : un coude s'ajoute au besoin. Un sommet au milieu d'un segment droit est
   permis ; les demi-tours et les sommets confondus sont refusés. Le L d'un tracé suit l'axe
-  dominant (Maj inverse). Élasticité (`src/domain/elastic.ts`) : les extrémités posées sur une
+  dominant (Maj inverse). Un segment est horizontal, vertical ou en diagonale à 45°
+  (`segmentStep`, `wireGeometryProblem` ; `routeDiagonal` pour le tracé avec Alt ; les liens
+  d'un diagramme, eux, restent sans diagonales : `wireGeometryProblem(points, true)`). Les
+  coudes s'arrondissent par un arc tangent quel que soit l'angle (`wirePathData`) ; un segment
+  ou un sommet qu'on glisse laisse à ses voisins leur direction, leur sommet commun glissant le
+  long d'eux (`moveSegment`, `segmentCoordinate`, `dragVertex`). Élasticité (`src/domain/elastic.ts`) : les extrémités posées sur une
   broche suivent le composant déplacé, tourné ou retourné ; un fil déplacé en bloc garde ses
   extrémités sur les broches immobiles. Les jonctions suivent aussi : quand le tracé d'un fil
   change (déplacé, segment ou sommet glissé, emmené par une broche), les extrémités des autres
@@ -160,10 +168,14 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Copies de secours : `src/io/autosave.ts` tient dans `userData/autosave/` une copie par montage
   modifié (`syncAutosaves(dirtyDocuments())`, fichiers `montage-<onglet>.*`, les autres effacés) ;
   `App.vue` les propose toutes au lancement. Elles ne survivent qu'à un arrêt brutal : quitter en
-  enregistrant (chaque onglet modifié, à son tour) ou en abandonnant les efface. La garde à la fermeture est
-  dans `electron/main.ts` (le rendu tient `setDirty` à jour, puis répond à `discard-then-quit` (efface la copie de secours) ou `save-then-quit` : Enregistrer / Ne pas enregistrer /
-  Annuler, `cancelQuit` si l'enregistrement est abandonné ; l'enregistrement lui-même est dans
-  `projectActions.ts` et `componentActions.ts`, partagé avec les éditeurs).
+  enregistrant (chaque onglet modifié, à son tour) ou en abandonnant les efface. La garde à la
+  fermeture commence dans `electron/main.ts` (le rendu tient `setDirty` à jour) : la fenêtre qui
+  se ferme avec des modifications envoie `ask-then-quit`, le rendu accuse réception (`quitAsked`)
+  et pose la question dans sa propre boîte (`askThenQuit` de `App.vue` : Enregistrer / Ne pas
+  enregistrer / Annuler), puis `confirmQuit`, ou `cancelQuit` si l'enregistrement est abandonné.
+  Sans accusé de réception (rendu bloqué), le dialogue de Windows prend le relais
+  (`askToSaveNatively`, puis `save-then-quit` ou `discard-then-quit`). L'enregistrement lui-même
+  est dans `projectActions.ts` et `componentActions.ts`, partagé avec les éditeurs.
 - Modes (`src/app/App.vue`) : un bouton à pictogramme par mode (puce = Composants, résistance =
   Montage, organigramme = Diagramme ; nom en infobulle), l'application démarre sur le montage. Ce que la coque demande à un
   mode (onglets, fermeture, enregistrement avant de quitter, statut) passe par son `ModeAdapter`.
@@ -192,8 +204,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   montage, point s'il est modifié (le bouton du mode qu'on ne regarde pas, Montage ou
   Composants, porte le même point dès qu'un de ses documents ouverts est à enregistrer), croix ou
   clic du milieu pour fermer (s'il est
-  modifié : Enregistrer / Ne pas enregistrer / Annuler, dialogue natif `confirmSave` du pont, flux
-  dans `closeTabAsking`), « + » pour un nouveau, Ctrl+Tab / Ctrl+Maj+Tab pour passer de l'un à l'autre,
+  modifié : Enregistrer / Ne pas enregistrer / Annuler, question `askToSave` de `src/ui/dialogs.ts`,
+  flux dans `closeTabAsking`), « + » pour un nouveau, Ctrl+Tab / Ctrl+Maj+Tab pour passer de l'un à l'autre,
   glisser-déposer pour les réordonner (`moveTab`). La mécanique d'onglets est commune aux
   éditeurs (`useDocumentTabs` de `src/state/tabs.ts`) : le document affiché vit dans des refs, les
   autres sont rangés avec leur historique, leur fichier et leur état d'édition (vue, sélection,
@@ -332,9 +344,28 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Boîtes de dialogue : `src/ui/ModalDialog.vue` ; tant qu'une est ouverte (`openModals`), les
   éditeurs ignorent leurs raccourcis. `src/ui/PromptDialog.vue` (saisie d'une valeur) et
   `src/ui/ContextMenu.vue` (menu contextuel, entrées décrites dans `contextMenu.ts`) comptent aussi
-  dans `openModals`.
-- Croisements : `src/domain/crossings.ts` (croisements stricts, fil du dessus, exceptions Alt+clic
-  élaguées à chaque commande). Broches reliées à rien : `unconnectedPinKeys` de la connectivité.
+  dans `openModals`. Échap ne ferme que la boîte du dessus (`modalStack`).
+- Questions et alertes : jamais les boîtes de message de Windows ni `window.confirm` (décision du
+  10 novembre 2026). `ask` de `src/ui/dialogs.ts` rend une promesse tenue par le bouton choisi
+  (`askToSave`, `askToSaveBeforeQuit`, `confirmAction`) ; `src/ui/DialogHost.vue`, monté une
+  fois par `App.vue`, les affiche une à la fois dans une `ModalDialog` compacte, le choix attendu
+  à droite et au clavier. Dans les tests, `scriptDialogs()` de `src/ui/testing/dialogs.ts`
+  répond à la place de la boîte (`setDialogResponder`). Les dialogues de fichier (ouvrir,
+  enregistrer sous, choisir un dossier) restent ceux du système.
+- Pas de barre de menus Electron : `Menu.setApplicationMenu(null)` dans `electron/main.ts`, pour
+  qu'Alt ne fasse rien apparaître, et `swallowAlt` de `App.vue` neutralise la touche seule. F11
+  reste le plein écran ; en développement seulement, F12
+  ou Ctrl+Maj+I ouvre les outils et F5 ou Ctrl+R recharge (`before-input-event`).
+- Composants et fils, ordre d'empilement du montage : les composants se dessinent au-dessus des
+  fils, sauf ceux qu'on a mis derrière (`behindWires` de l'instance ; case « Derrière les fils »
+  du panneau, menu contextuel, Ctrl+Page bas / haut sur un composant sélectionné :
+  `setInstancesBehindWires`, `restackSelection`), pour qu'une image ne cache pas les fils qui vont
+  à ses broches. Même ordre à l'écran (`STACK` et `layers` de `SchematicCanvas.vue`) et à
+  l'export (`componentLayer` de `svg.ts`) ; les textes d'un composant suivent sa couche.
+- Croisements : `src/domain/crossings.ts` (croisements stricts entre deux segments de directions
+  différentes, fil du dessus redessiné dans sa direction par `crossingPieceEnds`, exceptions
+  Alt+clic élaguées à chaque commande ; deux diagonales peuvent se croiser au milieu d'une
+  cellule, les exceptions vont donc par demi-pas). Broches reliées à rien : `unconnectedPinKeys` de la connectivité.
 - Exécutable : `pnpm icon` régénère `build/icon.png` (script sans dépendance), `pnpm build:win`
   produit l'installeur NSIS et l'exe portable dans `release/` (non signés : avertissement
   SmartScreen au premier lancement, normal). Les montages s'enregistrent en `.pinout` (du JSON ;
@@ -380,7 +411,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     composant posé s'appelle « libellé » dans l'interface.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 15, projet 20, paramètres 11,
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 15, projet 21, paramètres 11,
   diagramme 4
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).

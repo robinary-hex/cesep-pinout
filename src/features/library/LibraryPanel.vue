@@ -5,6 +5,7 @@ import { useSchematicStore } from '@/features/schematic-editor/store'
 import { deleteComponent, type LibraryEntry } from '@/io/library'
 import { baseName } from '@/io/paths'
 import ComponentThumbnail from '@/render/ComponentThumbnail.vue'
+import { confirmAction } from '@/ui/dialogs'
 import Icon from '@/ui/Icon.vue'
 import { useLibraryStore } from './store'
 
@@ -93,8 +94,14 @@ function duplicate(entry: LibraryEntry): void {
 
 async function remove(entry: LibraryEntry): Promise<void> {
   const name = entry.def?.name ?? baseName(entry.folder)
-  const message = `Supprimer « ${name} » de la bibliothèque ? Les projets qui l’utilisent gardent leur copie.`
-  if (!window.confirm(message)) return
+  const confirmed = await confirmAction({
+    title: 'Supprimer le composant ?',
+    message: `« ${name} » sera retiré de la bibliothèque.`,
+    detail: 'Les projets qui l’utilisent gardent leur copie.',
+    confirm: 'Supprimer',
+    danger: true
+  })
+  if (!confirmed) return
   try {
     await deleteComponent(entry.folder)
     editor.closeFolderTabs(entry.folder)

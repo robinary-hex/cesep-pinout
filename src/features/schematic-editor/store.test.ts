@@ -820,3 +820,61 @@ describe('onglets de montage', () => {
     expect(store.anyDirty).toBe(false)
   })
 })
+
+describe('montage : composants derrière les fils, fils à 45°', () => {
+  it('met un composant derrière les fils et le ramène devant, par commande ou Ctrl+Page', () => {
+    const store = useSchematicStore()
+    store.startPlacing(resistor())
+    const first = store.placeAt(2, 3)
+    const second = store.placeAt(10, 3)
+    store.stopPlacing()
+    if (!first || !second) throw new Error('composants attendus')
+    expect(store.doc.components.map((instance) => instance.behindWires)).toEqual([false, false])
+    store.setInstancesBehindWires([first], true)
+    expect(store.doc.components.map((instance) => instance.behindWires)).toEqual([true, false])
+    expect(store.undoLabel).toBe('Passer derrière les fils')
+    // Déjà derrière : rien à faire, rien de plus à annuler.
+    store.setInstancesBehindWires([first], true)
+    store.undo()
+    expect(store.doc.components[0]?.behindWires).toBe(false)
+    // Ctrl+Page bas sur la sélection, puis Ctrl+Page haut.
+    store.selection = [second]
+    store.restackSelection('down')
+    expect(store.doc.components.map((instance) => instance.behindWires)).toEqual([false, true])
+    store.restackSelection('top')
+    expect(store.doc.components[1]?.behindWires).toBe(false)
+    expect(store.undoLabel).toBe('Passer devant les fils')
+    // Le réglage s'enregistre avec le montage.
+    store.restackSelection('bottom')
+    const reread = parseProject(serializeProject(store.doc))
+    expect(reread.components[1]?.behindWires).toBe(true)
+  })
+
+  it('accepte un fil en diagonale à 45° et refuse une autre pente', () => {
+    const store = useSchematicStore()
+    const id = store.addWire([
+      [0, 0],
+      [2, 2],
+      [6, 2]
+    ])
+    expect(id).not.toBeNull()
+    expect(
+      store.addWire([
+        [0, 5],
+        [4, 7]
+      ])
+    ).toBeNull()
+    // Glisser un sommet garde la pente de la diagonale.
+    if (!id) throw new Error('fil attendu')
+    store.setWirePoints(id, [
+      [0, 1],
+      [1, 2],
+      [6, 2]
+    ])
+    expect(store.doc.wires[0]?.points).toEqual([
+      [0, 1],
+      [1, 2],
+      [6, 2]
+    ])
+  })
+})

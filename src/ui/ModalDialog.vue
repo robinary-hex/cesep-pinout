@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
-import { openModals } from './modalState'
+import { modalStack, openModals } from './modalState'
 
 // Boîte de dialogue modale : fond assombri, Échap ou clic hors de la boîte pour fermer.
-// Tant qu'elle est ouverte, les éditeurs ignorent leurs raccourcis (voir openModals).
+// Tant qu'elle est ouverte, les éditeurs ignorent leurs raccourcis (voir openModals). `wide` pour
+// une boîte à deux colonnes, `compact` pour une simple question.
 
-defineProps<{ title: string; wide?: boolean }>()
+defineProps<{ title: string; wide?: boolean; compact?: boolean }>()
 const emit = defineEmits<{ close: [] }>()
+const id = Symbol('boîte')
 
 function onKeyDown(event: KeyboardEvent): void {
+  // Plusieurs boîtes empilées : seule celle du dessus répond à Échap.
+  if (modalStack.at(-1) !== id) return
   if (event.key === 'Escape') {
     event.stopPropagation()
     emit('close')
@@ -17,18 +21,27 @@ function onKeyDown(event: KeyboardEvent): void {
 
 onMounted(() => {
   openModals.value++
+  modalStack.push(id)
   window.addEventListener('keydown', onKeyDown, true)
 })
 
 onUnmounted(() => {
   openModals.value--
+  const index = modalStack.indexOf(id)
+  if (index !== -1) modalStack.splice(index, 1)
   window.removeEventListener('keydown', onKeyDown, true)
 })
 </script>
 
 <template>
   <div class="backdrop" @pointerdown.self="emit('close')">
-    <div class="dialog" :class="{ wide }" role="dialog" aria-modal="true" :aria-label="title">
+    <div
+      class="dialog"
+      :class="{ wide, compact }"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="title"
+    >
       <header class="head">
         <h2>{{ title }}</h2>
         <button type="button" class="close" title="Fermer (Échap)" @click="emit('close')">✕</button>
@@ -65,6 +78,10 @@ onUnmounted(() => {
 
 .dialog.wide {
   width: min(960px, calc(100vw - 32px));
+}
+
+.dialog.compact {
+  width: min(460px, calc(100vw - 32px));
 }
 
 .head {

@@ -37,12 +37,14 @@ export interface DirEntry {
   isDirectory: boolean
 }
 
-/** Réponse au dialogue « Enregistrer les modifications ? » d'un montage qu'on ferme. */
-export type SaveChoice = 'save' | 'discard' | 'cancel'
-
-/** Demandes du processus principal au rendu. */
-/** discard-then-quit : abandonner les modifications (copie de secours effacée) ; save-then-quit : enregistrer d'abord. */
-export type AppRequest = 'discard-then-quit' | 'save-then-quit'
+/**
+ * Demandes du processus principal au rendu. ask-then-quit : la fenêtre se ferme avec des
+ * modifications, le rendu pose la question « enregistrer ? » dans sa propre boîte. Les deux
+ * autres viennent du dialogue de Windows, qui ne sert plus que si le rendu ne répond pas :
+ * discard-then-quit, abandonner les modifications (copie de secours effacée) ; save-then-quit,
+ * enregistrer d'abord.
+ */
+export type AppRequest = 'ask-then-quit' | 'discard-then-quit' | 'save-then-quit'
 
 /** État de la mise à jour automatique, envoyé par le principal au fil de l'eau. */
 export type UpdateStatus =
@@ -70,8 +72,6 @@ export interface PinoutApi {
   showOpenDialog(options?: OpenDialogOptions): Promise<string | null>
   /** Retourne le chemin choisi, ou null si l'utilisateur annule. */
   showSaveDialog(options?: SaveDialogOptions): Promise<string | null>
-  /** Montage modifié qu'on ferme : Enregistrer, Ne pas enregistrer ou Annuler. */
-  confirmSave(name: string): Promise<SaveChoice>
   getAppPaths(): Promise<AppPaths>
   /** Fichier (.pinout ou .json) passé au lancement par un double-clic ou « Ouvrir avec ». */
   getLaunchFile(): Promise<string | null>
@@ -84,6 +84,8 @@ export interface PinoutApi {
   pathForFile(file: unknown): string
   /** Informe le principal qu'il y a des modifications non enregistrées (garde à la fermeture). */
   setDirty(dirty: boolean): Promise<void>
+  /** Accuse réception de `ask-then-quit` : le rendu pose la question, pas le dialogue de Windows. */
+  quitAsked(): Promise<void>
   /** Après la copie de secours ou l'enregistrement, autorise la fermeture demandée. */
   confirmQuit(): Promise<void>
   /** L'enregistrement demandé avant de quitter a été abandonné : la fenêtre reste ouverte. */
@@ -109,11 +111,11 @@ export const IPC = {
   removeComponentFolder: 'fs:remove-component-folder',
   showOpenDialog: 'dialog:open',
   showSaveDialog: 'dialog:save',
-  confirmSave: 'dialog:confirm-save',
   getAppPaths: 'app:paths',
   launchFile: 'app:launch-file',
   openFile: 'app:open-file',
   setDirty: 'app:set-dirty',
+  quitAsked: 'app:quit-asked',
   confirmQuit: 'app:confirm-quit',
   cancelQuit: 'app:cancel-quit',
   appRequest: 'app:request',

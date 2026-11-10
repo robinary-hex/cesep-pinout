@@ -3,19 +3,24 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useLibraryStore } from '@/features/library/store'
 import { setBridge } from '@/io/bridge'
 import { FakeFs } from '@/io/testing/fakeFs'
+import { setDialogResponder } from '@/ui/dialogs'
+import { scriptDialogs, type DialogScript } from '@/ui/testing/dialogs'
 import { closeComponentTabAsking } from './componentActions'
 import { useComponentEditorStore } from './store'
 
 let fs: FakeFs
+let dialogs: DialogScript
 
 beforeEach(() => {
   fs = new FakeFs()
   setBridge(fs)
+  dialogs = scriptDialogs()
   setActivePinia(createPinia())
 })
 
 afterEach(() => {
   setBridge(null)
+  setDialogResponder(null)
 })
 
 describe('fermer un onglet de composant', () => {
@@ -31,10 +36,10 @@ describe('fermer un onglet de composant', () => {
   it('« Annuler » garde l’onglet ; « Ne pas enregistrer » le ferme', async () => {
     const store = useComponentEditorStore()
     store.addPrimitive(dot, 'Ajouter un point')
-    fs.confirmSaveAnswers.push('cancel')
+    dialogs.answers.push('cancel')
     expect(await closeComponentTabAsking(store, useLibraryStore(), store.activeTabId)).toBe(false)
     expect(store.dirty).toBe(true)
-    fs.confirmSaveAnswers.push('discard')
+    dialogs.answers.push('discard')
     expect(await closeComponentTabAsking(store, useLibraryStore(), store.activeTabId)).toBe(true)
     expect(store.pristine).toBe(true)
   })
@@ -45,7 +50,7 @@ describe('fermer un onglet de composant', () => {
     await library.init()
     store.setMeta({ name: 'LED' })
     store.addPrimitive(dot, 'Ajouter un point')
-    fs.confirmSaveAnswers.push('save')
+    dialogs.answers.push('save')
     expect(await closeComponentTabAsking(store, library, store.activeTabId)).toBe(true)
     expect(fs.texts.get('C:/fake/Pinout/library/led/component.json')).toContain('"name": "LED"')
     expect(store.pristine).toBe(true)

@@ -1,9 +1,9 @@
 import { FileFormatError } from '@/domain'
 import type { useLibraryStore } from '@/features/library/store'
 import { syncAutosaves } from '@/io/autosave'
-import { bridge } from '@/io/bridge'
 import { dirOf } from '@/io/paths'
 import { chooseProjectToSave, writeProject } from '@/io/projectFiles'
+import { askToSave } from '@/ui/dialogs'
 import type { useSchematicStore } from './store'
 
 // Enregistrement du montage, partagé par l'éditeur (Ctrl+S, menu Fichier), la fermeture d'un
@@ -60,7 +60,7 @@ export async function closeTabAsking(
   const tab = store.tabs.find((candidate) => candidate.id === id)
   if (!tab) return false
   if (tab.dirty) {
-    const choice = await bridge().confirmSave(tab.name)
+    const choice = await askToSave(tab.name)
     if (choice === 'cancel') return false
     if (choice === 'save') {
       // L'enregistrement porte sur le montage affiché : on montre d'abord celui qu'on ferme.

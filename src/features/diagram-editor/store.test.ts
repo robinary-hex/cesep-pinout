@@ -5,19 +5,24 @@ import { useLibraryStore } from '@/features/library/store'
 import { readDiagramAutosaves, syncDiagramAutosaves } from '@/io/autosave'
 import { setBridge } from '@/io/bridge'
 import { FakeFs } from '@/io/testing/fakeFs'
+import { setDialogResponder } from '@/ui/dialogs'
+import { scriptDialogs, type DialogScript } from '@/ui/testing/dialogs'
 import { closeDiagramTabAsking, saveDiagram } from './diagramActions'
 import { useDiagramStore } from './store'
 
 let fs: FakeFs
+let dialogs: DialogScript
 
 beforeEach(() => {
   fs = new FakeFs()
   setBridge(fs)
+  dialogs = scriptDialogs()
   setActivePinia(createPinia())
 })
 
 afterEach(() => {
   setBridge(null)
+  setDialogResponder(null)
 })
 
 describe('diagramme : nœuds', () => {
@@ -287,6 +292,17 @@ describe('diagramme : liens', () => {
     ])
   })
 
+  it('refuse un lien en diagonale : les liens restent horizontaux ou verticaux', () => {
+    const store = useDiagramStore()
+    expect(
+      store.addLink([
+        [0, 0],
+        [3, 3]
+      ])
+    ).toBeNull()
+    expect(store.doc.links).toHaveLength(0)
+  })
+
   it('pose une étiquette le long du lien, la déplace, la retire ; inverse le sens', () => {
     const store = useDiagramStore()
     const id = store.addLink([
@@ -405,9 +421,9 @@ describe('diagramme : textes, copies, onglets', () => {
     const store = useDiagramStore()
     const library = useLibraryStore()
     store.addNode('start', 0, 0)
-    fs.confirmSaveAnswers.push('cancel')
+    dialogs.answers.push('cancel')
     expect(await closeDiagramTabAsking(store, library, store.activeTabId)).toBe(false)
-    fs.confirmSaveAnswers.push('discard')
+    dialogs.answers.push('discard')
     expect(await closeDiagramTabAsking(store, library, store.activeTabId)).toBe(true)
     expect(store.doc.nodes).toHaveLength(0)
   })

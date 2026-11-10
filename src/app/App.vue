@@ -28,6 +28,8 @@ import { bridge } from '@/io/bridge'
 import { isDiagramPath } from '@/io/diagramFiles'
 import { baseName } from '@/io/paths'
 import ContextMenu from '@/ui/ContextMenu.vue'
+import DialogHost from '@/ui/DialogHost.vue'
+import { ask, askToSaveBeforeQuit, confirmAction } from '@/ui/dialogs'
 import { heading, item, SEPARATOR, type MenuItem } from '@/ui/contextMenu'
 import Icon from '@/ui/Icon.vue'
 import type { IconName } from '@/ui/icons'
@@ -78,9 +80,13 @@ async function onUpdateClick(): Promise<void> {
   } else if (current.state === 'downloaded') {
     if (
       anyDirty.value &&
-      !window.confirm(
-        'Des modifications ne sont pas enregistrées. Installer la mise à jour et relancer quand même ?'
-      )
+      !(await confirmAction({
+        title: 'Installer la mise à jour ?',
+        message:
+          'Des modifications ne sont pas enregistrées : elles seront perdues au redémarrage.',
+        confirm: 'Installer et relancer',
+        danger: true
+      }))
     ) {
       return
     }
@@ -452,11 +458,21 @@ async function proposeRecovery(): Promise<void> {
     ...projects.map(({ meta }) => `Montage ${describe(meta)}`),
     ...diagrams.map(({ meta }) => `Diagramme ${describe(meta)}`)
   ]
-  const question =
-    count === 1
-      ? `Une copie de secours existe : ${lines.join('')}. La récupérer ?`
-      : `Des copies de secours de ${count} documents existent :\n${lines.join('\n')}\nLes récupérer ?`
-  if (window.confirm(question)) {
+  // Fermer la boîte sans choisir récupère : rien n'est perdu, les onglets se referment au besoin.
+  const recover = await ask({
+    title: count === 1 ? 'Récupérer la copie de secours ?' : 'Récupérer les copies de secours ?',
+    message:
+      count === 1
+        ? 'Pinout s’est arrêté sans que ce document soit enregistré :'
+        : `Pinout s’est arrêté sans que ces ${count} documents soient enregistrés :`,
+    detail: lines.join('\n'),
+    buttons: [
+      { label: 'Ne pas récupérer', value: false },
+      { label: 'Récupérer', value: true, kind: 'primary' }
+    ],
+    cancel: true
+  })
+  if (recover) {
     for (const { project, meta } of projects) schematic.restoreProject(project, meta.originalPath)
     for (const entry of diagrams) diagram.restoreDiagram(entry.diagram, entry.meta.originalPath)
     mode.value = projects.length > 0 ? 'schematic' : 'diagram'
@@ -525,26 +541,53 @@ async function saveEverything(): Promise<boolean> {
   return true
 }
 
+/**
+ * « Enregistrer » avant de quitter : chaque document modifié de chaque mode, affiché à son tour ;
+ * un refus garde la fenêtre.
+ */
+async function saveThenQuit(): Promise<void> {
+  if (await saveEverything()) await bridge().confirmQuit()
+  else await bridge().cancelQuit()
+}
+
+/** « Ne pas enregistrer » : les copies de secours disparaissent, le prochain lancement part à vide. */
+async function discardThenQuit(): Promise<void> {
+  try {
+    await clearAutosave()
+  } finally {
+    await bridge().confirmQuit()
+  }
+}
+
+/** Vrai tant que la question « enregistrer avant de quitter ? » est à l'écran. */
+let askingToQuit = false
+
+/**
+ * La fenêtre se ferme avec des modifications : le principal le signale, le rendu accuse réception
+ * (sans quoi le dialogue de Windows prendrait le relais) et pose la question dans sa propre boîte.
+ */
+async function askThenQuit(): Promise<void> {
+  await bridge().quitAsked()
+  if (askingToQuit) return
+  askingToQuit = true
+  try {
+    const choice = await askToSaveBeforeQuit()
+    if (choice === 'save') await saveThenQuit()
+    else if (choice === 'discard') await discardThenQuit()
+  } finally {
+    askingToQuit = false
+  }
+}
+
 let unsubscribe: (() => void) | null = null
 let unsubscribeOpenFile: (() => void) | null = null
 
 onMounted(async () => {
   unsubscribe = bridge().onAppRequest((request) => {
     void (async () => {
-      if (request === 'save-then-quit') {
-        // « Enregistrer » avant de quitter : chaque document modifié de chaque mode, affiché à
-        // son tour ; un refus garde la fenêtre.
-        if (await saveEverything()) await bridge().confirmQuit()
-        else await bridge().cancelQuit()
-        return
-      }
-      if (request !== 'discard-then-quit') return
-      // « Ne pas enregistrer » : les copies de secours disparaissent, le prochain lancement part à vide.
-      try {
-        await clearAutosave()
-      } finally {
-        await bridge().confirmQuit()
-      }
+      if (request === 'ask-then-quit') await askThenQuit()
+      else if (request === 'save-then-quit') await saveThenQuit()
+      else await discardThenQuit()
     })()
   })
   unsubscribeUpdate = bridge().onUpdateStatus((status) => {
@@ -582,6 +625,14 @@ function onKeyDown(event: KeyboardEvent): void {
 }
 
 /**
+ * Alt seule ne doit rien activer dans la fenêtre (menu du système ou du navigateur) : c'est une
+ * touche de dessin, pour copier en glissant ou tracer un fil à 45°. AltGr n'est pas concernée.
+ */
+function swallowAlt(event: KeyboardEvent): void {
+  if (event.key === 'Alt') event.preventDefault()
+}
+
+/**
  * Un clic hors du champ en cours de saisie le valide d'abord : `blur()` déclenche son `change`
  * tout de suite, avant que le clic n'atteigne le canevas et que la sélection, en changeant, ne
  * retire le champ du panneau avec ce qu'on venait d'y taper.
@@ -596,6 +647,8 @@ function commitFocusedField(event: PointerEvent): void {
 
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('keydown', swallowAlt)
+  window.addEventListener('keyup', swallowAlt)
   window.addEventListener('pointerdown', commitFocusedField, true)
   window.addEventListener('focus', onWindowFocus)
   window.addEventListener('dragover', onWindowDragOver)
@@ -603,6 +656,8 @@ onMounted(() => {
 })
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('keydown', swallowAlt)
+  window.removeEventListener('keyup', swallowAlt)
   window.removeEventListener('pointerdown', commitFocusedField, true)
   window.removeEventListener('focus', onWindowFocus)
   window.removeEventListener('dragover', onWindowDragOver)
@@ -747,5 +802,6 @@ onUnmounted(() => {
       :items="fileMenu.items"
       @close="fileMenu = null"
     />
+    <DialogHost />
   </div>
 </template>

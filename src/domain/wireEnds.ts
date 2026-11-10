@@ -104,7 +104,8 @@ export interface EndLabelPlacement {
 
 /**
  * Position de l'étiquette d'une extrémité : dans le prolongement du dernier segment, à l'opposé
- * du fil. Un fil qui arrive par le haut a son étiquette en dessous ; par la gauche, à droite.
+ * du fil. Un fil qui arrive par le haut a son étiquette en dessous ; par la gauche, à droite ;
+ * en diagonale, dans le coin opposé.
  */
 export function wireEndLabelPlacement(
   points: readonly GridPoint[],
@@ -117,6 +118,15 @@ export function wireEndLabelPlacement(
   const dx = Math.sign(end[0] - neighbor[0])
   const dy = Math.sign(end[1] - neighbor[1])
   if (dx === 0 && dy === 0) return null
+  if (dx !== 0 && dy !== 0) {
+    const along = offset * Math.SQRT1_2
+    return {
+      x: end[0] + dx * along,
+      y: end[1] + dy * along,
+      anchor: dx > 0 ? 'start' : 'end',
+      baseline: dy > 0 ? 'hanging' : 'auto'
+    }
+  }
   if (dx !== 0) {
     return {
       x: end[0] + dx * offset,

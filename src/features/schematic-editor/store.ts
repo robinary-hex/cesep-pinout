@@ -156,6 +156,8 @@ export const useSchematicStore = defineStore('schematic', () => {
   const shiftHeld = ref(false)
   /** Ctrl enfoncée : en sélection, le canevas montre la broche qu'un Ctrl+glisser saisirait. */
   const ctrlHeld = ref(false)
+  /** Alt enfoncée : le fil qu'on trace passe aux segments à 45°. */
+  const altHeld = ref(false)
   const hoverWireId = ref<string | null>(null)
   const status = ref('')
 
@@ -510,7 +512,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     stopWireDrawing()
     clearSelection()
     status.value =
-      'Fil : clic sur une broche ou une intersection pour partir, clic pour chaque coude, Maj inverse le L, double-clic ou Entrée pour finir, Échap annule.'
+      'Fil : clic sur une broche ou une intersection pour partir, clic pour chaque coude, Alt trace à 45°, Maj inverse l’ordre, double-clic ou Entrée pour finir.'
   }
 
   function startTextTool(): void {
@@ -531,7 +533,8 @@ export const useSchematicStore = defineStore('schematic', () => {
       rotation: current.rotation,
       mirror: current.mirror,
       label: '',
-      fields: {}
+      fields: {},
+      behindWires: false
     }
   }
 
@@ -572,7 +575,8 @@ export const useSchematicStore = defineStore('schematic', () => {
         rotation: current.rotation,
         mirror: current.mirror,
         label: '',
-        fields: {}
+        fields: {},
+        behindWires: false
       })
     })
     status.value = `${def.name} posé.`
@@ -848,6 +852,31 @@ export const useSchematicStore = defineStore('schematic', () => {
     apply('Ordre des fils', (draft) => {
       for (const wire of draft.wires) wire.stack = rank.get(wire.id) ?? wire.stack
     })
+  }
+
+  /**
+   * Met des composants derrière les fils, ou les ramène devant. Derrière, un composant ne cache
+   * plus les fils qui passent sur lui : pour une image, surtout.
+   */
+  function setInstancesBehindWires(ids: readonly string[], behind: boolean): void {
+    const changing = doc.value.components.filter(
+      (instance) => ids.includes(instance.id) && instance.behindWires !== behind
+    )
+    if (changing.length === 0) return
+    apply(behind ? 'Passer derrière les fils' : 'Passer devant les fils', (draft) => {
+      for (const instance of draft.components) {
+        if (ids.includes(instance.id)) instance.behindWires = behind
+      }
+    })
+  }
+
+  /**
+   * Ctrl+Page haut / bas sur la sélection : les fils avancent ou reculent entre eux ; les
+   * composants passent devant les fils (haut) ou derrière (bas).
+   */
+  function restackSelection(move: StackMove): void {
+    reorderWires(move)
+    setInstancesBehindWires(selection.value, move === 'down' || move === 'bottom')
   }
 
   /** Alt+clic près d'un croisement : l'autre fil passe au-dessus à cet endroit seulement. */
@@ -1185,6 +1214,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     panKeyHeld,
     shiftHeld,
     ctrlHeld,
+    altHeld,
     hoverWireId,
     status,
     undoLabel,
@@ -1254,6 +1284,8 @@ export const useSchematicStore = defineStore('schematic', () => {
     setWireEndLabel,
     removeWires,
     reorderWires,
+    setInstancesBehindWires,
+    restackSelection,
     toggleCrossing,
     clearSelection,
     revealInspector,

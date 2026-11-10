@@ -1,4 +1,4 @@
-import type { AppRequest, DirEntry, PinoutApi, SaveChoice } from '../../../electron/api'
+import type { AppRequest, DirEntry, PinoutApi } from '../../../electron/api'
 
 /**
  * Système de fichiers en mémoire qui imite le pont Electron, pour les tests.
@@ -10,10 +10,10 @@ export class FakeFs implements PinoutApi {
   /** Réponses programmées des dialogues : chaque appel consomme la première. */
   readonly openDialogAnswers: Array<string | null> = []
   readonly saveDialogAnswers: Array<string | null> = []
-  /** Réponses programmées au dialogue « Enregistrer les modifications ? » ; Annuler par défaut. */
-  readonly confirmSaveAnswers: SaveChoice[] = []
   dirty = false
   quitConfirmed = false
+  /** Vrai une fois la demande de fermeture prise en charge par le rendu. */
+  quitAskedByRenderer = false
   private readonly requestHandlers = new Set<(request: AppRequest) => void>()
   private readonly openFileHandlers = new Set<(path: string) => void>()
 
@@ -88,10 +88,6 @@ export class FakeFs implements PinoutApi {
     return this.saveDialogAnswers.shift() ?? null
   }
 
-  async confirmSave(): Promise<SaveChoice> {
-    return this.confirmSaveAnswers.shift() ?? 'cancel'
-  }
-
   /** Racine OneDrive simulée ; null par défaut, comme une machine sans OneDrive. */
   oneDrive: string | null = null
 
@@ -105,6 +101,10 @@ export class FakeFs implements PinoutApi {
 
   async setDirty(dirty: boolean): Promise<void> {
     this.dirty = dirty
+  }
+
+  async quitAsked(): Promise<void> {
+    this.quitAskedByRenderer = true
   }
 
   async confirmQuit(): Promise<void> {

@@ -204,7 +204,8 @@ export const diagramLinkSchema = z
     labelBackground: z.boolean()
   })
   .superRefine((link, ctx) => {
-    const problem = wireGeometryProblem(link.points)
+    // Les liens d'un diagramme n'ont pas de diagonales.
+    const problem = wireGeometryProblem(link.points, true)
     if (problem !== null) ctx.addIssue({ code: 'custom', message: problem, path: ['points'] })
   })
 export type DiagramLink = z.infer<typeof diagramLinkSchema>

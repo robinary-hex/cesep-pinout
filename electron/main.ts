@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { access, mkdir, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -8,7 +8,6 @@ import {
   type AppRequest,
   type DirEntry,
   type OpenDialogOptions,
-  type SaveChoice,
   type SaveDialogOptions,
   type UpdateStatus
 } from './api'
@@ -19,6 +18,8 @@ app.setName('Pinout')
 
 const isDev = !app.isPackaged
 const QUIT_FALLBACK_MS = 3000
+/** Délai laissé au rendu pour accuser réception d'une demande de fermeture. */
+const QUIT_ASK_FALLBACK_MS = 1500
 const RELEASES_URL = 'https://github.com/robinary-hex/cesep-pinout/releases/latest'
 
 /**
@@ -33,9 +34,10 @@ function fileArgument(argv: readonly string[]): string | null {
 }
 
 /**
- * Textes des dialogues « enregistrer ? ». Windows règle la largeur de la boîte sur la ligne de
- * détail : elle est assez longue pour que la question, en gros caractères au-dessus, tienne sur
- * une seule ligne. Les espaces insécables gardent de toute façon « avant de quitter ? » ensemble.
+ * Textes du dialogue de secours « enregistrer ? », celui de Windows, qui ne sert que si le rendu
+ * ne répond pas. Windows règle la largeur de la boîte sur la ligne de détail : elle est assez
+ * longue pour que la question, en gros caractères au-dessus, tienne sur une seule ligne. Les
+ * espaces insécables gardent de toute façon « avant de quitter ? » ensemble.
  */
 const NBSP = String.fromCharCode(0xa0)
 const QUIT_QUESTION = `Enregistrer les modifications avant${NBSP}de${NBSP}quitter${NBSP}?`
@@ -53,6 +55,8 @@ let dirty = false
 let quitting = false
 /** Fermeture forcée si le rendu ne répond pas après « Ne pas enregistrer ». */
 let quitFallback: ReturnType<typeof setTimeout> | null = null
+/** Dialogue de Windows si le rendu n'accuse pas réception de la demande de fermeture. */
+let quitAskFallback: ReturnType<typeof setTimeout> | null = null
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -128,25 +132,6 @@ function registerIpc(): void {
     return result.canceled || !result.filePath ? null : result.filePath
   })
 
-  // Fermeture d'un onglet modifié : le même dialogue à trois boutons que la garde à la fermeture.
-  ipcMain.handle(IPC.confirmSave, async (event, name: string): Promise<SaveChoice> => {
-    const owner = BrowserWindow.fromWebContents(event.sender)
-    const options = {
-      type: 'warning' as const,
-      title: 'Pinout',
-      message: `Enregistrer les modifications de « ${name} » ?`,
-      detail: UNSAVED_DETAIL,
-      buttons: ['Enregistrer', 'Ne pas enregistrer', 'Annuler'],
-      defaultId: 0,
-      cancelId: 2,
-      noLink: true
-    }
-    const { response } = owner
-      ? await dialog.showMessageBox(owner, options)
-      : await dialog.showMessageBox(options)
-    return response === 0 ? 'save' : response === 1 ? 'discard' : 'cancel'
-  })
-
   ipcMain.handle(IPC.getAppPaths, (): AppPaths => ({
     userData: app.getPath('userData'),
     documents: app.getPath('documents'),
@@ -159,6 +144,11 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.setDirty, (_event, value: boolean) => {
     dirty = value
+  })
+
+  ipcMain.handle(IPC.quitAsked, () => {
+    if (quitAskFallback) clearTimeout(quitAskFallback)
+    quitAskFallback = null
   })
 
   ipcMain.handle(IPC.confirmQuit, (event) => {
@@ -215,6 +205,35 @@ function setupUpdater(mainWindow: BrowserWindow): void {
   autoUpdater.checkForUpdates().catch(() => undefined)
 }
 
+/**
+ * Secours de la garde à la fermeture : le dialogue de Windows, quand le rendu ne peut pas poser
+ * la question lui-même. « Ne pas enregistrer » ferme de force si le rendu ne confirme pas.
+ */
+function askToSaveNatively(mainWindow: BrowserWindow): void {
+  const choice = dialog.showMessageBoxSync(mainWindow, {
+    type: 'warning',
+    title: 'Pinout',
+    message: QUIT_QUESTION,
+    detail: UNSAVED_DETAIL,
+    buttons: ['Enregistrer', 'Ne pas enregistrer', 'Annuler'],
+    defaultId: 0,
+    cancelId: 2,
+    noLink: true
+  })
+  if (choice === 2) return
+  const request: AppRequest = choice === 0 ? 'save-then-quit' : 'discard-then-quit'
+  mainWindow.webContents.send(IPC.appRequest, request)
+  // Un enregistrement peut attendre un choix de fichier : pas de délai dans ce cas.
+  if (request === 'discard-then-quit') {
+    quitFallback = setTimeout(() => {
+      if (!quitting && !mainWindow.isDestroyed()) {
+        quitting = true
+        mainWindow.destroy()
+      }
+    }, QUIT_FALLBACK_MS)
+  }
+}
+
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1400,
@@ -222,7 +241,6 @@ function createWindow(): void {
     minWidth: 1000,
     minHeight: 640,
     show: false,
-    autoHideMenuBar: true,
     title: 'Pinout',
     webPreferences: {
       preload: join(__dirname, '../preload/preload.js'),
@@ -251,35 +269,42 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
-  // Garde à la fermeture : avec des modifications non enregistrées, on propose d'enregistrer ;
-  // le rendu enregistre, ou abandonne (la copie de secours est effacée : au prochain lancement,
-  // rien n'est proposé), puis confirme ; il annule si l'utilisateur renonce au choix du fichier.
-  // Une copie de secours ne survit donc qu'à un arrêt brutal, et c'est alors qu'elle est proposée.
+  // Sans barre de menus, plus de raccourcis de menu : F11 reste le plein écran ; en développement,
+  // F12 (ou Ctrl+Maj+I) ouvre les outils et F5 (ou Ctrl+R) recharge.
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return
+    const key = input.key.toLowerCase()
+    if (key === 'f11') {
+      mainWindow.setFullScreen(!mainWindow.isFullScreen())
+    } else if (isDev && (key === 'f12' || (input.control && input.shift && key === 'i'))) {
+      mainWindow.webContents.toggleDevTools()
+    } else if (isDev && (key === 'f5' || (input.control && !input.shift && key === 'r'))) {
+      mainWindow.webContents.reload()
+    } else {
+      return
+    }
+    event.preventDefault()
+  })
+
+  // Garde à la fermeture : avec des modifications non enregistrées, la question « enregistrer ? »
+  // se pose dans la fenêtre, au style de l'application (`ask-then-quit`). Le rendu enregistre, ou
+  // abandonne (la copie de secours est effacée : au prochain lancement, rien n'est proposé), puis
+  // confirme ; il ne fait rien si l'utilisateur renonce. S'il n'accuse pas réception (rendu
+  // bloqué), le dialogue de Windows prend le relais, pour que la fenêtre reste fermable. Une copie
+  // de secours ne survit donc qu'à un arrêt brutal, et c'est alors qu'elle est proposée.
   mainWindow.on('close', (event) => {
     if (quitting || !dirty) return
     event.preventDefault()
-    const choice = dialog.showMessageBoxSync(mainWindow, {
-      type: 'warning',
-      title: 'Pinout',
-      message: QUIT_QUESTION,
-      detail: UNSAVED_DETAIL,
-      buttons: ['Enregistrer', 'Ne pas enregistrer', 'Annuler'],
-      defaultId: 0,
-      cancelId: 2,
-      noLink: true
-    })
-    if (choice === 2) return
-    const request: AppRequest = choice === 0 ? 'save-then-quit' : 'discard-then-quit'
+    if (quitAskFallback) return
+    // La question s'affiche dans la fenêtre : elle doit être visible.
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
+    const request: AppRequest = 'ask-then-quit'
     mainWindow.webContents.send(IPC.appRequest, request)
-    // Un enregistrement peut attendre un choix de fichier : pas de délai dans ce cas.
-    if (request === 'discard-then-quit') {
-      quitFallback = setTimeout(() => {
-        if (!quitting && !mainWindow.isDestroyed()) {
-          quitting = true
-          mainWindow.destroy()
-        }
-      }, QUIT_FALLBACK_MS)
-    }
+    quitAskFallback = setTimeout(() => {
+      quitAskFallback = null
+      if (!quitting && !mainWindow.isDestroyed()) askToSaveNatively(mainWindow)
+    }, QUIT_ASK_FALLBACK_MS)
   })
 
   const devUrl = process.env['ELECTRON_RENDERER_URL']
@@ -308,6 +333,9 @@ if (app.isPackaged && !app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(() => {
     app.setAppUserModelId('be.robin.pinout')
+    // Pas de barre de menus : l'application a son menu Fichier, et Alt ne doit rien faire
+    // apparaître (la touche sert au dessin).
+    Menu.setApplicationMenu(null)
     registerIpc()
     createWindow()
 

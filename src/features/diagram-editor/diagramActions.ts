@@ -1,9 +1,9 @@
 import type { useLibraryStore } from '@/features/library/store'
 import { describeError } from '@/features/schematic-editor/projectActions'
 import { syncDiagramAutosaves } from '@/io/autosave'
-import { bridge } from '@/io/bridge'
 import { chooseDiagramToSave, isDiagramPath, writeDiagram } from '@/io/diagramFiles'
 import { dirOf } from '@/io/paths'
+import { askToSave } from '@/ui/dialogs'
 import type { useDiagramStore } from './store'
 
 // Enregistrement d'un diagramme, partagé par l'éditeur (Ctrl+S, menu Fichier), la fermeture d'un
@@ -59,7 +59,7 @@ export async function closeDiagramTabAsking(
   const tab = store.tabs.find((candidate) => candidate.id === id)
   if (!tab) return false
   if (tab.dirty) {
-    const choice = await bridge().confirmSave(tab.name)
+    const choice = await askToSave(tab.name)
     if (choice === 'cancel') return false
     if (choice === 'save') {
       store.activateTab(id)
