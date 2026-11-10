@@ -8,12 +8,12 @@ import {
   gridLines,
   layoutLabel,
   layoutLinkLabel,
-  linkArrowHead,
   linkDashArray,
   linkLabelBox,
-  linkRenderPoints,
+  linkShape,
   linksFollowingNodes,
   moveSegment,
+  nearestOnPath,
   nearestSegmentIndex,
   NODE_SPECS,
   nodeBounds,
@@ -34,6 +34,7 @@ import {
   type DiagramNode,
   type GridPoint,
   type GridRect,
+  type LinkLabelSide,
   type LocalPoint,
   type NodeAnchor,
   type TextLabel
@@ -115,13 +116,12 @@ type Drag =
       moved: boolean
     }
   | {
-      /** Étiquette d'un lien qu'on déplace : décalage en quarts de cellule. */
+      /** Étiquette d'un lien qu'on fait glisser : elle longe le tracé, d'un côté ou de l'autre. */
       kind: 'label'
       linkId: string
-      start: LocalPoint
-      original: { dx: number; dy: number }
-      dx: number
-      dy: number
+      original: { at: number; side: LinkLabelSide }
+      at: number
+      side: LinkLabelSide
     }
 
 const drag = ref<Drag | null>(null)
@@ -246,7 +246,9 @@ const shown = computed<{ nodes: DiagramNode[]; links: DiagramLink[]; texts: Text
     return {
       ...doc,
       links: doc.links.map((link) =>
-        link.id === current.linkId ? { ...link, labelDx: current.dx, labelDy: current.dy } : link
+        link.id === current.linkId
+          ? { ...link, labelAt: current.at, labelSide: current.side }
+          : link
       )
     }
   }
@@ -255,31 +257,16 @@ const shown = computed<{ nodes: DiagramNode[]; links: DiagramLink[]; texts: Text
 
 // Liens
 
-function local(point: GridPoint): LocalPoint {
-  return { x: point[0], y: point[1] }
-}
-
 const renderedLinks = computed(() =>
   shown.value.links.map((link) => {
-    const points = linkRenderPoints(link, shown.value.nodes, lineWidth.value)
-    const heads: string[] = []
-    const first = points[0]
-    const second = points[1]
-    const last = points.at(-1)
-    const beforeLast = points.at(-2)
-    if (link.startArrow && first && second) {
-      const head = linkArrowHead(local(second), local(first), lineWidth.value)
-      if (head) heads.push(pointsAttribute(head))
-    }
-    if (link.endArrow && last && beforeLast) {
-      const head = linkArrowHead(local(beforeLast), local(last), lineWidth.value)
-      if (head) heads.push(pointsAttribute(head))
-    }
+    const shape = linkShape(link, shown.value.nodes, lineWidth.value)
     return {
       link,
-      d: wirePathData(points, look.value.cornerRadius),
+      // Le trait s'arrête dans ses pointes ; la sélection et la zone cliquable vont jusqu'au bout.
+      d: wirePathData(shape.stroke, look.value.cornerRadius),
+      reach: wirePathData(shape.points, look.value.cornerRadius),
       dash: linkDashArray(link, lineWidth.value),
-      heads,
+      heads: shape.heads.map(pointsAttribute),
       selected: selectedLinkSet.value.has(link.id),
       label: layoutLinkLabel(link, look.value),
       labelBox: linkLabelBox(link, look.value)
@@ -717,10 +704,9 @@ function onLabelDown(id: string, event: PointerEvent): void {
   drag.value = {
     kind: 'label',
     linkId: id,
-    start: toWorld(screenPoint(event)),
-    original: { dx: link.labelDx, dy: link.labelDy },
-    dx: link.labelDx,
-    dy: link.labelDy
+    original: { at: link.labelAt, side: link.labelSide },
+    at: link.labelAt,
+    side: link.labelSide
   }
   capture(event)
 }
@@ -894,10 +880,15 @@ function onPointerMove(event: PointerEvent): void {
         current.moved = true
       }
       break
-    case 'label':
-      current.dx = current.original.dx + Math.round((world.x - current.start.x) * 4)
-      current.dy = current.original.dy + Math.round((world.y - current.start.y) * 4)
+    case 'label': {
+      // L'étiquette suit le pointeur le long du lien et passe de l'autre côté quand il traverse le trait.
+      const link = store.doc.links.find((candidate) => candidate.id === current.linkId)
+      if (!link) break
+      const nearest = nearestOnPath(link.points, world)
+      current.at = nearest.at
+      current.side = nearest.side
       break
+    }
   }
 }
 
@@ -987,8 +978,8 @@ function onPointerUp(event: PointerEvent): void {
       }
       break
     case 'label':
-      if (current.dx !== current.original.dx || current.dy !== current.original.dy) {
-        store.setLinkLabelOffset(current.linkId, current.dx, current.dy)
+      if (current.at !== current.original.at || current.side !== current.original.side) {
+        store.setLinkLabelPlacement(current.linkId, current.at, current.side)
       }
       break
     case 'pan':
@@ -1151,7 +1142,7 @@ const cursorClass = computed(() => {
         <g :transform="`translate(${view.panX} ${view.panY}) scale(${cell})`">
           <g class="link-selections">
             <template v-for="item in renderedLinks" :key="item.link.id">
-              <path v-if="item.selected" :d="item.d" :stroke-width="lineWidth + 6 / cell" />
+              <path v-if="item.selected" :d="item.reach" :stroke-width="lineWidth + 6 / cell" />
             </template>
           </g>
 
@@ -1164,17 +1155,18 @@ const cursorClass = computed(() => {
                 :stroke-width="lineWidth"
                 :stroke-dasharray="item.dash"
               />
-              <polyline
+              <polygon
                 v-for="(head, h) in item.heads"
                 :key="`head${h}`"
                 class="link-head"
                 :points="head"
+                :fill="screenColor(item.link.color)"
                 :stroke="screenColor(item.link.color)"
-                :stroke-width="lineWidth"
+                :stroke-width="lineWidth * 0.5"
               />
               <path
                 class="link-hit"
-                :d="item.d"
+                :d="item.reach"
                 :stroke-width="hitWidth"
                 @pointerdown="onLinkDown(item.link.id, $event)"
                 @dblclick="onLinkDoubleClick(item.link.id, $event)"
@@ -1212,7 +1204,7 @@ const cursorClass = computed(() => {
                   :height="item.labelBox.h"
                 />
                 <text
-                  text-anchor="middle"
+                  :text-anchor="item.label.anchor"
                   :font-size="look.labelSize / look.cellPx"
                   :font-family="fontFamily"
                   :fill="screenColor(item.link.color)"
@@ -1482,15 +1474,16 @@ const cursorClass = computed(() => {
   stroke: var(--grid-major);
 }
 
-.link,
-.link-head {
+.link {
   fill: none;
   stroke-linejoin: round;
   pointer-events: none;
 }
 
+/* Pointe pleine : un filet de trait de sa couleur en adoucit les angles. */
 .link-head {
-  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
 }
 
 .link-hit {

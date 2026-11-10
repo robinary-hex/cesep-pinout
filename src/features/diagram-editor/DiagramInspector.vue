@@ -227,6 +227,20 @@ function setLinkLabel(event: Event): void {
   if (link) store.setLinkLabel(link.id, inputValue(event))
 }
 
+/** Position de l'étiquette le long du lien, en pourcentage de sa longueur. */
+function setLinkLabelAt(event: Event): void {
+  const link = singleLink.value
+  const percent = Number(inputValue(event))
+  if (link && Number.isFinite(percent)) {
+    store.setLinkLabelPlacement(link.id, percent / 100, link.labelSide)
+  }
+}
+
+function flipLinkLabel(): void {
+  const link = singleLink.value
+  if (link) store.setLinkLabelPlacement(link.id, link.labelAt, link.labelSide === 1 ? -1 : 1)
+}
+
 // Texte libre
 
 function setTextContent(event: Event): void {
@@ -492,6 +506,29 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
         <span>Étiquette</span>
         <textarea rows="2" :value="singleLink.label" @change="setLinkLabel" />
       </label>
+      <div v-if="singleLink.label.length > 0" class="row">
+        <label class="field">
+          <span title="Du départ (0) à l'arrivée (100) ; se règle aussi en la glissant">
+            Position le long du lien
+          </span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            :value="Math.round(singleLink.labelAt * 100)"
+            @change="setLinkLabelAt"
+          />
+        </label>
+        <button
+          type="button"
+          class="with-icon"
+          title="Met l'étiquette de l'autre côté du trait"
+          @click="flipLinkLabel"
+        >
+          <Icon name="swap" /> Côté
+        </button>
+      </div>
       <div class="field">
         <span>Couleur</span>
         <div class="swatches">
@@ -693,6 +730,11 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
 
 .field textarea {
   resize: vertical;
+}
+
+.field input[type='range'] {
+  padding: 0;
+  border: 0;
 }
 
 .field input[type='color'] {

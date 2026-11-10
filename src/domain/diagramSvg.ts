@@ -4,10 +4,9 @@ import { DIAGRAM_FONT_FAMILIES, type Diagram, type DiagramNode } from './diagram
 import {
   diagramBounds,
   layoutLinkLabel,
-  linkArrowHead,
   linkDashArray,
   linkLabelBox,
-  linkRenderPoints
+  linkShape
 } from './diagramLinks'
 import {
   DARK_GROUND,
@@ -23,7 +22,6 @@ import {
   type DiagramGround,
   type NodePart
 } from './diagramShapes'
-import type { GridPoint, LocalPoint } from './grid'
 import { layoutLabel } from './placement'
 import type { ExportSettings } from './settings'
 import { escapeXml, svgAttrs, type SvgExport } from './svg'
@@ -39,10 +37,6 @@ import { wirePathData } from './wires'
 /** Nombre du viewBox, arrondi au millième. */
 function num(value: number): string {
   return String(Math.round(value * 1000) / 1000)
-}
-
-function local(point: GridPoint): LocalPoint {
-  return { x: point[0], y: point[1] }
 }
 
 /** Fond sur lequel l'image est peinte : sa couleur, ou la page visée si elle est transparente. */
@@ -136,27 +130,24 @@ export function buildDiagramSvg(
 
   if (diagram.links.length > 0) {
     const linkParts = diagram.links.map((link) => {
-      const points = linkRenderPoints(link, diagram.nodes, lineWidth)
-      const heads: string[] = []
-      const first = points[0]
-      const second = points[1]
-      const last = points.at(-1)
-      const beforeLast = points.at(-2)
-      const head = (from: GridPoint, tip: GridPoint): void => {
-        const wings = linkArrowHead(local(from), local(tip), lineWidth)
-        if (wings) {
-          heads.push(
-            `<polyline ${svgAttrs({ points: pointsAttribute(wings), 'stroke-linecap': 'round' })}/>`
-          )
-        }
-      }
-      if (link.startArrow && first && second) head(second, first)
-      if (link.endArrow && last && beforeLast) head(beforeLast, last)
+      const shape = linkShape(link, diagram.nodes, lineWidth)
+      const color = inkColor(link.color, ground)
+      // Pointes pleines, de la couleur du lien ; un filet de trait en adoucit les angles.
+      const heads = shape.heads
+        .map(
+          (head) =>
+            `<polygon ${svgAttrs({
+              points: pointsAttribute(head),
+              fill: color,
+              'stroke-width': lineWidth * 0.5
+            })}/>`
+        )
+        .join('')
       const path = `<path ${svgAttrs({
-        d: wirePathData(points, style.cornerRadius),
+        d: wirePathData(shape.stroke, style.cornerRadius),
         'stroke-dasharray': linkDashArray(link, lineWidth)
       })}/>`
-      return `<g ${svgAttrs({ stroke: inkColor(link.color, ground) })}>${path}${heads.join('')}</g>`
+      return `<g ${svgAttrs({ stroke: color })}>${path}${heads}</g>`
     })
     parts.push(
       `<g ${svgAttrs({
@@ -198,15 +189,16 @@ export function buildDiagramSvg(
       fill: ground.paper,
       'fill-opacity': 0.85
     })}/>`
-    return [`${back}<text ${svgAttrs({ fill: inkColor(link.color, ground) })}>${spans}</text>`]
+    return [
+      `${back}<text ${svgAttrs({
+        'text-anchor': layout.anchor,
+        fill: inkColor(link.color, ground)
+      })}>${spans}</text>`
+    ]
   })
   if (labelParts.length > 0) {
     parts.push(
-      `<g ${svgAttrs({
-        class: 'link-labels',
-        'text-anchor': 'middle',
-        'font-size': labelSize
-      })}>${labelParts.join('')}</g>`
+      `<g ${svgAttrs({ class: 'link-labels', 'font-size': labelSize })}>${labelParts.join('')}</g>`
     )
   }
 

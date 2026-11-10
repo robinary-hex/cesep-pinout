@@ -1,4 +1,4 @@
-import { layoutTextBox, TEXT_LINE_HEIGHT, type TextBoxLayout } from './component'
+import { layoutTextBox, TEXT_LINE_HEIGHT, type TextAnchor, type TextBoxLayout } from './component'
 import type { PinRef } from './connectivity'
 import {
   NODE_SPECS,
@@ -171,12 +171,13 @@ export function linksFollowingNodes(
 
 /** Longueur d'une pointe de flèche, en cellules. */
 export function linkArrowSize(lineWidth: number): number {
-  return Math.max(0.8, lineWidth * 6)
+  return Math.max(1.1, lineWidth * 7)
 }
 
 /**
- * Pointe ouverte en V : aile, pointe, aile. La pointe est en `tip`, dans la direction
- * `from` → `tip` ; null si les deux points sont confondus.
+ * Pointe de flèche pleine et effilée : la pointe en `tip`, deux ailes en arrière, et un creux
+ * entre elles. Polygone aile, pointe, aile, creux, dans la direction `from` → `tip` ; null si les
+ * deux points sont confondus.
  */
 export function linkArrowHead(
   from: LocalPoint,
@@ -190,13 +191,15 @@ export function linkArrowHead(
   const ux = dx / length
   const uy = dy / length
   const size = linkArrowSize(lineWidth)
-  const half = size / 2
+  const half = size * 0.36
+  const notch = size * 0.72
   const baseX = tip.x - ux * size
   const baseY = tip.y - uy * size
   return [
     { x: baseX - uy * half, y: baseY + ux * half },
     { x: tip.x, y: tip.y },
-    { x: baseX + uy * half, y: baseY - ux * half }
+    { x: baseX + uy * half, y: baseY - ux * half },
+    { x: tip.x - ux * notch, y: tip.y - uy * notch }
   ]
 }
 
@@ -215,10 +218,11 @@ export function linkArrowGap(lineWidth: number): number {
 }
 
 /**
- * Sommets d'un lien tels qu'on le dessine. Ce sont ses sommets, à deux retraits près, purement
- * visuels : une extrémité qui arrive de face sur une barre s'arrête à son bord (demi-épaisseur de
- * la barre), et une extrémité qui porte une pointe de flèche s'arrête un peu avant, pour laisser
- * un espace devant la pointe. Un retrait ne dépasse jamais la moitié de son segment.
+ * Sommets d'un lien tels qu'on le voit, bouts des pointes compris. Ce sont ses sommets, à deux
+ * retraits près, purement visuels : une extrémité qui arrive de face sur une barre s'arrête à son
+ * bord (demi-épaisseur de la barre), et une extrémité qui porte une pointe de flèche s'arrête un
+ * peu avant, pour laisser un espace devant la pointe. Un retrait ne dépasse jamais la moitié de
+ * son segment.
  */
 export function linkRenderPoints(
   link: DiagramLink,
@@ -253,37 +257,139 @@ export function linkRenderPoints(
   return points
 }
 
-// Étiquette
+/** Ce qu'on dessine d'un lien. */
+export interface LinkShape {
+  /** Sommets visibles, bouts des pointes compris : pour la sélection et la zone cliquable. */
+  points: GridPoint[]
+  /** Sommets du trait : sous une pointe il s'arrête dedans, pour ne pas en dépasser. */
+  stroke: GridPoint[]
+  /** Pointes de flèche, un polygone chacune. */
+  heads: LocalPoint[][]
+}
 
-/** Point à mi-longueur d'un tracé, et sens du segment qui le porte. */
-export function pathMidpoint(points: readonly GridPoint[]): {
-  point: LocalPoint
-  horizontal: boolean
-} {
-  const first = points[0] ?? [0, 0]
+/** Trait et pointes d'un lien, en cellules ; l'écran et l'export dessinent la même chose. */
+export function linkShape(
+  link: DiagramLink,
+  nodes: readonly DiagramNode[],
+  lineWidth: number
+): LinkShape {
+  const points = linkRenderPoints(link, nodes, lineWidth)
+  const stroke = points.map((point): GridPoint => [point[0], point[1]])
+  const heads: LocalPoint[][] = []
+  const inset = linkArrowSize(lineWidth) * 0.6
+  const arrow = (tipIndex: number, fromIndex: number): void => {
+    const tip = points[tipIndex]
+    const from = points[fromIndex]
+    if (!tip || !from) return
+    const head = linkArrowHead({ x: from[0], y: from[1] }, { x: tip[0], y: tip[1] }, lineWidth)
+    if (!head) return
+    heads.push(head)
+    // Le trait s'arrête dans la pointe : son bout carré ne dépasse pas du bout effilé.
+    const length = Math.hypot(tip[0] - from[0], tip[1] - from[1])
+    const back = Math.min(inset, length * 0.9)
+    stroke[tipIndex] = [
+      tip[0] + ((from[0] - tip[0]) / length) * back,
+      tip[1] + ((from[1] - tip[1]) / length) * back
+    ]
+  }
+  if (link.startArrow) arrow(0, 1)
+  if (link.endArrow) arrow(points.length - 1, points.length - 2)
+  return { points, stroke, heads }
+}
+
+// Étiquette : elle longe le tracé, d'un côté ou de l'autre, toujours à la même distance du trait.
+
+/** Distance entre le trait et le bord de son étiquette, en cellules. */
+export const LINK_LABEL_GAP = 0.6
+/** Pas de la position d'une étiquette le long du tracé, en cellules. */
+const LABEL_STEP = 0.5
+
+function pathLength(points: readonly GridPoint[]): number {
   let total = 0
   for (let i = 1; i < points.length; i++) {
     const a = points[i - 1]
     const b = points[i]
     if (a && b) total += Math.abs(b[0] - a[0]) + Math.abs(b[1] - a[1])
   }
-  let remaining = total / 2
+  return total
+}
+
+/** Point d'un tracé à une fraction de sa longueur (0 = départ, 1 = arrivée), et sens du segment qui le porte. */
+export function pathPointAt(
+  points: readonly GridPoint[],
+  fraction: number
+): { point: LocalPoint; horizontal: boolean } {
+  const first = points[0] ?? [0, 0]
+  let remaining = pathLength(points) * Math.min(1, Math.max(0, fraction))
+  let last = { point: { x: first[0], y: first[1] }, horizontal: true }
   for (let i = 1; i < points.length; i++) {
     const a = points[i - 1]
     const b = points[i]
     if (!a || !b) continue
     const length = Math.abs(b[0] - a[0]) + Math.abs(b[1] - a[1])
     if (length === 0) continue
+    const horizontal = a[1] === b[1]
     if (remaining <= length) {
       const t = remaining / length
-      return {
-        point: { x: a[0] + (b[0] - a[0]) * t, y: a[1] + (b[1] - a[1]) * t },
-        horizontal: a[1] === b[1]
-      }
+      return { point: { x: a[0] + (b[0] - a[0]) * t, y: a[1] + (b[1] - a[1]) * t }, horizontal }
     }
     remaining -= length
+    last = { point: { x: b[0], y: b[1] }, horizontal }
   }
-  return { point: { x: first[0], y: first[1] }, horizontal: true }
+  return last
+}
+
+/** Point à mi-longueur d'un tracé, et sens du segment qui le porte. */
+export function pathMidpoint(points: readonly GridPoint[]): {
+  point: LocalPoint
+  horizontal: boolean
+} {
+  return pathPointAt(points, 0.5)
+}
+
+/** Côté d'un trait : -1 au-dessus (segment horizontal) ou à gauche (vertical), 1 en dessous ou à droite. */
+export type LinkLabelSide = -1 | 1
+
+/**
+ * Position le long d'un tracé la plus proche d'un point : fraction de la longueur (au pas d'une
+ * demi-cellule) et côté du trait où le point se trouve. C'est ce que donne le glisser d'une
+ * étiquette : elle suit le pointeur le long du lien et change de côté quand il traverse le trait.
+ */
+export function nearestOnPath(
+  points: readonly GridPoint[],
+  target: LocalPoint
+): { at: number; side: LinkLabelSide } {
+  const total = pathLength(points)
+  let best = { distance: Number.POSITIVE_INFINITY, along: 0, side: 1 as LinkLabelSide }
+  let before = 0
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]
+    const b = points[i]
+    if (!a || !b) continue
+    const length = Math.abs(b[0] - a[0]) + Math.abs(b[1] - a[1])
+    if (length === 0) continue
+    const horizontal = a[1] === b[1]
+    // Projection sur le segment, bornée à ses extrémités.
+    const offset = horizontal
+      ? Math.min(Math.max((target.x - a[0]) * Math.sign(b[0] - a[0]), 0), length)
+      : Math.min(Math.max((target.y - a[1]) * Math.sign(b[1] - a[1]), 0), length)
+    const x = horizontal ? a[0] + Math.sign(b[0] - a[0]) * offset : a[0]
+    const y = horizontal ? a[1] : a[1] + Math.sign(b[1] - a[1]) * offset
+    const distance = Math.hypot(target.x - x, target.y - y)
+    if (distance < best.distance) {
+      const across = horizontal ? target.y - a[1] : target.x - a[0]
+      best = { distance, along: before + offset, side: across < 0 ? -1 : 1 }
+    }
+    before += length
+  }
+  if (total === 0) return { at: 0.5, side: best.side }
+  const snapped = Math.min(total, Math.max(0, Math.round(best.along / LABEL_STEP) * LABEL_STEP))
+  return { at: snapped / total, side: best.side }
+}
+
+/** Côté d'une étiquette qu'on vient d'écrire : au-dessus d'un segment horizontal, à droite d'un vertical. */
+export function defaultLabelSide(points: readonly GridPoint[], at: number): LinkLabelSide {
+  return pathPointAt(points, at).horizontal ? -1 : 1
 }
 
 /** Largeur moyenne d'un caractère, en multiple de la hauteur de police. */
@@ -303,40 +409,56 @@ export function estimatedTextSize(
   }
 }
 
-/** Centre de l'étiquette d'un lien, en cellules. */
-export function linkLabelCenter(link: DiagramLink): LocalPoint {
-  const { point } = pathMidpoint(link.points)
-  return { x: point.x + link.labelDx / 4, y: point.y + link.labelDy / 4 }
-}
-
-/** Boîte estimée de l'étiquette d'un lien (sélection, limites du diagramme) ; null sans étiquette. */
-export function linkLabelBox(link: DiagramLink, style: DiagramStyle): Box | null {
-  if (link.label.length === 0) return null
-  const size = estimatedTextSize(link.label, style.labelSize / style.cellPx, style.font)
-  const center = linkLabelCenter(link)
-  return { x: center.x - size.w / 2, y: center.y - size.h / 2, w: size.w, h: size.h }
-}
-
-/** Lignes de l'étiquette d'un lien, centrées sur son point ; null sans étiquette. */
-export function layoutLinkLabel(link: DiagramLink, style: DiagramStyle): TextBoxLayout | null {
-  const box = linkLabelBox(link, style)
-  return box ? layoutTextBox(box, link.label, style.labelSize / style.cellPx, 'middle') : null
+/** Où se pose l'étiquette d'un lien : sa boîte, et de quel bord son texte part. */
+export interface LinkLabelPlacement {
+  /** Boîte du texte ; sa largeur est estimée, mais le bord tourné vers le trait est exact. */
+  box: Box
+  anchor: TextAnchor
 }
 
 /**
- * Décalage d'une étiquette qu'on vient d'écrire, en quarts de cellule : au-dessus d'un segment
- * horizontal, à droite d'un segment vertical, sans toucher le trait.
+ * Place de l'étiquette d'un lien, toujours à `LINK_LABEL_GAP` du trait : centrée au-dessus ou en
+ * dessous d'un segment horizontal ; à droite d'un segment vertical (le texte part du trait) ou à
+ * gauche (il y finit). Null sans étiquette.
  */
-export function defaultLabelOffset(
-  points: readonly GridPoint[],
-  text: string,
+export function linkLabelPlacement(
+  link: DiagramLink,
   style: DiagramStyle
-): { dx: number; dy: number } {
-  const size = estimatedTextSize(text, style.labelSize / style.cellPx, style.font)
-  const gap = 0.6
-  return pathMidpoint(points).horizontal
-    ? { dx: 0, dy: -Math.round((size.h / 2 + gap) * 4) }
-    : { dx: Math.round((size.w / 2 + gap) * 4), dy: 0 }
+): LinkLabelPlacement | null {
+  if (link.label.length === 0) return null
+  const size = estimatedTextSize(link.label, style.labelSize / style.cellPx, style.font)
+  const { point, horizontal } = pathPointAt(link.points, link.labelAt)
+  const gap = LINK_LABEL_GAP + style.lineWidth / 2
+  if (horizontal) {
+    const y = link.labelSide < 0 ? point.y - gap - size.h : point.y + gap
+    return { box: { x: point.x - size.w / 2, y, w: size.w, h: size.h }, anchor: 'middle' }
+  }
+  const x = link.labelSide < 0 ? point.x - gap - size.w : point.x + gap
+  return {
+    box: { x, y: point.y - size.h / 2, w: size.w, h: size.h },
+    anchor: link.labelSide < 0 ? 'end' : 'start'
+  }
+}
+
+/** Boîte de l'étiquette d'un lien (sélection, limites du diagramme) ; null sans étiquette. */
+export function linkLabelBox(link: DiagramLink, style: DiagramStyle): Box | null {
+  return linkLabelPlacement(link, style)?.box ?? null
+}
+
+/** Lignes de l'étiquette d'un lien et leur alignement ; null sans étiquette. */
+export function layoutLinkLabel(
+  link: DiagramLink,
+  style: DiagramStyle
+): (TextBoxLayout & { anchor: TextAnchor }) | null {
+  const placement = linkLabelPlacement(link, style)
+  if (!placement) return null
+  const layout = layoutTextBox(
+    placement.box,
+    link.label,
+    style.labelSize / style.cellPx,
+    placement.anchor
+  )
+  return { ...layout, anchor: placement.anchor }
 }
 
 // Limites

@@ -82,7 +82,7 @@ function editLinkLabel(id: string): void {
     label: 'Étiquette',
     value: link.label,
     placeholder: 'vrai, [sinon], topic : message…',
-    hint: 'Elle se pose à côté du trait et se déplace en la glissant. Vide : aucune.',
+    hint: 'Elle longe le trait : glisse-la le long du lien, ou de l’autre côté. Vide : aucune.',
     onSubmit: (value) => store.setLinkLabel(id, value)
   }
 }

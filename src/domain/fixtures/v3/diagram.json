@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 3,
+  "name": "Étiquettes le long des liens",
+  "style": {
+    "cellPx": 10,
+    "lineWidth": 0.15,
+    "cornerRadius": 0.8,
+    "nodeRadius": 1,
+    "font": "mono",
+    "titleSize": 14,
+    "subtitleSize": 12,
+    "labelSize": 12
+  },
+  "nodes": [
+    {
+      "id": "n1",
+      "shape": "start",
+      "x": 7,
+      "y": 0,
+      "w": 2,
+      "h": 2,
+      "title": "",
+      "subtitle": "",
+      "color": "#000000",
+      "fill": "none",
+      "font": null,
+      "bold": false,
+      "italic": false,
+      "underline": false,
+      "strike": false,
+      "textScale": 1
+    },
+    {
+      "id": "n2",
+      "shape": "diamond",
+      "x": 0,
+      "y": 6,
+      "w": 16,
+      "h": 8,
+      "title": "condition",
+      "subtitle": "bouton == HIGH",
+      "color": "#c2255c",
+      "fill": "tint",
+      "font": null,
+      "bold": false,
+      "italic": false,
+      "underline": false,
+      "strike": false,
+      "textScale": 1
+    },
+    {
+      "id": "n3",
+      "shape": "rounded",
+      "x": 0,
+      "y": 20,
+      "w": 16,
+      "h": 6,
+      "title": "instructions",
+      "subtitle": "// attendre",
+      "color": "#d9730d",
+      "fill": "tint",
+      "font": "sans",
+      "bold": true,
+      "italic": false,
+      "underline": true,
+      "strike": false,
+      "textScale": 1.5
+    },
+    {
+      "id": "n4",
+      "shape": "bar",
+      "x": 0,
+      "y": 30,
+      "w": 16,
+      "h": 0,
+      "title": "",
+      "subtitle": "",
+      "color": "#000000",
+      "fill": "none",
+      "font": null,
+      "bold": false,
+      "italic": false,
+      "underline": false,
+      "strike": false,
+      "textScale": 1
+    }
+  ],
+  "links": [
+    {
+      "id": "l1",
+      "points": [
+        [8, 2],
+        [8, 6]
+      ],
+      "color": "#000000",
+      "dash": "solid",
+      "startArrow": false,
+      "endArrow": true,
+      "label": "",
+      "labelAt": 0.5,
+      "labelSide": 1
+    },
+    {
+      "id": "l2",
+      "points": [
+        [8, 14],
+        [8, 20]
+      ],
+      "color": "#000000",
+      "dash": "solid",
+      "startArrow": false,
+      "endArrow": true,
+      "label": "vrai",
+      "labelAt": 0.25,
+      "labelSide": 1
+    },
+    {
+      "id": "l3",
+      "points": [
+        [0, 23],
+        [-4, 23],
+        [-4, 10],
+        [0, 10]
+      ],
+      "color": "#d62828",
+      "dash": "dashed",
+      "startArrow": false,
+      "endArrow": true,
+      "label": "",
+      "labelAt": 0.5,
+      "labelSide": 1
+    }
+  ],
+  "texts": [
+    {
+      "id": "t1",
+      "x": 20,
+      "y": 8,
+      "w": 8,
+      "h": 2,
+      "anchor": "start",
+      "text": "tant que",
+      "size": 12,
+      "bold": false,
+      "italic": true,
+      "underline": false,
+      "strike": false,
+      "vertical": false,
+      "color": "#000000"
+    }
+  ],
+  "customColors": ["#c2255c"]
+}

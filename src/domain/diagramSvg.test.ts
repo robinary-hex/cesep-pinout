@@ -32,13 +32,16 @@ describe('export SVG d’un diagramme', () => {
     if (!result) throw new Error('export vide')
     const parsed = new DOMParser().parseFromString(result.svg, 'image/svg+xml')
     const links = parsed.querySelectorAll('g.links > g')
-    // Chaque lien a une pointe ouverte à l'arrivée ; le lien de retour est rouge et pointillé.
-    expect(parsed.querySelectorAll('g.links polyline')).toHaveLength(3)
+    // Chaque lien a une pointe pleine à l'arrivée ; le lien de retour est rouge et pointillé.
+    expect(parsed.querySelectorAll('g.links polygon')).toHaveLength(3)
+    expect(parsed.querySelector('g.links polygon')?.getAttribute('fill')).toBe('#000000')
     expect(links[2]?.getAttribute('stroke')).toBe('#d62828')
     expect(links[2]?.querySelector('path')?.getAttribute('stroke-dasharray')).toBe('0.6 0.45')
     expect(links[0]?.querySelector('path')?.getAttribute('stroke-dasharray')).toBeNull()
     // Le lien qui arrive sur le losange s'arrête à sa pointe ; l'étiquette « vrai » est posée à côté.
     expect(parsed.querySelector('g.link-labels text')?.textContent).toBe('vrai')
+    // À droite d'un lien vertical : le texte part du trait.
+    expect(parsed.querySelector('g.link-labels text')?.getAttribute('text-anchor')).toBe('start')
     expect(parsed.querySelector('g.texts text')?.getAttribute('font-style')).toBe('italic')
     expect(parsed.querySelector('g.texts text')?.textContent).toBe('tant que')
   })
@@ -107,10 +110,11 @@ describe('export SVG d’un diagramme', () => {
     const result = buildDiagramSvg(diagram, DEFAULT_EXPORT)
     if (!result) throw new Error('export vide')
     const parsed = new DOMParser().parseFromString(result.svg, 'image/svg+xml')
-    // Premier lien : de (8, 2) à (8, 6), pointe à l'arrivée ; le trait s'arrête à y = 5,6.
+    // Premier lien : de (8, 2) à (8, 6), pointe à l'arrivée. La pointe finit à y = 5,6, sans
+    // toucher le nœud ; le trait s'arrête dedans, à 4,94.
     const first = parsed.querySelectorAll('g.links > g')[0]
-    expect(first?.querySelector('path')?.getAttribute('d')).toBe('M 8 2 L 8 5.6')
-    expect(first?.querySelector('polyline')?.getAttribute('points')).toContain('8,5.6')
+    expect(first?.querySelector('path')?.getAttribute('d')).toBe('M 8 2 L 8 4.94')
+    expect(first?.querySelector('polygon')?.getAttribute('points')).toContain('8,5.6')
   })
 
   it('n’a pas de fond en transparent et retourne null pour un diagramme vide', () => {

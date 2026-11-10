@@ -244,7 +244,7 @@ describe('diagramme : liens', () => {
     ])
   })
 
-  it('pose une étiquette à côté du trait, la déplace, la retire ; inverse le sens', () => {
+  it('pose une étiquette le long du lien, la déplace, la retire ; inverse le sens', () => {
     const store = useDiagramStore()
     const id = store.addLink([
       [0, 0],
@@ -252,12 +252,18 @@ describe('diagramme : liens', () => {
     ])
     if (!id) throw new Error('lien attendu')
     store.setLinkLabel(id, '  vrai ')
-    expect(store.doc.links[0]?.label).toBe('vrai')
-    expect(store.doc.links[0]?.labelDx).toBeGreaterThan(0)
-    store.setLinkLabelOffset(id, -8, 2)
+    // Au milieu d'un lien vertical, à droite.
+    expect(store.doc.links[0]).toMatchObject({ label: 'vrai', labelAt: 0.5, labelSide: 1 })
+    store.setLinkLabelPlacement(id, 0.2, -1)
+    expect(store.undoLabel).toBe('Déplacer l’étiquette du lien')
     store.setLinkLabel(id, 'faux')
     // Changer le texte ne déplace pas une étiquette déjà posée.
-    expect(store.doc.links[0]).toMatchObject({ label: 'faux', labelDx: -8, labelDy: 2 })
+    expect(store.doc.links[0]).toMatchObject({ label: 'faux', labelAt: 0.2, labelSide: -1 })
+    // La position reste entre le départ et l'arrivée.
+    store.setLinkLabelPlacement(id, 1.4, -1)
+    expect(store.doc.links[0]?.labelAt).toBe(1)
+    store.setLinkLabelPlacement(id, 0.2, -1)
+    // Inverser le sens : l'étiquette reste au même endroit du tracé.
     store.reverseLinks([id])
     expect(store.doc.links[0]).toMatchObject({
       points: [
@@ -265,7 +271,9 @@ describe('diagramme : liens', () => {
         [0, 0]
       ],
       startArrow: true,
-      endArrow: false
+      endArrow: false,
+      labelAt: 0.8,
+      labelSide: -1
     })
     store.setLinkLabel(id, '')
     expect(store.doc.links[0]?.label).toBe('')

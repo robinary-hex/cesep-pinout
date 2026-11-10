@@ -203,7 +203,7 @@ describe('canevas du diagramme : liens', () => {
     ])
   })
 
-  it('montre l’étiquette d’un lien et la déplace en la glissant', async () => {
+  it('montre l’étiquette d’un lien ; la glisser la fait longer le trait et changer de côté', async () => {
     const store = useDiagramStore()
     const id = store.addLink([
       [0, 0],
@@ -211,16 +211,20 @@ describe('canevas du diagramme : liens', () => {
     ])
     if (!id) throw new Error('lien attendu')
     store.setLinkLabel(id, 'vrai')
-    const before = store.doc.links[0]?.labelDx ?? 0
     const wrapper = mount(DiagramCanvas)
     const svg = wrapper.get('svg.diagram')
     const label = wrapper.get('.link-label')
     expect(label.text()).toBe('vrai')
-    await fire(label, 'pointerdown', at(store, 3, 5))
-    await fire(svg, 'pointermove', at(store, 5, 4))
-    await fire(svg, 'pointerup', at(store, 5, 4))
-    // Deux cellules à droite, une vers le haut : en quarts de cellule.
-    expect(store.doc.links[0]).toMatchObject({ labelDx: before + 8, labelDy: -4 })
+    // À droite du lien vertical : le texte part du trait.
+    expect(label.get('text').attributes('text-anchor')).toBe('start')
+    await fire(label, 'pointerdown', at(store, 2, 5))
+    // Vers le haut et de l'autre côté du trait : l'aperçu suit, le texte finit maintenant au trait.
+    await fire(svg, 'pointermove', at(store, -3, 2.2))
+    expect(wrapper.get('.link-label text').attributes('text-anchor')).toBe('end')
+    await fire(svg, 'pointerup', at(store, -3, 2.2))
+    // 2 cellules sur 10 depuis le départ (au pas d'une demi-cellule), côté gauche.
+    expect(store.doc.links[0]).toMatchObject({ labelAt: 0.2, labelSide: -1 })
     expect(store.selectedLinks).toEqual([id])
+    expect(store.undoLabel).toBe('Déplacer l’étiquette du lien')
   })
 })

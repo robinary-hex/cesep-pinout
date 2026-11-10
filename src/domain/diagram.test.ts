@@ -13,16 +13,19 @@ import {
   type DiagramNode
 } from './diagram'
 import {
-  defaultLabelOffset,
+  defaultLabelSide,
   diagramBounds,
   linkArrowGap,
   linkArrowHead,
-  linkLabelCenter,
+  linkLabelPlacement,
   linkRenderPoints,
+  linkShape,
   linksFollowingNodes,
   movedAnchor,
+  nearestOnPath,
   nodeAnchors,
-  pathMidpoint
+  pathMidpoint,
+  pathPointAt
 } from './diagramLinks'
 import {
   DARK_GROUND,
@@ -38,7 +41,8 @@ import {
   nodeSizeForText
 } from './diagramShapes'
 import fixtureV1 from './fixtures/v1/diagram.json?raw'
-import fixture from './fixtures/v2/diagram.json?raw'
+import fixtureV2 from './fixtures/v2/diagram.json?raw'
+import fixture from './fixtures/v3/diagram.json?raw'
 import { FileFormatError } from './migrations'
 import { parseDiagram, serializeDiagram } from './serialize'
 
@@ -75,8 +79,8 @@ function link(points: [number, number][], patch: Partial<DiagramLink> = {}): Dia
     startArrow: false,
     endArrow: true,
     label: '',
-    labelDx: 0,
-    labelDy: 0,
+    labelAt: 0.5,
+    labelSide: 1,
     ...patch
   }
 }
@@ -84,14 +88,19 @@ function link(points: [number, number][], patch: Partial<DiagramLink> = {}): Dia
 describe('diagramme : format', () => {
   it('lit et réécrit un fichier sans rien perdre', () => {
     const diagram = parseDiagram(fixture)
-    expect(diagram.schemaVersion).toBe(2)
+    expect(diagram.schemaVersion).toBe(3)
     expect(diagram.nodes.map((entry) => entry.shape)).toEqual([
       'start',
       'diamond',
       'rounded',
       'bar'
     ])
-    expect(diagram.links[1]).toMatchObject({ label: 'vrai', labelDx: 10, endArrow: true })
+    expect(diagram.links[1]).toMatchObject({
+      label: 'vrai',
+      labelAt: 0.25,
+      labelSide: 1,
+      endArrow: true
+    })
     expect(diagram.texts[0]?.text).toBe('tant que')
     expect(parseDiagram(serializeDiagram(diagram))).toEqual(diagram)
   })
@@ -120,7 +129,7 @@ describe('diagramme : format', () => {
   it('v1 → v2 : chaque nœud reçoit un style de texte qui garde son allure', () => {
     // Diagramme en chasse fixe : le titre y était maigre, il le reste.
     const mono = parseDiagram(fixtureV1)
-    expect(mono.schemaVersion).toBe(2)
+    expect(mono.schemaVersion).toBe(3)
     expect(mono.nodes[1]).toMatchObject({
       title: 'condition',
       font: null,
@@ -134,6 +143,19 @@ describe('diagramme : format', () => {
     const raw = JSON.parse(fixtureV1) as { style: { font: string } }
     raw.style.font = 'sans'
     expect(parseDiagram(JSON.stringify(raw)).nodes[1]?.bold).toBe(true)
+  })
+
+  it('v2 → v3 : l’étiquette d’un lien revient au milieu du tracé, du côté où elle était', () => {
+    const diagram = parseDiagram(fixtureV2)
+    expect(diagram.schemaVersion).toBe(3)
+    // « vrai » était décalée vers la droite d'un lien vertical : elle reste à droite.
+    expect(diagram.links[1]).toMatchObject({ label: 'vrai', labelAt: 0.5, labelSide: 1 })
+    expect('labelDx' in (diagram.links[1] ?? {})).toBe(false)
+    // À gauche d'un lien vertical, ou au-dessus d'un horizontal : l'autre côté.
+    const raw = JSON.parse(fixtureV2) as { links: { labelDx: number; labelDy: number }[] }
+    const second = raw.links[1]
+    if (second) second.labelDx = -6
+    expect(parseDiagram(JSON.stringify(raw)).links[1]?.labelSide).toBe(-1)
   })
 
   it('pose un nœud neuf au style de texte par défaut du diagramme', () => {
@@ -414,13 +436,37 @@ describe('diagramme : accroche des liens', () => {
 })
 
 describe('diagramme : dessin des liens', () => {
-  it('ouvre une pointe en V vers l’arrivée', () => {
+  it('dessine une pointe pleine et effilée vers l’arrivée', () => {
     const head = linkArrowHead({ x: 0, y: 0 }, { x: 0, y: 5 }, 0.15)
-    expect(head).toHaveLength(3)
+    // Aile, pointe, aile, creux : 1,1 de long, 0,79 de large, creux à 0,79 de la pointe.
+    expect(head).toHaveLength(4)
     expect(head?.[1]).toEqual({ x: 0, y: 5 })
-    expect(head?.[0]?.y).toBeCloseTo(4.1)
-    expect(Math.abs(head?.[0]?.x ?? 0)).toBeCloseTo(0.45)
+    expect(head?.[0]?.y).toBeCloseTo(3.9)
+    expect(head?.[0]?.x).toBeCloseTo(-0.396)
+    expect(head?.[2]?.x).toBeCloseTo(0.396)
+    expect(head?.[3]?.x).toBeCloseTo(0)
+    expect(head?.[3]?.y).toBeCloseTo(4.208)
     expect(linkArrowHead({ x: 1, y: 1 }, { x: 1, y: 1 }, 0.15)).toBeNull()
+  })
+
+  it('arrête le trait dans sa pointe, et garde le bout visible pour la sélection', () => {
+    const arriving = link([
+      [4, 4],
+      [4, 10]
+    ])
+    const shape = linkShape(arriving, [], 0.15)
+    // La pointe finit 0,4 avant le sommet ; le trait s'arrête 0,66 plus tôt, dans la pointe.
+    expect(shape.points.at(-1)).toEqual([4, 9.6])
+    expect(shape.stroke.at(-1)?.[1]).toBeCloseTo(8.94)
+    expect(shape.stroke[0]).toEqual([4, 4])
+    expect(shape.heads).toHaveLength(1)
+    expect(shape.heads[0]?.[1]).toEqual({ x: 4, y: 9.6 })
+    // Sans pointe : rien à dessiner de plus, le trait va au bout.
+    const plain = linkShape({ ...arriving, endArrow: false }, [], 0.15)
+    expect(plain.heads).toEqual([])
+    expect(plain.stroke).toEqual(arriving.points)
+    // Deux pointes : une à chaque bout.
+    expect(linkShape({ ...arriving, startArrow: true }, [], 0.15).heads).toHaveLength(2)
   })
 
   it('laisse un petit espace devant une pointe de flèche, au dessin seulement', () => {
@@ -485,7 +531,7 @@ describe('diagramme : dessin des liens', () => {
     expect(linkRenderPoints(arriving, [], 0.15)).toEqual(arriving.points)
   })
 
-  it('place l’étiquette depuis le milieu du tracé', () => {
+  it('repère un point le long du tracé, et le point du tracé le plus proche d’un autre', () => {
     const points: [number, number][] = [
       [0, 0],
       [0, 4],
@@ -493,18 +539,54 @@ describe('diagramme : dessin des liens', () => {
     ]
     // 12 de long : le milieu est à 6, donc 2 cellules après le coude, sur le segment horizontal.
     expect(pathMidpoint(points)).toEqual({ point: { x: 2, y: 4 }, horizontal: true })
-    expect(linkLabelCenter(link(points, { label: 'oui', labelDx: 4, labelDy: -6 }))).toEqual({
-      x: 3,
-      y: 2.5
-    })
-    // Par défaut : au-dessus d'un segment horizontal, à droite d'un vertical.
-    expect(defaultLabelOffset(points, 'oui', style).dx).toBe(0)
-    expect(defaultLabelOffset(points, 'oui', style).dy).toBeLessThan(0)
-    const vertical: [number, number][] = [
-      [0, 0],
-      [0, 6]
-    ]
-    expect(defaultLabelOffset(vertical, 'oui', style).dx).toBeGreaterThan(0)
+    expect(pathPointAt(points, 0.25)).toEqual({ point: { x: 0, y: 3 }, horizontal: false })
+    expect(pathPointAt(points, 0)).toEqual({ point: { x: 0, y: 0 }, horizontal: false })
+    expect(pathPointAt(points, 1)).toEqual({ point: { x: 8, y: 4 }, horizontal: true })
+    // Au-dessus du segment horizontal, à 3 cellules du coude : 7 sur 12, côté « au-dessus ».
+    expect(nearestOnPath(points, { x: 3, y: 3 })).toEqual({ at: 7 / 12, side: -1 })
+    // À droite du segment vertical.
+    expect(nearestOnPath(points, { x: 1, y: 2 })).toEqual({ at: 2 / 12, side: 1 })
+    // La position se cale sur la demi-cellule ; au-delà du bout, elle s'y arrête.
+    expect(nearestOnPath(points, { x: 5.3, y: 6 })).toEqual({ at: 9.5 / 12, side: 1 })
+    expect(nearestOnPath(points, { x: 20, y: 4.5 })).toEqual({ at: 1, side: 1 })
+  })
+
+  it('tient l’étiquette à distance fixe du trait, d’un côté ou de l’autre', () => {
+    const vertical = link(
+      [
+        [0, 0],
+        [0, 10]
+      ],
+      { label: 'vrai' }
+    )
+    // À droite d'un lien vertical : le texte part du trait, 0,6 cellule plus la demi-épaisseur.
+    const right = linkLabelPlacement(vertical, style)
+    expect(right?.anchor).toBe('start')
+    expect(right?.box.x).toBeCloseTo(0.675)
+    expect(right?.box.y).toBeCloseTo(5 - 0.72)
+    // À gauche : il finit au trait, à la même distance.
+    const left = linkLabelPlacement({ ...vertical, labelSide: -1 }, style)
+    expect(left?.anchor).toBe('end')
+    expect((left?.box.x ?? 0) + (left?.box.w ?? 0)).toBeCloseTo(-0.675)
+    // Le long du lien : même distance, plus haut.
+    expect(linkLabelPlacement({ ...vertical, labelAt: 0.2 }, style)?.box.y).toBeCloseTo(2 - 0.72)
+    const horizontal = link(
+      [
+        [0, 0],
+        [10, 0]
+      ],
+      { label: 'oui', labelSide: -1 }
+    )
+    // Au-dessus d'un lien horizontal : centrée, le bas du texte à distance du trait.
+    const above = linkLabelPlacement(horizontal, style)
+    expect(above?.anchor).toBe('middle')
+    expect((above?.box.x ?? 0) + (above?.box.w ?? 0) / 2).toBeCloseTo(5)
+    expect((above?.box.y ?? 0) + (above?.box.h ?? 0)).toBeCloseTo(-0.675)
+    expect(linkLabelPlacement({ ...horizontal, labelSide: 1 }, style)?.box.y).toBeCloseTo(0.675)
+    expect(linkLabelPlacement({ ...horizontal, label: '' }, style)).toBeNull()
+    // Une nouvelle étiquette : au-dessus d'un segment horizontal, à droite d'un vertical.
+    expect(defaultLabelSide(horizontal.points, 0.5)).toBe(-1)
+    expect(defaultLabelSide(vertical.points, 0.5)).toBe(1)
   })
 
   it('mesure le diagramme entier, étiquettes et textes compris', () => {

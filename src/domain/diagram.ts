@@ -9,7 +9,7 @@ import { textLabelSchema, wireGeometryProblem } from './project'
 // verticaux) ; des textes libres. Rien ne dit dans le fichier qu'un lien est accroché à un nœud :
 // cela se déduit de la géométrie (une extrémité posée sur un point d'accroche du nœud).
 
-export const DIAGRAM_SCHEMA_VERSION = 2
+export const DIAGRAM_SCHEMA_VERSION = 3
 
 /** Formes du catalogue, dans l'ordre de la bibliothèque. */
 export const NODE_SHAPES = [
@@ -191,11 +191,15 @@ export const diagramLinkSchema = z
     dash: linkDashSchema,
     startArrow: z.boolean(),
     endArrow: z.boolean(),
-    /** Étiquette posée près du lien ; vide = aucune. */
+    /** Étiquette du lien ; vide = aucune. Elle longe le tracé, à distance fixe du trait. */
     label: z.string(),
-    /** Décalage du centre de l'étiquette depuis le milieu du tracé, en quarts de cellule. */
-    labelDx: z.number().int(),
-    labelDy: z.number().int()
+    /** Où elle se tient le long du tracé : fraction de sa longueur, de 0 (départ) à 1 (arrivée). */
+    labelAt: z.number().min(0).max(1),
+    /**
+     * De quel côté du trait : -1 au-dessus d'un segment horizontal ou à gauche d'un vertical,
+     * 1 en dessous ou à droite.
+     */
+    labelSide: z.union([z.literal(-1), z.literal(1)])
   })
   .superRefine((link, ctx) => {
     const problem = wireGeometryProblem(link.points)

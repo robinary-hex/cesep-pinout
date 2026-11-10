@@ -5,7 +5,7 @@ import {
   createEmptyDiagram,
   createNode,
   DEFAULT_VIEW,
-  defaultLabelOffset,
+  defaultLabelSide,
   diagramAnchors,
   diagramBounds,
   fittedNodeSize,
@@ -34,6 +34,7 @@ import {
   type GridPoint,
   type GridRect,
   type LinkDash,
+  type LinkLabelSide,
   type NodeFill,
   type NodeShape,
   type NodeTextStyle,
@@ -587,8 +588,8 @@ export const useDiagramStore = defineStore('diagram', () => {
       startArrow: linkStartArrow.value,
       endArrow: linkEndArrow.value,
       label: '',
-      labelDx: 0,
-      labelDy: 0
+      labelAt: 0.5,
+      labelSide: 1
     }
     apply('Tracer un lien', (draft) => {
       draft.links.push(castDraft(link))
@@ -648,33 +649,36 @@ export const useDiagramStore = defineStore('diagram', () => {
     })
   }
 
-  /** Texte de l'étiquette d'un lien ; vide la retire. Une première étiquette se place à côté du trait. */
+  /**
+   * Texte de l'étiquette d'un lien ; vide la retire. Une première étiquette se met au milieu du
+   * lien, au-dessus d'un segment horizontal ou à droite d'un vertical.
+   */
   function setLinkLabel(id: string, text: string): void {
     const link = doc.value.links.find((candidate) => candidate.id === id)
     if (!link) return
     const trimmed = text.trim()
-    const offset =
-      link.label.length === 0 && trimmed.length > 0
-        ? defaultLabelOffset(link.points, trimmed, style.value)
-        : null
+    const first = link.label.length === 0 && trimmed.length > 0
     apply(trimmed.length > 0 ? 'Étiquette du lien' : 'Retirer l’étiquette du lien', (draft) => {
       const target = draft.links.find((candidate) => candidate.id === id)
       if (!target) return
       target.label = trimmed
-      if (offset) {
-        target.labelDx = offset.dx
-        target.labelDy = offset.dy
+      if (first) {
+        target.labelAt = 0.5
+        target.labelSide = defaultLabelSide(link.points, 0.5)
       }
     })
   }
 
-  /** Décalage de l'étiquette depuis le milieu du tracé, en quarts de cellule. */
-  function setLinkLabelOffset(id: string, dx: number, dy: number): void {
+  /**
+   * Place de l'étiquette le long du lien : fraction de sa longueur (0 au départ, 1 à l'arrivée)
+   * et côté du trait. Elle reste toujours à la même distance du trait.
+   */
+  function setLinkLabelPlacement(id: string, at: number, side: LinkLabelSide): void {
     apply('Déplacer l’étiquette du lien', (draft) => {
       const link = draft.links.find((candidate) => candidate.id === id)
       if (!link) return
-      link.labelDx = Math.round(dx)
-      link.labelDy = Math.round(dy)
+      link.labelAt = Math.min(1, Math.max(0, at))
+      link.labelSide = side
     })
   }
 
@@ -685,6 +689,8 @@ export const useDiagramStore = defineStore('diagram', () => {
       for (const link of draft.links) {
         if (!ids.includes(link.id)) continue
         link.points.reverse()
+        // L'étiquette reste au même endroit du tracé.
+        link.labelAt = 1 - link.labelAt
         const start = link.startArrow
         link.startArrow = link.endArrow
         link.endArrow = start
@@ -1044,7 +1050,7 @@ export const useDiagramStore = defineStore('diagram', () => {
     setLinkPoints,
     setLinksStyle,
     setLinkLabel,
-    setLinkLabelOffset,
+    setLinkLabelPlacement,
     reverseLinks,
     addText,
     addTextBox,

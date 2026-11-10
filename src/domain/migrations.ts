@@ -1,5 +1,6 @@
 import { COMPONENT_SCHEMA_VERSION } from './component'
 import { DIAGRAM_SCHEMA_VERSION } from './diagram'
+import { pathPointAt } from './diagramLinks'
 import { DEFAULT_COMPONENT_STROKE, DEFAULT_END_LABEL_SIZE } from './profile'
 import { PROJECT_SCHEMA_VERSION } from './project'
 import { DEFAULT_AUTOSAVE_SECONDS, DEFAULT_EXPORT, SETTINGS_SCHEMA_VERSION } from './settings'
@@ -462,9 +463,39 @@ function migrateDiagramV1(raw: RawRecord): RawRecord {
   }
 }
 
+// Diagramme v2 → v3 : l'étiquette d'un lien n'est plus posée librement, elle longe le tracé. Elle
+// revient au milieu du lien, du côté où son ancien décalage la mettait.
+
+function migrateDiagramV2(raw: RawRecord): RawRecord {
+  const links = Array.isArray(raw['links']) ? raw['links'] : []
+  return {
+    ...raw,
+    links: links.map((link) => {
+      if (!isRecord(link)) return link
+      const { labelDx, labelDy, ...rest } = link
+      const points = Array.isArray(link['points']) ? link['points'] : []
+      const wellFormed = points.every(
+        (point) =>
+          Array.isArray(point) &&
+          point.length === 2 &&
+          typeof point[0] === 'number' &&
+          typeof point[1] === 'number'
+      )
+      const horizontal = wellFormed
+        ? pathPointAt(points as [number, number][], 0.5).horizontal
+        : true
+      const offset = horizontal ? labelDy : labelDx
+      // Par défaut : au-dessus d'un segment horizontal, à droite d'un vertical.
+      const fallback = horizontal ? -1 : 1
+      const side = typeof offset === 'number' && offset !== 0 ? Math.sign(offset) : fallback
+      return { ...rest, labelAt: 0.5, labelSide: side }
+    })
+  }
+}
+
 export const diagramMigrations: MigrationTable = {
   current: DIAGRAM_SCHEMA_VERSION,
-  steps: { 1: migrateDiagramV1 }
+  steps: { 1: migrateDiagramV1, 2: migrateDiagramV2 }
 }
 
 // Paramètres v1 → v2 : export et copie de secours ; v2 → v3 : trait des composants du profil ;
