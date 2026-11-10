@@ -288,7 +288,7 @@ function setLabelSize(event: Event): void {
             title="Modifier le style de ce montage seulement"
             @click="emit('editProfile')"
           >
-            <Icon name="sliders" :size="13" /> Modifier le style…
+            <Icon name="palette" :size="13" /> Modifier le style…
           </button>
           <button
             v-if="store.profileDiffs.length > 0"

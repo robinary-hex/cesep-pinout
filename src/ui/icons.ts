@@ -104,17 +104,13 @@ export const ICONS = {
   moon: ['M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z'],
   dots: ['M5 12h.01', 'M12 12h.01', 'M19 12h.01'],
   bold: ['M6 4h8a4 4 0 0 1 0 8H6z', 'M6 12h9a4 4 0 0 1 0 8H6z'],
-  // Trois curseurs de réglage : le profil de style.
-  sliders: [
-    'M4 6h9',
-    'M17 6h3',
-    'M15 4a2 2 0 1 0 0 4a2 2 0 1 0 0-4z',
-    'M4 12h3',
-    'M11 12h9',
-    'M9 10a2 2 0 1 0 0 4a2 2 0 1 0 0-4z',
-    'M4 18h11',
-    'M19 18h1',
-    'M17 16a2 2 0 1 0 0 4a2 2 0 1 0 0-4z'
+  // Palette de peintre : le profil de style.
+  palette: [
+    'M12 3a9 9 0 1 0 0 18c1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16.5a4.5 4.5 0 0 0 4.5-4.5C21 6.6 16.97 3 12 3z',
+    'M13.5 7h.01',
+    'M17 10.5h.01',
+    'M8.5 8h.01',
+    'M7 12.5h.01'
   ],
   // Disque plein : deux cercles concentriques dont les traits se touchent.
   dot: ['M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z', 'M12 11a1 1 0 1 0 0 2a1 1 0 1 0 0-2z'],

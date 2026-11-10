@@ -164,7 +164,7 @@ function fileMenuItems(): MenuItem[] {
       () => {
         showProfile.value = true
       },
-      { icon: 'sliders' }
+      { icon: 'palette' }
     ),
     item(
       'Raccourcis clavier',
@@ -515,7 +515,7 @@ onUnmounted(() => {
           title="Profil de style général"
           @click="showProfile = true"
         >
-          <Icon name="sliders" :size="18" />
+          <Icon name="palette" :size="18" />
         </button>
         <button
           type="button"
