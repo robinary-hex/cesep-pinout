@@ -8,7 +8,7 @@ import {
   type ComponentDefinition
 } from '@/domain'
 import { bridge } from './bridge'
-import { joinPath } from './paths'
+import { dirOf, joinPath } from './paths'
 
 export const COMPONENT_FILE = 'component.json'
 
@@ -19,13 +19,19 @@ export interface LibraryEntry {
   problem: string | null
 }
 
-/** Lit un composant ; pour un PNG, rattache l'image en dataUrl si elle est présente. */
+/** Lit le composant d'un dossier de la bibliothèque. */
 export async function loadComponent(folder: string): Promise<ComponentDefinition> {
-  const def = parseComponentDefinition(
-    await bridge().readTextFile(joinPath(folder, COMPONENT_FILE))
-  )
+  return loadComponentFile(joinPath(folder, COMPONENT_FILE))
+}
+
+/**
+ * Lit un composant depuis son fichier, où qu'il soit ; pour un PNG, rattache en dataUrl l'image
+ * rangée à côté si elle est présente.
+ */
+export async function loadComponentFile(path: string): Promise<ComponentDefinition> {
+  const def = parseComponentDefinition(await bridge().readTextFile(path))
   if (def.visual.kind !== 'png') return def
-  const imagePath = joinPath(folder, def.visual.file)
+  const imagePath = joinPath(dirOf(path), def.visual.file)
   if (!(await bridge().pathExists(imagePath))) return def
   const base64 = await bridge().readBinaryFile(imagePath)
   return { ...def, visual: { ...def.visual, dataUrl: pngDataUrl(base64) } }

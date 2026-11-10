@@ -22,6 +22,10 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['Ctrl+Z / Y', 'Annuler / rétablir'],
       ['Ctrl+N / O / S', 'Nouveau / ouvrir (dans un onglet) / enregistrer (Ctrl+Maj+S : sous…)'],
       [
+        'Glisser un fichier',
+        'Dans la fenêtre : un montage s’ouvre dans un onglet, un composant dans son éditeur'
+      ],
+      [
         'Ctrl+Tab / Ctrl+Maj+Tab',
         'Montage suivant / précédent ; clic du milieu sur un onglet : le fermer'
       ],

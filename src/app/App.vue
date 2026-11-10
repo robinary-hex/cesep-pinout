@@ -19,6 +19,7 @@ import Icon from '@/ui/Icon.vue'
 import { openModals } from '@/ui/modalState'
 import { applyTheme } from '@/ui/theme'
 import type { UpdateStatus } from '../../electron/api'
+import { openExternalFile } from './externalFiles'
 import ShortcutsHelp from './ShortcutsHelp.vue'
 import { updateButtonLabel, updateButtonTitle } from './update'
 
@@ -267,7 +268,41 @@ async function proposeRecovery(): Promise<void> {
   }
 }
 
+// Fichiers venus de l'extérieur : passés au lancement, double-cliqués pendant que l'application
+// tourne, ou déposés dans la fenêtre. Un montage prend un onglet, un composant l'éditeur.
+async function openExternal(path: string): Promise<void> {
+  const result = await openExternalFile(path, { schematic, editor, library })
+  if (result.kind !== null) {
+    mode.value = result.kind === 'project' ? 'schematic' : 'components'
+  } else if (result.message.length > 0) {
+    // Le refus s'affiche dans la barre d'état de l'éditeur visible.
+    if (mode.value === 'components') editor.status = result.message
+    else schematic.status = result.message
+  }
+}
+
+function onWindowDragOver(event: DragEvent): void {
+  if (!event.dataTransfer?.types.includes('Files')) return
+  event.preventDefault()
+  event.dataTransfer.dropEffect = openModals.value === 0 ? 'copy' : 'none'
+}
+
+function onWindowDrop(event: DragEvent): void {
+  const files = event.dataTransfer?.files
+  if (!files || files.length === 0) return
+  // Sans ceci, la fenêtre afficherait le fichier à la place de l'application.
+  event.preventDefault()
+  if (openModals.value > 0) return
+  const paths = Array.from(files)
+    .map((file) => bridge().pathForFile(file))
+    .filter((path) => path.length > 0)
+  void (async () => {
+    for (const path of paths) await openExternal(path)
+  })()
+}
+
 let unsubscribe: (() => void) | null = null
+let unsubscribeOpenFile: (() => void) | null = null
 
 onMounted(async () => {
   unsubscribe = bridge().onAppRequest((request) => {
@@ -300,6 +335,7 @@ onMounted(async () => {
   unsubscribeUpdate = bridge().onUpdateStatus((status) => {
     update.value = status
   })
+  unsubscribeOpenFile = bridge().onOpenFile((path) => void openExternal(path))
   await library.init()
   // Les paramètres sont lus : le montage vierge du lancement repart du profil et de la couleur
   // par défaut.
@@ -307,12 +343,13 @@ onMounted(async () => {
   schematic.syncCurrentColor()
   await proposeRecovery()
   const launch = await bridge().getLaunchFile()
-  if (launch && (await schematic.openPath(launch))) mode.value = 'schematic'
+  if (launch) await openExternal(launch)
 })
 
 onUnmounted(() => {
   unsubscribe?.()
   unsubscribeUpdate?.()
+  unsubscribeOpenFile?.()
   if (autosaveTimer) clearInterval(autosaveTimer)
 })
 
@@ -348,10 +385,14 @@ function commitFocusedField(event: PointerEvent): void {
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('pointerdown', commitFocusedField, true)
+  window.addEventListener('dragover', onWindowDragOver)
+  window.addEventListener('drop', onWindowDrop)
 })
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
   window.removeEventListener('pointerdown', commitFocusedField, true)
+  window.removeEventListener('dragover', onWindowDragOver)
+  window.removeEventListener('drop', onWindowDrop)
 })
 </script>
 

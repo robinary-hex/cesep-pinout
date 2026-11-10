@@ -2,13 +2,18 @@ import { parseProject, serializeProject, slugify, type Project } from '@/domain'
 import { bridge } from './bridge'
 import { joinPath } from './paths'
 
-export const PROJECT_EXTENSION = '.pinout.json'
+/**
+ * Extension des montages : du JSON sous une extension propre, que l'installeur associe à
+ * l'application (double-clic). Les anciens fichiers .pinout.json et .json s'ouvrent toujours.
+ */
+export const PROJECT_EXTENSION = '.pinout'
 
-const PROJECT_FILTERS = [{ name: 'Projet Pinout', extensions: ['pinout.json', 'json'] }]
+const OPEN_FILTERS = [{ name: 'Montage Pinout', extensions: ['pinout', 'json'] }]
+const SAVE_FILTERS = [{ name: 'Montage Pinout', extensions: ['pinout'] }]
 
-/** Ajoute l'extension de projet si le chemin choisi n'en a pas. */
+/** Ajoute l'extension de montage si le chemin choisi n'en a pas (ni .pinout, ni .json). */
 export function ensureProjectExtension(path: string): string {
-  return /\.json$/i.test(path) ? path : path + PROJECT_EXTENSION
+  return /\.(pinout|json)$/i.test(path) ? path : path + PROJECT_EXTENSION
 }
 
 /** Dialogue d'ouverture, dans `defaultDir` s'il est donné (dossier du dernier projet). */
@@ -16,7 +21,7 @@ export async function chooseProjectToOpen(defaultDir?: string | null): Promise<s
   return bridge().showOpenDialog({
     title: 'Ouvrir un projet Pinout',
     defaultPath: defaultDir ?? undefined,
-    filters: PROJECT_FILTERS
+    filters: OPEN_FILTERS
   })
 }
 
@@ -29,7 +34,7 @@ export async function chooseProjectToSave(
   const path = await bridge().showSaveDialog({
     title: 'Enregistrer le projet',
     defaultPath: joinPath(dir, slugify(projectName) + PROJECT_EXTENSION),
-    filters: PROJECT_FILTERS
+    filters: SAVE_FILTERS
   })
   return path === null ? null : ensureProjectExtension(path)
 }

@@ -15,6 +15,7 @@ export class FakeFs implements PinoutApi {
   dirty = false
   quitConfirmed = false
   private readonly requestHandlers = new Set<(request: AppRequest) => void>()
+  private readonly openFileHandlers = new Set<(path: string) => void>()
 
   private norm(path: string): string {
     return path.replace(/\\/g, '/').replace(/\/+$/, '')
@@ -130,6 +131,22 @@ export class FakeFs implements PinoutApi {
 
   installUpdate(): Promise<void> {
     return Promise.resolve()
+  }
+
+  onOpenFile(handler: (path: string) => void): () => void {
+    this.openFileHandlers.add(handler)
+    return () => this.openFileHandlers.delete(handler)
+  }
+
+  /** Un « fichier » déposé est ici un objet portant son chemin. */
+  pathForFile(file: unknown): string {
+    const path = (file as { path?: unknown } | null)?.path
+    return typeof path === 'string' ? path : ''
+  }
+
+  /** Simule un double-clic sur un fichier alors que l'application tourne. */
+  emitOpenFile(path: string): void {
+    for (const handler of this.openFileHandlers) handler(path)
   }
 
   /** Simule une demande du processus principal. */

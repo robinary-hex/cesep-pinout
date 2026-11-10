@@ -171,7 +171,14 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   élaguées à chaque commande). Broches reliées à rien : `unconnectedPinKeys` de la connectivité.
 - Exécutable : `pnpm icon` régénère `build/icon.png` (script sans dépendance), `pnpm build:win`
   produit l'installeur NSIS et l'exe portable dans `release/` (non signés : avertissement
-  SmartScreen au premier lancement, normal). Un `.json` passé en argument s'ouvre au lancement.
+  SmartScreen au premier lancement, normal). Les montages s'enregistrent en `.pinout` (du JSON ;
+  les anciens `.pinout.json` s'ouvrent toujours), extension que l'installeur associe à
+  l'application (`fileAssociations`). Un fichier passé en argument s'ouvre au lancement ; avec
+  l'application installée déjà ouverte (verrou d'instance unique, pas en développement), il
+  arrive par `onOpenFile` et prend un onglet. Un fichier déposé dans la fenêtre s'ouvre de même
+  (`pathForFile` du pont). `src/app/externalFiles.ts` reconnaît montage ou composant à son
+  contenu : montage dans un onglet, composant dans l'éditeur (tel quel s'il est dans la
+  bibliothèque, sinon comme nouveau composant).
   - Éditeur de composants : V sélection, R rectangle, O ellipse, L ligne, P polyligne, N point
     (un clic par point, l'outil reste actif), E texte,
     B broche, Suppr, Échap, Entrée (termine une polyligne), Ctrl+Z / Ctrl+Y, Ctrl+S, Ctrl+N,

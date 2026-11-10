@@ -17,6 +17,7 @@ afterEach(() => {
 describe('fichiers d’export', () => {
   it('propose le nom du projet enregistré, sinon le nom du montage', () => {
     expect(defaultExportName('Alim 5 V', 'D:/x/alim.pinout.json', 'png')).toBe('alim.png')
+    expect(defaultExportName('Alim 5 V', 'D:/x/alim.pinout', 'svg')).toBe('alim.svg')
     expect(defaultExportName('Alim 5 V', null, 'svg')).toBe('alim-5-v.svg')
   })
 

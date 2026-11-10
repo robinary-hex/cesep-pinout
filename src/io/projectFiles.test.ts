@@ -28,7 +28,9 @@ describe('fichiers de projet', () => {
   })
 
   it('complète l’extension du fichier choisi', () => {
-    expect(ensureProjectExtension('C:/x/montage')).toBe('C:/x/montage.pinout.json')
+    expect(ensureProjectExtension('C:/x/montage')).toBe('C:/x/montage.pinout')
+    expect(ensureProjectExtension('C:/x/montage.pinout')).toBe('C:/x/montage.pinout')
+    // Les anciennes extensions restent telles quelles.
     expect(ensureProjectExtension('C:/x/montage.pinout.json')).toBe('C:/x/montage.pinout.json')
     expect(ensureProjectExtension('C:/x/montage.JSON')).toBe('C:/x/montage.JSON')
   })
@@ -36,9 +38,7 @@ describe('fichiers de projet', () => {
   it('propose un nom de fichier dérivé du nom du projet et respecte l’annulation', async () => {
     fs.saveDialogAnswers.push(null, 'C:/fake/Documents/choisi')
     expect(await chooseProjectToSave('Alimentation 5 V')).toBeNull()
-    expect(await chooseProjectToSave('Alimentation 5 V')).toBe(
-      'C:/fake/Documents/choisi.pinout.json'
-    )
+    expect(await chooseProjectToSave('Alimentation 5 V')).toBe('C:/fake/Documents/choisi.pinout')
   })
 })
 

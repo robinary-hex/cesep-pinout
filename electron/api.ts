@@ -73,8 +73,15 @@ export interface PinoutApi {
   /** Montage modifié qu'on ferme : Enregistrer, Ne pas enregistrer ou Annuler. */
   confirmSave(name: string): Promise<SaveChoice>
   getAppPaths(): Promise<AppPaths>
-  /** Fichier .json passé au lancement (« Ouvrir avec »), s'il existe. */
+  /** Fichier (.pinout ou .json) passé au lancement par un double-clic ou « Ouvrir avec ». */
   getLaunchFile(): Promise<string | null>
+  /**
+   * Écoute les fichiers à ouvrir que le principal transmet quand on en double-clique un alors
+   * que Pinout tourne déjà ; retourne la fonction qui désabonne.
+   */
+  onOpenFile(handler: (path: string) => void): () => void
+  /** Chemin sur disque d'un fichier déposé dans la fenêtre (objet File) ; vide s'il n'en a pas. */
+  pathForFile(file: unknown): string
   /** Informe le principal qu'il y a des modifications non enregistrées (garde à la fermeture). */
   setDirty(dirty: boolean): Promise<void>
   /** Après la copie de secours ou l'enregistrement, autorise la fermeture demandée. */
@@ -105,6 +112,7 @@ export const IPC = {
   confirmSave: 'dialog:confirm-save',
   getAppPaths: 'app:paths',
   launchFile: 'app:launch-file',
+  openFile: 'app:open-file',
   setDirty: 'app:set-dirty',
   confirmQuit: 'app:confirm-quit',
   cancelQuit: 'app:cancel-quit',

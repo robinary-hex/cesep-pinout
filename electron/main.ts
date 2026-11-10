@@ -21,9 +21,15 @@ const isDev = !app.isPackaged
 const QUIT_FALLBACK_MS = 3000
 const RELEASES_URL = 'https://github.com/robinary-hex/cesep-pinout/releases/latest'
 
-/** Projet passé en argument (double-clic « Ouvrir avec » ou ligne de commande). */
-const launchFile =
-  process.argv.slice(1).find((arg) => /\.json$/i.test(arg) && !arg.startsWith('-')) ?? null
+/** Fichier Pinout parmi des arguments de ligne de commande : un montage (.pinout) ou un .json. */
+function fileArgument(argv: readonly string[]): string | null {
+  return argv.slice(1).find((arg) => /\.(pinout|json)$/i.test(arg) && !arg.startsWith('-')) ?? null
+}
+
+/** Fichier passé au lancement (double-clic sur un montage, « Ouvrir avec », ligne de commande). */
+const launchFile = fileArgument(process.argv)
+/** La fenêtre de l'application, pour lui transmettre les fichiers d'un second lancement. */
+let mainWindowRef: BrowserWindow | null = null
 
 /** Le rendu tient cet indicateur à jour ; il décide de la question à la fermeture. */
 let dirty = false
@@ -210,8 +216,19 @@ function createWindow(): void {
     }
   })
 
+  mainWindowRef = mainWindow
+  mainWindow.on('closed', () => {
+    mainWindowRef = null
+  })
   mainWindow.on('ready-to-show', () => mainWindow.show())
   setupUpdater(mainWindow)
+
+  // Un fichier déposé dans la fenêtre ne doit pas remplacer l'application : toute navigation vers
+  // une autre adresse est refusée (le rendu ouvre lui-même les fichiers déposés). Le rechargement
+  // de la même adresse reste permis, pour le développement.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url !== mainWindow.webContents.getURL()) event.preventDefault()
+  })
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url)
@@ -257,15 +274,32 @@ function createWindow(): void {
   }
 }
 
-void app.whenReady().then(() => {
-  app.setAppUserModelId('be.robin.pinout')
-  registerIpc()
-  createWindow()
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+// Une seule instance de l'application installée : double-cliquer un montage quand Pinout tourne
+// déjà l'ouvre dans la fenêtre existante (un nouvel onglet) au lieu de lancer une seconde
+// application. En développement, pas de verrou : `pnpm dev` peut tourner à côté de la version
+// installée.
+if (app.isPackaged && !app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', (_event, argv) => {
+    const window = mainWindowRef
+    if (!window || window.isDestroyed()) return
+    if (window.isMinimized()) window.restore()
+    window.focus()
+    const file = fileArgument(argv)
+    if (file) window.webContents.send(IPC.openFile, file)
   })
-})
+
+  void app.whenReady().then(() => {
+    app.setAppUserModelId('be.robin.pinout')
+    registerIpc()
+    createWindow()
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    })
+  })
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()

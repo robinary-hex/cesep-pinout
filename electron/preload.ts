@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import {
   IPC,
   type AppRequest,
@@ -23,6 +23,13 @@ const api: PinoutApi = {
   confirmSave: (name) => ipcRenderer.invoke(IPC.confirmSave, name),
   getAppPaths: () => ipcRenderer.invoke(IPC.getAppPaths),
   getLaunchFile: () => ipcRenderer.invoke(IPC.launchFile),
+  onOpenFile: (handler) => {
+    const listener = (_event: IpcRendererEvent, path: string): void => handler(path)
+    ipcRenderer.on(IPC.openFile, listener)
+    return () => ipcRenderer.removeListener(IPC.openFile, listener)
+  },
+  pathForFile: (file) =>
+    webUtils.getPathForFile(file as Parameters<typeof webUtils.getPathForFile>[0]),
   setDirty: (dirty) => ipcRenderer.invoke(IPC.setDirty, dirty),
   confirmQuit: () => ipcRenderer.invoke(IPC.confirmQuit),
   cancelQuit: () => ipcRenderer.invoke(IPC.cancelQuit),

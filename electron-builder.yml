@@ -15,6 +15,12 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
   - resources/**
+# Double-clic sur un montage : l'installeur associe l'extension .pinout à l'application (la
+# version portable ne pose pas d'association).
+fileAssociations:
+  - ext: pinout
+    name: Montage Pinout
+    description: Montage Pinout
 win:
   executableName: Pinout
   target:
