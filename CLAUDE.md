@@ -88,7 +88,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   permis ; les demi-tours et les sommets confondus sont refusés. Le L d'un tracé suit l'axe
   dominant (Maj inverse). Élasticité (`src/domain/elastic.ts`) : les extrémités posées sur une
   broche suivent le composant déplacé, tourné ou retourné ; un fil déplacé en bloc garde ses
-  extrémités sur les broches immobiles. Un nouveau fil prend la couleur du dernier fil tracé ou
+  extrémités sur les broches immobiles. Les jonctions suivent aussi : quand le tracé d'un fil
+  change (déplacé, segment ou sommet glissé, emmené par une broche), les extrémités des autres
+  fils posées sur lui le suivent, de proche en proche (`wiresFollowingJunctions`, appliqué dans
+  `apply` à chaque commande et dans l'aperçu du canevas) ; une extrémité sur une broche ou
+  déplacée par la commande elle-même ne suit pas. Un nouveau fil prend la couleur du dernier fil tracé ou
   recoloré (`currentColor`, recalée sur le dernier fil du projet à l'ouverture). Extrémités
   libres (`freeEnds`) : nettes, en flèche ou en pointillés, dessinées pareil à l'écran et à
   l'export par `src/domain/wireEnds.ts` (corps raccourci, pointe sur le bout du fil, queue
@@ -122,7 +126,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   tracés de `src/ui/icons.ts` (SVG inline, trait de la couleur courante, pas de police d'icônes).
 - Onglets de montage (`App.vue`, à droite du bouton Montage) : un par montage ouvert, au nom du
   montage, point s'il est modifié, croix ou clic du milieu pour fermer (confirmation s'il est
-  modifié), « + » pour un nouveau, Ctrl+Tab / Ctrl+Maj+Tab pour passer de l'un à l'autre. Le store
+  modifié), « + » pour un nouveau, Ctrl+Tab / Ctrl+Maj+Tab pour passer de l'un à l'autre,
+  glisser-déposer pour les réordonner (`moveTab`). Le store
   du montage reste unique : l'onglet actif vit dans ses refs, les autres sont rangés dans
   `tabStates` (historique, fichier, vue, sélection, couleur courante) ; `activateTab` range l'un et
   charge l'autre. Nouveau et Ouvrir créent un onglet, ou prennent la place de l'onglet actif s'il
@@ -149,6 +154,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   `${OneDrive}` (`portableLibraryDir`), résolu sur chaque machine (`resolveLibraryDir`). Panneau en
   liste (nom, broches) ou en grille de vignettes (nom en petit dessous) selon `libraryView`
   (paramètres) ; catégories repliables.
+- Champs des panneaux : ils valident au `change`. Un clic hors du champ en cours de saisie le
+  valide d'abord (`commitFocusedField` dans `App.vue`, en phase de capture), pour que la saisie ne
+  soit pas perdue quand le clic retire le champ. Hors des champs, le texte de l'interface ne se
+  surligne pas (`user-select: none`).
 - Boîtes de dialogue : `src/ui/ModalDialog.vue` ; tant qu'une est ouverte (`openModals`), les
   éditeurs ignorent leurs raccourcis. `src/ui/PromptDialog.vue` (saisie d'une valeur) et
   `src/ui/ContextMenu.vue` (menu contextuel, entrées décrites dans `contextMenu.ts`) comptent aussi

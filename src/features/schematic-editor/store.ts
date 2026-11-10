@@ -1,4 +1,4 @@
-import { castDraft, type Draft } from 'immer'
+import { castDraft, current as snapshot, type Draft } from 'immer'
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 import {
@@ -22,6 +22,7 @@ import {
   unionRects,
   wireBounds,
   wireGeometryProblem,
+  wiresFollowingJunctions,
   wiresFollowingPins,
   type ComponentDefinition,
   type ComponentInstance,
@@ -248,10 +249,22 @@ export const useSchematicStore = defineStore('schematic', () => {
     }
   }
 
-  /** Toute commande passe ici ; les exceptions de croisement orphelines sont élaguées au passage. */
+  /**
+   * Toute commande passe ici ; au passage, les jonctions suivent les fils déplacés et les
+   * exceptions de croisement orphelines sont élaguées.
+   */
   function apply(label: string, recipe: (draft: Draft<Project>) => void): boolean {
+    const wiresBefore = history.value.wires
     const changed = history.apply(label, (draft) => {
       recipe(draft)
+      // Jonctions : les extrémités posées sur un fil dont le tracé vient de changer le suivent.
+      const now = snapshot(draft) as Project
+      if (now.wires !== wiresBefore) {
+        const followed = wiresFollowingJunctions(wiresBefore, now.wires, projectPins(now))
+        if (followed.some((wire, index) => wire !== now.wires[index])) {
+          draft.wires = castDraft(followed)
+        }
+      }
       const pruned = pruneCrossingOverrides(draft.crossingOverrides, computeCrossings(draft.wires))
       if (pruned.length !== draft.crossingOverrides.length) {
         draft.crossingOverrides = castDraft(pruned)
@@ -379,6 +392,16 @@ export const useSchematicStore = defineStore('schematic', () => {
     const index = list.findIndex((tab) => tab.id === activeTabId.value)
     const next = list[(index + step + list.length) % list.length]
     if (next) activateTab(next.id)
+  }
+
+  /** Déplace un onglet à la position donnée dans la rangée (glisser-déposer). */
+  function moveTab(id: number, toIndex: number): void {
+    const list = [...tabStates.value]
+    const from = list.findIndex((tab) => tab.id === id)
+    const [tab] = from === -1 ? [] : list.splice(from, 1)
+    if (!tab) return
+    list.splice(Math.max(0, Math.min(toIndex, list.length)), 0, tab)
+    tabStates.value = list
   }
 
   /** Montre un document dans un onglet : l'onglet actif s'il est vierge, sinon un nouveau. */
@@ -1222,6 +1245,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     markSaved,
     activateTab,
     cycleTab,
+    moveTab,
     closeTab,
     dirtyDocuments,
     syncCurrentColor,

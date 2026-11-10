@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PinRef } from './connectivity'
-import { wiresFollowingPins } from './elastic'
+import { movedJunction, wiresFollowingJunctions, wiresFollowingPins } from './elastic'
 import type { Wire } from './project'
 
 function wire(id: string, points: [number, number][]): Wire {
@@ -101,5 +101,76 @@ describe('élasticité des fils', () => {
     ])
     const [result] = wiresFollowingPins([original], before, after)
     expect(result).toBe(original)
+  })
+})
+
+describe('jonctions qui suivent le fil porteur', () => {
+  // y : fil horizontal ; x : fil vertical dont le départ est posé sur y ; z : départ posé sur x.
+  const y = wire('y', [
+    [0, 0],
+    [10, 0]
+  ])
+  const x = wire('x', [
+    [5, 0],
+    [5, 6]
+  ])
+  const z = wire('z', [
+    [5, 3],
+    [9, 3]
+  ])
+  const shifted = (source: Wire, dx: number, dy: number): Wire => ({
+    ...source,
+    points: source.points.map(([px, py]): [number, number] => [px + dx, py + dy])
+  })
+
+  it('un fil déplacé en bloc emmène la jonction ; le fil attaché reçoit un coude', () => {
+    const result = wiresFollowingJunctions([y, x], [shifted(y, 2, -3), x])
+    expect(result[1]?.points).toEqual([
+      [7, -3],
+      [7, 6],
+      [5, 6]
+    ])
+  })
+
+  it('un segment glissé emmène la jonction ; le fil attaché s’allonge', () => {
+    const bent = wire('y', [
+      [0, 0],
+      [10, 0],
+      [10, 5]
+    ])
+    const dragged = wire('y', [
+      [0, 0],
+      [0, -3],
+      [10, -3],
+      [10, 5]
+    ])
+    expect(movedJunction(bent.points, dragged.points, [5, 0])).toEqual([5, -3])
+    // Au coin, le fil passe toujours : la jonction reste.
+    expect(movedJunction(bent.points, dragged.points, [10, 0])).toEqual([10, 0])
+    const result = wiresFollowingJunctions([bent, x], [dragged, x])
+    expect(result[1]?.points).toEqual([
+      [5, -3],
+      [5, 6]
+    ])
+  })
+
+  it('se propage au fil attaché au fil qui suit', () => {
+    const result = wiresFollowingJunctions([y, x, z], [shifted(y, 2, -3), x, z])
+    expect(result[2]?.points).toEqual([
+      [7, 3],
+      [9, 3]
+    ])
+  })
+
+  it('laisse en place une extrémité posée sur une broche, ou déplacée par la commande', () => {
+    const moved = shifted(y, 2, -3)
+    expect(wiresFollowingJunctions([y, x], [moved, x], [pin('a:1', 5, 0)])[1]).toBe(x)
+    const dragged = shifted(x, 0, 1)
+    expect(wiresFollowingJunctions([y, x], [moved, dragged])[1]).toBe(dragged)
+  })
+
+  it('ne touche à rien quand aucun tracé ne change', () => {
+    const wires = [y, x, z]
+    expect(wiresFollowingJunctions(wires, wires)).toEqual(wires)
   })
 })

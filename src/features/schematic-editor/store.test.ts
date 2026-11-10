@@ -285,6 +285,34 @@ describe('montage : fils', () => {
     expect(store.doc.wires[0]?.points).toHaveLength(4)
   })
 
+  it('une jonction suit le fil qui la porte, dans la même commande', () => {
+    const store = useSchematicStore()
+    store.addWire([
+      [0, 0],
+      [10, 0],
+      [10, 5]
+    ])
+    store.addWire([
+      [5, 0],
+      [5, 6]
+    ])
+    // Le premier segment de w1 monte de trois cellules : l'extrémité de w2 posée dessus suit.
+    store.setWirePoints('w1', [
+      [0, 0],
+      [0, -3],
+      [10, -3],
+      [10, 5]
+    ])
+    expect(store.doc.wires[1]?.points).toEqual([
+      [5, -3],
+      [5, 6]
+    ])
+    expect(store.connectivity.junctions.map((junction) => junction.point)).toEqual([[5, -3]])
+    store.undo()
+    expect(store.doc.wires.map((wire) => wire.points.length)).toEqual([3, 2])
+    expect(store.doc.wires[1]?.points[0]).toEqual([5, 0])
+  })
+
   it('duplique et colle les fils avec les composants', () => {
     const store = useSchematicStore()
     store.startPlacing(resistor())
@@ -641,6 +669,23 @@ describe('onglets de montage', () => {
     vi.stubGlobal('window', { confirm: () => true })
     expect(store.closeTab(store.activeTabId)).toBe(true)
     expect(store.doc.name).toBe('Nouveau montage')
+  })
+
+  it('réordonne les onglets sans changer celui qui est affiché', () => {
+    const store = useSchematicStore()
+    store.setProjectName('A')
+    store.newProject()
+    store.setProjectName('B')
+    store.newProject()
+    store.setProjectName('C')
+    const names = (): string[] => store.tabs.map((tab) => tab.name)
+    const c = store.activeTabId
+    store.moveTab(c, 0)
+    expect(names()).toEqual(['C', 'A', 'B'])
+    expect(store.activeTabId).toBe(c)
+    expect(store.doc.name).toBe('C')
+    store.moveTab(c, 99)
+    expect(names()).toEqual(['A', 'B', 'C'])
   })
 
   it('liste les montages modifiés pour la copie de secours, onglet par onglet', () => {

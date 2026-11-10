@@ -104,6 +104,35 @@ function closeTabOnMiddle(id: number, event: MouseEvent): void {
   if (event.button === 1) schematic.closeTab(id)
 }
 
+// Glisser un onglet le réordonne : il prend la place de celui qu'il survole dès que le curseur
+// en dépasse le milieu (sans ce seuil, deux onglets de largeurs différentes s'échangeraient en
+// boucle).
+const draggedTabId = ref<number | null>(null)
+
+function onTabDragStart(id: number, event: DragEvent): void {
+  draggedTabId.value = id
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', String(id))
+  }
+}
+
+function onTabDragOver(id: number, event: DragEvent): void {
+  const dragged = draggedTabId.value
+  if (dragged === null) return
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+  const target = event.currentTarget
+  if (dragged === id || !(target instanceof HTMLElement)) return
+  const ids = schematic.tabs.map((tab) => tab.id)
+  const from = ids.indexOf(dragged)
+  const to = ids.indexOf(id)
+  if (from === -1 || to === -1) return
+  const rect = target.getBoundingClientRect()
+  const pastMiddle = event.clientX > rect.left + rect.width / 2
+  if (from < to ? pastMiddle : !pastMiddle) schematic.moveTab(dragged, to)
+}
+
 /** La molette fait défiler la rangée d'onglets quand elle déborde. */
 function onTabsWheel(event: WheelEvent): void {
   const strip = event.currentTarget
@@ -298,8 +327,27 @@ function onKeyDown(event: KeyboardEvent): void {
   }
 }
 
-onMounted(() => window.addEventListener('keydown', onKeyDown))
-onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
+/**
+ * Un clic hors du champ en cours de saisie le valide d'abord : `blur()` déclenche son `change`
+ * tout de suite, avant que le clic n'atteigne le canevas et que la sélection, en changeant, ne
+ * retire le champ du panneau avec ce qu'on venait d'y taper.
+ */
+function commitFocusedField(event: PointerEvent): void {
+  const active = document.activeElement
+  if (!(active instanceof HTMLElement)) return
+  if (!['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)) return
+  if (event.target instanceof Node && active.contains(event.target)) return
+  active.blur()
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('pointerdown', commitFocusedField, true)
+})
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('pointerdown', commitFocusedField, true)
+})
 </script>
 
 <template>
@@ -332,17 +380,27 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
           v-for="tab in schematic.tabs"
           :key="tab.id"
           class="doc-tab"
-          :class="{ active: mode === 'schematic' && tab.id === schematic.activeTabId }"
+          :class="{
+            active: mode === 'schematic' && tab.id === schematic.activeTabId,
+            dragging: tab.id === draggedTabId
+          }"
           role="tab"
           tabindex="0"
+          draggable="true"
           :title="tab.filePath ?? 'Pas encore enregistré'"
+          @dragstart="onTabDragStart(tab.id, $event)"
+          @dragover="onTabDragOver(tab.id, $event)"
+          @drop.prevent
+          @dragend="draggedTabId = null"
           @click="showTab(tab.id)"
           @keydown.enter="showTab(tab.id)"
           @mousedown.middle.prevent
           @auxclick.prevent="closeTabOnMiddle(tab.id, $event)"
         >
-          <span class="doc-tab-name">{{ tab.name }}</span>
-          <span v-if="tab.dirty" class="doc-tab-dot" title="Modifications non enregistrées">●</span>
+          <span class="doc-tab-label">
+            <span class="doc-tab-name">{{ tab.name }}</span>
+            <span v-if="tab.dirty" class="doc-tab-dot" title="Modifications non enregistrées" />
+          </span>
           <button
             type="button"
             class="doc-tab-close"

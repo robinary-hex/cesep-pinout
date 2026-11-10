@@ -52,6 +52,8 @@
   --preview-bg: #d8dde4;
   --scrollbar: #c3cad2;
   --scrollbar-hover: #a9b2bc;
+  /* Point « modifié » d'un onglet, sur la barre sombre : rouge en clair. */
+  --tab-dot: #ff6b6b;
 }
 
 :root[data-theme='dark'] {
@@ -103,10 +105,22 @@
   --preview-bg: #262c35;
   --scrollbar: #3d4650;
   --scrollbar-hover: #525d6a;
+  /* Ambre en sombre. */
+  --tab-dot: #e3b341;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Rien ne se surligne à la souris, sauf le texte des champs de saisie. */
+body {
+  user-select: none;
+}
+
+input,
+textarea {
+  user-select: text;
 }
 
 html,
@@ -201,16 +215,30 @@ body,
   opacity: 1;
 }
 
-.doc-tab-name {
+.doc-tab.dragging {
+  opacity: 0.35;
+}
+
+/* Le nom, et le point « modifié » en exposant juste après son dernier caractère. */
+.doc-tab-label {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.doc-tab-name {
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .doc-tab-dot {
   flex: none;
-  font-size: 9px;
-  color: var(--accent-border);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tab-dot);
 }
 
 .topbar .doc-tab-close {

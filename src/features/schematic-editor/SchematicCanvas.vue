@@ -25,7 +25,10 @@ import {
   wireIntersectsRect,
   wirePathData,
   wireRenderParts,
+  wiresFollowingJunctions,
   wiresFollowingPins,
+  computeConnectivity,
+  type Junction,
   type Box,
   type ComponentInstance,
   type GridPoint,
@@ -224,27 +227,50 @@ function labelOffsetOf(id: string): { dx: number; dy: number } {
 }
 
 /**
- * Fils pendant un déplacement : les fils sélectionnés suivent le vecteur, les extrémités posées
- * sur une broche d'un composant déplacé suivent leur broche (même règle que la commande finale).
+ * Aperçu pendant un geste, selon les règles des commandes finales : pendant un déplacement, les
+ * fils sélectionnés suivent le vecteur et les extrémités posées sur une broche d'un composant
+ * déplacé suivent leur broche ; pendant le glisser d'un segment ou d'un sommet, le fil prend son
+ * nouveau tracé. Dans tous les cas, les jonctions suivent le fil qui les porte.
  */
-const previewWires = computed<Map<string, readonly GridPoint[]> | null>(() => {
+const dragPreview = computed<{
+  wires: Map<string, readonly GridPoint[]>
+  junctions: Junction[]
+} | null>(() => {
   const current = drag.value
-  if (current?.kind !== 'move' || current.duplicate || (current.dx === 0 && current.dy === 0)) {
+  let pins = store.pinRefs
+  let after: Wire[]
+  if (current?.kind === 'wire-segment' || current?.kind === 'wire-vertex') {
+    if (samePoints(current.original, current.preview)) return null
+    after = store.doc.wires.map((wire) =>
+      wire.id === current.wireId ? { ...wire, points: [...current.preview] } : wire
+    )
+  } else if (
+    current?.kind === 'move' &&
+    !current.duplicate &&
+    (current.dx !== 0 || current.dy !== 0)
+  ) {
+    const { dx, dy } = current
+    const moving = new Set(current.ids)
+    pins = store.pinRefs.map((pin) =>
+      moving.has(pin.instanceId)
+        ? { ...pin, point: [pin.point[0] + dx, pin.point[1] + dy] as GridPoint }
+        : pin
+    )
+    const translated = new Map<string, GridPoint>(
+      current.wireIds.map((id) => [id, [dx, dy] as GridPoint])
+    )
+    after = wiresFollowingPins(store.doc.wires, store.pinRefs, pins, translated)
+  } else {
     return null
   }
-  const { dx, dy } = current
-  const moving = new Set(current.ids)
-  const pinsAfter = store.pinRefs.map((pin) =>
-    moving.has(pin.instanceId)
-      ? { ...pin, point: [pin.point[0] + dx, pin.point[1] + dy] as GridPoint }
-      : pin
-  )
-  const translated = new Map<string, GridPoint>(
-    current.wireIds.map((id) => [id, [dx, dy] as GridPoint])
-  )
-  const adjusted = wiresFollowingPins(store.doc.wires, store.pinRefs, pinsAfter, translated)
-  return new Map(adjusted.map((wire) => [wire.id, wire.points]))
+  const followed = wiresFollowingJunctions(store.doc.wires, after, pins)
+  return {
+    wires: new Map(followed.map((wire) => [wire.id, wire.points])),
+    junctions: computeConnectivity(followed, pins).junctions
+  }
 })
+
+const previewWires = computed(() => dragPreview.value?.wires ?? null)
 
 /** Copies fantômes pendant un Alt+glisser : la sélection, décalée, en transparence. */
 const ghostCopies = computed(() => {
@@ -446,7 +472,9 @@ const crossingMarks = computed(() =>
 const junctions = computed(() => {
   const radius = (wireWidth.value * profile.value.junctionScale) / 2
   const fixed = profile.value.junctionColor
-  return store.connectivity.junctions.map((junction) => ({
+  // Pendant un geste, les points de jonction sont ceux de l'aperçu.
+  const list = dragPreview.value?.junctions ?? store.connectivity.junctions
+  return list.map((junction) => ({
     key: `${junction.point[0]},${junction.point[1]}`,
     x: junction.point[0],
     y: junction.point[1],
