@@ -1,3 +1,4 @@
+import { pointsAttribute } from './arrows'
 import { textEmphasisAttrs, textTransform } from './component'
 import { DIAGRAM_FONT_FAMILIES, type Diagram, type DiagramNode } from './diagram'
 import {
@@ -9,15 +10,19 @@ import {
   linkRenderPoints
 } from './diagramLinks'
 import {
+  DARK_GROUND,
+  groundOf,
+  inkColor,
   layoutNodeText,
+  LIGHT_GROUND,
+  mixColors,
+  nodePaint,
   nodeParts,
   nodeTextAttrs,
-  nodeTextTone,
   SUBTITLE_OPACITY,
-  TINT_OPACITY,
+  type DiagramGround,
   type NodePart
 } from './diagramShapes'
-import { pointsAttribute } from './arrows'
 import type { GridPoint, LocalPoint } from './grid'
 import { layoutLabel } from './placement'
 import type { ExportSettings } from './settings'
@@ -27,8 +32,8 @@ import { wirePathData } from './wires'
 /**
  * Export d'un diagramme en SVG autonome, en unités de cellule dans le viewBox. Même ordre
  * d'empilement que l'éditeur, sans marqueurs d'édition : fond, grille optionnelle, liens, nœuds,
- * étiquettes de lien, textes libres. L'encre est noire ; un fond teinté se pose sur la couleur du
- * fond de l'image (blanc si elle est transparente), comme à l'écran sur le papier.
+ * étiquettes de lien, textes libres. L'encre suit le fond de l'image : noire sur un fond clair,
+ * claire sur un fond sombre ; pour un fond transparent, `darkPage` dit sur quelle page l'image ira.
  */
 
 /** Nombre du viewBox, arrondi au millième. */
@@ -40,26 +45,32 @@ function local(point: GridPoint): LocalPoint {
   return { x: point[0], y: point[1] }
 }
 
-function nodeSvg(node: DiagramNode, diagram: Diagram, underlay: string): string {
+/** Fond sur lequel l'image est peinte : sa couleur, ou la page visée si elle est transparente. */
+export function exportGround(options: ExportSettings, darkPage: boolean): DiagramGround {
+  if (options.background === 'transparent') return darkPage ? DARK_GROUND : LIGHT_GROUND
+  return groundOf(options.background === 'white' ? '#ffffff' : options.background)
+}
+
+function nodeSvg(node: DiagramNode, diagram: Diagram, ground: DiagramGround): string {
   const style = diagram.style
-  const paint = (part: NodePart): string => {
-    const body = part.fill === 'body'
-    const filled = part.fill === 'color' || (body && node.fill !== 'none')
-    const path = `<path ${svgAttrs({
-      d: part.d,
-      fill: filled ? node.color : 'none',
-      'fill-opacity': body && node.fill === 'tint' ? TINT_OPACITY : undefined,
-      stroke: part.stroke ? node.color : 'none',
-      'stroke-width': part.stroke ? style.lineWidth : undefined
-    })}/>`
-    return body && node.fill === 'tint'
-      ? `<path ${svgAttrs({ d: part.d, fill: underlay })}/>${path}`
-      : path
+  const paint = nodePaint(node, ground)
+  const fillOf = (part: NodePart): string => {
+    if (part.fill === 'color') return paint.solid
+    return part.fill === 'body' && paint.fill !== null ? paint.fill : 'none'
   }
-  const shapes = nodeParts(node, style).map(paint).join('')
+  const shapes = nodeParts(node, style)
+    .map(
+      (part) =>
+        `<path ${svgAttrs({
+          d: part.d,
+          fill: fillOf(part),
+          stroke: part.stroke ? paint.stroke : 'none',
+          'stroke-width': part.stroke ? style.lineWidth : undefined
+        })}/>`
+    )
+    .join('')
   const text = layoutNodeText(node, style)
   if (!text) return shapes
-  const tone = nodeTextTone(node)
   const spans = text.lines
     .map(
       (line) =>
@@ -72,13 +83,14 @@ function nodeSvg(node: DiagramNode, diagram: Diagram, underlay: string): string 
         })}>${escapeXml(line.text)}</tspan>`
     )
     .join('')
-  return `${shapes}<text ${svgAttrs({
-    'text-anchor': 'middle',
-    fill: tone === 'light' ? '#ffffff' : '#000000'
-  })}>${spans}</text>`
+  return `${shapes}<text ${svgAttrs({ 'text-anchor': 'middle', fill: paint.text })}>${spans}</text>`
 }
 
-export function buildDiagramSvg(diagram: Diagram, options: ExportSettings): SvgExport | null {
+export function buildDiagramSvg(
+  diagram: Diagram,
+  options: ExportSettings,
+  darkPage = false
+): SvgExport | null {
   const bounds = diagramBounds(diagram)
   if (!bounds) return null
   const style = diagram.style
@@ -89,15 +101,18 @@ export function buildDiagramSvg(diagram: Diagram, options: ExportSettings): SvgE
   const heightCells = bounds.height + 2 * margin
   const cellPx = style.cellPx * options.scale
   const lineWidth = style.lineWidth
+  const ground = exportGround(options, darkPage)
   const parts: string[] = []
-  const paper =
-    options.background === 'transparent' || options.background === 'white'
-      ? '#ffffff'
-      : options.background
 
   if (options.background !== 'transparent') {
     parts.push(
-      `<rect ${svgAttrs({ x: x0, y: y0, width: widthCells, height: heightCells, fill: paper })}/>`
+      `<rect ${svgAttrs({
+        x: x0,
+        y: y0,
+        width: widthCells,
+        height: heightCells,
+        fill: ground.paper
+      })}/>`
     )
   }
 
@@ -109,9 +124,9 @@ export function buildDiagramSvg(diagram: Diagram, options: ExportSettings): SvgE
     for (let y = Math.ceil(y0); y <= Math.floor(y0 + heightCells); y++) {
       lines.push(`<line ${svgAttrs({ x1: x0, y1: y, x2: x0 + widthCells, y2: y })}/>`)
     }
-    parts.push(
-      `<g ${svgAttrs({ stroke: '#d8dee4', 'stroke-width': 1 / cellPx })}>${lines.join('')}</g>`
-    )
+    // Une grille discrète : un peu d'encre dans la couleur du papier.
+    const stroke = ground.dark ? mixColors(ground.ink, ground.paper, 0.18) : '#d8dee4'
+    parts.push(`<g ${svgAttrs({ stroke, 'stroke-width': 1 / cellPx })}>${lines.join('')}</g>`)
   }
 
   if (diagram.links.length > 0) {
@@ -136,7 +151,7 @@ export function buildDiagramSvg(diagram: Diagram, options: ExportSettings): SvgE
         d: wirePathData(points, style.cornerRadius),
         'stroke-dasharray': linkDashArray(link, lineWidth)
       })}/>`
-      return `<g ${svgAttrs({ stroke: link.color })}>${path}${heads.join('')}</g>`
+      return `<g ${svgAttrs({ stroke: inkColor(link.color, ground) })}>${path}${heads.join('')}</g>`
     })
     parts.push(
       `<g ${svgAttrs({
@@ -149,7 +164,7 @@ export function buildDiagramSvg(diagram: Diagram, options: ExportSettings): SvgE
   }
 
   if (diagram.nodes.length > 0) {
-    const groups = diagram.nodes.map((node) => `<g>${nodeSvg(node, diagram, paper)}</g>`)
+    const groups = diagram.nodes.map((node) => `<g>${nodeSvg(node, diagram, ground)}</g>`)
     parts.push(
       `<g ${svgAttrs({
         class: 'nodes',
@@ -169,15 +184,16 @@ export function buildDiagramSvg(diagram: Diagram, options: ExportSettings): SvgE
         (line) => `<tspan ${svgAttrs({ x: layout.x, y: line.y })}>${escapeXml(line.text)}</tspan>`
       )
       .join('')
+    // Un voile de la couleur du papier sous l'étiquette : elle reste lisible posée sur un trait.
     const back = `<rect ${svgAttrs({
       x: box.x - 0.2,
       y: box.y,
       width: box.w + 0.4,
       height: box.h,
-      fill: paper,
+      fill: ground.paper,
       'fill-opacity': 0.85
     })}/>`
-    return [`${back}<text ${svgAttrs({ fill: link.color })}>${spans}</text>`]
+    return [`${back}<text ${svgAttrs({ fill: inkColor(link.color, ground) })}>${spans}</text>`]
   })
   if (labelParts.length > 0) {
     parts.push(
@@ -200,7 +216,7 @@ export function buildDiagramSvg(diagram: Diagram, options: ExportSettings): SvgE
       return `<text ${svgAttrs({
         'font-size': text.size / style.cellPx,
         'text-anchor': text.anchor,
-        fill: text.color,
+        fill: inkColor(text.color, ground),
         ...textEmphasisAttrs(text),
         transform: textTransform(text)
       })}>${spans}</text>`

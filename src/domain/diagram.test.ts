@@ -21,7 +21,15 @@ import {
   nodeAnchors,
   pathMidpoint
 } from './diagramLinks'
-import { layoutNodeText, nodeParts, nodeTextTone } from './diagramShapes'
+import {
+  DARK_GROUND,
+  groundOf,
+  layoutNodeText,
+  LIGHT_GROUND,
+  mixColors,
+  nodePaint,
+  nodeParts
+} from './diagramShapes'
 import fixture from './fixtures/v1/diagram.json?raw'
 import { FileFormatError } from './migrations'
 import { parseDiagram, serializeDiagram } from './serialize'
@@ -148,10 +156,52 @@ describe('diagramme : formes', () => {
     expect(layoutNodeText(node({ shape: 'start', w: 2, h: 2 }), style)).toBeNull()
   })
 
-  it('écrit en clair sur un fond plein sombre, à l’encre ailleurs', () => {
-    expect(nodeTextTone({ color: '#3c3489', fill: 'solid' })).toBe('light')
-    expect(nodeTextTone({ color: '#ffd33d', fill: 'solid' })).toBe('dark')
-    expect(nodeTextTone({ color: '#3c3489', fill: 'tint' })).toBe('ink')
+  it('mêle deux couleurs et choisit l’encre d’après le papier', () => {
+    expect(mixColors('#000000', '#ffffff', 0.5)).toBe('#808080')
+    expect(mixColors('#ff0000', '#0000ff', 1)).toBe('#ff0000')
+    expect(groundOf('#ffffff')).toEqual(LIGHT_GROUND)
+    expect(groundOf('#20242c')).toMatchObject({ ink: '#e6edf3', dark: true })
+  })
+
+  it('contour : le trait a la couleur, pas de fond, texte à l’encre', () => {
+    expect(nodePaint({ color: '#1d4ed8', fill: 'none' }, LIGHT_GROUND)).toEqual({
+      stroke: '#1d4ed8',
+      fill: null,
+      solid: '#1d4ed8',
+      text: '#000000'
+    })
+    // Le noir pur est l'encre : claire sur un papier sombre.
+    expect(nodePaint({ color: '#000000', fill: 'none' }, DARK_GROUND)).toMatchObject({
+      stroke: '#e6edf3',
+      text: '#e6edf3'
+    })
+  })
+
+  it('teinté : fond plus clair que le contour sur papier clair, plus sombre sur papier sombre', () => {
+    const light = nodePaint({ color: '#1d4ed8', fill: 'tint' }, LIGHT_GROUND)
+    expect(light.stroke).toBe('#1d4ed8')
+    expect(light.fill).toBe(mixColors('#1d4ed8', '#ffffff', 0.16))
+    expect(light.text).toBe('#000000')
+    const dark = nodePaint({ color: '#7f77dd', fill: 'tint' }, DARK_GROUND)
+    expect(dark.fill).toBe(mixColors('#7f77dd', '#16181d', 0.38))
+    expect(dark.text).toBe('#e6edf3')
+  })
+
+  it('plein : le fond est la couleur, le contour s’en détache, le texte contraste', () => {
+    // Couleur sombre : contour éclairci, texte blanc.
+    const deep = nodePaint({ color: '#3c3489', fill: 'solid' }, LIGHT_GROUND)
+    expect(deep.fill).toBe('#3c3489')
+    expect(deep.stroke).toBe(mixColors('#3c3489', '#ffffff', 0.62))
+    expect(deep.text).toBe('#ffffff')
+    // Couleur claire : contour foncé, texte noir.
+    const pale = nodePaint({ color: '#ffd33d', fill: 'solid' }, DARK_GROUND)
+    expect(pale.stroke).toBe(mixColors('#ffd33d', '#000000', 0.62))
+    expect(pale.text).toBe('#000000')
+    // Plein à l'encre sur papier sombre : fond clair, texte noir.
+    expect(nodePaint({ color: '#000000', fill: 'solid' }, DARK_GROUND)).toMatchObject({
+      fill: '#e6edf3',
+      text: '#000000'
+    })
   })
 })
 

@@ -113,7 +113,7 @@ export const useDiagramStore = defineStore('diagram', () => {
   const drawing = shallowRef<LinkDrawing | null>(null)
   // Style des prochains éléments : celui du dernier nœud ou lien stylé.
   const nodeColor = ref(DEFAULT_COLOR)
-  const nodeFill = ref<NodeFill>('none')
+  const nodeFill = ref<NodeFill>('tint')
   const linkColor = ref(DEFAULT_COLOR)
   const linkDash = ref<LinkDash>('solid')
   const linkStartArrow = ref(false)

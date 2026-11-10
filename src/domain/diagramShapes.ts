@@ -17,8 +17,17 @@ import { roundedPathData } from './roundedPath'
 
 /** Épaisseur d'une barre de fourche, en cellules. */
 export const BAR_THICKNESS = 0.6
-/** Opacité du fond « teinté » d'un nœud. */
-export const TINT_OPACITY = 0.16
+/**
+ * Fond « teinté » : part de la couleur du nœud mêlée au papier. Sur papier clair le fond est plus
+ * clair que le contour ; sur papier sombre, plus foncé, et il faut plus de couleur pour le voir.
+ * L'écran lit ces parts dans `--node-tint` (style.css), l'export les calcule ici.
+ */
+export const TINT_SHARE = { light: 0.16, dark: 0.38 } as const
+/**
+ * Fond « plein » : le fond est la couleur même, et le contour s'en détache, éclairci sur une
+ * couleur sombre, foncé sur une couleur claire. Part de la couleur gardée dans le contour.
+ */
+export const SOLID_BORDER_SHARE = 0.62
 /** Le sous-titre s'efface un peu devant le titre. */
 export const SUBTITLE_OPACITY = 0.75
 
@@ -245,12 +254,83 @@ export function isDarkColor(hex: string): boolean {
   return (red * 299 + green * 587 + blue * 114) / 1000 < 150
 }
 
-/** Couleur du texte d'un nœud : l'encre, sauf sur un fond plein où il contraste avec lui. */
-export type NodeTextTone = 'ink' | 'light' | 'dark'
+function channels(hex: string): [number, number, number] {
+  const value = Number.parseInt(hex.slice(1), 16)
+  return [(value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff]
+}
 
-export function nodeTextTone(node: Pick<DiagramNode, 'color' | 'fill'>): NodeTextTone {
-  if (node.fill !== 'solid') return 'ink'
-  return isDarkColor(node.color) ? 'light' : 'dark'
+/** Mélange de deux couleurs #rrggbb : `share` de la première, le reste de la seconde. */
+export function mixColors(color: string, other: string, share: number): string {
+  const a = channels(color)
+  const b = channels(other)
+  const mixed = a.map((value, index) => Math.round(value * share + (b[index] ?? 0) * (1 - share)))
+  return `#${mixed.map((value) => value.toString(16).padStart(2, '0')).join('')}`
+}
+
+/** Ce sur quoi un diagramme est peint : la couleur du papier et l'encre qui s'y lit. */
+export interface DiagramGround {
+  paper: string
+  ink: string
+  dark: boolean
+}
+
+export const LIGHT_GROUND: DiagramGround = { paper: '#ffffff', ink: '#000000', dark: false }
+export const DARK_GROUND: DiagramGround = { paper: '#16181d', ink: '#e6edf3', dark: true }
+
+/** Fond d'une couleur donnée : l'encre est claire sur un papier sombre, noire sinon. */
+export function groundOf(paper: string): DiagramGround {
+  const dark = isDarkColor(paper)
+  return { paper, ink: dark ? DARK_GROUND.ink : LIGHT_GROUND.ink, dark }
+}
+
+/** Une couleur du document telle qu'on la peint : le noir pur devient l'encre du fond. */
+export function inkColor(hex: string, ground: DiagramGround): string {
+  return hex.toLowerCase() === '#000000' ? ground.ink : hex
+}
+
+/** Vers quoi tire le contour d'un fond plein : le blanc sur une couleur sombre, le noir sinon. */
+export function solidBorderToward(color: string): string {
+  return isDarkColor(color) ? '#ffffff' : '#000000'
+}
+
+/** Couleurs d'un nœud, en #rrggbb, pour un fond donné : ce que l'export écrit. */
+export interface NodePaint {
+  /** Contour, et traits intérieurs de la forme. */
+  stroke: string
+  /** Fond de la forme ; null pour un simple contour. */
+  fill: string | null
+  /** Parties toujours pleines : disque de départ, cœur de la fin, barre. */
+  solid: string
+  text: string
+}
+
+/**
+ * Couleurs d'un nœud selon son fond. Contour : le trait a sa couleur, pas de fond. Teinté : le fond
+ * est sa couleur mêlée au papier. Plein : le fond est sa couleur, le contour s'en détache, et le
+ * texte contraste avec le fond ; ailleurs le texte est à l'encre.
+ */
+export function nodePaint(
+  node: Pick<DiagramNode, 'color' | 'fill'>,
+  ground: DiagramGround
+): NodePaint {
+  const color = inkColor(node.color, ground)
+  if (node.fill === 'solid') {
+    return {
+      stroke: mixColors(color, solidBorderToward(color), SOLID_BORDER_SHARE),
+      fill: color,
+      solid: color,
+      text: isDarkColor(color) ? '#ffffff' : '#000000'
+    }
+  }
+  return {
+    stroke: color,
+    fill:
+      node.fill === 'tint'
+        ? mixColors(color, ground.paper, ground.dark ? TINT_SHARE.dark : TINT_SHARE.light)
+        : null,
+    solid: color,
+    text: ground.ink
+  }
 }
 
 /** Rectangle occupé par un nœud, épaisseur d'une barre comprise. */

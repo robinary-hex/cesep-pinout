@@ -35,7 +35,7 @@ describe('diagramme : nœuds', () => {
       h: 6,
       title: '',
       color: '#000000',
-      fill: 'none'
+      fill: 'tint'
     })
     expect(store.selectedNodes).toEqual([id])
     expect(store.undoLabel).toBe('Poser « Action »')
@@ -79,13 +79,13 @@ describe('diagramme : nœuds', () => {
     const store = useDiagramStore()
     const a = store.addNode('rounded', 0, 0)
     store.setCurrentColor('#1d4ed8')
-    store.setCurrentFill('tint')
-    expect(store.doc.nodes[0]).toMatchObject({ color: '#1d4ed8', fill: 'tint' })
+    store.setCurrentFill('solid')
+    expect(store.doc.nodes[0]).toMatchObject({ color: '#1d4ed8', fill: 'solid' })
     store.clearSelection()
     const b = store.addNode('rect', 0, 10)
     expect(store.doc.nodes.find((node) => node.id === b)).toMatchObject({
       color: '#1d4ed8',
-      fill: 'tint'
+      fill: 'solid'
     })
     expect(store.doc.nodes.find((node) => node.id === a)?.color).toBe('#1d4ed8')
   })

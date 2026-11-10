@@ -60,8 +60,8 @@ function createNew(): void {
   store.newDiagram()
 }
 
-function buildSvg(options: ExportSettings): SvgExport | null {
-  return buildDiagramSvg(store.doc, options)
+function buildSvg(options: ExportSettings, darkPage: boolean): SvgExport | null {
+  return buildDiagramSvg(store.doc, options, darkPage)
 }
 
 function openExport(): void {
@@ -477,6 +477,7 @@ defineExpose({ createNew, open, openRecent, save, openExport })
       :name="store.doc.name"
       :file-path="store.filePath"
       :cell-px="store.doc.style.cellPx"
+      ink-follows-background
       :build="buildSvg"
       @close="showExport = false"
     />

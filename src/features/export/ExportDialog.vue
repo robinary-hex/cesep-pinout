@@ -19,7 +19,12 @@ const props = defineProps<{
   cellPx: number
   /** Propose la case des libellés de composants (montage seulement). */
   withLabels?: boolean
-  build: (options: ExportSettings) => SvgExport | null
+  /**
+   * L'encre suit le fond (diagramme) : claire sur un fond sombre. Pour un fond transparent, une
+   * case dit si l'image ira sur une page sombre.
+   */
+  inkFollowsBackground?: boolean
+  build: (options: ExportSettings, darkPage: boolean) => SvgExport | null
 }>()
 const emit = defineEmits<{ close: [] }>()
 const library = useLibraryStore()
@@ -38,7 +43,14 @@ watch([backgroundChoice, customBackground], ([choice, custom]) => {
   options.background = choice === 'custom' ? custom : choice
 })
 
-const result = computed(() => props.build({ ...options }))
+/** Fond transparent destiné à une page sombre : l'encre est claire. Non mémorisé. */
+const darkPage = ref(false)
+const onDarkPage = computed(
+  () =>
+    props.inkFollowsBackground === true && options.background === 'transparent' && darkPage.value
+)
+
+const result = computed(() => props.build({ ...options }, onDarkPage.value))
 const previewUrl = ref<string | null>(null)
 
 /**
@@ -179,6 +191,14 @@ function setMargin(event: Event): void {
           </label>
         </fieldset>
 
+        <label
+          v-if="inkFollowsBackground && options.background === 'transparent'"
+          class="check"
+          title="Sur un fond de couleur, l'encre suit déjà le fond : claire s'il est sombre"
+        >
+          <input v-model="darkPage" type="checkbox" />
+          <span>Pour une page sombre (encre claire)</span>
+        </label>
         <label class="field">
           <span>Marge autour du contenu (cellules)</span>
           <input type="number" min="0" step="1" :value="options.marginCells" @change="setMargin" />
@@ -199,7 +219,10 @@ function setMargin(event: Event): void {
         <p v-else class="hint">Le {{ what }} est vide : rien à exporter.</p>
       </form>
 
-      <div class="preview" :class="{ transparent: options.background === 'transparent' }">
+      <div
+        class="preview"
+        :class="{ transparent: options.background === 'transparent', 'dark-page': onDarkPage }"
+      >
         <img
           v-if="previewUrl"
           :src="previewUrl"
@@ -311,6 +334,11 @@ legend {
     radial-gradient(circle at 100% 0, var(--transparent-dot) 1.3px, transparent 1.9px),
     radial-gradient(circle at 0 100%, var(--transparent-dot) 1.3px, transparent 1.9px),
     radial-gradient(circle at 100% 100%, var(--transparent-dot) 1.3px, transparent 1.9px);
+}
+
+/* Image transparente destinée à une page sombre : l'aperçu la montre sur du sombre. */
+.preview.transparent.dark-page img {
+  background-color: #16181d;
 }
 
 .message {

@@ -43,6 +43,8 @@
   --checker-a: #ffffff;
   --checker-b: #e6e9ed;
   --ink: #000000;
+  /* Fond teinté d'un nœud de diagramme : part de sa couleur mêlée au papier (`TINT_SHARE`). */
+  --node-tint: 16%;
   --alert: #cf222e;
   /* Aperçu d'export transparent : fond et points de la grille. */
   --transparent-bg: #ffffff;
@@ -97,6 +99,7 @@
   --checker-b: #343a43;
   /* Le noir pur des composants et des fils s'affiche dans cette encre ; l'export reste noir. */
   --ink: #e6edf3;
+  --node-tint: 38%;
   /* Extrémités et broches reliées à rien : ambre, le rouge jure sur le papier sombre. */
   --alert: #d29922;
   --transparent-bg: #2a2f36;

@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { LinkDash, NodeFill } from '@/domain'
+import {
+  DEFAULT_DIAGRAM_STYLE,
+  type DiagramNode,
+  type DiagramStyle,
+  type LinkDash,
+  type NodeFill
+} from '@/domain'
+import DiagramNodeGraphic from '@/render/DiagramNodeGraphic.vue'
 import { baseName } from '@/io/paths'
 import Icon from '@/ui/Icon.vue'
 import { useDiagramStore } from './store'
@@ -26,15 +33,38 @@ function pickCustom(event: Event): void {
   store.setCurrentColor(hex)
 }
 
-const FILLS: { value: NodeFill; label: string }[] = [
-  { value: 'none', label: 'Contour' },
-  { value: 'tint', label: 'Teinté' },
-  { value: 'solid', label: 'Plein' }
+/** Fonds proposés, chacun montré par un petit nœud d'exemple dans la couleur courante. */
+const FILLS: { value: NodeFill; label: string; title: string }[] = [
+  { value: 'none', label: 'Contour', title: 'Fond : contour seul' },
+  {
+    value: 'tint',
+    label: 'Teinté',
+    title: 'Fond : teinté, plus clair que le contour (plus sombre en thème sombre)'
+  },
+  {
+    value: 'solid',
+    label: 'Plein',
+    title: 'Fond : plein, la couleur même, contour qui s’en détache'
+  }
 ]
 
-function setFill(event: Event): void {
-  store.setCurrentFill((event.target as HTMLSelectElement).value as NodeFill)
+/** Nœud d'exemple d'une pastille de fond : la forme, sans texte, dans la couleur des nœuds. */
+function fillSample(fill: NodeFill): DiagramNode {
+  return {
+    id: fill,
+    shape: 'rounded',
+    x: 0,
+    y: 0,
+    w: 10,
+    h: 6,
+    title: '',
+    subtitle: '',
+    color: firstNode.value?.color ?? store.nodeColor,
+    fill
+  }
 }
+
+const SAMPLE_LOOK: DiagramStyle = { ...DEFAULT_DIAGRAM_STYLE, lineWidth: 0.7, nodeRadius: 1.5 }
 
 // Fond et style de lien : les boutons montrent ceux de la sélection s'il y en a une, sinon ceux
 // des prochains éléments ; un clic règle les deux.
@@ -125,17 +155,21 @@ function toggleEndArrow(): void {
         </label>
       </div>
 
-      <div class="group">
-        <select
-          class="fill"
-          :value="shownFill"
-          title="Fond des prochains nœuds ; change aussi celui des nœuds sélectionnés"
-          @change="setFill"
+      <div class="group fills">
+        <button
+          v-for="fill in FILLS"
+          :key="fill.value"
+          type="button"
+          class="tool fill-choice"
+          :class="{ active: shownFill === fill.value }"
+          :title="`${fill.title} ; change aussi les nœuds sélectionnés`"
+          :aria-label="fill.label"
+          @click="store.setCurrentFill(fill.value)"
         >
-          <option v-for="fill in FILLS" :key="fill.value" :value="fill.value">
-            {{ fill.label }}
-          </option>
-        </select>
+          <svg viewBox="-1 -1 12 8" width="24" height="16" aria-hidden="true">
+            <DiagramNodeGraphic :node="fillSample(fill.value)" :look="SAMPLE_LOOK" />
+          </svg>
+        </button>
       </div>
 
       <div class="group" title="Style des prochains liens ; change aussi les liens sélectionnés">
@@ -319,14 +353,26 @@ function toggleEndArrow(): void {
   cursor: pointer;
 }
 
-.fill {
-  font: inherit;
-  font-size: 13px;
-  color: var(--text);
-  padding: 4px 6px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface-2);
+/* Pastilles de fond : un petit nœud dessiné sur la couleur du papier, comme sur le diagramme. */
+.fills {
+  gap: 2px;
+}
+
+.fill-choice {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 5px;
+  background: var(--paper);
+}
+
+.fill-choice svg {
+  display: block;
+}
+
+.fill-choice.active {
+  background: var(--paper);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 .zoom {
