@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   boxHandles,
+  createNode,
   DIAGRAM_FONT_FAMILIES,
   dragVertex,
   gridLines,
@@ -260,7 +261,7 @@ function local(point: GridPoint): LocalPoint {
 
 const renderedLinks = computed(() =>
   shown.value.links.map((link) => {
-    const points = linkRenderPoints(link, shown.value.nodes)
+    const points = linkRenderPoints(link, shown.value.nodes, lineWidth.value)
     const heads: string[] = []
     const first = points[0]
     const second = points[1]
@@ -488,14 +489,13 @@ const ghost = computed<DiagramNode | null>(() => {
   if (!shape || !point || store.tool !== 'place') return null
   const size = NODE_SPECS[shape].defaultSize
   return {
-    id: 'ghost',
-    shape,
-    x: Math.round(point.x - size.w / 2),
-    y: Math.round(point.y - size.h / 2),
-    w: size.w,
-    h: size.h,
-    title: '',
-    subtitle: '',
+    ...createNode(
+      'ghost',
+      shape,
+      Math.round(point.x - size.w / 2),
+      Math.round(point.y - size.h / 2),
+      look.value
+    ),
     color: store.nodeColor,
     fill: store.nodeFill
   }

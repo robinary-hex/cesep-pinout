@@ -188,7 +188,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Diagramme (`src/features/diagram-editor/`, domaine `src/domain/diagram.ts`,
   `diagramShapes.ts`, `diagramLinks.ts`, `diagramSvg.ts`) : organigrammes, diagrammes d'activité,
   schémas de communication ; pas de diagrammes de séquence ni de classes (décision du 10 novembre
-  2026). Document à part, fichier `.pinuml` (JSON, `schemaVersion` 1), même grille infinie que le
+  2026). Document à part, fichier `.pinuml` (JSON, `schemaVersion` 2), même grille infinie que le
   montage mais plus fine (`style.cellPx` = 10).
   - Nœuds : une boîte en cellules entières, une forme du catalogue en dur (`NODE_SHAPES`,
     `NODE_SPECS` : action arrondie, rectangle, décision, départ, fin, fin de flot, fourche, envoi,
@@ -201,19 +201,30 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     écrit ; l'écran applique les mêmes règles avec les variables du thème) : en contour, le trait
     a la couleur et il n'y a pas de fond ; en teinté (fond d'un nouveau nœud), le fond est la
     couleur mêlée au papier, opaque, donc plus clair que le contour en thème clair et plus sombre
-    en thème sombre (`TINT_SHARE`, `--node-tint` dans style.css) ; en plein, le fond est la
+    en thème sombre (`TINT_SHARE` : 20 % de couleur en clair, 40 % en sombre ; `--node-tint` dans
+    style.css) ; en plein, le fond est la
     couleur même et le contour s'en détache, éclairci sur une couleur sombre, foncé sur une
     couleur claire (`SOLID_BORDER_SHARE`). Texte à l'encre du thème, sauf sur un fond plein où il
     contraste avec lui. Trois pastilles dans la barre montrent les fonds dans la couleur courante.
-    Police du diagramme : normale (titre demi-gras) ou chasse fixe (sous-titre en italique). Un
-    nœud grandit de lui-même quand le texte qu'on vient d'y écrire déborde (`setNodeText`, même
-    commande que le texte, centre gardé) ; « Ajuster » (panneau, menu contextuel) le ramène au
+    Texte : le diagramme a une police (normale ou chasse fixe) et des tailles ; chaque nœud a son
+    style (`NodeTextStyle`, boutons du panneau) : `font` (null = la police du diagramme, sinon la
+    sienne ; un bouton bascule la chasse fixe), `bold`, `italic`, `underline`, `strike`, et
+    `textScale`, multiplicateur ×1 à ×3 des tailles du diagramme (`NODE_TEXT_SCALES`). Gras,
+    italique, souligné et barré stylent le titre ; le sous-titre reste une ligne secondaire,
+    maigre, en italique en chasse fixe ; police et taille valent pour les deux
+    (`layoutNodeText`, `nodeLineAttrs`). Un nœud neuf a un titre gras en police normale, maigre
+    en chasse fixe (`defaultNodeTextStyle`, `createNode`). Un
+    nœud grandit de lui-même quand le texte qu'on vient d'y écrire déborde (`setNodeText`, `setNodesTextStyle` quand c'est son style qui le grossit, même
+    commande, centre gardé) ; « Ajuster » (panneau, menu contextuel) le ramène au
     plus près (`fitNodeToText`, `nodeBoxForText`). La largeur du texte se mesure sur un canevas
     hors écran (`src/render/textMeasure.ts`), estimée sans navigateur. Le style du diagramme
     (trait, coins, coudes, tailles de texte, police) se règle dans le panneau, sans sélection.
   - Liens : la géométrie des fils (`wires.ts`), coudes posés à la main, pas de routage
     automatique. Pointe ouverte au départ et/ou à l'arrivée, trait plein ou pointillé, couleur,
-    étiquette (`label`, décalage en quarts de cellule depuis le milieu du tracé). L'accroche se
+    étiquette (`label`, décalage en quarts de cellule depuis le milieu du tracé). Au dessin
+    seulement (`linkRenderPoints`, écran et export), une extrémité qui porte une pointe s'arrête
+    un peu avant son point d'arrivée (`linkArrowGap`, 0,4 cellule) : la pointe ne touche pas la
+    forme ; les sommets enregistrés ne changent pas. L'accroche se
     déduit de la géométrie, jamais stockée : une extrémité posée sur un point d'accroche d'un nœud
     (`nodeAnchors` : tour d'un rectangle, quatre pointes d'un losange ou d'un disque, toute une
     barre) le suit quand il bouge, change de taille ou de forme (`linksFollowingNodes`,
@@ -323,7 +334,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
   par version dans `src/domain/fixtures/`. Versions courantes : composant 14, projet 19, paramètres 9,
-  diagramme 1
+  diagramme 2
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   createEmptyDiagram,
+  createNode,
   DEFAULT_DIAGRAM_STYLE,
+  defaultNodeTextStyle,
   fittedNodeSize,
   isEmptyDiagram,
   NODE_SHAPES,
@@ -13,6 +15,7 @@ import {
 import {
   defaultLabelOffset,
   diagramBounds,
+  linkArrowGap,
   linkArrowHead,
   linkLabelCenter,
   linkRenderPoints,
@@ -23,17 +26,19 @@ import {
 } from './diagramLinks'
 import {
   DARK_GROUND,
-  estimatedNodeTextMeasurer,
+  estimatedNodeTextWidth,
   groundOf,
   layoutNodeText,
   LIGHT_GROUND,
   mixColors,
   nodeBoxForText,
+  nodeLineAttrs,
   nodePaint,
   nodeParts,
   nodeSizeForText
 } from './diagramShapes'
-import fixture from './fixtures/v1/diagram.json?raw'
+import fixtureV1 from './fixtures/v1/diagram.json?raw'
+import fixture from './fixtures/v2/diagram.json?raw'
 import { FileFormatError } from './migrations'
 import { parseDiagram, serializeDiagram } from './serialize'
 
@@ -51,6 +56,12 @@ function node(patch: Partial<DiagramNode> = {}): DiagramNode {
     subtitle: '',
     color: '#000000',
     fill: 'none',
+    font: null,
+    bold: true,
+    italic: false,
+    underline: false,
+    strike: false,
+    textScale: 1,
     ...patch
   }
 }
@@ -73,7 +84,7 @@ function link(points: [number, number][], patch: Partial<DiagramLink> = {}): Dia
 describe('diagramme : format', () => {
   it('lit et réécrit un fichier sans rien perdre', () => {
     const diagram = parseDiagram(fixture)
-    expect(diagram.schemaVersion).toBe(1)
+    expect(diagram.schemaVersion).toBe(2)
     expect(diagram.nodes.map((entry) => entry.shape)).toEqual([
       'start',
       'diamond',
@@ -104,6 +115,39 @@ describe('diagramme : format', () => {
     expect(() => parseDiagram(broken({ nodes: [node({ shape: 'diamond', w: 5 })] }))).toThrow(
       FileFormatError
     )
+  })
+
+  it('v1 → v2 : chaque nœud reçoit un style de texte qui garde son allure', () => {
+    // Diagramme en chasse fixe : le titre y était maigre, il le reste.
+    const mono = parseDiagram(fixtureV1)
+    expect(mono.schemaVersion).toBe(2)
+    expect(mono.nodes[1]).toMatchObject({
+      title: 'condition',
+      font: null,
+      bold: false,
+      italic: false,
+      underline: false,
+      strike: false,
+      textScale: 1
+    })
+    // En police normale, le titre était demi-gras : il devient gras.
+    const raw = JSON.parse(fixtureV1) as { style: { font: string } }
+    raw.style.font = 'sans'
+    expect(parseDiagram(JSON.stringify(raw)).nodes[1]?.bold).toBe(true)
+  })
+
+  it('pose un nœud neuf au style de texte par défaut du diagramme', () => {
+    expect(createNode('n1', 'rounded', 3, 4)).toMatchObject({
+      x: 3,
+      y: 4,
+      w: 16,
+      h: 6,
+      fill: 'tint',
+      font: null,
+      bold: true,
+      textScale: 1
+    })
+    expect(defaultNodeTextStyle({ ...style, font: 'mono' }).bold).toBe(false)
   })
 
   it('part d’un diagramme vide au style par défaut', () => {
@@ -159,6 +203,41 @@ describe('diagramme : formes', () => {
     expect(layoutNodeText(node({ shape: 'start', w: 2, h: 2 }), style)).toBeNull()
   })
 
+  it('style le titre selon le nœud, garde le sous-titre secondaire, et suit sa police et sa taille', () => {
+    const styled = node({
+      subtitle: 'détail',
+      bold: true,
+      italic: true,
+      underline: true,
+      strike: true,
+      textScale: 2
+    })
+    const layout = layoutNodeText(styled, style)
+    const [title, subtitle] = layout?.lines ?? []
+    if (!title || !subtitle) throw new Error('deux lignes attendues')
+    expect(nodeLineAttrs(title)).toEqual({
+      'font-weight': '600',
+      'font-style': 'italic',
+      'text-decoration': 'underline line-through'
+    })
+    expect(nodeLineAttrs(subtitle)).toEqual({
+      'font-weight': undefined,
+      'font-style': undefined,
+      'text-decoration': undefined
+    })
+    // Taille ×2 : les deux lignes doublent.
+    expect(title.size).toBeCloseTo(2.8)
+    expect(subtitle.size).toBeCloseTo(2.4)
+    // Police : celle du diagramme, sauf si le nœud a la sienne ; en chasse fixe le sous-titre
+    // passe en italique.
+    expect(layout?.font).toBe('sans')
+    const mono = layoutNodeText(node({ subtitle: 'détail', font: 'mono', bold: false }), style)
+    expect(mono?.font).toBe('mono')
+    expect(mono?.lines.map((entry) => entry.italic)).toEqual([false, true])
+    expect(layoutNodeText(node({ font: 'sans' }), { ...style, font: 'mono' })?.font).toBe('sans')
+    expect(layoutNodeText(node(), { ...style, font: 'mono' })?.font).toBe('mono')
+  })
+
   it('mêle deux couleurs et choisit l’encre d’après le papier', () => {
     expect(mixColors('#000000', '#ffffff', 0.5)).toBe('#808080')
     expect(mixColors('#ff0000', '#0000ff', 1)).toBe('#ff0000')
@@ -183,10 +262,10 @@ describe('diagramme : formes', () => {
   it('teinté : fond plus clair que le contour sur papier clair, plus sombre sur papier sombre', () => {
     const light = nodePaint({ color: '#1d4ed8', fill: 'tint' }, LIGHT_GROUND)
     expect(light.stroke).toBe('#1d4ed8')
-    expect(light.fill).toBe(mixColors('#1d4ed8', '#ffffff', 0.16))
+    expect(light.fill).toBe(mixColors('#1d4ed8', '#ffffff', 0.2))
     expect(light.text).toBe('#000000')
     const dark = nodePaint({ color: '#7f77dd', fill: 'tint' }, DARK_GROUND)
-    expect(dark.fill).toBe(mixColors('#7f77dd', '#16181d', 0.38))
+    expect(dark.fill).toBe(mixColors('#7f77dd', '#16181d', 0.4))
     expect(dark.text).toBe('#e6edf3')
   })
 
@@ -209,7 +288,7 @@ describe('diagramme : formes', () => {
 
   it('calcule la taille qu’il faut à un nœud pour son texte, selon sa forme', () => {
     // Mesure simple : une cellule par caractère.
-    const measure = (text: string): number => text.length
+    const measure = (line: { text: string }): number => line.text.length
     // « Titre » : 5 de large + 2 × 1,5 de marge ; une ligne de 1,68 + 2 × 1 de marge.
     expect(nodeSizeForText(node(), style, measure)).toEqual({ w: 8, h: 4 })
     // Deux lignes : la plus longue fait la largeur, les deux la hauteur.
@@ -223,11 +302,16 @@ describe('diagramme : formes', () => {
     expect(nodeSizeForText(node({ title: '' }), style, measure)).toBeNull()
     expect(nodeSizeForText(node({ shape: 'start', w: 2, h: 2 }), style, measure)).toBeNull()
     // L'estimation sans écran : un caractère moyen par lettre.
-    expect(estimatedNodeTextMeasurer(style)('abcd', 'title')).toBeCloseTo(4 * 0.55 * 1.4)
+    const line = layoutNodeText(node({ title: 'abcd', bold: false }), style)?.lines[0]
+    if (!line) throw new Error('ligne attendue')
+    expect(estimatedNodeTextWidth(line)).toBeCloseTo(4 * 0.55 * 1.4)
+    // Le gras élargit un peu ; pas en chasse fixe.
+    expect(estimatedNodeTextWidth({ ...line, bold: true })).toBeCloseTo(4 * 0.55 * 1.4 * 1.06)
+    expect(estimatedNodeTextWidth({ ...line, bold: true, font: 'mono' })).toBeCloseTo(4 * 0.6 * 1.4)
   })
 
   it('ajuste la boîte autour de son centre, ou la fait seulement grandir', () => {
-    const measure = (text: string): number => text.length
+    const measure = (line: { text: string }): number => line.text.length
     const wide = node({ title: 'Un titre vraiment très long' })
     // 27 + 3 = 30 de large : la boîte de 16 grandit de 14, moitié de chaque côté.
     expect(nodeBoxForText(wide, style, measure, true)).toEqual({ x: -7, y: 0, w: 30, h: 6 })
@@ -339,25 +423,66 @@ describe('diagramme : dessin des liens', () => {
     expect(linkArrowHead({ x: 1, y: 1 }, { x: 1, y: 1 }, 0.15)).toBeNull()
   })
 
-  it('arrête au bord de la barre un lien qui arrive de face', () => {
-    const bar = node({ id: 'b', shape: 'bar', x: 0, y: 10, w: 8, h: 0 })
+  it('laisse un petit espace devant une pointe de flèche, au dessin seulement', () => {
+    expect(linkArrowGap(0.15)).toBe(0.4)
+    expect(linkArrowGap(0.4)).toBe(1)
     const arriving = link([
       [4, 4],
       [4, 10]
     ])
-    expect(linkRenderPoints(arriving, [bar]).at(-1)).toEqual([4, 9.7])
-    const leaving = link([
-      [2, 10],
-      [2, 14]
+    // Flèche à l'arrivée : le trait s'arrête 0,4 cellule avant ; le départ, sans pointe, ne bouge pas.
+    expect(linkRenderPoints(arriving, [], 0.15)).toEqual([
+      [4, 4],
+      [4, 9.6]
     ])
-    expect(linkRenderPoints(leaving, [bar])[0]).toEqual([2, 10.3])
+    // Les sommets du lien, eux, n'ont pas changé.
+    expect(arriving.points.at(-1)).toEqual([4, 10])
+    // Sans pointe, rien ne recule ; avec deux pointes, les deux bouts.
+    expect(linkRenderPoints({ ...arriving, endArrow: false }, [], 0.15)).toEqual(arriving.points)
+    expect(linkRenderPoints({ ...arriving, startArrow: true }, [], 0.15)).toEqual([
+      [4, 4.4],
+      [4, 9.6]
+    ])
+    // Un segment très court ne recule jamais de plus de sa moitié.
+    const short = link([
+      [0, 0],
+      [0.5, 0]
+    ])
+    expect(linkRenderPoints(short, [], 0.15).at(-1)).toEqual([0.25, 0])
+  })
+
+  it('arrête au bord de la barre un lien qui arrive de face', () => {
+    const bar = node({ id: 'b', shape: 'bar', x: 0, y: 10, w: 8, h: 0 })
+    const arriving = link(
+      [
+        [4, 4],
+        [4, 10]
+      ],
+      { endArrow: false }
+    )
+    expect(linkRenderPoints(arriving, [bar], 0.15).at(-1)).toEqual([4, 9.7])
+    // Avec une pointe : le bord de la barre, puis l'espace devant la pointe.
+    expect(linkRenderPoints({ ...arriving, endArrow: true }, [bar], 0.15).at(-1)?.[1]).toBeCloseTo(
+      9.3
+    )
+    const leaving = link(
+      [
+        [2, 10],
+        [2, 14]
+      ],
+      { endArrow: false }
+    )
+    expect(linkRenderPoints(leaving, [bar], 0.15)[0]).toEqual([2, 10.3])
     // Le long de la barre, ou sans barre : rien ne change.
-    const along = link([
-      [8, 10],
-      [12, 10]
-    ])
-    expect(linkRenderPoints(along, [bar])).toEqual(along.points)
-    expect(linkRenderPoints(arriving, [])).toEqual(arriving.points)
+    const along = link(
+      [
+        [8, 10],
+        [12, 10]
+      ],
+      { endArrow: false }
+    )
+    expect(linkRenderPoints(along, [bar], 0.15)).toEqual(along.points)
+    expect(linkRenderPoints(arriving, [], 0.15)).toEqual(arriving.points)
   })
 
   it('place l’étiquette depuis le milieu du tracé', () => {

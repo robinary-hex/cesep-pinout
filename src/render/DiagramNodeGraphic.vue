@@ -5,8 +5,8 @@ import {
   isDarkColor,
   layoutNodeText,
   mixColors,
+  nodeLineAttrs,
   nodeParts,
-  nodeTextAttrs,
   SOLID_BORDER_SHARE,
   solidBorderToward,
   SUBTITLE_OPACITY,
@@ -72,7 +72,7 @@ const textColor = computed(() => {
     <text
       v-if="text"
       text-anchor="middle"
-      :font-family="DIAGRAM_FONT_FAMILIES[look.font]"
+      :font-family="DIAGRAM_FONT_FAMILIES[text.font]"
       :fill="textColor"
     >
       <tspan
@@ -82,7 +82,7 @@ const textColor = computed(() => {
         :y="line.y"
         :font-size="line.size"
         :fill-opacity="line.role === 'subtitle' ? SUBTITLE_OPACITY : undefined"
-        v-bind="nodeTextAttrs(line.role, look.font)"
+        v-bind="nodeLineAttrs(line)"
       >
         {{ line.text }}
       </tspan>

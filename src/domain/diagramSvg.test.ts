@@ -4,6 +4,7 @@ import { createEmptyDiagram } from './diagram'
 import { DARK_GROUND, LIGHT_GROUND, mixColors } from './diagramShapes'
 import { buildDiagramSvg, exportGround } from './diagramSvg'
 import fixture from './fixtures/v1/diagram.json?raw'
+import styledFixture from './fixtures/v2/diagram.json?raw'
 import { parseDiagram } from './serialize'
 import { DEFAULT_EXPORT } from './settings'
 
@@ -49,7 +50,7 @@ describe('export SVG d’un diagramme', () => {
     const decision = parsed.querySelectorAll('g.nodes > g')[1]
     const paths = decision?.querySelectorAll('path') ?? []
     expect(paths).toHaveLength(1)
-    expect(paths[0]?.getAttribute('fill')).toBe(mixColors('#c2255c', '#f6f7f9', 0.16))
+    expect(paths[0]?.getAttribute('fill')).toBe(mixColors('#c2255c', '#f6f7f9', 0.2))
     expect(paths[0]?.getAttribute('stroke')).toBe('#c2255c')
     const text = decision?.querySelector('text')
     expect(text?.getAttribute('fill')).toBe('#000000')
@@ -74,7 +75,7 @@ describe('export SVG d’un diagramme', () => {
     expect(links[2]?.getAttribute('stroke')).toBe('#d62828')
     const decision = parsed.querySelectorAll('g.nodes > g')[1]
     expect(decision?.querySelector('path')?.getAttribute('fill')).toBe(
-      mixColors('#c2255c', '#16181d', 0.38)
+      mixColors('#c2255c', '#16181d', 0.4)
     )
     expect(decision?.querySelector('text')?.getAttribute('fill')).toBe('#e6edf3')
     expect(parsed.querySelector('g.texts text')?.getAttribute('fill')).toBe('#e6edf3')
@@ -84,6 +85,32 @@ describe('export SVG d’un diagramme', () => {
     expect(exportGround(transparent, true)).toEqual(DARK_GROUND)
     expect(buildDiagramSvg(diagram, transparent, true)?.svg).toContain('stroke="#e6edf3"')
     expect(buildDiagramSvg(diagram, transparent, false)?.svg).not.toContain('#e6edf3')
+  })
+
+  it('écrit le style de texte propre à un nœud : police, gras, souligné, taille', () => {
+    const result = buildDiagramSvg(parseDiagram(styledFixture), DEFAULT_EXPORT)
+    if (!result) throw new Error('export vide')
+    const parsed = new DOMParser().parseFromString(result.svg, 'image/svg+xml')
+    // Le diagramme est en chasse fixe ; ce nœud a choisi la police normale, en gras souligné, ×1,5.
+    const text = parsed.querySelectorAll('g.nodes > g')[2]?.querySelector('text')
+    expect(text?.getAttribute('font-family')).toContain('Segoe UI')
+    const title = text?.querySelector('tspan')
+    expect(title?.getAttribute('font-weight')).toBe('600')
+    expect(title?.getAttribute('text-decoration')).toBe('underline')
+    expect(title?.getAttribute('font-size')).toBe('2.1')
+    // Un nœud qui suit le diagramme ne redit pas la police.
+    const plain = parsed.querySelectorAll('g.nodes > g')[1]?.querySelector('text')
+    expect(plain?.getAttribute('font-family')).toBeNull()
+  })
+
+  it('arrête le trait d’un lien un peu avant le nœud quand il porte une pointe', () => {
+    const result = buildDiagramSvg(diagram, DEFAULT_EXPORT)
+    if (!result) throw new Error('export vide')
+    const parsed = new DOMParser().parseFromString(result.svg, 'image/svg+xml')
+    // Premier lien : de (8, 2) à (8, 6), pointe à l'arrivée ; le trait s'arrête à y = 5,6.
+    const first = parsed.querySelectorAll('g.links > g')[0]
+    expect(first?.querySelector('path')?.getAttribute('d')).toBe('M 8 2 L 8 5.6')
+    expect(first?.querySelector('polyline')?.getAttribute('points')).toContain('8,5.6')
   })
 
   it('n’a pas de fond en transparent et retourne null pour un diagramme vide', () => {

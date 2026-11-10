@@ -16,9 +16,9 @@ import {
   layoutNodeText,
   LIGHT_GROUND,
   mixColors,
+  nodeLineAttrs,
   nodePaint,
   nodeParts,
-  nodeTextAttrs,
   SUBTITLE_OPACITY,
   type DiagramGround,
   type NodePart
@@ -79,11 +79,16 @@ function nodeSvg(node: DiagramNode, diagram: Diagram, ground: DiagramGround): st
           y: line.y,
           'font-size': line.size,
           'fill-opacity': line.role === 'subtitle' ? SUBTITLE_OPACITY : undefined,
-          ...nodeTextAttrs(line.role, style.font)
+          ...nodeLineAttrs(line)
         })}>${escapeXml(line.text)}</tspan>`
     )
     .join('')
-  return `${shapes}<text ${svgAttrs({ 'text-anchor': 'middle', fill: paint.text })}>${spans}</text>`
+  return `${shapes}<text ${svgAttrs({
+    'text-anchor': 'middle',
+    fill: paint.text,
+    // La police du diagramme est posée sur l'image entière : un nœud ne redit que la sienne.
+    'font-family': text.font === style.font ? undefined : DIAGRAM_FONT_FAMILIES[text.font]
+  })}>${spans}</text>`
 }
 
 export function buildDiagramSvg(
@@ -131,7 +136,7 @@ export function buildDiagramSvg(
 
   if (diagram.links.length > 0) {
     const linkParts = diagram.links.map((link) => {
-      const points = linkRenderPoints(link, diagram.nodes)
+      const points = linkRenderPoints(link, diagram.nodes, lineWidth)
       const heads: string[] = []
       const first = points[0]
       const second = points[1]

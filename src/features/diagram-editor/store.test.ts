@@ -102,6 +102,34 @@ describe('diagramme : nœuds', () => {
     expect(store.undoLabel).toBe('Ajuster le nœud à son texte')
   })
 
+  it('style le texte d’un nœud ; la boîte grandit si le texte grossit', () => {
+    const store = useDiagramStore()
+    const id = store.addNode('rounded', 10, 10)
+    expect(store.doc.nodes[0]).toMatchObject({ font: null, bold: true, textScale: 1 })
+    store.setNodeText(id, { title: 'Brancher' })
+    expect(store.doc.nodes[0]).toMatchObject({ w: 16, h: 6 })
+    store.setNodesTextStyle([id], 'Italique activé', { italic: true, underline: true })
+    expect(store.doc.nodes[0]).toMatchObject({ italic: true, underline: true, w: 16 })
+    expect(store.undoLabel).toBe('Italique activé')
+    // ×2 : le texte ne tient plus, la boîte grandit autour de son centre, en une commande.
+    store.setNodesTextStyle([id], 'Taille du texte du nœud', { textScale: 2 })
+    const grown = store.doc.nodes[0]
+    expect(grown?.textScale).toBe(2)
+    expect(grown?.w).toBeGreaterThan(16)
+    expect((grown?.x ?? 0) + (grown?.w ?? 0) / 2).toBe(18)
+    store.undo()
+    expect(store.doc.nodes[0]).toMatchObject({ textScale: 1, w: 16, x: 10 })
+    // La police propre au nœud ; null revient à celle du diagramme.
+    store.setNodesTextStyle([id], 'Texte en chasse fixe', { font: 'mono' })
+    expect(store.doc.nodes[0]?.font).toBe('mono')
+    store.setNodesTextStyle([id], 'Texte en police normale', { font: null })
+    expect(store.doc.nodes[0]?.font).toBeNull()
+    // Dans un diagramme en chasse fixe, un nouveau nœud a un titre maigre.
+    store.setStyle({ font: 'mono' })
+    store.addNode('rect', 0, 30)
+    expect(store.doc.nodes[1]?.bold).toBe(false)
+  })
+
   it('règle le style du diagramme, en une commande annulable', () => {
     const store = useDiagramStore()
     store.addNode('rounded', 0, 0)

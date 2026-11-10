@@ -22,7 +22,7 @@ export const BAR_THICKNESS = 0.6
  * clair que le contour ; sur papier sombre, plus foncé, et il faut plus de couleur pour le voir.
  * L'écran lit ces parts dans `--node-tint` (style.css), l'export les calcule ici.
  */
-export const TINT_SHARE = { light: 0.16, dark: 0.38 } as const
+export const TINT_SHARE = { light: 0.2, dark: 0.4 } as const
 /**
  * Fond « plein » : le fond est la couleur même, et le contour s'en détache, éclairci sur une
  * couleur sombre, foncé sur une couleur claire. Part de la couleur gardée dans le contour.
@@ -198,38 +198,70 @@ export function nodeTextBox(node: DiagramNode): Box {
   return { x, y, w, h }
 }
 
+/** Police effective d'un nœud : la sienne s'il en a choisi une, sinon celle du diagramme. */
+export function nodeFont(node: Pick<DiagramNode, 'font'>, style: DiagramStyle): DiagramFont {
+  return node.font ?? style.font
+}
+
 export interface NodeTextLine {
   text: string
   /** Ligne de base, en cellules. */
   y: number
-  /** Hauteur de police, en cellules. */
+  /** Hauteur de police, en cellules (multiplicateur du nœud compris). */
   size: number
   role: 'title' | 'subtitle'
+  font: DiagramFont
+  bold: boolean
+  italic: boolean
+  /** Valeur de `text-decoration` (souligné, barré), ou indéfini. */
+  decoration: string | undefined
 }
 
 export interface NodeTextLayout {
   /** Abscisse du centre des lignes. */
   x: number
+  font: DiagramFont
   lines: NodeTextLine[]
 }
 
 /**
  * Titre puis sous-titre d'un nœud, en un bloc centré dans sa boîte de texte (capitales centrées
- * sur chaque ligne) ; null pour une forme sans texte ou un nœud sans rien d'écrit.
+ * sur chaque ligne) ; null pour une forme sans texte ou un nœud sans rien d'écrit. Le style du
+ * nœud (gras, italique, souligné, barré) est celui de son titre ; le sous-titre reste une ligne
+ * secondaire, maigre, en italique quand la police est à chasse fixe. La police et le
+ * multiplicateur de taille du nœud valent pour les deux.
  */
 export function layoutNodeText(node: DiagramNode, style: DiagramStyle): NodeTextLayout | null {
   if (!NODE_SPECS[node.shape].text) return null
-  const titleSize = style.titleSize / style.cellPx
-  const subtitleSize = style.subtitleSize / style.cellPx
+  const font = nodeFont(node, style)
+  const titleSize = (style.titleSize * node.textScale) / style.cellPx
+  const subtitleSize = (style.subtitleSize * node.textScale) / style.cellPx
+  const decorations: string[] = []
+  if (node.underline) decorations.push('underline')
+  if (node.strike) decorations.push('line-through')
   const newline = String.fromCharCode(10)
-  const entries: { text: string; size: number; role: 'title' | 'subtitle' }[] = [
+  const entries: Omit<NodeTextLine, 'y'>[] = [
     ...(node.title.length > 0
-      ? node.title.split(newline).map((text) => ({ text, size: titleSize, role: 'title' as const }))
+      ? node.title.split(newline).map((text) => ({
+          text,
+          size: titleSize,
+          role: 'title' as const,
+          font,
+          bold: node.bold,
+          italic: node.italic,
+          decoration: decorations.length > 0 ? decorations.join(' ') : undefined
+        }))
       : []),
     ...(node.subtitle.length > 0
-      ? node.subtitle
-          .split(newline)
-          .map((text) => ({ text, size: subtitleSize, role: 'subtitle' as const }))
+      ? node.subtitle.split(newline).map((text) => ({
+          text,
+          size: subtitleSize,
+          role: 'subtitle' as const,
+          font,
+          bold: false,
+          italic: font === 'mono',
+          decoration: undefined
+        }))
       : [])
   ]
   if (entries.length === 0) return null
@@ -242,7 +274,23 @@ export function layoutNodeText(node: DiagramNode, style: DiagramStyle): NodeText
     top += lineHeight
     return line
   })
-  return { x: box.x + box.w / 2, lines }
+  return { x: box.x + box.w / 2, font, lines }
+}
+
+/** Graisse d'un texte de nœud en gras : demi-gras, lisible sans alourdir la boîte. */
+export const NODE_BOLD_WEIGHT = '600'
+
+/** Attributs SVG du style d'une ligne de texte de nœud. */
+export function nodeLineAttrs(line: NodeTextLine): {
+  'font-weight': string | undefined
+  'font-style': string | undefined
+  'text-decoration': string | undefined
+} {
+  return {
+    'font-weight': line.bold ? NODE_BOLD_WEIGHT : undefined,
+    'font-style': line.italic ? 'italic' : undefined,
+    'text-decoration': line.decoration
+  }
 }
 
 /** Une couleur est-elle assez sombre pour porter un texte clair ? */
@@ -344,20 +392,6 @@ export function nodeBounds(node: DiagramNode): GridRect {
   return { x: node.x, y: node.y, width: node.w, height: node.h }
 }
 
-/**
- * Graisse et style d'une ligne de texte de nœud : en police normale le titre est demi-gras ; en
- * chasse fixe (organigrammes de code) le titre reste maigre et le sous-titre passe en italique.
- */
-export function nodeTextAttrs(
-  role: 'title' | 'subtitle',
-  font: DiagramFont
-): { 'font-weight': string | undefined; 'font-style': string | undefined } {
-  return {
-    'font-weight': role === 'title' && font === 'sans' ? '600' : undefined,
-    'font-style': role === 'subtitle' && font === 'mono' ? 'italic' : undefined
-  }
-}
-
 /** Poignées d'un nœud : les huit de sa boîte, ou les deux bouts d'une barre. */
 export function nodeHandles(node: DiagramNode): Handle[] {
   if (!NODE_SPECS[node.shape].line) return boxHandles(node)
@@ -392,18 +426,20 @@ export const NODE_TEXT_PAD_X = 1.5
 export const NODE_TEXT_PAD_Y = 1
 
 /** Largeur d'une ligne de texte de nœud, en cellules. */
-export type NodeTextMeasurer = (text: string, role: 'title' | 'subtitle') => number
+export type NodeTextMeasurer = (line: NodeTextLine) => number
 
 /** Largeur moyenne d'un caractère, en multiple de la hauteur de police. */
 const NODE_CHAR_WIDTH: Record<DiagramFont, number> = { sans: 0.55, mono: 0.6 }
 
-/** Mesure estimée, sans écran : un caractère moyen par lettre. Les tests et l'export s'en servent. */
-export function estimatedNodeTextMeasurer(style: DiagramStyle): NodeTextMeasurer {
-  return (text, role) => {
-    const size = (role === 'title' ? style.titleSize : style.subtitleSize) / style.cellPx
-    return text.length * NODE_CHAR_WIDTH[style.font] * size
-  }
-}
+/**
+ * Mesure estimée, sans écran : un caractère moyen par lettre, un peu plus large en gras (pas en
+ * chasse fixe, où chaque caractère a la même largeur). Les tests s'en servent.
+ */
+export const estimatedNodeTextWidth: NodeTextMeasurer = (line) =>
+  line.text.length *
+  NODE_CHAR_WIDTH[line.font] *
+  line.size *
+  (line.bold && line.font === 'sans' ? 1.06 : 1)
 
 /**
  * Taille qu'il faut à un nœud pour contenir son texte, marges comprises, ramenée à ce que sa forme
@@ -417,7 +453,7 @@ export function nodeSizeForText(
 ): { w: number; h: number } | null {
   const layout = layoutNodeText(node, style)
   if (!layout) return null
-  const width = layout.lines.reduce((max, line) => Math.max(max, measure(line.text, line.role)), 0)
+  const width = layout.lines.reduce((max, line) => Math.max(max, measure(line)), 0)
   const height = layout.lines.reduce((sum, line) => sum + line.size * TEXT_LINE_HEIGHT, 0)
   let w = width + 2 * NODE_TEXT_PAD_X
   let h = height + 2 * NODE_TEXT_PAD_Y

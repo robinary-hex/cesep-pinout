@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 import {
   createEmptyDiagram,
+  createNode,
   DEFAULT_VIEW,
   defaultLabelOffset,
   diagramAnchors,
@@ -35,6 +36,7 @@ import {
   type LinkDash,
   type NodeFill,
   type NodeShape,
+  type NodeTextStyle,
   type StackMove,
   type TextAnchor,
   type TextLabel,
@@ -385,22 +387,13 @@ export const useDiagramStore = defineStore('diagram', () => {
       'n',
       doc.value.nodes.map((node) => node.id)
     )
-    const size = NODE_SPECS[shape].defaultSize
-    const color = nodeColor.value
-    const fill = nodeFill.value
+    const node: DiagramNode = {
+      ...createNode(id, shape, x, y, style.value),
+      color: nodeColor.value,
+      fill: nodeFill.value
+    }
     apply(`Poser « ${NODE_SPECS[shape].label} »`, (draft) => {
-      draft.nodes.push({
-        id,
-        shape,
-        x,
-        y,
-        w: size.w,
-        h: size.h,
-        title: '',
-        subtitle: '',
-        color,
-        fill
-      })
+      draft.nodes.push(node)
     })
     clearSelection()
     selectedNodes.value = [id]
@@ -440,7 +433,7 @@ export const useDiagramStore = defineStore('diagram', () => {
     const box = nodeBoxForText(
       { ...node, ...patch },
       style.value,
-      nodeTextMeasurer(style.value),
+      nodeTextMeasurer(style.value.cellPx),
       true
     )
     applyWithElasticLinks('Modifier le texte du nœud', (draft) => {
@@ -451,11 +444,36 @@ export const useDiagramStore = defineStore('diagram', () => {
     })
   }
 
+  /**
+   * Style du texte de nœuds : police, gras, italique, souligné, barré, taille. Une boîte dont le
+   * texte déborde alors grandit, dans la même commande.
+   */
+  function setNodesTextStyle(
+    ids: readonly string[],
+    label: string,
+    patch: Partial<NodeTextStyle>
+  ): void {
+    if (ids.length === 0) return
+    const measure = nodeTextMeasurer(style.value.cellPx)
+    const boxes = new Map<string, Box>()
+    for (const node of doc.value.nodes) {
+      if (!ids.includes(node.id)) continue
+      const box = nodeBoxForText({ ...node, ...patch }, style.value, measure, true)
+      if (box) boxes.set(node.id, box)
+    }
+    applyWithElasticLinks(label, (draft) => {
+      for (const node of draft.nodes) {
+        if (!ids.includes(node.id)) continue
+        Object.assign(node, patch, boxes.get(node.id) ?? {})
+      }
+    })
+  }
+
   /** Ajuste la boîte d'un nœud à son texte, au plus près, en gardant son centre. */
   function fitNodeToText(id: string): void {
     const node = doc.value.nodes.find((candidate) => candidate.id === id)
     if (!node) return
-    const box = nodeBoxForText(node, style.value, nodeTextMeasurer(style.value), false)
+    const box = nodeBoxForText(node, style.value, nodeTextMeasurer(style.value.cellPx), false)
     if (!box) return
     applyWithElasticLinks('Ajuster le nœud à son texte', (draft) => {
       const target = draft.nodes.find((candidate) => candidate.id === id)
@@ -1011,6 +1029,7 @@ export const useDiagramStore = defineStore('diagram', () => {
     placeAt,
     setNodeBox,
     setNodeText,
+    setNodesTextStyle,
     fitNodeToText,
     setNodeShape,
     turnBar,

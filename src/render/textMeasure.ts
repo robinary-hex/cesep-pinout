@@ -1,14 +1,13 @@
 import {
   DIAGRAM_FONT_FAMILIES,
-  estimatedNodeTextMeasurer,
-  nodeTextAttrs,
-  type DiagramStyle,
+  estimatedNodeTextWidth,
+  NODE_BOLD_WEIGHT,
   type NodeTextMeasurer
 } from '@/domain'
 
 // Mesure du texte d'un nœud de diagramme, pour l'ajuster à ce qu'on y écrit : la vraie largeur,
-// prise sur un canevas 2D hors écran, dans la police et la graisse du dessin. Sans navigateur
-// (tests), l'estimation du domaine prend le relais.
+// prise sur un canevas 2D hors écran, dans la police, la graisse et la taille de chaque ligne.
+// Sans navigateur (tests), l'estimation du domaine prend le relais.
 
 let context: CanvasRenderingContext2D | null | undefined
 
@@ -23,15 +22,14 @@ function measuringContext(): CanvasRenderingContext2D | null {
   return context
 }
 
-/** Mesureur des lignes d'un nœud, en cellules, pour le style d'un diagramme. */
-export function nodeTextMeasurer(style: DiagramStyle): NodeTextMeasurer {
+/** Mesureur des lignes d'un nœud, en cellules, pour une taille de cellule à 100 %. */
+export function nodeTextMeasurer(cellPx: number): NodeTextMeasurer {
   const ctx = measuringContext()
-  if (!ctx) return estimatedNodeTextMeasurer(style)
-  const family = DIAGRAM_FONT_FAMILIES[style.font]
-  return (text, role) => {
-    const attrs = nodeTextAttrs(role, style.font)
-    const size = role === 'title' ? style.titleSize : style.subtitleSize
-    ctx.font = `${attrs['font-style'] ?? 'normal'} ${attrs['font-weight'] ?? '400'} ${size}px ${family}`
-    return ctx.measureText(text).width / style.cellPx
+  if (!ctx) return estimatedNodeTextWidth
+  return (line) => {
+    const style = line.italic ? 'italic' : 'normal'
+    const weight = line.bold ? NODE_BOLD_WEIGHT : '400'
+    ctx.font = `${style} ${weight} ${line.size * cellPx}px ${DIAGRAM_FONT_FAMILIES[line.font]}`
+    return ctx.measureText(line.text).width / cellPx
   }
 }

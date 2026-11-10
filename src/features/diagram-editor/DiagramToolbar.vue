@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import {
+  createNode,
   DEFAULT_DIAGRAM_STYLE,
   type DiagramNode,
   type DiagramStyle,
@@ -51,14 +52,9 @@ const FILLS: { value: NodeFill; label: string; title: string }[] = [
 /** Nœud d'exemple d'une pastille de fond : la forme, sans texte, dans la couleur des nœuds. */
 function fillSample(fill: NodeFill): DiagramNode {
   return {
-    id: fill,
-    shape: 'rounded',
-    x: 0,
-    y: 0,
+    ...createNode(fill, 'rounded', 0, 0),
     w: 10,
     h: 6,
-    title: '',
-    subtitle: '',
     color: firstNode.value?.color ?? store.nodeColor,
     fill
   }

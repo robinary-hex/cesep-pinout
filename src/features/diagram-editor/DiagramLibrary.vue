@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  createNode,
   DEFAULT_DIAGRAM_STYLE,
   NODE_SHAPES,
   NODE_SPECS,
@@ -36,15 +37,9 @@ const SAMPLE_SIZES: Record<NodeShape, { w: number; h: number }> = {
 function sample(shape: NodeShape): DiagramNode {
   const { w, h } = SAMPLE_SIZES[shape]
   return {
-    id: shape,
-    shape,
-    x: (16 - w) / 2,
-    y: (6 - h) / 2,
+    ...createNode(shape, shape, (16 - w) / 2, (6 - h) / 2),
     w,
     h,
-    title: '',
-    subtitle: '',
-    color: '#000000',
     fill: 'none'
   }
 }

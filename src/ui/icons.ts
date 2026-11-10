@@ -107,6 +107,7 @@ export const ICONS = {
   // Diagramme : outil Lien, trait pointillé, inversion du sens d'un lien.
   link: ['M4 19h8V6h8', 'M16 2l4 4-4 4'],
   dash: ['M3 12h4', 'M10 12h4', 'M17 12h4'],
+  code: ['M8 7l-5 5 5 5', 'M16 7l5 5-5 5'],
   swap: ['M4 8h14', 'M14 4l4 4-4 4', 'M20 16H6', 'M10 12l-4 4 4 4'],
   'select-all': ['M4 4h16v16H4z', 'M9 9h6v6H9z'],
   sun: [

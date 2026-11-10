@@ -9,7 +9,7 @@ import { textLabelSchema, wireGeometryProblem } from './project'
 // verticaux) ; des textes libres. Rien ne dit dans le fichier qu'un lien est accroché à un nœud :
 // cela se déduit de la géométrie (une extrémité posée sur un point d'accroche du nœud).
 
-export const DIAGRAM_SCHEMA_VERSION = 1
+export const DIAGRAM_SCHEMA_VERSION = 2
 
 /** Formes du catalogue, dans l'ordre de la bibliothèque. */
 export const NODE_SHAPES = [
@@ -133,6 +133,19 @@ export const NODE_SPECS: Record<NodeShape, NodeSpec> = {
   }
 }
 
+export const DIAGRAM_FONTS = ['sans', 'mono'] as const
+export const diagramFontSchema = z.enum(DIAGRAM_FONTS)
+export type DiagramFont = z.infer<typeof diagramFontSchema>
+
+/** Familles de police : normale, ou à chasse fixe pour les organigrammes de code. */
+export const DIAGRAM_FONT_FAMILIES: Record<DiagramFont, string> = {
+  sans: "'Segoe UI', sans-serif",
+  mono: "Consolas, 'Cascadia Mono', monospace"
+}
+
+/** Multiplicateurs de taille proposés pour le texte d'un nœud. */
+export const NODE_TEXT_SCALES = [1, 1.5, 2, 2.5, 3] as const
+
 /** Nœud : une boîte en cellules, (x, y) = coin supérieur gauche. */
 export const diagramNodeSchema = z.object({
   id: z.string().min(1),
@@ -146,9 +159,24 @@ export const diagramNodeSchema = z.object({
   subtitle: z.string(),
   /** Couleur du contour ; le noir pur prend l'encre du thème à l'écran. */
   color: hexColorSchema,
-  fill: nodeFillSchema
+  fill: nodeFillSchema,
+  /** Police de ce nœud ; null = celle du diagramme. */
+  font: diagramFontSchema.nullable(),
+  // Style du titre ; le sous-titre reste une ligne secondaire, maigre.
+  bold: z.boolean(),
+  italic: z.boolean(),
+  underline: z.boolean(),
+  strike: z.boolean(),
+  /** Multiplicateur des tailles de texte du diagramme, pour ce nœud (titre et sous-titre). */
+  textScale: z.number().positive()
 })
 export type DiagramNode = z.infer<typeof diagramNodeSchema>
+
+/** Style du texte d'un nœud. */
+export type NodeTextStyle = Pick<
+  DiagramNode,
+  'font' | 'bold' | 'italic' | 'underline' | 'strike' | 'textScale'
+>
 
 export const LINK_DASHES = ['solid', 'dashed'] as const
 export const linkDashSchema = z.enum(LINK_DASHES)
@@ -174,16 +202,6 @@ export const diagramLinkSchema = z
     if (problem !== null) ctx.addIssue({ code: 'custom', message: problem, path: ['points'] })
   })
 export type DiagramLink = z.infer<typeof diagramLinkSchema>
-
-export const DIAGRAM_FONTS = ['sans', 'mono'] as const
-export const diagramFontSchema = z.enum(DIAGRAM_FONTS)
-export type DiagramFont = z.infer<typeof diagramFontSchema>
-
-/** Familles de police : normale, ou à chasse fixe pour les organigrammes de code. */
-export const DIAGRAM_FONT_FAMILIES: Record<DiagramFont, string> = {
-  sans: "'Segoe UI', sans-serif",
-  mono: "Consolas, 'Cascadia Mono', monospace"
-}
 
 /** Style d'un diagramme, enregistré avec lui. Longueurs en cellules, tailles de texte en points. */
 export const diagramStyleSchema = z.object({
@@ -279,6 +297,45 @@ export function createEmptyDiagram(
     links: [],
     texts: [],
     customColors: []
+  }
+}
+
+/**
+ * Style de texte d'un nœud qu'on vient de poser : la police du diagramme, taille ×1, et un titre
+ * en gras en police normale, maigre en chasse fixe (les organigrammes de code).
+ */
+export function defaultNodeTextStyle(style: DiagramStyle): NodeTextStyle {
+  return {
+    font: null,
+    bold: style.font !== 'mono',
+    italic: false,
+    underline: false,
+    strike: false,
+    textScale: 1
+  }
+}
+
+/** Nœud neuf d'une forme, à sa taille par défaut, sans texte ; (x, y) = coin supérieur gauche. */
+export function createNode(
+  id: string,
+  shape: NodeShape,
+  x: number,
+  y: number,
+  style: DiagramStyle = DEFAULT_DIAGRAM_STYLE
+): DiagramNode {
+  const size = NODE_SPECS[shape].defaultSize
+  return {
+    id,
+    shape,
+    x,
+    y,
+    w: size.w,
+    h: size.h,
+    title: '',
+    subtitle: '',
+    color: '#000000',
+    fill: 'tint',
+    ...defaultNodeTextStyle(style)
   }
 }
 

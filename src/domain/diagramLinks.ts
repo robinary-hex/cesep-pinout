@@ -207,14 +207,28 @@ export function linkDashArray(link: DiagramLink, lineWidth: number): string | un
 }
 
 /**
- * Sommets d'un lien tels qu'on le dessine : ses sommets, sauf une extrémité qui arrive de face
- * sur une barre, reculée de la demi-épaisseur de la barre pour s'arrêter à son bord.
+ * Espace laissé, au dessin seulement, entre une pointe de flèche et le point où le lien finit :
+ * la pointe ne touche pas la forme sur laquelle elle arrive. En cellules.
  */
-export function linkRenderPoints(link: DiagramLink, nodes: readonly DiagramNode[]): GridPoint[] {
+export function linkArrowGap(lineWidth: number): number {
+  return Math.max(0.4, lineWidth * 2.5)
+}
+
+/**
+ * Sommets d'un lien tels qu'on le dessine. Ce sont ses sommets, à deux retraits près, purement
+ * visuels : une extrémité qui arrive de face sur une barre s'arrête à son bord (demi-épaisseur de
+ * la barre), et une extrémité qui porte une pointe de flèche s'arrête un peu avant, pour laisser
+ * un espace devant la pointe. Un retrait ne dépasse jamais la moitié de son segment.
+ */
+export function linkRenderPoints(
+  link: DiagramLink,
+  nodes: readonly DiagramNode[],
+  lineWidth: number
+): GridPoint[] {
   const points = link.points.map((point): GridPoint => [point[0], point[1]])
   const bars = nodes.filter((node) => NODE_SPECS[node.shape].line)
-  if (bars.length === 0) return points
-  const inset = (endIndex: number, neighborIndex: number): void => {
+  const gap = linkArrowGap(lineWidth)
+  const pullBack = (endIndex: number, neighborIndex: number, arrow: boolean): void => {
     const end = points[endIndex]
     const neighbor = points[neighborIndex]
     if (!end || !neighbor) return
@@ -227,14 +241,15 @@ export function linkRenderPoints(link: DiagramLink, nodes: readonly DiagramNode[
         ? end[1] === bar.y && end[0] >= bar.x && end[0] <= bar.x + bar.w
         : end[0] === bar.x && end[1] >= bar.y && end[1] <= bar.y + bar.h
     })
-    if (!onBar) return
+    const wanted = (onBar ? BAR_THICKNESS / 2 : 0) + (arrow ? gap : 0)
+    if (wanted === 0) return
     const length = Math.abs(vertical ? neighbor[1] - end[1] : neighbor[0] - end[0])
-    const back = Math.min(BAR_THICKNESS / 2, length / 2)
+    const back = Math.min(wanted, length / 2)
     const sign = Math.sign(vertical ? neighbor[1] - end[1] : neighbor[0] - end[0])
     points[endIndex] = vertical ? [end[0], end[1] + sign * back] : [end[0] + sign * back, end[1]]
   }
-  inset(0, 1)
-  inset(points.length - 1, points.length - 2)
+  pullBack(0, 1, link.startArrow)
+  pullBack(points.length - 1, points.length - 2, link.endArrow)
   return points
 }
 

@@ -4,6 +4,8 @@ import {
   DEFAULT_DIAGRAM_STYLE,
   NODE_SHAPES,
   NODE_SPECS,
+  NODE_TEXT_SCALES,
+  nodeFont,
   TEXT_SCALES,
   type DiagramFont,
   type LinkDash,
@@ -136,6 +138,58 @@ function setNodeTitle(event: Event): void {
 function setNodeSubtitle(event: Event): void {
   const node = singleNode.value
   if (node) store.setNodeText(node.id, { subtitle: inputValue(event) })
+}
+
+type NodeTextKey = 'bold' | 'italic' | 'underline' | 'strike'
+
+/** Styles du titre d'un nœud, un bouton à pictogramme chacun. */
+const NODE_TEXT_OPTIONS: { key: NodeTextKey; label: string; icon: IconName }[] = [
+  { key: 'bold', label: 'Gras', icon: 'bold' },
+  { key: 'italic', label: 'Italique', icon: 'italic' },
+  { key: 'underline', label: 'Souligné', icon: 'underline' },
+  { key: 'strike', label: 'Barré', icon: 'strikethrough' }
+]
+
+function toggleNodeText(option: (typeof NODE_TEXT_OPTIONS)[number]): void {
+  const node = singleNode.value
+  if (!node) return
+  const on = !node[option.key]
+  store.setNodesTextStyle([node.id], `${option.label} ${on ? 'activé' : 'retiré'}`, {
+    [option.key]: on
+  })
+}
+
+/** Le nœud est-il en chasse fixe, par son propre choix ou par la police du diagramme ? */
+const nodeIsMono = computed(() =>
+  singleNode.value ? nodeFont(singleNode.value, doc.value.style) === 'mono' : false
+)
+
+/** Bascule la police du nœud ; revenu à celle du diagramme, il la suit de nouveau. */
+function toggleNodeMono(): void {
+  const node = singleNode.value
+  if (!node) return
+  const wanted = nodeIsMono.value ? 'sans' : 'mono'
+  store.setNodesTextStyle(
+    [node.id],
+    wanted === 'mono' ? 'Texte en chasse fixe' : 'Texte en police normale',
+    { font: wanted === doc.value.style.font ? null : wanted }
+  )
+}
+
+/** Tailles proposées pour le texte d'un nœud, plus la sienne si elle n'en fait pas partie. */
+const nodeScaleChoices = computed(() => {
+  const list: number[] = [...NODE_TEXT_SCALES]
+  const current = singleNode.value?.textScale
+  if (current !== undefined && !list.includes(current)) list.push(current)
+  return list.sort((a, b) => a - b)
+})
+
+function setNodeScale(event: Event): void {
+  const node = singleNode.value
+  const scale = Number(inputValue(event))
+  if (node && Number.isFinite(scale) && scale > 0) {
+    store.setNodesTextStyle([node.id], 'Taille du texte du nœud', { textScale: scale })
+  }
 }
 
 function setNodeFill(event: Event): void {
@@ -282,7 +336,7 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
     <section v-if="!store.hasSelection" class="block">
       <h3>Style</h3>
       <label class="field">
-        <span>Police</span>
+        <span title="Police de tout le diagramme ; un nœud peut choisir la sienne">Police</span>
         <select :value="doc.style.font" @change="setFont">
           <option value="sans">Normale</option>
           <option value="mono">Chasse fixe (code)</option>
@@ -337,6 +391,41 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
           <span>Sous-titre</span>
           <textarea rows="2" :value="singleNode.subtitle" @change="setNodeSubtitle" />
         </label>
+        <div class="row">
+          <div class="field">
+            <span title="Gras, italique, souligné et barré stylent le titre">Style du texte</span>
+            <div class="toggles">
+              <button
+                v-for="option in NODE_TEXT_OPTIONS"
+                :key="option.key"
+                type="button"
+                class="toggle"
+                :class="{ active: singleNode[option.key] }"
+                :title="`${option.label} (titre)`"
+                @click="toggleNodeText(option)"
+              >
+                <Icon :name="option.icon" />
+              </button>
+              <button
+                type="button"
+                class="toggle"
+                :class="{ active: nodeIsMono }"
+                title="Chasse fixe, pour du code (titre et sous-titre)"
+                @click="toggleNodeMono"
+              >
+                <Icon name="code" />
+              </button>
+            </div>
+          </div>
+          <label class="field scale">
+            <span>Taille</span>
+            <select :value="singleNode.textScale" @change="setNodeScale">
+              <option v-for="scale in nodeScaleChoices" :key="scale" :value="scale">
+                ×{{ scale }}
+              </option>
+            </select>
+          </label>
+        </div>
       </template>
       <div class="field">
         <span>Couleur</span>
@@ -641,6 +730,12 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
 .row .field input[type='number'] {
   width: 100%;
   box-sizing: border-box;
+}
+
+/* Taille du texte d'un nœud : à côté des boutons de style, sans leur prendre la place. */
+.row .field.scale {
+  flex: 0 0 70px;
+  min-width: 0;
 }
 
 /* Réglages du style : trois par ligne. */

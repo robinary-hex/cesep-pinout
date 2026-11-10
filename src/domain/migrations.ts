@@ -442,10 +442,29 @@ export const projectMigrations: MigrationTable = {
   }
 }
 
-/** Diagrammes : première version du format, aucune migration encore. */
+// Diagramme v1 → v2 : style de texte par nœud. La police reste celle du diagramme, la taille ×1 ;
+// le titre garde l'allure qu'il avait : gras en police normale, maigre en chasse fixe.
+
+function migrateDiagramV1(raw: RawRecord): RawRecord {
+  const style = isRecord(raw['style']) ? raw['style'] : {}
+  const nodes = Array.isArray(raw['nodes']) ? raw['nodes'] : []
+  const defaults = {
+    font: null,
+    bold: style['font'] !== 'mono',
+    italic: false,
+    underline: false,
+    strike: false,
+    textScale: 1
+  }
+  return {
+    ...raw,
+    nodes: nodes.map((node) => (isRecord(node) ? { ...defaults, ...node } : node))
+  }
+}
+
 export const diagramMigrations: MigrationTable = {
   current: DIAGRAM_SCHEMA_VERSION,
-  steps: {}
+  steps: { 1: migrateDiagramV1 }
 }
 
 // Paramètres v1 → v2 : export et copie de secours ; v2 → v3 : trait des composants du profil ;
