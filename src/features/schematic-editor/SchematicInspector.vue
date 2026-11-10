@@ -12,11 +12,11 @@ import { useLibraryStore } from '@/features/library/store'
 import Icon from '@/ui/Icon.vue'
 import { useSchematicStore } from './store'
 
-// Panneau de droite du montage (replié par défaut, touche I). Toujours : le projet, avec
-// enregistrer et exporter. Sans sélection : le profil et le contenu du montage. Avec une
+// Panneau de droite du montage (replié par défaut, touche I). Toujours : le projet, avec son nom
+// et le bouton d'export. Sans sélection : le profil et le contenu du montage. Avec une
 // sélection : seulement les propriétés de l'élément (composant, fil(s), étiquette, groupe).
 
-const emit = defineEmits<{ editProfile: []; save: []; exportImage: [] }>()
+const emit = defineEmits<{ editProfile: []; exportImage: [] }>()
 const store = useSchematicStore()
 const library = useLibraryStore()
 const doc = computed(() => store.doc)
@@ -216,26 +216,18 @@ function setLabelSize(event: Event): void {
 
     <section class="block">
       <h3>Projet</h3>
-      <label class="field">
-        <span>Nom du montage</span>
-        <input type="text" :value="doc.name" @change="setName" />
-      </label>
-      <div class="row">
+      <div class="row name-row">
+        <label class="field">
+          <span>Nom du montage</span>
+          <input type="text" :value="doc.name" @change="setName" />
+        </label>
         <button
           type="button"
-          class="primary with-icon"
-          title="Enregistrer (Ctrl+S)"
-          @click="emit('save')"
-        >
-          <Icon name="save" /> Enregistrer
-        </button>
-        <button
-          type="button"
-          class="with-icon"
+          class="icon-only"
           title="Exporter en PNG ou SVG (Ctrl+E)"
           @click="emit('exportImage')"
         >
-          <Icon name="export" /> Exporter…
+          <Icon name="export" />
         </button>
       </div>
       <p v-if="store.filePath" class="hint path">{{ store.filePath }}</p>
@@ -655,6 +647,16 @@ function setLabelSize(event: Event): void {
   flex: 1;
   min-width: 90px;
   margin-bottom: 0;
+}
+
+/* Nom du montage et bouton d'export sur une seule ligne. */
+.name-row {
+  flex-wrap: nowrap;
+}
+
+.name-row button {
+  flex: none;
+  padding: 6px;
 }
 
 .check {

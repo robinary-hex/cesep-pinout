@@ -523,7 +523,6 @@ defineExpose({ createNew, open, openRecent, save, openExport })
       <SchematicInspector
         v-if="store.inspectorOpen"
         @edit-profile="showProfile = true"
-        @save="save(false)"
         @export-image="openExport"
       />
     </div>

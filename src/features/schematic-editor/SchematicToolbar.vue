@@ -147,7 +147,7 @@ function pickCustom(event: Event): void {
     <div class="right">
       <span class="doc-name" :title="store.filePath ?? 'Pas encore enregistré'">
         <span class="name">{{ store.doc.name }}</span>
-        <span class="file">{{ fileLabel }}{{ store.dirty ? ' · modifié' : '' }}</span>
+        <span class="file">{{ fileLabel }}</span>
       </span>
       <button
         type="button"
