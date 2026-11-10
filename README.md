@@ -17,8 +17,8 @@ pnpm build      # bundles electron-vite dans out/
 
 Les exécutables Windows sont publiés sur GitHub : https://github.com/robinary-hex/cesep-pinout/releases/latest
 
-- Installeur 1.1.7 : https://github.com/robinary-hex/cesep-pinout/releases/download/v1.1.7/pinout-1.1.7-setup.exe
-- Portable 1.1.7 : https://github.com/robinary-hex/cesep-pinout/releases/download/v1.1.7/pinout-1.1.7-portable.exe
+- Installeur 1.2.0 : https://github.com/robinary-hex/cesep-pinout/releases/download/v1.2.0/pinout-1.2.0-setup.exe
+- Portable 1.2.0 : https://github.com/robinary-hex/cesep-pinout/releases/download/v1.2.0/pinout-1.2.0-portable.exe
 
 La version installée vérifie au lancement si une release plus récente existe sur GitHub et propose
 alors, par un bouton en haut à droite, de la télécharger puis de l'installer. La version portable
