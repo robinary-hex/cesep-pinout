@@ -12,9 +12,11 @@ import {
   nextNumberedId,
   normalizePoints,
   projectBounds,
+  profileDifferences,
   projectPins,
   pruneCrossingOverrides,
   rotatedInstance,
+  sameProfile,
   simplifyPoints,
   textLabelBounds,
   toggledOverrides,
@@ -207,6 +209,9 @@ export const useSchematicStore = defineStore('schematic', () => {
   /** Profil effectif pour l'affichage : l'aperçu de la boîte de dialogue, sinon celui du projet. */
   const profile = computed<StyleProfile>(() => profilePreview.value ?? doc.value.profile)
   const cellPx = computed(() => profile.value.cellPx * view.value.zoom)
+  /** Réglages où le style de ce montage s'écarte du profil général de l'application. */
+  const profileDiffs = computed(() => profileDifferences(doc.value.profile, library.defaultProfile))
+  const followsGeneralProfile = computed(() => profileDiffs.value.length === 0)
   const placed = computed<PlacedInstance[]>(() =>
     doc.value.components.flatMap((instance) => {
       const def = doc.value.embeddedDefs[instance.defId]
@@ -510,6 +515,48 @@ export const useSchematicStore = defineStore('schematic', () => {
     apply('Changer le profil de style', (draft) => {
       draft.profile = castDraft(structuredClone(profile))
     })
+  }
+
+  /** Aligne ce montage sur le profil général de l'application. */
+  function adoptGeneralProfile(): void {
+    const general = library.defaultProfile
+    apply('Appliquer le profil général', (draft) => {
+      draft.profile = castDraft(structuredClone(general))
+    })
+  }
+
+  /**
+   * Le profil général vient de passer de `previous` à `next` : les montages ouverts qui suivaient
+   * l'ancien prennent le nouveau (une commande par onglet, annulable) ; ceux qui avaient leur
+   * propre style le gardent. Un montage vierge repart simplement du nouveau profil.
+   */
+  function followGeneralProfile(previous: StyleProfile, next: StyleProfile): void {
+    if (sameProfile(previous, next)) return
+    const label = 'Changer le profil de style'
+    const set = (draft: Draft<Project>): void => {
+      draft.profile = castDraft(structuredClone(next))
+    }
+    tabStates.value = tabStates.value.map((tab) => {
+      if (tab.id === activeTabId.value) return tab
+      const current = tab.history.value
+      if (!sameProfile(current.profile, previous)) return tab
+      if (tab.filePath === null && current === tab.savedDoc) {
+        const blank = createEmptyProject(current.name, next)
+        tab.history.reset(blank)
+        return { ...tab, savedDoc: blank }
+      }
+      tab.history.apply(label, set)
+      return { ...tab }
+    })
+    if (!sameProfile(doc.value.profile, previous)) return
+    if (pristine.value) {
+      const blank = createEmptyProject(doc.value.name, next)
+      history.reset(blank)
+      savedDoc.value = blank
+      sync()
+    } else {
+      apply(label, set)
+    }
   }
 
   /** Remplace la définition embarquée par celle de la bibliothèque (même identifiant). */
@@ -1245,6 +1292,10 @@ export const useSchematicStore = defineStore('schematic', () => {
     syncCurrentColor,
     setProjectName,
     setProfile,
+    adoptGeneralProfile,
+    followGeneralProfile,
+    profileDiffs,
+    followsGeneralProfile,
     updateDefinition,
     selectTool,
     startPlacing,

@@ -681,6 +681,34 @@ describe('onglets de montage', () => {
     expect(names()).toEqual(['A', 'B', 'C'])
   })
 
+  it('donne le nouveau profil général aux montages qui suivaient l’ancien, pas aux autres', () => {
+    const store = useSchematicStore()
+    const next = { ...DEFAULT_PROFILE, name: 'Cours', wireWidth: 0.2 }
+    // Premier onglet : un montage au style propre.
+    store.setProfile({ ...DEFAULT_PROFILE, cornerRadius: 0 })
+    expect(store.profileDiffs).toEqual(['wires'])
+    const custom = store.activeTabId
+    // Deuxième onglet : il suit le profil général et a du contenu ; troisième : vierge.
+    store.newProject()
+    store.setProjectName('Suiveur')
+    const follower = store.activeTabId
+    store.newProject()
+
+    store.followGeneralProfile(DEFAULT_PROFILE, next)
+    // Le montage vierge affiché repart du nouveau profil sans devenir « modifié ».
+    expect(store.doc.profile.wireWidth).toBe(0.2)
+    expect(store.dirty).toBe(false)
+    store.activateTab(follower)
+    expect(store.doc.profile.name).toBe('Cours')
+    expect(store.undoLabel).toBe('Changer le profil de style')
+    store.activateTab(custom)
+    expect(store.doc.profile).toMatchObject({ name: 'Standard', cornerRadius: 0 })
+
+    // Aligner un montage sur le profil général efface ses écarts.
+    store.adoptGeneralProfile()
+    expect(store.followsGeneralProfile).toBe(true)
+  })
+
   it('liste les montages modifiés pour la copie de secours, onglet par onglet', () => {
     const store = useSchematicStore()
     store.setProjectName('A')

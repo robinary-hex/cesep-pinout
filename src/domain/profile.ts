@@ -24,9 +24,10 @@ export type FontSpec = z.infer<typeof fontSchema>
 export const DEFAULT_END_LABEL_SIZE = 14
 
 /**
- * Profil de style : l'échelle et le trait, partagés entre projets.
- * Un projet en garde une copie. Changer de profil redimensionne un montage sans le casser,
- * puisque les composants gardent leur taille en cellules.
+ * Profil de style : l'échelle et le trait. L'application en a un, général (paramètres) ; chaque
+ * montage en garde une copie dans son fichier, celle avec laquelle il se dessine. Changer de
+ * profil redimensionne un montage sans le casser, puisque les composants gardent leur taille en
+ * cellules.
  */
 export const styleProfileSchema = z.object({
   name: z.string().min(1),
@@ -59,4 +60,39 @@ export const DEFAULT_PROFILE: StyleProfile = {
   junctionColor: 'wire',
   labelFont: { family: 'Segoe UI', size: 11 },
   endLabelFont: { family: 'Segoe UI', size: DEFAULT_END_LABEL_SIZE }
+}
+
+/** Réglages d'un profil, regroupés comme le panneau de propriétés les présente. */
+export type ProfileFact =
+  'name' | 'cell' | 'wires' | 'componentStroke' | 'junction' | 'labels' | 'endLabels'
+
+function sameFont(a: FontSpec, b: FontSpec): boolean {
+  return a.family === b.family && a.size === b.size
+}
+
+/** Groupes de réglages où `profile` s'écarte de `reference` (le profil général), dans l'ordre. */
+export function profileDifferences(profile: StyleProfile, reference: StyleProfile): ProfileFact[] {
+  const facts: ProfileFact[] = []
+  if (profile.name !== reference.name) facts.push('name')
+  if (profile.cellPx !== reference.cellPx) facts.push('cell')
+  if (
+    profile.wireWidth !== reference.wireWidth ||
+    profile.cornerRadius !== reference.cornerRadius
+  ) {
+    facts.push('wires')
+  }
+  if (profile.componentStroke !== reference.componentStroke) facts.push('componentStroke')
+  if (
+    profile.junctionScale !== reference.junctionScale ||
+    profile.junctionColor.toLowerCase() !== reference.junctionColor.toLowerCase()
+  ) {
+    facts.push('junction')
+  }
+  if (!sameFont(profile.labelFont, reference.labelFont)) facts.push('labels')
+  if (!sameFont(profile.endLabelFont, reference.endLabelFont)) facts.push('endLabels')
+  return facts
+}
+
+export function sameProfile(a: StyleProfile, b: StyleProfile): boolean {
+  return profileDifferences(a, b).length === 0
 }

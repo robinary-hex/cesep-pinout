@@ -149,10 +149,14 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   opacité unique : deux fils qui se chevauchent ne s'additionnent pas.
   Les marques d'extrémité libre et de broche reliée à rien prennent `--alert` (rouge en clair, ambre
   en sombre) ; l'aperçu d'export transparent est hachuré (`--hatch-*`).
-- Profil de style : la boîte « Profil de style du montage » prévisualise chaque réglage sur le
-  montage via `profilePreview` (le store expose `profile` = aperçu ou profil du projet) et
-  n'enregistre qu'à « Appliquer », en une commande. Les Paramètres proposent « Appliquer au
-  montage ouvert » pour copier le profil par défaut dans le projet courant.
+- Profil de style : général à l'application (`defaultProfile` des paramètres), modifié par la boîte
+  « Profil de style » (`settings/ProfileDialog.vue`, bouton de la barre d'application entre l'aide
+  et les paramètres, et menu Fichier), avec aperçu sur le montage affiché s'il le suit
+  (`profilePreview`). « Appliquer » l'enregistre et le donne aux montages ouverts qui suivaient
+  l'ancien (`followGeneralProfile`). Chaque fichier de montage garde la copie du profil avec
+  laquelle il se dessine : un montage dont le style s'écarte du profil général garde le sien, et
+  son panneau surligne en `--alert` les réglages qui diffèrent (`profileDifferences`), avec
+  « Appliquer le profil général » pour l'aligner (`adoptGeneralProfile`).
 - Bibliothèque de composants : dossier par défaut = racine OneDrive de la machine (variables
   `OneDriveCommercial` puis `OneDrive`, exposées par `getAppPaths().oneDrive`) + `(Cours)\Robotique\(Ressources)\Pinout\library`,
   sinon `userData/library` ; un dossier choisi dans OneDrive est enregistré avec le préfixe

@@ -9,6 +9,7 @@ import { useLibraryStore } from '@/features/library/store'
 import { closeTabAsking, saveProject } from '@/features/schematic-editor/projectActions'
 import SchematicEditor from '@/features/schematic-editor/SchematicEditor.vue'
 import { useSchematicStore } from '@/features/schematic-editor/store'
+import ProfileDialog from '@/features/settings/ProfileDialog.vue'
 import SettingsDialog from '@/features/settings/SettingsDialog.vue'
 import { clearAutosave, readAutosaves, syncAutosaves } from '@/io/autosave'
 import { bridge } from '@/io/bridge'
@@ -35,6 +36,7 @@ const editor = useComponentEditorStore()
 // Au lancement, le montage ; l'onglet Composants est pourtant le premier de la barre.
 const mode = ref<Mode>('schematic')
 const showSettings = ref(false)
+const showProfile = ref(false)
 const showHelp = ref(false)
 
 const schematicEditor = useTemplateRef<InstanceType<typeof SchematicEditor>>('schematicEditor')
@@ -156,6 +158,13 @@ function fileMenuItems(): MenuItem[] {
         showSettings.value = true
       },
       { icon: 'settings' }
+    ),
+    item(
+      'Profil de style…',
+      () => {
+        showProfile.value = true
+      },
+      { icon: 'sliders' }
     ),
     item(
       'Raccourcis clavier',
@@ -489,6 +498,14 @@ onUnmounted(() => {
         <button
           type="button"
           class="ghost icon-only"
+          title="Profil de style de l’application"
+          @click="showProfile = true"
+        >
+          <Icon name="sliders" :size="18" />
+        </button>
+        <button
+          type="button"
+          class="ghost icon-only"
           title="Paramètres"
           @click="showSettings = true"
         >
@@ -502,6 +519,7 @@ onUnmounted(() => {
       <SchematicEditor v-else ref="schematicEditor" />
     </main>
     <SettingsDialog v-if="showSettings" @close="showSettings = false" />
+    <ProfileDialog v-if="showProfile" @close="showProfile = false" />
     <ShortcutsHelp v-if="showHelp" @close="showHelp = false" />
     <ContextMenu
       v-if="fileMenu"

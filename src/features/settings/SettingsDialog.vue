@@ -4,41 +4,30 @@ import {
   DEFAULT_SETTINGS,
   EXPORT_SCALES,
   settingsSchema,
-  styleProfileSchema,
   type ExportScale,
   type PaletteColor,
   type Settings,
-  type StyleProfile,
   type Theme
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
-import { useSchematicStore } from '@/features/schematic-editor/store'
 import Icon from '@/ui/Icon.vue'
 import ModalDialog from '@/ui/ModalDialog.vue'
 import { applyTheme } from '@/ui/theme'
-import ProfileFields from './ProfileFields.vue'
 
-// Paramètres de l'application : bibliothèque, palette, copie de secours à gauche ; profil par
-// défaut et export à droite. On édite une copie et on n'enregistre qu'à la validation, sauf
-// « Appliquer au montage ouvert », qui est une commande du montage (annulable) à part.
+// Paramètres de l'application : apparence, bibliothèque et palette à gauche ; copie de secours
+// et export à droite. On édite une copie et on n'enregistre qu'à la validation. Le profil de
+// style a sa propre boîte (ProfileDialog), ouverte depuis la barre d'application.
 
 const emit = defineEmits<{ close: [] }>()
 const library = useLibraryStore()
-const schematic = useSchematicStore()
 
 const draft = ref<Settings>(structuredClone(library.settings ?? DEFAULT_SETTINGS))
 const errors = ref<string[]>([])
-const applied = ref('')
 
 const defaultColorChoices = computed(() => [
   ...draft.value.palette,
   ...draft.value.customColors.map((hex) => ({ name: hex, hex }))
 ])
-
-const montageSummary = computed(() => {
-  const count = schematic.doc.components.length + schematic.doc.wires.length
-  return count === 0 ? 'Le montage ouvert est vide.' : `Montage ouvert : « ${schematic.doc.name} ».`
-})
 
 function text(event: Event): string {
   return (event.target as HTMLInputElement).value
@@ -69,21 +58,6 @@ function addPaletteColor(): void {
       { name: `Couleur ${draft.value.palette.length + 1}`, hex: '#808080' }
     ]
   }
-}
-
-function setDefaultProfile(profile: StyleProfile): void {
-  draft.value = { ...draft.value, defaultProfile: profile }
-}
-
-/** Copie le profil par défaut (tel que réglé ici) dans le montage ouvert, en une commande. */
-function applyProfileToMontage(): void {
-  const parsed = styleProfileSchema.safeParse(draft.value.defaultProfile)
-  if (!parsed.success) {
-    applied.value = parsed.error.issues.map((issue) => issue.message).join(' ; ')
-    return
-  }
-  schematic.setProfile(parsed.data)
-  applied.value = `Profil « ${parsed.data.name} » appliqué au montage ouvert (Ctrl+Z pour revenir).`
 }
 
 function setExportScale(scale: ExportScale): void {
@@ -217,7 +191,9 @@ async function save(): Promise<void> {
             </label>
           </div>
         </section>
+      </div>
 
+      <div class="column">
         <section class="block">
           <h3>Copie de secours</h3>
           <label class="field inline">
@@ -235,22 +211,6 @@ async function save(): Promise<void> {
               "
             />
           </label>
-        </section>
-      </div>
-
-      <div class="column">
-        <section class="block">
-          <h3>Profil de style des nouveaux montages</h3>
-          <ProfileFields
-            :model-value="draft.defaultProfile"
-            @update:model-value="setDefaultProfile"
-          />
-          <div class="row apply">
-            <button type="button" class="small" @click="applyProfileToMontage">
-              Appliquer au montage ouvert
-            </button>
-            <span class="hint">{{ applied || montageSummary }}</span>
-          </div>
         </section>
 
         <section class="block">
@@ -436,10 +396,6 @@ async function save(): Promise<void> {
   align-items: center;
   flex-wrap: wrap;
   margin-top: 8px;
-}
-
-.row.apply .hint {
-  margin: 0;
 }
 
 .radio,

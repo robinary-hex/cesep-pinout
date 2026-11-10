@@ -5,7 +5,9 @@ import {
   ROTATIONS,
   TEXT_SCALES,
   type FreeEndStyle,
+  type ProfileFact,
   type Rotation,
+  type StyleProfile,
   type TextAnchor
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
@@ -14,13 +16,45 @@ import { useSchematicStore } from './store'
 
 // Panneau de droite du montage (replié par défaut, touche I). Toujours : le projet, avec son nom
 // et le bouton d'export. Sans sélection : le profil et le contenu du montage. Avec une
-// sélection : seulement les propriétés de l'élément (composant, fil(s), étiquette, groupe).
+// sélection : seulement les propriétés de l'élément (composant, fil(s), étiquette, groupe). Le
+// profil de style se modifie ailleurs (il est général) ; ici, les réglages où ce montage s'en
+// écarte sont surlignés, avec un bouton pour l'aligner.
 
-const emit = defineEmits<{ editProfile: []; exportImage: [] }>()
+const emit = defineEmits<{ exportImage: [] }>()
 const store = useSchematicStore()
 const library = useLibraryStore()
 const doc = computed(() => store.doc)
 const profile = computed(() => store.profile)
+
+/** Lignes du bloc « Profil de style » : un texte par groupe de réglages, pour n'importe quel profil. */
+const FACT_TEXTS: { key: ProfileFact; text: (p: StyleProfile) => string }[] = [
+  { key: 'name', text: (p) => `Profil « ${p.name} »` },
+  { key: 'cell', text: (p) => `Cellule : ${p.cellPx} px à l’écran` },
+  { key: 'wires', text: (p) => `Fils : ${p.wireWidth} cellule, coins de rayon ${p.cornerRadius}` },
+  { key: 'componentStroke', text: (p) => `Trait des composants : ${p.componentStroke} cellule` },
+  {
+    key: 'junction',
+    text: (p) =>
+      `Point de jonction : ×${p.junctionScale}, ${
+        p.junctionColor === 'wire' ? 'couleur du fil porteur' : `couleur ${p.junctionColor}`
+      }`
+  },
+  { key: 'labels', text: (p) => `Libellés : ${p.labelFont.family} ${p.labelFont.size} pt` },
+  {
+    key: 'endLabels',
+    text: (p) => `Étiquettes d’extrémité : ${p.endLabelFont.family} ${p.endLabelFont.size} pt`
+  }
+]
+
+/** Le style du montage, ligne par ligne ; celles qui s'écartent du profil général sont marquées. */
+const profileFacts = computed(() =>
+  FACT_TEXTS.map((fact) => ({
+    key: fact.key,
+    text: fact.text(profile.value),
+    general: fact.text(library.defaultProfile),
+    differs: store.profileDiffs.includes(fact.key)
+  }))
+)
 
 const onlyInstances = computed(
   () => store.selectedWires.length === 0 && store.selectedLabels.length === 0
@@ -238,26 +272,23 @@ function setLabelSize(event: Event): void {
       <section class="block">
         <h3>Profil de style</h3>
         <ul class="facts">
-          <li>Profil « {{ profile.name }} »</li>
-          <li>Cellule : {{ profile.cellPx }} px à l’écran</li>
-          <li>Fils : {{ profile.wireWidth }} cellule, coins de rayon {{ profile.cornerRadius }}</li>
-          <li>Trait des composants : {{ profile.componentStroke }} cellule</li>
-          <li>
-            Point de jonction : ×{{ profile.junctionScale }},
-            {{
-              profile.junctionColor === 'wire'
-                ? 'couleur du fil porteur'
-                : `couleur ${profile.junctionColor}`
-            }}
-          </li>
-          <li>Libellés : {{ profile.labelFont.family }} {{ profile.labelFont.size }} pt</li>
-          <li>
-            Étiquettes d’extrémité : {{ profile.endLabelFont.family }}
-            {{ profile.endLabelFont.size }} pt
+          <li
+            v-for="fact in profileFacts"
+            :key="fact.key"
+            :class="{ differs: fact.differs }"
+            :title="fact.differs ? `Profil général — ${fact.general}` : undefined"
+          >
+            {{ fact.text }}
           </li>
         </ul>
-        <button type="button" class="small" @click="emit('editProfile')">
-          Modifier le profil…
+        <button
+          v-if="store.profileDiffs.length > 0"
+          type="button"
+          class="small with-icon"
+          title="Remplace le style de ce montage par le profil général (annulable)"
+          @click="store.adoptGeneralProfile()"
+        >
+          <Icon name="refresh" :size="13" /> Appliquer le profil général
         </button>
       </section>
 
@@ -695,6 +726,12 @@ function setLabelSize(event: Event): void {
 
 .facts li {
   margin: 2px 0;
+}
+
+/* Réglage qui s'écarte du profil général : rouge en clair, ambre en sombre. */
+.facts li.differs {
+  color: var(--alert);
+  font-weight: 600;
 }
 
 .hint {

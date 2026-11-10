@@ -41,9 +41,14 @@ ajouté par `dragVertex`) ; le canevas appelle la même fonction pour l'aperçu 
 Poser un composant depuis la bibliothèque remplace la copie embarquée de sa définition si elle a
 changé (même commande élastique) : un projet suit la dernière version posée et garde son autonomie.
 
-Le store du montage distingue le profil du projet (`doc.profile`, enregistré) du profil affiché
-(`profile` = `profilePreview` s'il y en a un) : la boîte de profil prévisualise sans toucher à
-l'historique et ne crée qu'une commande à la validation.
+Le profil de style est général à l'application (`defaultProfile` des paramètres) ; chaque montage
+garde dans son fichier la copie avec laquelle il se dessine (`doc.profile`). Le store du montage
+distingue cette copie du profil affiché (`profile` = `profilePreview` s'il y en a un) : la boîte
+« Profil de style » prévisualise le profil général sur le montage affiché s'il le suit, sans
+toucher à l'historique ; à la validation, les paramètres sont enregistrés et chaque montage ouvert
+qui suivait l'ancien profil reçoit une commande (`followGeneralProfile`). Un montage dont le style
+s'écarte du profil général garde le sien ; ses écarts (`profileDifferences`) sont surlignés dans le
+panneau, où un bouton l'aligne.
 
 ## Interface partagée (`src/ui/`)
 
@@ -127,12 +132,12 @@ définitions embarquées migrées à chaque version des composants), paramètres
 et `endLabelFont` du profil par défaut, thème sombre par défaut, ouverture du panneau, affichage de
 la bibliothèque).
 
-| Donnée                  | Schéma                      | Emplacement                                                             |
-| ----------------------- | --------------------------- | ----------------------------------------------------------------------- |
-| Définition de composant | `componentDefinitionSchema` | `<bibliothèque>/<id>/component.json` (+ `image.png` pour un visuel PNG) |
-| Projet                  | `projectSchema`             | où l'utilisateur veut, `*.pinout.json`, autonome                        |
-| Profil de style         | `styleProfileSchema`        | copié dans chaque projet ; modèles dans `userData/profiles/`            |
-| Paramètres              | `settingsSchema`            | `userData/settings.json` (`userData` = `%APPDATA%\Pinout`)              |
+| Donnée                  | Schéma                      | Emplacement                                                                               |
+| ----------------------- | --------------------------- | ----------------------------------------------------------------------------------------- |
+| Définition de composant | `componentDefinitionSchema` | `<bibliothèque>/<id>/component.json` (+ `image.png` pour un visuel PNG)                   |
+| Projet                  | `projectSchema`             | où l'utilisateur veut, `*.pinout.json`, autonome                                          |
+| Profil de style         | `styleProfileSchema`        | général dans les paramètres, copié dans chaque projet ; modèles dans `userData/profiles/` |
+| Paramètres              | `settingsSchema`            | `userData/settings.json` (`userData` = `%APPDATA%\Pinout`)                                |
 
 La bibliothèque vit par défaut dans OneDrive (`(Cours)\Robotique\(Ressources)\Pinout\library` sous la racine
 `OneDriveCommercial` ou `OneDrive` de la machine), sinon dans `userData/library` ; les paramètres

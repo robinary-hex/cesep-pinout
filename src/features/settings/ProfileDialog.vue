@@ -2,20 +2,23 @@
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { styleProfileSchema, type StyleProfile } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
-import ProfileFields from '@/features/settings/ProfileFields.vue'
+import { useSchematicStore } from '@/features/schematic-editor/store'
 import { deleteProfile, listProfiles, saveProfile, type SavedProfile } from '@/io/profiles'
 import ModalDialog from '@/ui/ModalDialog.vue'
-import { useSchematicStore } from './store'
+import ProfileFields from './ProfileFields.vue'
 
-// Profil de style du montage courant, et profils nommés réutilisables d'un projet à l'autre.
-// Chaque changement s'affiche aussitôt sur le montage (aperçu) ; « Appliquer » l'enregistre dans
-// le projet en une seule commande, « Annuler » ou Échap remet le profil du projet.
+// Profil de style général de l'application, et profils nommés qu'on peut y charger. Chaque
+// changement s'affiche aussitôt sur le montage affiché s'il suit le profil général (aperçu) ;
+// « Appliquer » l'enregistre dans les paramètres et le donne aux montages ouverts qui suivaient
+// l'ancien ; « Annuler » ou Échap ne change rien.
 
 const emit = defineEmits<{ close: [] }>()
-const store = useSchematicStore()
 const library = useLibraryStore()
+const schematic = useSchematicStore()
 
-const draft = ref<StyleProfile>(structuredClone(store.doc.profile))
+const draft = ref<StyleProfile>(structuredClone(library.defaultProfile))
+/** Le montage affiché suit le profil général : il sert d'aperçu. Sinon il garde son style. */
+const previewable = schematic.followsGeneralProfile
 const saved = ref<SavedProfile[]>([])
 const message = ref('')
 const failed = ref(false)
@@ -23,14 +26,15 @@ const failed = ref(false)
 watch(
   draft,
   (value) => {
+    if (!previewable) return
     const parsed = styleProfileSchema.safeParse(value)
-    store.profilePreview = parsed.success ? parsed.data : null
+    schematic.profilePreview = parsed.success ? parsed.data : null
   },
   { deep: true }
 )
 
 onUnmounted(() => {
-  store.profilePreview = null
+  schematic.profilePreview = null
 })
 
 async function refresh(): Promise<void> {
@@ -62,19 +66,15 @@ function valid(): StyleProfile | null {
   return parsed.data
 }
 
-function applyToProject(): void {
+/** Le profil devient le profil général ; les montages ouverts qui suivaient l'ancien le prennent. */
+async function apply(): Promise<void> {
   const profile = valid()
   if (!profile) return
-  store.profilePreview = null
-  store.setProfile(profile)
-  emit('close')
-}
-
-async function useAsDefault(): Promise<void> {
-  const profile = valid()
-  if (!profile) return
+  const previous = library.defaultProfile
   await library.updateSettings({ defaultProfile: profile })
-  report(`« ${profile.name} » devient le profil des nouveaux montages.`)
+  schematic.profilePreview = null
+  schematic.followGeneralProfile(previous, profile)
+  emit('close')
 }
 
 async function saveNamed(): Promise<void> {
@@ -91,7 +91,7 @@ async function saveNamed(): Promise<void> {
 
 function load(entry: SavedProfile): void {
   draft.value = structuredClone(entry.profile)
-  report(`Profil « ${entry.profile.name} » chargé : le montage le montre, Appliquer le garde.`)
+  report(`Profil « ${entry.profile.name} » chargé : Appliquer en fait le profil général.`)
 }
 
 async function remove(entry: SavedProfile): Promise<void> {
@@ -102,8 +102,12 @@ async function remove(entry: SavedProfile): Promise<void> {
 </script>
 
 <template>
-  <ModalDialog title="Profil de style du montage" @close="emit('close')">
+  <ModalDialog title="Profil de style" @close="emit('close')">
     <ProfileFields v-model="draft" />
+    <p v-if="!previewable" class="hint">
+      Le montage affiché a son propre style : il ne montre pas l’aperçu et ne suivra pas ces
+      réglages.
+    </p>
 
     <section class="saved">
       <h3>Profils enregistrés</h3>
@@ -125,9 +129,8 @@ async function remove(entry: SavedProfile): Promise<void> {
 
     <template #footer>
       <button type="button" @click="saveNamed">Enregistrer sous ce nom</button>
-      <button type="button" @click="useAsDefault">Profil par défaut</button>
       <button type="button" @click="emit('close')">Annuler</button>
-      <button type="button" class="primary" @click="applyToProject">Appliquer</button>
+      <button type="button" class="primary" @click="apply">Appliquer</button>
     </template>
   </ModalDialog>
 </template>

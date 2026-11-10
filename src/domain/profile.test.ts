@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PROFILE, styleProfileSchema } from './profile'
+import { DEFAULT_PROFILE, profileDifferences, sameProfile, styleProfileSchema } from './profile'
 import { createEmptyProject, projectSchema } from './project'
 import { DEFAULT_PALETTE, DEFAULT_SETTINGS, settingsSchema } from './settings'
 
@@ -33,5 +33,24 @@ describe('profil de style et paramètres', () => {
     const project = createEmptyProject('Nouveau montage', DEFAULT_PROFILE)
     expect(projectSchema.safeParse(project).success).toBe(true)
     expect(project.profile).not.toBe(DEFAULT_PROFILE)
+  })
+
+  it('liste les réglages où un profil s’écarte du profil général', () => {
+    expect(profileDifferences(DEFAULT_PROFILE, structuredClone(DEFAULT_PROFILE))).toEqual([])
+    expect(sameProfile(DEFAULT_PROFILE, structuredClone(DEFAULT_PROFILE))).toBe(true)
+    const custom = {
+      ...DEFAULT_PROFILE,
+      name: 'Cours',
+      cornerRadius: 0,
+      junctionColor: '#000000',
+      endLabelFont: { family: 'Segoe UI', size: 18 }
+    }
+    expect(profileDifferences(custom, DEFAULT_PROFILE)).toEqual([
+      'name',
+      'wires',
+      'junction',
+      'endLabels'
+    ])
+    expect(sameProfile(custom, DEFAULT_PROFILE)).toBe(false)
   })
 })

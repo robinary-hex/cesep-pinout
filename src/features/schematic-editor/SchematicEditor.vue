@@ -15,7 +15,6 @@ import { heading, item, SEPARATOR, type MenuItem } from '@/ui/contextMenu'
 import { openModals } from '@/ui/modalState'
 import PromptDialog from '@/ui/PromptDialog.vue'
 import type { MenuRequest } from './menu'
-import ProfileDialog from './ProfileDialog.vue'
 import { saveProject } from './projectActions'
 import SchematicCanvas from './SchematicCanvas.vue'
 import SchematicInspector from './SchematicInspector.vue'
@@ -23,13 +22,12 @@ import SchematicToolbar from './SchematicToolbar.vue'
 import { useSchematicStore } from './store'
 
 // Éditeur de montage : barre d'outils, canevas, inspecteur (replié par défaut), raccourcis,
-// menu contextuel, boîtes de saisie, fichiers de projet, export et profil de style.
+// menu contextuel, boîtes de saisie, fichiers de projet et export.
 
 const store = useSchematicStore()
 const library = useLibraryStore()
 const canvas = useTemplateRef<InstanceType<typeof SchematicCanvas>>('canvas')
 const showExport = ref(false)
-const showProfile = ref(false)
 
 interface PromptState {
   title: string
@@ -520,14 +518,9 @@ defineExpose({ createNew, open, openRecent, save, openExport })
         @edit-label="editLabelText"
         @edit-wire-end="editWireEnd"
       />
-      <SchematicInspector
-        v-if="store.inspectorOpen"
-        @edit-profile="showProfile = true"
-        @export-image="openExport"
-      />
+      <SchematicInspector v-if="store.inspectorOpen" @export-image="openExport" />
     </div>
     <ExportDialog v-if="showExport" @close="showExport = false" />
-    <ProfileDialog v-if="showProfile" @close="showProfile = false" />
     <ContextMenu v-if="menu" :x="menu.x" :y="menu.y" :items="menu.items" @close="menu = null" />
     <PromptDialog
       v-if="prompt"
