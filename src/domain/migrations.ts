@@ -256,7 +256,10 @@ export const componentMigrations: MigrationTable = {
     // v9 → v10 : la chasse fixe disparaît (option retirée le jour même).
     9: migrateComponentV9,
     // v10 → v11 : opacité du remplissage, opaque par défaut.
-    10: (raw) => withStyleDefaults(raw, { fillOpacity: 1 })
+    10: (raw) => withStyleDefaults(raw, { fillOpacity: 1 }),
+    // v11 → v12 : forme « point ». Rien à convertir ; la version monte pour qu'une application
+    // plus ancienne refuse proprement un fichier qui en contient.
+    11: (raw) => raw
   }
 }
 
@@ -358,7 +361,9 @@ export const projectMigrations: MigrationTable = {
     // Projet v12 → v13 : définitions embarquées migrées (plus de chasse fixe).
     12: migrateEmbeddedDefs,
     // Projet v13 → v14 : définitions embarquées migrées (opacité du remplissage).
-    13: migrateEmbeddedDefs
+    13: migrateEmbeddedDefs,
+    // Projet v14 → v15 : définitions embarquées migrées (forme « point »).
+    14: migrateEmbeddedDefs
   }
 }
 

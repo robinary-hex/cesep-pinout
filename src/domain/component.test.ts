@@ -4,6 +4,7 @@ import {
   componentIssues,
   createEmptyComponent,
   DEFAULT_SHAPE_STYLE,
+  dotRadiusCells,
   reorderItem,
   NO_ARROWS,
   primitiveBounds,
@@ -180,5 +181,29 @@ describe('ordre des formes', () => {
     // Déjà au bout : rien ne bouge.
     expect(reorderItem(list, 3, 'up')).toEqual({ list, index: 3 })
     expect(reorderItem(list, 0, 'down')).toEqual({ list, index: 0 })
+  })
+})
+
+describe('point', () => {
+  const dot = { kind: 'dot', x: 8, y: 4, scale: 2, color: '#000000' } as const
+
+  it('a pour diamètre deux traits de composant, fois sa taille', () => {
+    expect(dotRadiusCells(1, 0.1)).toBeCloseTo(0.1)
+    expect(dotRadiusCells(2.5, 0.2)).toBeCloseTo(0.5)
+  })
+
+  it('se déplace par son centre et a une petite boîte de sélection', () => {
+    expect(translatePrimitive(dot, 2, -1)).toMatchObject({ x: 10, y: 3 })
+    const bounds = primitiveBounds(dot)
+    expect(bounds.x1).toBeCloseTo(7.2)
+    expect(bounds.y2).toBeCloseTo(4.8)
+  })
+
+  it('posé sur le bord du composant, ne compte pas comme une forme qui dépasse', () => {
+    const def = createEmptyComponent('x', 'X')
+    def.visual = { kind: 'drawing', primitives: [{ ...dot, x: 0, y: 4 }] }
+    expect(componentIssues(def).some((issue) => /dépasse/.test(issue.message))).toBe(false)
+    def.visual = { kind: 'drawing', primitives: [{ ...dot, x: -4, y: 4 }] }
+    expect(componentIssues(def).some((issue) => /dépasse/.test(issue.message))).toBe(true)
   })
 })

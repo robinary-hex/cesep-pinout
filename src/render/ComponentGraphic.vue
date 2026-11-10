@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import {
   arrowHeadPoints,
+  dotRadiusCells,
   layoutText,
   middleArrowHead,
   NO_ARROWS,
@@ -95,6 +96,15 @@ function shapeAttrs(style: ShapeStyle): Record<string, string | number> {
     'stroke-linecap': 'round',
     'stroke-linejoin': 'round'
   }
+}
+
+/** Rayon d'un point en pixels, et rayon de sa zone cliquable (jamais minuscule). */
+function dotRadiusPx(scale: number): number {
+  return dotRadiusCells(scale, props.strokeBase) * props.cellPx
+}
+
+function dotHitRadiusPx(scale: number): number {
+  return Math.max(dotRadiusPx(scale), HIT_MIN_PX / 2)
 }
 
 function hitWidth(style: ShapeStyle): number {
@@ -299,6 +309,17 @@ function down(index: number, event: PointerEvent): void {
           :fill="p.closed ? 'transparent' : 'none'"
           stroke="transparent"
           :stroke-width="hitWidth(p.style)"
+        />
+      </template>
+
+      <template v-else-if="p.kind === 'dot'">
+        <circle :cx="q(p.x)" :cy="q(p.y)" :r="dotRadiusPx(p.scale)" :fill="inkFor(p.color)" />
+        <circle
+          v-if="interactive"
+          :cx="q(p.x)"
+          :cy="q(p.y)"
+          :r="dotHitRadiusPx(p.scale)"
+          fill="transparent"
         />
       </template>
 

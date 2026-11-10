@@ -296,7 +296,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
 
   function updateStyle(index: number, patch: Partial<ShapeStyle>): void {
     updatePrimitive(index, 'Modifier le style', (primitive) => {
-      if (primitive.kind !== 'text') Object.assign(primitive.style, patch)
+      if ('style' in primitive) Object.assign(primitive.style, patch)
     })
   }
 

@@ -32,7 +32,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   (multiplicateur, choix dans `STROKE_WEIGHTS`) × `componentStroke` du profil de style (0,1 cellule
   par défaut) : un montage change d'épaisseur avec son profil. Le remplissage a une opacité
   (`fillOpacity`, 0 à 1, attribut `fill-opacity` à l'écran et à l'export) ; le trait reste
-  opaque. Lignes et polylignes ouvertes portent
+  opaque. Un point (`dot`) est un disque plein dont le diamètre vaut deux traits de composant ×
+  `scale` (choix dans `DOT_SCALES`, ×1 à ×3 ; `dotRadiusCells`) : il suit le profil comme les
+  traits. Lignes et polylignes ouvertes portent
   des flèches optionnelles (`arrows` : début, centre dans le sens du tracé et centrée par son
   centre de gravité, fin), le trait
   s'arrêtant à la base des pointes d'extrémité
@@ -167,7 +169,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Exécutable : `pnpm icon` régénère `build/icon.png` (script sans dépendance), `pnpm build:win`
   produit l'installeur NSIS et l'exe portable dans `release/` (non signés : avertissement
   SmartScreen au premier lancement, normal). Un `.json` passé en argument s'ouvre au lancement.
-  - Éditeur de composants : V sélection, R rectangle, O ellipse, L ligne, P polyligne, E texte,
+  - Éditeur de composants : V sélection, R rectangle, O ellipse, L ligne, P polyligne, N point
+    (un clic par point, l'outil reste actif), E texte,
     B broche, Suppr, Échap, Entrée (termine une polyligne), Ctrl+Z / Ctrl+Y, Ctrl+S, Ctrl+N,
     Ctrl+Page haut/bas (Maj pour premier/arrière-plan) = ordre d'empilement de la forme
     sélectionnée (`reorderItem`, aussi par boutons dans le panneau),
@@ -196,7 +199,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     composant posé s'appelle « libellé » dans l'interface.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 11, projet 14, paramètres 8
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 12, projet 15, paramètres 8
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

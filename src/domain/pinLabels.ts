@@ -99,6 +99,7 @@ export function primitiveTouchesBox(primitive: Primitive, box: Box): boolean {
   const target = grow(box, STROKE_MARGIN)
   switch (primitive.kind) {
     case 'text':
+    case 'dot':
       return boxesOverlap(bounds, target)
     case 'rect':
     case 'ellipse':

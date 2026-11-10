@@ -53,6 +53,9 @@ export function primitiveHandles(primitive: Primitive): Handle[] {
     case 'rect':
     case 'text':
       return boxHandles(primitive)
+    case 'dot':
+      // Un point se déplace en le glissant ; sa taille se règle dans le panneau.
+      return []
     case 'ellipse': {
       const { cx, cy, rx, ry } = primitive
       return [
@@ -83,6 +86,8 @@ export function dragHandle(
     case 'rect':
     case 'text':
       return { ...primitive, ...resizeBox(primitive, handleId, target) }
+    case 'dot':
+      return primitive
     case 'ellipse':
       if (handleId === 'w' || handleId === 'e') {
         return { ...primitive, rx: Math.max(1, Math.abs(tx - primitive.cx)) }

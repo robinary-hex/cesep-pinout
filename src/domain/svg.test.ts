@@ -100,6 +100,12 @@ describe('export SVG', () => {
     ).toContain('>&lt;5&gt;</tspan>')
   })
 
+  it('dessine un point en disque plein, de rayon un trait fois sa taille', () => {
+    expect(primitiveSvg({ kind: 'dot', x: 4, y: 2, scale: 2, color: '#d62828' }, 0.1)).toBe(
+      '<circle cx="1" cy="0.5" r="0.2" fill="#d62828"/>'
+    )
+  })
+
   it('substitue les textes variables et dessine les flèches des lignes', () => {
     const valeur = primitiveSvg(
       {

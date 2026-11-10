@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import {
+  DOT_SCALES,
   fitPngToCells,
   PIN_KIND_LABELS,
   PIN_KINDS,
@@ -117,7 +118,7 @@ const primitiveCount = computed(() =>
 )
 const multiCount = computed(() => store.selectedIndexes.length)
 const shapeStyle = computed(() =>
-  primitive.value && primitive.value.kind !== 'text' ? primitive.value.style : null
+  primitive.value && 'style' in primitive.value ? primitive.value.style : null
 )
 const weightChoices = computed(() => {
   const current = shapeStyle.value?.weight
@@ -131,6 +132,7 @@ const KIND_LABELS: Record<string, string> = {
   ellipse: 'Ellipse',
   line: 'Ligne',
   polyline: 'Polyligne',
+  dot: 'Point',
   text: 'Texte'
 }
 
@@ -273,6 +275,28 @@ function setFollowsRotation(event: Event): void {
       if (p.kind === 'text') p.followsRotation = follows
     }
   )
+}
+
+/** Tailles de point proposées, plus la taille actuelle si elle n'en fait pas partie. */
+const dotScaleChoices = computed(() => {
+  const list: number[] = [...DOT_SCALES]
+  const current = primitive.value?.kind === 'dot' ? primitive.value.scale : undefined
+  if (current !== undefined && !list.includes(current)) list.push(current)
+  return list.sort((a, b) => a - b)
+})
+
+function setDotScale(event: Event): void {
+  const scale = Math.max(0.1, numberValue(event))
+  store.updatePrimitive(primitiveIndex.value, 'Taille du point', (p) => {
+    if (p.kind === 'dot') p.scale = scale
+  })
+}
+
+function setDotColor(event: Event): void {
+  const color = inputValue(event)
+  store.updatePrimitive(primitiveIndex.value, 'Couleur du point', (p) => {
+    if (p.kind === 'dot') p.color = color
+  })
 }
 
 function setRectRadius(event: Event): void {
@@ -429,6 +453,23 @@ function setClosed(event: Event): void {
           />
           <span>Tourne avec le composant sur le montage</span>
         </label>
+      </template>
+
+      <template v-else-if="primitive.kind === 'dot'">
+        <div class="row">
+          <label class="field">
+            <span>Taille</span>
+            <select :value="primitive.scale" @change="setDotScale">
+              <option v-for="scale in dotScaleChoices" :key="scale" :value="scale">
+                ×{{ scale }}
+              </option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Couleur</span>
+            <input type="color" :value="primitive.color" @change="setDotColor" />
+          </label>
+        </div>
       </template>
 
       <template v-else-if="shapeStyle">

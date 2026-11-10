@@ -583,6 +583,13 @@ function onPointerDown(event: PointerEvent): void {
       }
       break
     }
+    case 'dot':
+      // L'outil reste actif : plusieurs points se posent à la suite.
+      store.addPrimitive(
+        { kind: 'dot', x: q.x, y: q.y, scale: 1, color: '#000000' },
+        'Ajouter un point'
+      )
+      break
     case 'pin': {
       const nearest = nearestInsidePoint(cells, size.value)
       if (nearest.distance > PIN_SNAP_CELLS) {

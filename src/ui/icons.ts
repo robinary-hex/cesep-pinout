@@ -104,6 +104,8 @@ export const ICONS = {
   moon: ['M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z'],
   dots: ['M5 12h.01', 'M12 12h.01', 'M19 12h.01'],
   bold: ['M6 4h8a4 4 0 0 1 0 8H6z', 'M6 12h9a4 4 0 0 1 0 8H6z'],
+  // Disque plein : deux cercles concentriques dont les traits se touchent.
+  dot: ['M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z', 'M12 11a1 1 0 1 0 0 2a1 1 0 1 0 0-2z'],
   italic: ['M19 4h-9', 'M14 20H5', 'M15 4L9 20'],
   underline: ['M6 4v6a6 6 0 0 0 12 0V4', 'M4 20h16'],
   strikethrough: ['M16 4H9a3 3 0 0 0-2.83 4', 'M14 12a4 4 0 0 1 1.17 7.83H8', 'M4 12h16']

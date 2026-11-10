@@ -1,6 +1,7 @@
 import { arrowHeadPoints, middleArrowHead, pointsAttribute, trimForArrows } from './arrows'
 import { wireEndLabelPlacement, wireRenderParts } from './wireEnds'
 import {
+  dotRadiusCells,
   strokeWidthCells,
   type ComponentDefinition,
   type FieldValues,
@@ -129,6 +130,9 @@ export function primitiveSvg(
       fill: primitive.color,
       ...textStyleAttrs(primitive)
     })}>${spans}</text>`
+  }
+  if (primitive.kind === 'dot') {
+    return `<circle ${attrs({ cx: q(primitive.x), cy: q(primitive.y), r: dotRadiusCells(primitive.scale, componentStroke), fill: primitive.color })}/>`
   }
   const width = strokeWidthCells(primitive.style, componentStroke)
   const style = {

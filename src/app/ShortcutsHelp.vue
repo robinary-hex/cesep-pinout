@@ -44,6 +44,7 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['V', 'Sélection : glisser déplace une forme ou une broche'],
       ['Ctrl (sans sélection)', 'Poignées de la boîte du composant : glisser un coin ou un côté'],
       ['R / O / L / P', 'Rectangle / ellipse / ligne / polyligne'],
+      ['N', 'Point : un clic par point ; taille ×1 à ×3 dans le panneau'],
       ['E / B', 'Texte / broche (sur une intersection du composant)'],
       ['Ctrl+Page haut / bas', 'Avancer / reculer la forme (Maj : premier / arrière-plan)'],
       ['Bouton du milieu', 'Glisser : déplacer la vue ; double-clic : ajuster à la fenêtre'],

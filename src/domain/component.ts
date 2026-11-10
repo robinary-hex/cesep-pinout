@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { hexColorSchema } from './color'
 import { isInsideBox, PNG_PX_PER_CELL, QUARTERS_PER_CELL, sizeSchema, type Size } from './grid'
 
-export const COMPONENT_SCHEMA_VERSION = 11
+export const COMPONENT_SCHEMA_VERSION = 12
 
 export const pinKindSchema = z.enum(['in', 'out', 'io', 'power'])
 export type PinKind = z.infer<typeof pinKindSchema>
@@ -128,12 +128,36 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
     italic: z.boolean(),
     underline: z.boolean(),
     strike: z.boolean()
+  }),
+  z.object({
+    kind: z.literal('dot'),
+    /** Centre du point. */
+    x: quarterSchema,
+    y: quarterSchema,
+    /** Taille : le diamètre vaut deux traits de composant, multipliés par `scale`. */
+    scale: z.number().positive(),
+    color: hexColorSchema
   })
 ])
 export type Primitive = z.infer<typeof primitiveSchema>
 export type PrimitiveKind = Primitive['kind']
 export type TextPrimitive = Extract<Primitive, { kind: 'text' }>
-export type StyledPrimitive = Exclude<Primitive, { kind: 'text' }>
+export type DotPrimitive = Extract<Primitive, { kind: 'dot' }>
+export type StyledPrimitive = Exclude<Primitive, { kind: 'text' | 'dot' }>
+
+/** Tailles de point proposées par l'interface ; le schéma accepte tout multiplicateur positif. */
+export const DOT_SCALES = [1, 1.5, 2, 2.5, 3] as const
+
+/**
+ * Rayon d'un point, en cellules. Son diamètre vaut deux traits de composant (`componentStroke` du
+ * profil) multipliés par sa taille : il s'épaissit avec les traits quand le profil change.
+ */
+export function dotRadiusCells(scale: number, componentStroke: number): number {
+  return scale * componentStroke
+}
+
+/** Rayon d'un point pour sa boîte de sélection : estimé avec le trait par défaut (0,1 cellule). */
+const DOT_BOUNDS_RADIUS_QUARTERS = 0.1 * QUARTERS_PER_CELL
 
 /** Valeurs des champs variables d'un composant posé : nom du champ → valeur. */
 export type FieldValues = Readonly<Record<string, string>>
@@ -339,6 +363,15 @@ export function primitiveBounds(primitive: Primitive): Bounds {
       const ys = primitive.points.map(([, y]) => y)
       return { x1: Math.min(...xs), y1: Math.min(...ys), x2: Math.max(...xs), y2: Math.max(...ys) }
     }
+    case 'dot': {
+      const radius = primitive.scale * DOT_BOUNDS_RADIUS_QUARTERS
+      return {
+        x1: primitive.x - radius,
+        y1: primitive.y - radius,
+        x2: primitive.x + radius,
+        y2: primitive.y + radius
+      }
+    }
     case 'text':
       return {
         x1: primitive.x,
@@ -378,6 +411,7 @@ export function translatePrimitive(primitive: Primitive, dx: number, dy: number)
   switch (primitive.kind) {
     case 'rect':
     case 'text':
+    case 'dot':
       return { ...primitive, x: primitive.x + dx, y: primitive.y + dy }
     case 'ellipse':
       return { ...primitive, cx: primitive.cx + dx, cy: primitive.cy + dy }
@@ -399,7 +433,8 @@ export function translatePrimitive(primitive: Primitive, dx: number, dy: number)
 
 function primitiveWithin(primitive: Primitive, maxX: number, maxY: number): boolean {
   const inBox = (x: number, y: number): boolean => x >= 0 && x <= maxX && y >= 0 && y <= maxY
-  if (primitive.kind === 'text') return inBox(primitive.x, primitive.y)
+  // Un texte compte par son coin, un point par son centre (il peut être posé sur le bord).
+  if (primitive.kind === 'text' || primitive.kind === 'dot') return inBox(primitive.x, primitive.y)
   const bounds = primitiveBounds(primitive)
   return inBox(bounds.x1, bounds.y1) && inBox(bounds.x2, bounds.y2)
 }
