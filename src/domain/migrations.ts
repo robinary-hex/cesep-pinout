@@ -239,6 +239,26 @@ function withStyleDefaults(raw: RawRecord, defaults: RawRecord): RawRecord {
   }
 }
 
+// Composant v12 → v13 : arrondi des angles des polylignes et des polygones, nul par défaut.
+
+function migrateComponentV12(raw: RawRecord): RawRecord {
+  const visual = raw['visual']
+  if (!isRecord(visual) || visual['kind'] !== 'drawing' || !Array.isArray(visual['primitives'])) {
+    return raw
+  }
+  return {
+    ...raw,
+    visual: {
+      ...visual,
+      primitives: visual['primitives'].map((primitive) =>
+        isRecord(primitive) && primitive['kind'] === 'polyline'
+          ? { radius: 0, ...primitive }
+          : primitive
+      )
+    }
+  }
+}
+
 export const componentMigrations: MigrationTable = {
   current: COMPONENT_SCHEMA_VERSION,
   steps: {
@@ -259,7 +279,8 @@ export const componentMigrations: MigrationTable = {
     10: (raw) => withStyleDefaults(raw, { fillOpacity: 1 }),
     // v11 → v12 : forme « point ». Rien à convertir ; la version monte pour qu'une application
     // plus ancienne refuse proprement un fichier qui en contient.
-    11: (raw) => raw
+    11: (raw) => raw,
+    12: migrateComponentV12
   }
 }
 
@@ -363,7 +384,9 @@ export const projectMigrations: MigrationTable = {
     // Projet v13 → v14 : définitions embarquées migrées (opacité du remplissage).
     13: migrateEmbeddedDefs,
     // Projet v14 → v15 : définitions embarquées migrées (forme « point »).
-    14: migrateEmbeddedDefs
+    14: migrateEmbeddedDefs,
+    // Projet v15 → v16 : définitions embarquées migrées (angles arrondis).
+    15: migrateEmbeddedDefs
   }
 }
 

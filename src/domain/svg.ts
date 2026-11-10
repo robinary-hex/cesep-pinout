@@ -26,6 +26,7 @@ import {
   textPlacementTransform
 } from './placement'
 import type { Project } from './project'
+import { roundedPathData } from './roundedPath'
 import type { ExportSettings } from './settings'
 import { wirePathData } from './wires'
 
@@ -169,7 +170,12 @@ export function primitiveSvg(
       const cells: LocalPoint[] = primitive.points.map(([x, y]) => ({ x: q(x), y: q(y) }))
       const heads =
         primitive.closed || primitive.style.stroke === 'none' ? NO_ARROWS : primitive.arrows
-      const points = pointsAttribute(trimForArrows(cells, heads, width))
+      const trimmed = trimForArrows(cells, heads, width)
+      if (primitive.radius > 0) {
+        const d = roundedPathData(trimmed, q(primitive.radius), primitive.closed)
+        return `<path ${attrs({ d, ...style })}/>` + arrowsSvg(primitive, width)
+      }
+      const points = pointsAttribute(trimmed)
       const tag = primitive.closed ? 'polygon' : 'polyline'
       return `<${tag} ${attrs({ points, ...style })}/>` + arrowsSvg(primitive, width)
     }

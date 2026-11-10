@@ -760,6 +760,7 @@ function finishPolyline(): void {
       kind: 'polyline',
       points: current.points.map((p): [number, number] => [p.x, p.y]),
       closed: false,
+      radius: 0,
       arrows: { ...NO_ARROWS },
       style: { ...DEFAULT_SHAPE_STYLE }
     },

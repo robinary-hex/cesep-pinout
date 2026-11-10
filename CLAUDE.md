@@ -34,7 +34,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   (`fillOpacity`, 0 à 1, attribut `fill-opacity` à l'écran et à l'export) ; le trait reste
   opaque. Un point (`dot`) est un disque plein dont le diamètre vaut deux traits de composant ×
   `scale` (choix dans `DOT_SCALES`, ×1 à ×3 ; `dotRadiusCells`) : il suit le profil comme les
-  traits. Lignes et polylignes ouvertes portent
+  traits. Une polyligne ou un polygone peut arrondir ses angles (`radius`, en quarts de cellule,
+  comme `rx` du rectangle) : chaque sommet devient un arc tangent à ses deux côtés, quel que
+  soit l'angle, limité à la moitié d'un côté (`roundedPathData`). Lignes et polylignes ouvertes portent
   des flèches optionnelles (`arrows` : début, centre dans le sens du tracé et centrée par son
   centre de gravité, fin), le trait
   s'arrêtant à la base des pointes d'extrémité
@@ -200,7 +202,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     composant posé s'appelle « libellé » dans l'interface.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 12, projet 15, paramètres 8
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 13, projet 16, paramètres 8
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

@@ -8,6 +8,7 @@ import {
   NO_ARROWS,
   pointsAttribute,
   QUARTERS_PER_CELL,
+  roundedPathData,
   strokeWidthCells,
   textStyleAttrs,
   trimForArrows,
@@ -144,6 +145,14 @@ function strokePoints(primitive: Stroked): LocalPoint[] {
     x: point.x * props.cellPx,
     y: point.y * props.cellPx
   }))
+}
+
+/** Tracé d'une polyligne ou d'un polygone aux angles arrondis, en pixels. */
+function roundedPath(primitive: Extract<Primitive, { kind: 'polyline' }>): string {
+  const points = primitive.closed
+    ? primitive.points.map(([x, y]) => ({ x: q(x), y: q(y) }))
+    : strokePoints(primitive)
+  return roundedPathData(points, q(primitive.radius), primitive.closed)
 }
 
 function lineAttrs(primitive: Stroked): Record<string, number> {
@@ -295,7 +304,8 @@ function down(index: number, event: PointerEvent): void {
       </template>
 
       <template v-else-if="p.kind === 'polyline'">
-        <polygon v-if="p.closed" :points="polyPoints(p.points)" v-bind="shapeAttrs(p.style)" />
+        <path v-if="p.radius > 0" :d="roundedPath(p)" v-bind="shapeAttrs(p.style)" />
+        <polygon v-else-if="p.closed" :points="polyPoints(p.points)" v-bind="shapeAttrs(p.style)" />
         <polyline v-else :points="pointsAttribute(strokePoints(p))" v-bind="shapeAttrs(p.style)" />
         <polygon
           v-for="(head, h) in arrowHeads(p)"

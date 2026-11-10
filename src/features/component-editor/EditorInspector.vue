@@ -306,6 +306,13 @@ function setRectRadius(event: Event): void {
   })
 }
 
+function setPolyRadius(event: Event): void {
+  const radius = Math.max(0, Math.round(numberValue(event)))
+  store.updatePrimitive(primitiveIndex.value, 'Arrondi des angles', (p) => {
+    if (p.kind === 'polyline') p.radius = radius
+  })
+}
+
 function setClosed(event: Event): void {
   const closed = checked(event)
   store.updatePrimitive(
@@ -567,6 +574,10 @@ function setClosed(event: Event): void {
         <label v-if="primitive.kind === 'rect'" class="field">
           <span>Arrondi des coins (quarts de cellule)</span>
           <input type="number" min="0" step="1" :value="primitive.rx" @change="setRectRadius" />
+        </label>
+        <label v-if="primitive.kind === 'polyline'" class="field">
+          <span>Arrondi des angles (quarts de cellule)</span>
+          <input type="number" min="0" step="1" :value="primitive.radius" @change="setPolyRadius" />
         </label>
         <label v-if="primitive.kind === 'polyline'" class="check">
           <input type="checkbox" :checked="primitive.closed" @change="setClosed" />

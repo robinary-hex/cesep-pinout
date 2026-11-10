@@ -100,6 +100,29 @@ describe('export SVG', () => {
     ).toContain('>&lt;5&gt;</tspan>')
   })
 
+  it('trace un polygone aux angles arrondis', () => {
+    const polygon = primitiveSvg(
+      {
+        kind: 'polyline',
+        points: [
+          [0, 0],
+          [16, 0],
+          [16, 16],
+          [0, 16]
+        ],
+        closed: true,
+        radius: 4,
+        arrows: { start: false, middle: false, end: false },
+        style: { stroke: '#000000', weight: 1, fill: 'none', fillOpacity: 1 }
+      },
+      0.1
+    )
+    // Carré de 4 cellules, rayon d'une cellule : quatre arcs, tracé refermé.
+    expect(polygon).toContain(
+      '<path d="M 1 0 L 3 0 A 1 1 0 0 1 4 1 L 4 3 A 1 1 0 0 1 3 4 L 1 4 A 1 1 0 0 1 0 3 L 0 1 A 1 1 0 0 1 1 0 Z"'
+    )
+  })
+
   it('dessine un point en disque plein, de rayon un trait fois sa taille', () => {
     expect(primitiveSvg({ kind: 'dot', x: 4, y: 2, scale: 2, color: '#d62828' }, 0.1)).toBe(
       '<circle cx="1" cy="0.5" r="0.2" fill="#d62828"/>'

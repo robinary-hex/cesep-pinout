@@ -47,6 +47,7 @@ describe('formes du mini-éditeur', () => {
           [2, 3]
         ],
         closed: false,
+        radius: 0,
         arrows: NO_ARROWS,
         style
       })
@@ -63,6 +64,7 @@ describe('formes du mini-éditeur', () => {
         [1, 1]
       ],
       closed: true,
+      radius: 0,
       arrows: NO_ARROWS,
       style
     }

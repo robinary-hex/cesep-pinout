@@ -69,6 +69,7 @@ describe('poignées des formes', () => {
         [4, 4]
       ],
       closed: false,
+      radius: 0,
       arrows: NO_ARROWS,
       style
     }

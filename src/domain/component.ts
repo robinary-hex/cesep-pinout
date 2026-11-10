@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { hexColorSchema } from './color'
 import { isInsideBox, PNG_PX_PER_CELL, QUARTERS_PER_CELL, sizeSchema, type Size } from './grid'
 
-export const COMPONENT_SCHEMA_VERSION = 12
+export const COMPONENT_SCHEMA_VERSION = 13
 
 export const pinKindSchema = z.enum(['in', 'out', 'io', 'power'])
 export type PinKind = z.infer<typeof pinKindSchema>
@@ -100,6 +100,8 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
     kind: z.literal('polyline'),
     points: z.array(quarterPointSchema).min(2),
     closed: z.boolean(),
+    /** Rayon d'arrondi des angles, en quarts de cellule ; 0 = angles vifs. */
+    radius: z.number().int().nonnegative(),
     arrows: arrowsSchema,
     style: shapeStyleSchema
   }),
