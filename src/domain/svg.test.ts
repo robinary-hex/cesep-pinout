@@ -70,6 +70,60 @@ describe('export SVG', () => {
     expect(result.svg).toContain('viewBox="2 -1 22 17"')
   })
 
+  it('exporte une étiquette avec ses styles, sa couleur et son sens', () => {
+    const label = {
+      id: 't1',
+      x: 2,
+      y: 0,
+      w: 1,
+      h: 4,
+      anchor: 'middle' as const,
+      text: 'Alim',
+      size: 20,
+      bold: true,
+      italic: true,
+      underline: true,
+      strike: false,
+      vertical: true,
+      color: '#d62828'
+    }
+    const result = buildProjectSvg(
+      { ...project, components: [], wires: [], labels: [label] },
+      DEFAULT_EXPORT
+    )
+    if (!result) throw new Error('export vide')
+    const text = /<text [^>]*>(?=<tspan[^>]*>Alim)/.exec(result.svg)?.[0] ?? ''
+    expect(text).toContain('fill="#d62828"')
+    expect(text).toContain('font-weight="bold"')
+    expect(text).toContain('font-style="italic"')
+    expect(text).toContain('text-decoration="underline"')
+    // Quart de tour autour du centre de la boîte (2,5 ; 2), lignes posées dans la boîte tournée.
+    expect(text).toContain('transform="rotate(90 2.5 2)"')
+    expect(result.svg).toMatch(/<tspan x="2\.5" y="[^"]+">Alim<\/tspan>/)
+    // Une étiquette simple n'a ni décoration ni transformation ; le noir reste noir à l'export.
+    const plain = buildProjectSvg(
+      {
+        ...project,
+        components: [],
+        wires: [],
+        labels: [
+          {
+            ...label,
+            bold: false,
+            italic: false,
+            underline: false,
+            vertical: false,
+            color: '#000000'
+          }
+        ]
+      },
+      DEFAULT_EXPORT
+    )
+    const plainText = /<text [^>]*>(?=<tspan[^>]*>Alim)/.exec(plain?.svg ?? '')?.[0] ?? ''
+    expect(plainText).toContain('fill="#000000"')
+    expect(plainText).not.toMatch(/transform|font-weight|font-style|text-decoration/)
+  })
+
   it('retourne null pour un montage vide et échappe le texte', () => {
     expect(
       buildProjectSvg({ ...project, components: [], wires: [], labels: [] }, DEFAULT_EXPORT)

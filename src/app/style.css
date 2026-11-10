@@ -159,7 +159,11 @@ body,
   gap: 4px;
 }
 
+/* Le point « modifié » d'un mode qu'on ne regarde pas se met en exposant, comme sur un onglet. */
 .modes button {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 2px;
   color: var(--topbar-text);
   background: transparent;
   border-color: transparent;

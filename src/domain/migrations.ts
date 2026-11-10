@@ -361,6 +361,28 @@ function migrateProjectV8(raw: RawRecord): RawRecord {
   }
 }
 
+// Projet v18 → v19 : les étiquettes texte reçoivent les styles des textes de composant
+// (italique, souligné, barré, vertical) et une couleur, noire au départ.
+
+function migrateProjectV18(raw: RawRecord): RawRecord {
+  const labels = Array.isArray(raw['labels']) ? raw['labels'] : []
+  return {
+    ...raw,
+    labels: labels.map((label) =>
+      isRecord(label)
+        ? {
+            italic: false,
+            underline: false,
+            strike: false,
+            vertical: false,
+            color: '#000000',
+            ...label
+          }
+        : label
+    )
+  }
+}
+
 // Paramètres v8 → v9 : les couleurs personnalisées deviennent propres à chaque montage. Celles
 // que les paramètres gardaient rejoignent la palette, pour rester disponibles partout.
 
@@ -414,7 +436,8 @@ export const projectMigrations: MigrationTable = {
     // Projet v16 → v17 : couleurs de fil propres au montage, aucune au départ.
     16: (raw) => ({ customColors: [], ...raw }),
     // Projet v17 → v18 : définitions embarquées migrées (textes verticaux).
-    17: migrateEmbeddedDefs
+    17: migrateEmbeddedDefs,
+    18: migrateProjectV18
   }
 }
 

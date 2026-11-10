@@ -183,17 +183,29 @@ export function textContent(primitive: TextPrimitive, fields?: FieldValues): str
 
 export const TEXT_FONT_FAMILY = "'Segoe UI', sans-serif"
 
-/** Attributs SVG du style d'un texte : graisse, italique, décorations, famille ; à l'écran comme à l'export. */
-export function textStyleAttrs(primitive: TextPrimitive): Record<string, string | undefined> {
+/** Styles d'un texte, communs aux textes des composants et aux étiquettes du montage. */
+export interface TextEmphasis {
+  bold: boolean
+  italic: boolean
+  underline: boolean
+  strike: boolean
+}
+
+/** Attributs SVG de graisse, d'italique et de décorations d'un texte, sans la famille. */
+export function textEmphasisAttrs(text: TextEmphasis): Record<string, string | undefined> {
   const decorations: string[] = []
-  if (primitive.underline) decorations.push('underline')
-  if (primitive.strike) decorations.push('line-through')
+  if (text.underline) decorations.push('underline')
+  if (text.strike) decorations.push('line-through')
   return {
-    'font-weight': primitive.bold ? 'bold' : undefined,
-    'font-style': primitive.italic ? 'italic' : undefined,
-    'text-decoration': decorations.length > 0 ? decorations.join(' ') : undefined,
-    'font-family': TEXT_FONT_FAMILY
+    'font-weight': text.bold ? 'bold' : undefined,
+    'font-style': text.italic ? 'italic' : undefined,
+    'text-decoration': decorations.length > 0 ? decorations.join(' ') : undefined
   }
+}
+
+/** Attributs SVG du style d'un texte de composant : graisse, italique, décorations, famille ; à l'écran comme à l'export. */
+export function textStyleAttrs(primitive: TextEmphasis): Record<string, string | undefined> {
+  return { ...textEmphasisAttrs(primitive), 'font-family': TEXT_FONT_FAMILY }
 }
 
 export const visualSchema = z.discriminatedUnion('kind', [
@@ -287,29 +299,53 @@ export function layoutTextBox(
   }
 }
 
+/** Boîte d'un texte qui peut être vertical : texte de composant (quarts) ou étiquette du montage (cellules). */
+export interface TurnableTextBox {
+  x: number
+  y: number
+  w: number
+  h: number
+  vertical: boolean
+}
+
 /**
  * Boîte dans laquelle un texte se met en page : la sienne, ou la même tournée d'un quart de tour
  * (largeur et hauteur échangées, même centre) quand il est vertical.
  */
-export function textLayoutBox(primitive: TextPrimitive): {
+export function textLayoutBox(text: TurnableTextBox): {
   x: number
   y: number
   w: number
   h: number
 } {
-  const { x, y, w, h } = primitive
-  if (!primitive.vertical) return { x, y, w, h }
+  const { x, y, w, h } = text
+  if (!text.vertical) return { x, y, w, h }
   return { x: x + w / 2 - h / 2, y: y + h / 2 - w / 2, w: h, h: w }
 }
 
 /**
- * Attribut `transform` SVG d'un texte vertical : un quart de tour horaire autour du centre de sa
- * boîte, dans l'unité voulue (`scale` par quart de cellule) ; indéfini pour un texte horizontal.
+ * Boîte d'un texte qu'on met à la verticale ou à l'horizontale : couchée dans l'autre sens, elle
+ * tourne avec lui autour de son centre (à l'unité près, sans dérive d'un aller-retour) ; déjà
+ * dans le bon sens, ou carrée, elle ne bouge pas.
  */
-export function textTransform(primitive: TextPrimitive, scale = 1): string | undefined {
-  if (!primitive.vertical) return undefined
-  const cx = (primitive.x + primitive.w / 2) * scale
-  const cy = (primitive.y + primitive.h / 2) * scale
+export function turnedTextBox(
+  box: { x: number; y: number; w: number; h: number },
+  vertical: boolean
+): { x: number; y: number; w: number; h: number } {
+  const { x, y, w, h } = box
+  if (vertical ? w <= h : h <= w) return { x, y, w, h }
+  const shift = Math.trunc((w - h) / 2)
+  return { x: x + shift, y: y - shift, w: h, h: w }
+}
+
+/**
+ * Attribut `transform` SVG d'un texte vertical : un quart de tour horaire autour du centre de sa
+ * boîte, dans l'unité voulue (`scale` par unité de la boîte) ; indéfini pour un texte horizontal.
+ */
+export function textTransform(text: TurnableTextBox, scale = 1): string | undefined {
+  if (!text.vertical) return undefined
+  const cx = (text.x + text.w / 2) * scale
+  const cy = (text.y + text.h / 2) * scale
   return `rotate(90 ${cx} ${cy})`
 }
 

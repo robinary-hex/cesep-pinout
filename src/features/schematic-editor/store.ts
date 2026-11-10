@@ -22,6 +22,7 @@ import {
   textLabelBounds,
   toggledOverrides,
   translatePoints,
+  turnedTextBox,
   unionRects,
   wireBounds,
   wireGeometryProblem,
@@ -84,6 +85,12 @@ export interface PlacedInstance {
 export interface WireDrawing {
   points: GridPoint[]
 }
+
+/** Styles d'une étiquette texte : ceux des textes de composant, sans le texte variable. */
+export type LabelStyle = Pick<
+  TextLabel,
+  'bold' | 'italic' | 'underline' | 'strike' | 'vertical' | 'color'
+>
 
 /** Onglet affiché dans la barre d'application. */
 export interface TabInfo {
@@ -701,7 +708,12 @@ export const useSchematicStore = defineStore('schematic', () => {
         anchor: 'middle',
         text: 'Texte',
         size,
-        bold: false
+        bold: false,
+        italic: false,
+        underline: false,
+        strike: false,
+        vertical: false,
+        color: '#000000'
       })
     })
     selection.value = []
@@ -743,9 +755,24 @@ export const useSchematicStore = defineStore('schematic', () => {
   }
 
   function setLabelBold(id: string, bold: boolean): void {
-    apply(bold ? 'Étiquette en gras' : 'Étiquette normale', (draft) => {
+    setLabelStyle(id, bold ? 'Étiquette en gras' : 'Étiquette normale', { bold })
+  }
+
+  /** Change un ou plusieurs styles d'une étiquette (graisse, italique, décorations, couleur). */
+  function setLabelStyle(id: string, name: string, style: Partial<LabelStyle>): void {
+    apply(name, (draft) => {
       const label = draft.labels.find((candidate) => candidate.id === id)
-      if (label) label.bold = bold
+      if (label) Object.assign(label, style)
+    })
+  }
+
+  /** Met une étiquette à la verticale ou à l'horizontale ; sa boîte tourne avec elle au besoin. */
+  function setLabelVertical(id: string, vertical: boolean): void {
+    apply(vertical ? 'Étiquette verticale' : 'Étiquette horizontale', (draft) => {
+      const label = draft.labels.find((candidate) => candidate.id === id)
+      if (!label) return
+      Object.assign(label, turnedTextBox(label, vertical))
+      label.vertical = vertical
     })
   }
 
@@ -1337,6 +1364,8 @@ export const useSchematicStore = defineStore('schematic', () => {
     setLabelText,
     setLabelSize,
     setLabelBold,
+    setLabelStyle,
+    setLabelVertical,
     setLabelBox,
     setLabelAnchor,
     addWire,

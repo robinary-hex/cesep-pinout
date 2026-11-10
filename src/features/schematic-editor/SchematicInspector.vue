@@ -12,6 +12,7 @@ import {
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import Icon from '@/ui/Icon.vue'
+import type { IconName } from '@/ui/icons'
 import { useSchematicStore } from './store'
 
 // Panneau de droite du montage (replié par défaut, touche I). Toujours : le projet, avec son nom
@@ -228,6 +229,35 @@ function setLabelSize(event: Event): void {
   const label = singleLabel.value
   const size = Number(inputValue(event))
   if (label && Number.isFinite(size)) store.setLabelSize(label.id, Math.max(4, size))
+}
+
+type LabelStyleKey = 'bold' | 'italic' | 'underline' | 'strike'
+
+/** Styles de texte, un bouton à pictogramme chacun ; `label` sert d'infobulle et de libellé d'annulation. */
+const LABEL_STYLE_OPTIONS: { key: LabelStyleKey; label: string; icon: IconName }[] = [
+  { key: 'bold', label: 'Gras', icon: 'bold' },
+  { key: 'italic', label: 'Italique', icon: 'italic' },
+  { key: 'underline', label: 'Souligné', icon: 'underline' },
+  { key: 'strike', label: 'Barré', icon: 'strikethrough' }
+]
+
+function toggleLabelStyle(option: (typeof LABEL_STYLE_OPTIONS)[number]): void {
+  const label = singleLabel.value
+  if (!label) return
+  const on = !label[option.key]
+  store.setLabelStyle(label.id, `${option.label} ${on ? 'activé' : 'retiré'}`, {
+    [option.key]: on
+  })
+}
+
+function setLabelColor(event: Event): void {
+  const label = singleLabel.value
+  if (label) store.setLabelStyle(label.id, 'Couleur de l’étiquette', { color: inputValue(event) })
+}
+
+function setLabelVertical(event: Event): void {
+  const label = singleLabel.value
+  if (label) store.setLabelVertical(label.id, (event.target as HTMLInputElement).checked)
 }
 </script>
 
@@ -524,21 +554,33 @@ function setLabelSize(event: Event): void {
             </option>
           </select>
         </label>
+      </div>
+      <div class="row">
+        <label class="field">
+          <span>Couleur</span>
+          <input type="color" :value="singleLabel.color" @change="setLabelColor" />
+        </label>
         <div class="field">
           <span>Style</span>
           <div class="toggles">
             <button
+              v-for="option in LABEL_STYLE_OPTIONS"
+              :key="option.key"
               type="button"
               class="toggle"
-              :class="{ active: singleLabel.bold }"
-              title="Gras"
-              @click="store.setLabelBold(singleLabel.id, !singleLabel.bold)"
+              :class="{ active: singleLabel[option.key] }"
+              :title="option.label"
+              @click="toggleLabelStyle(option)"
             >
-              <Icon name="bold" />
+              <Icon :name="option.icon" />
             </button>
           </div>
         </div>
       </div>
+      <label class="check" title="Le texte est tourné de 90° et se lit de haut en bas">
+        <input type="checkbox" :checked="singleLabel.vertical" @change="setLabelVertical" />
+        <span>Vertical</span>
+      </label>
       <div class="row">
         <label v-for="side in BOX_FIELDS" :key="side.key" class="field">
           <span>{{ side.label }}</span>
@@ -671,6 +713,12 @@ function setLabelSize(event: Event): void {
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--surface);
+}
+
+.field input[type='color'] {
+  padding: 0 2px;
+  height: 28px;
+  width: 56px;
 }
 
 .row {

@@ -10,6 +10,7 @@ import {
   layoutText,
   layoutTextBox,
   textContent,
+  textEmphasisAttrs,
   textStyleAttrs,
   textTransform
 } from './component'
@@ -414,7 +415,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
           (line) => `<tspan ${attrs({ x: layout.x, y: line.y })}>${escapeXml(line.text)}</tspan>`
         )
         .join('')
-      return `<text ${attrs({ 'font-size': label.size / profile.cellPx, 'font-weight': label.bold ? 'bold' : undefined, 'text-anchor': label.anchor, fill: '#1f2328' })}>${spans}</text>`
+      return `<text ${attrs({ 'font-size': label.size / profile.cellPx, 'text-anchor': label.anchor, fill: label.color, ...textEmphasisAttrs(label), transform: textTransform(label) })}>${spans}</text>`
     })
     parts.push(`<g class="texts">${textParts.join('')}</g>`)
   }

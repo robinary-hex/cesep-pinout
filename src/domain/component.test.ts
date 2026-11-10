@@ -9,7 +9,9 @@ import {
   NO_ARROWS,
   primitiveBounds,
   textContent,
+  textEmphasisAttrs,
   translatePrimitive,
+  turnedTextBox,
   type Primitive
 } from './component'
 import { nearestInsidePoint } from './grid'
@@ -185,6 +187,36 @@ describe('ordre des formes', () => {
     // Déjà au bout : rien ne bouge.
     expect(reorderItem(list, 3, 'up')).toEqual({ list, index: 3 })
     expect(reorderItem(list, 0, 'down')).toEqual({ list, index: 0 })
+  })
+})
+
+describe('texte mis à la verticale', () => {
+  it('tourne une boîte couchée autour de son centre, sans dérive d’un aller-retour', () => {
+    const wide = { x: 0, y: 0, w: 4, h: 1 }
+    const tall = turnedTextBox(wide, true)
+    expect(tall).toEqual({ x: 1, y: -1, w: 1, h: 4 })
+    expect(turnedTextBox(tall, false)).toEqual(wide)
+  })
+
+  it('laisse une boîte déjà dans le bon sens, ou carrée', () => {
+    expect(turnedTextBox({ x: 2, y: 3, w: 1, h: 4 }, true)).toEqual({ x: 2, y: 3, w: 1, h: 4 })
+    expect(turnedTextBox({ x: 2, y: 3, w: 4, h: 1 }, false)).toEqual({ x: 2, y: 3, w: 4, h: 1 })
+    expect(turnedTextBox({ x: 2, y: 3, w: 2, h: 2 }, true)).toEqual({ x: 2, y: 3, w: 2, h: 2 })
+  })
+
+  it('donne graisse, italique et décorations sans la famille de police', () => {
+    expect(textEmphasisAttrs({ bold: true, italic: true, underline: true, strike: true })).toEqual({
+      'font-weight': 'bold',
+      'font-style': 'italic',
+      'text-decoration': 'underline line-through'
+    })
+    expect(
+      textEmphasisAttrs({ bold: false, italic: false, underline: false, strike: false })
+    ).toEqual({
+      'font-weight': undefined,
+      'font-style': undefined,
+      'text-decoration': undefined
+    })
   })
 })
 

@@ -43,7 +43,12 @@ describe('profil de style et paramètres', () => {
       anchor: 'middle' as const,
       text: 'Texte',
       size: 11,
-      bold: false
+      bold: false,
+      italic: false,
+      underline: false,
+      strike: false,
+      vertical: false,
+      color: '#000000'
     }
     expect(isEmptyProject({ ...project, labels: [label] })).toBe(false)
   })

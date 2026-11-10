@@ -41,6 +41,12 @@ ajouté par `dragVertex`) ; le canevas appelle la même fonction pour l'aperçu 
 Poser un composant depuis la bibliothèque remplace la copie embarquée de sa définition si elle a
 changé (même commande élastique) : un projet suit la dernière version posée et garde son autonomie.
 
+Les gestes du canevas du montage sont un état local (`drag`, une union par geste) qui ne touche le
+document qu'au relâchement, par une commande. Tirer un fil d'une broche en mode sélection en est
+un (`pin-wire`) : il ne passe pas par le tracé de l'outil Fil (`store.drawing`), l'aperçu vient de
+`drawingPoints` et le relâchement appelle `addWire`. `SchematicCanvas.test.ts` rejoue ces gestes
+sous jsdom avec de vrais événements de souris.
+
 Le profil de style est général à l'application (`defaultProfile` des paramètres) ; chaque montage
 garde dans son fichier la copie avec laquelle il se dessine (`doc.profile`). Le store du montage
 distingue cette copie du profil affiché (`profile` = `profilePreview` s'il y en a un) : la boîte
@@ -131,7 +137,7 @@ un arrêt brutal : c'est alors qu'elles sont proposées.
 Tous en JSON indenté, avec `schemaVersion`, validés par Zod à l'ouverture, migrés étape par étape
 (`src/domain/migrations.ts`). Un fichier d'exemple par version dans `src/domain/fixtures/`.
 Versions courantes : composant 14 (textes verticaux, angles arrondis des polylignes, forme point, opacité du remplissage, italique, souligné et barré des textes, orientation réglée texte par texte, textes droits sur le montage, boîtes de texte multilignes, flèche au milieu, graisse des textes, épaisseur en multiplicateur, flèches, textes variables avec
-unité, plus de `labelPrefix`), projet 18 (couleurs de fil propres au montage, étiquettes texte en boîte, police des étiquettes d'extrémité dans le profil, graisse des étiquettes, étiquettes d'extrémité des fils, `componentStroke` dans le profil, `fields` par instance,
+unité, plus de `labelPrefix`), projet 19 (styles, sens et couleur des étiquettes texte, couleurs de fil propres au montage, étiquettes texte en boîte, police des étiquettes d'extrémité dans le profil, graisse des étiquettes, étiquettes d'extrémité des fils, `componentStroke` dans le profil, `fields` par instance,
 définitions embarquées migrées à chaque version des composants), paramètres 9 (`componentStroke`
 et `endLabelFont` du profil par défaut, thème sombre par défaut, ouverture du panneau, affichage de
 la bibliothèque).

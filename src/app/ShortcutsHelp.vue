@@ -11,6 +11,10 @@ const sections: { title: string; rows: [string, string][] }[] = [
       ['F', 'Tracer un fil : un clic par coude, l’axe dominant d’abord, Maj inverse le L'],
       ['Entrée / double-clic', 'Terminer le fil (finir sur une broche ou un fil le termine aussi)'],
       ['Retour arrière', 'Retirer le dernier sommet du fil en cours'],
+      [
+        'Glisser depuis une broche',
+        'En sélection : tire un fil de cette broche jusqu’au point de relâchement (Maj inverse le L)'
+      ],
       ['Échap', 'Annuler le tracé, la pose, puis la sélection'],
       ['R / Maj+R', 'Rotation horaire / antihoraire'],
       ['T / Maj+T', 'Miroir horizontal / vertical'],

@@ -44,7 +44,12 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   posée fournit la valeur (`instance.fields`), sinon `defaultValue` s'affiche ; `bold`, `italic`,
   `underline` et `strike` stylent le texte, `vertical` le tourne de 90° autour du centre de sa
   boîte (`textLayoutBox`, `textTransform`) (`textStyleAttrs`, boutons à
-  pictogramme dans le panneau) ; les étiquettes du montage n'ont que le gras. Un texte occupe une boîte (`x`, `y`, `w`, `h` en
+  pictogramme dans le panneau) ; cocher ou décocher « Vertical » tourne aussi une boîte couchée
+  dans l'autre sens (`turnedTextBox`, autour de son centre). Les étiquettes du montage ont les
+  mêmes styles (`bold`, `italic`, `underline`, `strike`, `vertical`) et une couleur (`color`, le
+  noir pur prenant l'encre du thème à l'écran), sans le texte variable ; elles gardent la police
+  des libellés du profil (`textEmphasisAttrs`, commandes `setLabelStyle` et `setLabelVertical`).
+  Un texte occupe une boîte (`x`, `y`, `w`, `h` en
   quarts) redimensionnable par poignées : lignes (retours à la ligne permis) centrées
   verticalement, alignées à gauche, au centre ou à droite selon `anchor` (`layoutTextBox`, ligne de base
   placée pour centrer les capitales). Les étiquettes texte du montage suivent le même modèle,
@@ -85,7 +90,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     Poser un composant remplace la copie embarquée de sa définition par celle de la bibliothèque
     si elle a changé, pour tout le montage (fils élastiques compris). Alt+glisser dépose une copie
     de la sélection (Alt+clic sur un croisement garde son rôle) ; double-clic sur l'extrémité
-    libre d'un fil saisit son étiquette d'extrémité.
+    libre d'un fil saisit son étiquette d'extrémité. En sélection, la broche sous le pointeur
+    montre un anneau (`pinGrab`, 8 px autour d'elle) : glisser depuis lui tire un fil de la broche
+    jusqu'au point de relâchement (L selon l'axe dominant, Maj l'inverse, arrivée accrochée aux
+    broches ; glisser `pin-wire` du canevas, une commande `addWire`), un simple clic sélectionne
+    le composant, Maj et Alt gardent leurs gestes sur le composant.
 - Fils : la géométrie pure est dans `src/domain/wires.ts` (tracé, coins arrondis, édition de
   segments et de sommets), la connectivité dérivée dans `src/domain/connectivity.ts` (jonctions,
   extrémités libres, nets par union-find). Un fil garde ses extrémités fixes quand on déplace un
@@ -133,7 +142,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   rouges en clair, jaunes en sombre ; cadre pour un PNG). Pictogrammes : `src/ui/Icon.vue` dessine les
   tracés de `src/ui/icons.ts` (SVG inline, trait de la couleur courante, pas de police d'icônes).
 - Onglets de montage (`App.vue`, à droite du bouton Montage) : un par montage ouvert, au nom du
-  montage, point s'il est modifié, croix ou clic du milieu pour fermer (s'il est
+  montage, point s'il est modifié (le bouton du mode qu'on ne regarde pas, Montage ou
+  Composants, porte le même point dès qu'un de ses documents ouverts est à enregistrer), croix ou
+  clic du milieu pour fermer (s'il est
   modifié : Enregistrer / Ne pas enregistrer / Annuler, dialogue natif `confirmSave` du pont, flux
   dans `closeTabAsking`), « + » pour un nouveau, Ctrl+Tab / Ctrl+Maj+Tab pour passer de l'un à l'autre,
   glisser-déposer pour les réordonner (`moveTab`). Le store
@@ -217,7 +228,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     l'origine, les broches qui sortent disparaissent). Redimensionner le composant supprime les broches qui sortent de la
     boîte ; les noms numériques des broches suivent toujours leur ordre (`renumberPins`). Le repère
     d'une broche se met du côté libre le plus proche du bord (`pinLabelSide`, contours et traits
-    évités), sinon du côté du bord le plus proche. Tout l'espace de travail a la couleur du
+    évités), sinon du côté du bord le plus proche ; son numéro (et le point médian qui le sépare
+    du nom) est plus petit et grisé, le nom garde sa taille (`pinNumberText`). Tout l'espace de travail a la couleur du
     papier ; la marge du canevas vaut une cellule ou la place des repères qui dépassent, et
     l'ajustement à la fenêtre en tient compte (`pinLabelLayout.ts`).
     Sélection multiple : lasso dans le vide (formes et broches), Maj+clic ajoute ou retire une forme
@@ -234,7 +246,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     composant posé s'appelle « libellé » dans l'interface.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 14, projet 18, paramètres 9
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 14, projet 19, paramètres 9
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

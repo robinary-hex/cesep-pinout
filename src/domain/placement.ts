@@ -1,5 +1,6 @@
 import {
   layoutTextBox,
+  textLayoutBox,
   type ComponentDefinition,
   type TextAnchor,
   type TextBoxLayout,
@@ -57,9 +58,18 @@ export function textLabelBounds(label: { x: number; y: number; w: number; h: num
   return { x: label.x, y: label.y, width: label.w, height: label.h }
 }
 
-/** Lignes d'une étiquette du montage dans sa boîte, en cellules (police en points / cellPx). */
-export function layoutLabel(label: TextLabel, cellPx: number): TextBoxLayout {
-  return layoutTextBox(label, label.text, label.size / cellPx, label.anchor)
+/**
+ * Lignes d'une étiquette du montage, en cellules (police en points / cellPx), dans sa boîte de
+ * mise en page : la sienne, ou la même tournée d'un quart de tour si elle est verticale. `box`
+ * remplace la boîte enregistrée (aperçu d'un déplacement ou d'une poignée).
+ */
+export function layoutLabel(label: TextLabel, cellPx: number, box: Box = label): TextBoxLayout {
+  return layoutTextBox(
+    textLayoutBox({ x: box.x, y: box.y, w: box.w, h: box.h, vertical: label.vertical }),
+    label.text,
+    label.size / cellPx,
+    label.anchor
+  )
 }
 
 /** Union des boîtes des composants, des sommets de fils et des étiquettes ; null si tout est vide. */

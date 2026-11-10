@@ -8,6 +8,7 @@ import {
   instanceMatrix,
   instanceTextPlacements,
   textPlacementTransform,
+  layoutLabel,
   layoutTextBox,
   locateOnWire,
   matrixToSvg,
@@ -19,7 +20,9 @@ import {
   rotatedSize,
   routeLAuto,
   textContent,
+  textEmphasisAttrs,
   textStyleAttrs,
+  textTransform,
   textLabelBounds,
   wireEndLabelPlacement,
   wireIntersectsRect,
@@ -49,7 +52,8 @@ import { useSchematicStore, type PlacedInstance } from './store'
 // mis à l'échelle (zoom) et translaté (pan) ; seule la grille est calculée en pixels d'écran.
 // Ordre d'empilement : grille, fils (corps, queues pointillées, pointes), croisements (fil du
 // dessus avec liseré), points de jonction, composants, repères, étiquettes, étiquettes
-// d'extrémité, broches, surcouches de sélection et d'édition, copies fantômes (Alt+glisser),
+// d'extrémité, broches (et anneau de saisie de la broche survolée), surcouches de sélection et
+// d'édition, copies fantômes (Alt+glisser),
 // fantôme de pose, tracé en cours, rectangle de sélection.
 
 const store = useSchematicStore()
@@ -71,6 +75,11 @@ const PIN_COLORS: Record<PinKind, string> = {
 const MIN_GRID_PX = 6
 const ZOOM_STEP = 1.1
 const PIN_SNAP_CELLS = 0.5
+/** Saisie d'une broche en mode sélection : 8 px autour d'elle, 0,4 cellule au plus en vue éloignée. */
+const PIN_GRAB_PX = 8
+const PIN_GRAB_CELLS = 0.4
+/** Déplacement du pointeur, en pixels, à partir duquel un appui sur une broche devient un fil. */
+const PIN_DRAG_PX = 4
 const END_PICK_CELLS = 0.5
 const NO_FREE_ENDS: WireEndFlags = { start: false, end: false }
 
@@ -98,6 +107,16 @@ type Drag =
   | { kind: 'band'; start: LocalPoint; current: LocalPoint; additive: boolean }
   | { kind: 'text-box'; start: GridPoint; current: GridPoint }
   | { kind: 'label-handle'; id: string; handleId: string; original: Box; preview: Box }
+  | {
+      /** Fil tiré d'une broche en mode sélection : relâcher le pose. */
+      kind: 'pin-wire'
+      instanceId: string
+      origin: GridPoint
+      downX: number
+      downY: number
+      /** Faux tant que le pointeur n'a pas quitté la broche : un simple clic sélectionne le composant. */
+      moved: boolean
+    }
   | {
       kind: 'wire-segment'
       wireId: string
@@ -151,9 +170,9 @@ function snapGrid(point: LocalPoint): GridPoint {
   return [Math.round(point.x), Math.round(point.y)]
 }
 
-function nearestPin(point: LocalPoint): PinRef | null {
+function nearestPin(point: LocalPoint, reach = PIN_SNAP_CELLS): PinRef | null {
   let best: PinRef | null = null
-  let bestDistance = PIN_SNAP_CELLS
+  let bestDistance = reach
   for (const pin of store.pinRefs) {
     const distance = Math.hypot(pin.point[0] - point.x, pin.point[1] - point.y)
     if (distance <= bestDistance) {
@@ -295,7 +314,8 @@ const ghostCopies = computed(() => {
       .filter((label) => labelIds.has(label.id))
       .map((label) => ({
         label,
-        layout: layoutTextBox(label, label.text, label.size / profile.value.cellPx, label.anchor)
+        transform: textTransform(label),
+        layout: layoutLabel(label, profile.value.cellPx)
       }))
   }
 })
@@ -382,7 +402,8 @@ const labels = computed(() =>
       label,
       fontCells,
       box,
-      layout: layoutTextBox(box, label.text, fontCells, label.anchor),
+      transform: textTransform({ ...box, vertical: label.vertical }),
+      layout: layoutLabel(label, profile.value.cellPx, box),
       selected: selectedLabelSet.value.has(label.id)
     }
   })
@@ -537,19 +558,42 @@ const vertexHandles = computed(() =>
     )
 )
 
-const drawingPreview = computed(() => {
-  const current = store.drawing
+/** Rayon de saisie d'une broche en mode sélection, en cellules. */
+const pinGrabReach = computed(() => Math.min(PIN_GRAB_CELLS, PIN_GRAB_PX / cell.value))
+
+/**
+ * Broche sous le pointeur en mode sélection, hors de tout geste : tirer depuis elle trace un fil.
+ * Elle reste saisie pendant un simple clic (appui sans déplacement), pour que clic et double-clic
+ * arrivent bien sur elle.
+ */
+const pinGrab = computed(() => {
   const point = hover.value
-  if (!current) return null
-  const last = current.points.at(-1)
+  const current = drag.value
+  if (store.tool !== 'select' || store.panKeyHeld || !point) return null
+  if (current && (current.kind !== 'pin-wire' || current.moved)) return null
+  return nearestPin(point, pinGrabReach.value)
+})
+
+/** Sommets posés du tracé en cours : ceux de l'outil Fil, ou la broche d'où l'on tire un fil. */
+const drawingPoints = computed<readonly GridPoint[] | null>(() => {
+  const current = drag.value
+  if (current?.kind === 'pin-wire') return current.moved ? [current.origin] : null
+  return store.drawing?.points ?? null
+})
+
+const drawingPreview = computed(() => {
+  const points = drawingPoints.value
+  const point = hover.value
+  if (!points) return null
+  const last = points.at(-1)
   if (!last) return null
-  const committed = wirePathData(current.points, cornerRadius.value)
+  const committed = wirePathData(points, cornerRadius.value)
   if (!point) return { committed, pending: '', end: null as GridPoint | null, onPin: false }
   const snap = wireSnap(point)
   const route = routeLAuto(last, snap.point, store.shiftHeld)
   return {
     committed,
-    pending: wirePathData([...current.points, ...route.slice(1)], cornerRadius.value),
+    pending: wirePathData([...points, ...route.slice(1)], cornerRadius.value),
     end: snap.point,
     onPin: snap.pinKey !== null
   }
@@ -663,6 +707,40 @@ function onInstanceDown(id: string, event: PointerEvent): void {
   }
   store.revealInspector()
   startMove(event)
+}
+
+/**
+ * Appui sur une broche en mode sélection : tirer trace un fil depuis elle, relâcher le pose ; un
+ * simple clic sélectionne le composant. Maj et Alt gardent leurs gestes sur le composant
+ * (ajouter à la sélection, déposer une copie).
+ */
+function onPinGrabDown(event: PointerEvent): void {
+  const pin = pinGrab.value
+  if (!pin || event.button !== 0) return
+  if (event.shiftKey || event.altKey) {
+    onInstanceDown(pin.instanceId, event)
+    return
+  }
+  event.stopPropagation()
+  drag.value = {
+    kind: 'pin-wire',
+    instanceId: pin.instanceId,
+    origin: pin.point,
+    downX: event.clientX,
+    downY: event.clientY,
+    moved: false
+  }
+  capture(event)
+}
+
+function onPinGrabDoubleClick(event: MouseEvent): void {
+  const pin = pinGrab.value
+  if (pin) onInstanceDoubleClick(pin.instanceId, event)
+}
+
+function onPinGrabMenu(event: MouseEvent): void {
+  const pin = pinGrab.value
+  if (pin) onContextMenu(event, { kind: 'instance', id: pin.instanceId })
 }
 
 function onLabelDown(label: TextLabel, event: PointerEvent): void {
@@ -842,6 +920,11 @@ function onPointerMove(event: PointerEvent): void {
     case 'label-handle':
       current.preview = resizeBox(current.original, current.handleId, snapGrid(world))
       break
+    case 'pin-wire':
+      if (Math.hypot(event.clientX - current.downX, event.clientY - current.downY) > PIN_DRAG_PX) {
+        current.moved = true
+      }
+      break
   }
 }
 
@@ -911,6 +994,16 @@ function onPointerUp(event: PointerEvent): void {
   } else if (current.kind === 'label-handle') {
     const { original: a, preview: b } = current
     if (a.x !== b.x || a.y !== b.y || a.w !== b.w || a.h !== b.h) store.setLabelBox(current.id, b)
+  } else if (current.kind === 'pin-wire') {
+    if (current.moved) {
+      // Relâché sur la broche de départ, le fil n'a qu'un point : `addWire` le refuse.
+      const snap = wireSnap(toWorld(screenPoint(event)))
+      store.addWire(routeLAuto(current.origin, snap.point, store.shiftHeld))
+    } else {
+      store.clearSelection()
+      store.selection = [current.instanceId]
+      store.revealInspector()
+    }
   }
   if (svg.value?.hasPointerCapture(event.pointerId))
     svg.value.releasePointerCapture(event.pointerId)
@@ -1030,7 +1123,7 @@ const cursorClass = computed(() => {
   if (store.panKeyHeld || drag.value?.kind === 'pan') return 'panning'
   if (store.tool === 'place') return 'placing'
   if (store.tool === 'text') return 'texting'
-  return store.tool === 'wire' ? 'wiring' : ''
+  return store.tool === 'wire' || drag.value?.kind === 'pin-wire' ? 'wiring' : ''
 })
 </script>
 
@@ -1231,10 +1324,12 @@ const cursorClass = computed(() => {
               @contextmenu="onContextMenu($event, { kind: 'label', id: entry.label.id })"
             >
               <text
+                :transform="entry.transform"
                 :font-size="entry.fontCells"
                 :font-family="profile.labelFont.family"
-                :font-weight="entry.label.bold ? 'bold' : undefined"
                 :text-anchor="entry.label.anchor"
+                :fill="screenColor(entry.label.color)"
+                v-bind="textEmphasisAttrs(entry.label)"
               >
                 <tspan
                   v-for="(line, l) in entry.layout.lines"
@@ -1312,6 +1407,18 @@ const cursorClass = computed(() => {
             </template>
           </g>
 
+          <circle
+            v-if="pinGrab"
+            class="pin-grab"
+            :cx="pinGrab.point[0]"
+            :cy="pinGrab.point[1]"
+            :r="pinGrabReach"
+            vector-effect="non-scaling-stroke"
+            @pointerdown="onPinGrabDown"
+            @dblclick="onPinGrabDoubleClick"
+            @contextmenu="onPinGrabMenu"
+          />
+
           <rect
             v-for="box in selectedBoxes"
             :key="box.id"
@@ -1382,11 +1489,12 @@ const cursorClass = computed(() => {
             <text
               v-for="entry in ghostCopies.labels"
               :key="entry.label.id"
-              class="ghost-text"
+              :transform="entry.transform"
               :font-size="entry.label.size / profile.cellPx"
               :font-family="profile.labelFont.family"
-              :font-weight="entry.label.bold ? 'bold' : undefined"
               :text-anchor="entry.label.anchor"
+              :fill="screenColor(entry.label.color)"
+              v-bind="textEmphasisAttrs(entry.label)"
             >
               <tspan
                 v-for="(line, l) in entry.layout.lines"
@@ -1584,8 +1692,8 @@ const cursorClass = computed(() => {
   cursor: move;
 }
 
+/* La couleur d'une étiquette vient de son attribut `fill` (noir pur = encre du thème). */
 .text-label text {
-  fill: var(--paper-text);
   pointer-events: none;
 }
 
@@ -1602,6 +1710,14 @@ const cursorClass = computed(() => {
   fill: none;
   stroke: var(--alert);
   stroke-width: 1.5;
+}
+
+/* Broche sous le pointeur en mode sélection : tirer depuis elle trace un fil. */
+.pin-grab {
+  fill: rgba(26, 127, 55, 0.25);
+  stroke: #1a7f37;
+  stroke-width: 1.5;
+  cursor: crosshair;
 }
 
 .selection {
@@ -1642,10 +1758,6 @@ const cursorClass = computed(() => {
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-
-.ghost-text {
-  fill: var(--paper-text);
 }
 
 .ghost-box {

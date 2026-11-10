@@ -484,9 +484,19 @@ onUnmounted(() => {
           @click="mode = 'components'"
         >
           Composants
+          <span
+            v-if="mode !== 'components' && editor.anyDirty"
+            class="doc-tab-dot"
+            title="Un composant ouvert n'est pas enregistré"
+          />
         </button>
         <button type="button" :class="{ active: mode === 'schematic' }" @click="mode = 'schematic'">
           Montage
+          <span
+            v-if="mode !== 'schematic' && schematic.anyDirty"
+            class="doc-tab-dot"
+            title="Un montage ouvert n'est pas enregistré"
+          />
         </button>
       </nav>
       <div class="doc-tabs" @wheel.prevent="onTabsWheel">

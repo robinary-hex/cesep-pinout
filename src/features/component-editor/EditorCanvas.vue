@@ -25,8 +25,10 @@ import {
   canvasMargins,
   PIN_LABEL_FONT_PX,
   PIN_LABEL_OFFSETS,
+  PIN_NUMBER_FONT_PX,
+  pinLabelParts,
   pinLabelSideAt,
-  pinLabelText,
+  pinNumberText,
   type LabelOffset
 } from './pinLabelLayout'
 import { useComponentEditorStore } from './store'
@@ -986,7 +988,12 @@ defineExpose({ cancel, finishPolyline })
               :font-size="PIN_LABEL_FONT_PX"
               fill="var(--paper-text)"
             >
-              {{ pinLabelText(pin, index) }}
+              <tspan class="pin-number" :font-size="PIN_NUMBER_FONT_PX">
+                {{ pinNumberText(pin, index) }}
+              </tspan>
+              <tspan v-if="pinLabelParts(pin, index).name">
+                {{ pinLabelParts(pin, index).name }}
+              </tspan>
             </text>
           </g>
 
@@ -1140,6 +1147,11 @@ defineExpose({ cancel, finishPolyline })
 .pin text {
   pointer-events: none;
   font-family: 'Segoe UI', sans-serif;
+}
+
+/* Le numéro (et le point médian qui le sépare du nom) s'efface devant le nom de la broche. */
+.pin .pin-number {
+  fill-opacity: 0.6;
 }
 
 .preview > * {

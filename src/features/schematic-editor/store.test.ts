@@ -510,6 +510,60 @@ describe('montage : pose depuis la bibliothèque', () => {
   })
 })
 
+describe('montage : styles des étiquettes texte', () => {
+  it('crée une étiquette noire, sans style, horizontale', () => {
+    const store = useSchematicStore()
+    store.addLabel(2, 0)
+    expect(store.doc.labels[0]).toMatchObject({
+      x: 0,
+      y: 0,
+      w: 4,
+      h: 1,
+      bold: false,
+      italic: false,
+      underline: false,
+      strike: false,
+      vertical: false,
+      color: '#000000'
+    })
+  })
+
+  it('change styles et couleur, chacun annulable', () => {
+    const store = useSchematicStore()
+    const id = store.addLabel(2, 0)
+    store.setLabelStyle(id, 'Italique activé', { italic: true })
+    store.setLabelStyle(id, 'Couleur de l’étiquette', { color: '#d62828' })
+    expect(store.doc.labels[0]).toMatchObject({ italic: true, color: '#d62828', bold: false })
+    expect(store.undoLabel).toBe('Couleur de l’étiquette')
+    store.undo()
+    expect(store.doc.labels[0]).toMatchObject({ italic: true, color: '#000000' })
+    store.undo()
+    expect(store.doc.labels[0]?.italic).toBe(false)
+  })
+
+  it('met une étiquette à la verticale en tournant sa boîte, et revient au même endroit', () => {
+    const store = useSchematicStore()
+    const id = store.addLabel(2, 0)
+    store.setLabelVertical(id, true)
+    expect(store.doc.labels[0]).toMatchObject({ x: 1, y: -1, w: 1, h: 4, vertical: true })
+    store.setLabelVertical(id, false)
+    expect(store.doc.labels[0]).toMatchObject({ x: 0, y: 0, w: 4, h: 1, vertical: false })
+    // Une boîte déjà debout garde sa place.
+    store.setLabelBox(id, { x: 5, y: 5, w: 1, h: 3 })
+    store.setLabelVertical(id, true)
+    expect(store.doc.labels[0]).toMatchObject({ x: 5, y: 5, w: 1, h: 3, vertical: true })
+  })
+
+  it('enregistre et relit les styles d’une étiquette', () => {
+    const store = useSchematicStore()
+    const id = store.addLabel(2, 0)
+    store.setLabelStyle(id, 'Souligné activé', { underline: true, strike: true })
+    store.setLabelVertical(id, true)
+    const reread = parseProject(serializeProject(store.doc))
+    expect(reread.labels[0]).toMatchObject({ underline: true, strike: true, vertical: true })
+  })
+})
+
 describe('montage : étiquettes d’extrémité et copie au glisser', () => {
   it('pose et retire une étiquette sur chaque extrémité d’un fil', () => {
     const store = useSchematicStore()

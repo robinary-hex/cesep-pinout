@@ -8,6 +8,7 @@ import {
   STROKE_WEIGHTS,
   TEXT_BASE_SIZE_CELLS,
   TEXT_SCALES,
+  turnedTextBox,
   type Arrows,
   type PinKind,
   type PngFit
@@ -305,7 +306,10 @@ function setVertical(event: Event): void {
     primitiveIndex.value,
     vertical ? 'Texte vertical' : 'Texte horizontal',
     (p) => {
-      if (p.kind === 'text') p.vertical = vertical
+      if (p.kind !== 'text') return
+      // Une boîte couchée dans l'autre sens tourne avec le texte.
+      Object.assign(p, turnedTextBox(p, vertical))
+      p.vertical = vertical
     }
   )
 }

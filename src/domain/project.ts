@@ -17,7 +17,7 @@ import {
 import { styleProfileSchema, type StyleProfile } from './profile'
 import { isUTurn } from './wires'
 
-export const PROJECT_SCHEMA_VERSION = 18
+export const PROJECT_SCHEMA_VERSION = 19
 
 /** Composant posé sur le montage ; (x, y) = coin supérieur gauche de sa boîte, en grille. */
 export const componentInstanceSchema = z.object({
@@ -85,7 +85,10 @@ export const crossingOverrideSchema = z.object({
 })
 export type CrossingOverride = z.infer<typeof crossingOverrideSchema>
 
-/** Étiquette texte du montage : une boîte en cellules, texte centré verticalement, aligné selon `anchor`. */
+/**
+ * Étiquette texte du montage : une boîte en cellules, texte centré verticalement, aligné selon
+ * `anchor` ; mêmes styles que les textes des composants, sauf le texte variable.
+ */
 export const textLabelSchema = z.object({
   id: z.string().min(1),
   x: gridCoordSchema,
@@ -97,7 +100,14 @@ export const textLabelSchema = z.object({
   text: z.string(),
   /** Taille de police en points ; par défaut celle du profil. */
   size: z.number().positive(),
-  bold: z.boolean()
+  bold: z.boolean(),
+  italic: z.boolean(),
+  underline: z.boolean(),
+  strike: z.boolean(),
+  /** Texte tourné d'un quart de tour (lu de haut en bas) autour du centre de sa boîte. */
+  vertical: z.boolean(),
+  /** Couleur du texte ; le noir pur prend l'encre du thème à l'écran. */
+  color: hexColorSchema
 })
 export type TextLabel = z.infer<typeof textLabelSchema>
 

@@ -33,8 +33,26 @@ const CANVAS_MARGIN_CELLS = 1
 /** Espace gardé entre un repère et le bord du canevas, en pixels. */
 const LABEL_CLEARANCE_PX = 8
 
+/** Taille du numéro dans le repère : plus petit que le nom, et grisé, pour rester discret. */
+export const PIN_NUMBER_FONT_PX = 18
+
+/** Numéro d'une broche, et son nom s'il en diffère (vide sinon). */
+export function pinLabelParts(pin: Pin, index: number): { number: string; name: string } {
+  const number = String(index + 1)
+  return { number, name: pin.name !== number ? pin.name : '' }
+}
+
+/** Début du repère : le numéro, puis un point médian entre espaces insécables si un nom le suit. */
+export function pinNumberText(pin: Pin, index: number): string {
+  const { number, name } = pinLabelParts(pin, index)
+  const space = String.fromCharCode(0xa0)
+  return name.length > 0 ? `${number}${space}·${space}` : number
+}
+
+/** Texte entier du repère, « numéro · nom » : sert à estimer la place qu'il prend. */
 export function pinLabelText(pin: Pin, index: number): string {
-  return `${index + 1}${pin.name !== String(index + 1) ? ` · ${pin.name}` : ''}`
+  const { number, name } = pinLabelParts(pin, index)
+  return name.length > 0 ? `${number} · ${name}` : number
 }
 
 /** Boîte du repère pour un côté, en cellules, d'après une largeur de caractère moyenne. */
