@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useLibraryStore } from '@/features/library/store'
 import { baseName } from '@/io/paths'
 import Icon from '@/ui/Icon.vue'
 import { useSchematicStore } from './store'
@@ -12,14 +11,10 @@ import { useSchematicStore } from './store'
 // le clavier ; les actions de fichier par le menu Fichier.
 
 const store = useSchematicStore()
-const library = useLibraryStore()
 
 const fileLabel = computed(() => (store.filePath ? baseName(store.filePath) : 'Non enregistré'))
 
-const swatches = computed(() => [
-  ...library.palette.map((color) => ({ hex: color.hex, name: color.name })),
-  ...library.customColors.map((hex) => ({ hex, name: hex }))
-])
+const swatches = computed(() => store.colorChoices)
 
 function isCurrent(hex: string): boolean {
   return hex.toLowerCase() === store.currentColor.toLowerCase()
@@ -27,8 +22,9 @@ function isCurrent(hex: string): boolean {
 
 function pickCustom(event: Event): void {
   const hex = (event.target as HTMLInputElement).value
+  // La couleur choisie reste dans ce montage ; la palette générale se règle dans les Paramètres.
+  store.addCustomColor(hex)
   store.setCurrentColor(hex)
-  void library.rememberCustomColor(hex)
 }
 </script>
 
@@ -79,7 +75,7 @@ function pickCustom(event: Event): void {
           :title="swatch.name"
           @click="store.setCurrentColor(swatch.hex)"
         />
-        <label class="custom" title="Couleur personnalisée">
+        <label class="custom" title="Couleur personnalisée, gardée dans ce montage">
           <input type="color" :value="store.currentColor" @change="pickCustom" />
           <span>+</span>
         </label>

@@ -17,7 +17,7 @@ import {
 import { styleProfileSchema, type StyleProfile } from './profile'
 import { isUTurn } from './wires'
 
-export const PROJECT_SCHEMA_VERSION = 16
+export const PROJECT_SCHEMA_VERSION = 17
 
 /** Composant posé sur le montage ; (x, y) = coin supérieur gauche de sa boîte, en grille. */
 export const componentInstanceSchema = z.object({
@@ -110,6 +110,11 @@ const projectShape = z.object({
   wires: z.array(wireSchema),
   crossingOverrides: z.array(crossingOverrideSchema),
   labels: z.array(textLabelSchema),
+  /**
+   * Couleurs de fil propres à ce montage, ajoutées par le « + » de la palette ; les plus récentes
+   * d'abord. La palette de l'application, elle, vaut pour tous les montages.
+   */
+  customColors: z.array(hexColorSchema),
   /** Copie de chaque définition utilisée, une par type : le projet se suffit à lui-même. */
   embeddedDefs: z.record(z.string(), componentDefinitionSchema)
 })
@@ -177,6 +182,7 @@ export function createEmptyProject(name: string, profile: StyleProfile): Project
     wires: [],
     crossingOverrides: [],
     labels: [],
+    customColors: [],
     embeddedDefs: {}
   }
 }

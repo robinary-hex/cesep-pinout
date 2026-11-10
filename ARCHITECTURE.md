@@ -128,8 +128,8 @@ un arrêt brutal : c'est alors qu'elles sont proposées.
 Tous en JSON indenté, avec `schemaVersion`, validés par Zod à l'ouverture, migrés étape par étape
 (`src/domain/migrations.ts`). Un fichier d'exemple par version dans `src/domain/fixtures/`.
 Versions courantes : composant 13 (angles arrondis des polylignes, forme point, opacité du remplissage, italique, souligné et barré des textes, orientation réglée texte par texte, textes droits sur le montage, boîtes de texte multilignes, flèche au milieu, graisse des textes, épaisseur en multiplicateur, flèches, textes variables avec
-unité, plus de `labelPrefix`), projet 16 (étiquettes texte en boîte, police des étiquettes d'extrémité dans le profil, graisse des étiquettes, étiquettes d'extrémité des fils, `componentStroke` dans le profil, `fields` par instance,
-définitions embarquées migrées à chaque version des composants), paramètres 8 (`componentStroke`
+unité, plus de `labelPrefix`), projet 17 (couleurs de fil propres au montage, étiquettes texte en boîte, police des étiquettes d'extrémité dans le profil, graisse des étiquettes, étiquettes d'extrémité des fils, `componentStroke` dans le profil, `fields` par instance,
+définitions embarquées migrées à chaque version des composants), paramètres 9 (`componentStroke`
 et `endLabelFont` du profil par défaut, thème sombre par défaut, ouverture du panneau, affichage de
 la bibliothèque).
 

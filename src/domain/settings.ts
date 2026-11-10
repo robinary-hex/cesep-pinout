@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { hexColorSchema } from './color'
 import { DEFAULT_PROFILE, styleProfileSchema } from './profile'
 
-export const SETTINGS_SCHEMA_VERSION = 8
+export const SETTINGS_SCHEMA_VERSION = 9
 
 export const paletteColorSchema = z.object({
   name: z.string().min(1),
@@ -64,8 +64,6 @@ export const settingsSchema = z.object({
   /** Dossier de la bibliothèque de composants ; vide = dossier par défaut dans userData. */
   libraryDir: z.string(),
   palette: z.array(paletteColorSchema).min(1),
-  /** Dernières couleurs personnalisées, les plus récentes d'abord. */
-  customColors: z.array(hexColorSchema),
   defaultWireColor: hexColorSchema,
   defaultProfile: styleProfileSchema,
   /** Chemins des derniers projets ouverts, le plus récent d'abord. */
@@ -84,7 +82,6 @@ export const DEFAULT_SETTINGS: Settings = {
   schemaVersion: SETTINGS_SCHEMA_VERSION,
   libraryDir: '',
   palette: [...DEFAULT_PALETTE],
-  customColors: [],
   defaultWireColor: '#000000',
   defaultProfile: structuredClone(DEFAULT_PROFILE),
   recentFiles: [],

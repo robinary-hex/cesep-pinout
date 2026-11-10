@@ -114,6 +114,8 @@ export interface DirtyDocument {
 }
 
 const MIN_ZOOM = 0.2
+/** Couleurs personnalisées gardées par montage, les plus récentes d'abord. */
+const MAX_CUSTOM_COLORS = 8
 const MAX_ZOOM = 6
 const FIT_MARGIN_CELLS = 2
 const CROSSING_PICK_CELLS = 0.6
@@ -231,6 +233,11 @@ export const useSchematicStore = defineStore('schematic', () => {
     doc.value.components.filter((instance) => selection.value.includes(instance.id))
   )
   const sortedWires = computed(() => [...doc.value.wires].sort((a, b) => a.stack - b.stack))
+  /** Couleurs proposées pour les fils : la palette de l'application, puis celles du montage. */
+  const colorChoices = computed(() => [
+    ...library.palette.map((color) => ({ hex: color.hex, name: color.name })),
+    ...doc.value.customColors.map((hex) => ({ hex, name: hex }))
+  ])
   const pinRefs = computed(() => projectPins(doc.value))
   const connectivity = computed(() => computeConnectivity(doc.value.wires, pinRefs.value))
   const crossings = computed(() => computeCrossings(doc.value.wires))
@@ -832,6 +839,18 @@ export const useSchematicStore = defineStore('schematic', () => {
   }
 
   /** Couleur des prochains fils ; recolore aussi les fils sélectionnés. */
+  /**
+   * Garde dans ce montage une couleur choisie par le « + » de la palette ; rien si la palette de
+   * l'application ou le montage l'ont déjà.
+   */
+  function addCustomColor(hex: string): void {
+    const wanted = hex.toLowerCase()
+    if (colorChoices.value.some((choice) => choice.hex.toLowerCase() === wanted)) return
+    apply('Ajouter une couleur', (draft) => {
+      draft.customColors = [hex, ...draft.customColors].slice(0, MAX_CUSTOM_COLORS)
+    })
+  }
+
   function setCurrentColor(color: string): void {
     currentColor.value = color
     recolorWires(selectedWires.value, color)
@@ -1329,6 +1348,8 @@ export const useSchematicStore = defineStore('schematic', () => {
     setWirePoints,
     recolorWires,
     setCurrentColor,
+    addCustomColor,
+    colorChoices,
     setWireFreeEnds,
     setWireEndLabel,
     removeWires,

@@ -114,10 +114,7 @@ const inventory = computed(() => {
   ]
 })
 
-const swatches = computed(() => [
-  ...library.palette.map((color) => ({ hex: color.hex, name: color.name })),
-  ...library.customColors.map((hex) => ({ hex, name: hex }))
-])
+const swatches = computed(() => store.colorChoices)
 
 function inputValue(event: Event): string {
   return (event.target as HTMLInputElement).value
@@ -174,8 +171,8 @@ function recolor(hex: string): void {
 
 function recolorCustom(event: Event): void {
   const hex = inputValue(event)
+  store.addCustomColor(hex)
   store.setCurrentColor(hex)
-  void library.rememberCustomColor(hex)
 }
 
 function setFreeEnds(event: Event): void {

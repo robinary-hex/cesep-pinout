@@ -24,10 +24,7 @@ const library = useLibraryStore()
 const draft = ref<Settings>(structuredClone(library.settings ?? DEFAULT_SETTINGS))
 const errors = ref<string[]>([])
 
-const defaultColorChoices = computed(() => [
-  ...draft.value.palette,
-  ...draft.value.customColors.map((hex) => ({ name: hex, hex }))
-])
+const defaultColorChoices = computed(() => draft.value.palette)
 
 function text(event: Event): string {
   return (event.target as HTMLInputElement).value

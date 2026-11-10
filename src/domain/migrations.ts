@@ -359,6 +359,28 @@ function migrateProjectV8(raw: RawRecord): RawRecord {
   }
 }
 
+// Paramètres v8 → v9 : les couleurs personnalisées deviennent propres à chaque montage. Celles
+// que les paramètres gardaient rejoignent la palette, pour rester disponibles partout.
+
+function migrateSettingsV8(raw: RawRecord): RawRecord {
+  const palette = Array.isArray(raw['palette']) ? (raw['palette'] as unknown[]) : []
+  const custom = Array.isArray(raw['customColors']) ? (raw['customColors'] as unknown[]) : []
+  const known = new Set(
+    palette.flatMap((color) =>
+      isRecord(color) && typeof color['hex'] === 'string' ? [color['hex'].toLowerCase()] : []
+    )
+  )
+  const added: RawRecord[] = []
+  for (const hex of custom) {
+    if (typeof hex !== 'string' || known.has(hex.toLowerCase())) continue
+    known.add(hex.toLowerCase())
+    added.push({ name: hex.toUpperCase(), hex })
+  }
+  const rest = { ...raw }
+  delete rest['customColors']
+  return { ...rest, palette: [...palette, ...added] }
+}
+
 export const projectMigrations: MigrationTable = {
   current: PROJECT_SCHEMA_VERSION,
   steps: {
@@ -386,7 +408,9 @@ export const projectMigrations: MigrationTable = {
     // Projet v14 → v15 : définitions embarquées migrées (forme « point »).
     14: migrateEmbeddedDefs,
     // Projet v15 → v16 : définitions embarquées migrées (angles arrondis).
-    15: migrateEmbeddedDefs
+    15: migrateEmbeddedDefs,
+    // Projet v16 → v17 : couleurs de fil propres au montage, aucune au départ.
+    16: (raw) => ({ customColors: [], ...raw })
   }
 }
 
@@ -416,6 +440,7 @@ export const settingsMigrations: MigrationTable = {
     // v6 → v7 : thème sombre par défaut (le clair avait été imposé à la v4, pas choisi).
     6: (raw) => ({ ...raw, theme: 'dark' }),
     // v7 → v8 : affichage de la bibliothèque, en liste comme avant.
-    7: (raw) => ({ ...raw, libraryView: 'list' })
+    7: (raw) => ({ ...raw, libraryView: 'list' }),
+    8: migrateSettingsV8
   }
 }

@@ -164,14 +164,7 @@ function swatchItem(current: string | null): MenuItem {
   const matches = (hex: string): boolean => current?.toLowerCase() === hex.toLowerCase()
   return {
     kind: 'swatches',
-    swatches: [
-      ...library.palette.map((color) => ({
-        hex: color.hex,
-        name: color.name,
-        current: matches(color.hex)
-      })),
-      ...library.customColors.map((hex) => ({ hex, name: hex, current: matches(hex) }))
-    ],
+    swatches: store.colorChoices.map((choice) => ({ ...choice, current: matches(choice.hex) })),
     pick: (hex) => store.setCurrentColor(hex)
   }
 }

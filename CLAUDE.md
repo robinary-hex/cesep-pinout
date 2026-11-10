@@ -97,7 +97,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   fils posées sur lui le suivent, de proche en proche (`wiresFollowingJunctions`, appliqué dans
   `apply` à chaque commande et dans l'aperçu du canevas) ; une extrémité sur une broche ou
   déplacée par la commande elle-même ne suit pas. Un nouveau fil prend la couleur du dernier fil tracé ou
-  recoloré (`currentColor`, recalée sur le dernier fil du projet à l'ouverture). Extrémités
+  recoloré (`currentColor`, recalée sur le dernier fil du projet à l'ouverture). Couleurs proposées
+  (`colorChoices`) : la palette de l'application (Paramètres), commune à tous les montages, puis
+  les couleurs du montage (`customColors`, huit au plus), ajoutées par le « + » de la barre et
+  enregistrées dans son fichier. Extrémités
   libres (`freeEnds`) : nettes, en flèche ou en pointillés, dessinées pareil à l'écran et à
   l'export par `src/domain/wireEnds.ts` (corps raccourci, pointe sur le bout du fil, queue
   pointillée d'1,5 cellule). Étiquettes d'extrémité (`endLabels`) : point sur le bout libre et
@@ -224,7 +227,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     composant posé s'appelle « libellé » dans l'interface.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 13, projet 16, paramètres 8
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 13, projet 17, paramètres 9
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

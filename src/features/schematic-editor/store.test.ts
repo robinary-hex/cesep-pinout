@@ -685,6 +685,24 @@ describe('onglets de montage', () => {
     expect(store.closeTab(-1)).toBe(false)
   })
 
+  it('garde une couleur personnalisée dans le montage où elle est ajoutée, pas ailleurs', () => {
+    const store = useSchematicStore()
+    const paletteSize = store.colorChoices.length
+    store.addCustomColor('#ff00aa')
+    store.addCustomColor('#FF00AA')
+    // Une couleur de la palette de l'application n'est pas reprise.
+    store.addCustomColor('#000000')
+    expect(store.doc.customColors).toEqual(['#ff00aa'])
+    expect(store.colorChoices).toHaveLength(paletteSize + 1)
+    const first = store.activeTabId
+
+    store.newProject()
+    expect(store.doc.customColors).toEqual([])
+    expect(store.colorChoices).toHaveLength(paletteSize)
+    store.activateTab(first)
+    expect(store.colorChoices.at(-1)).toEqual({ hex: '#ff00aa', name: '#ff00aa' })
+  })
+
   it('réordonne les onglets sans changer celui qui est affiché', () => {
     const store = useSchematicStore()
     store.setProjectName('A')

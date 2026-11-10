@@ -31,7 +31,6 @@ export interface LibraryGroup {
 }
 
 const UNREADABLE_GROUP = 'Illisibles'
-const MAX_CUSTOM_COLORS = 8
 const MAX_RECENT_FILES = 10
 
 /** Bibliothèque de composants sur disque et paramètres de l'application. */
@@ -54,7 +53,6 @@ export const useLibraryStore = defineStore('library', () => {
   const palette = computed<readonly PaletteColor[]>(
     () => settings.value?.palette ?? DEFAULT_PALETTE
   )
-  const customColors = computed<readonly string[]>(() => settings.value?.customColors ?? [])
   const defaultWireColor = computed(
     () => settings.value?.defaultWireColor ?? DEFAULT_SETTINGS.defaultWireColor
   )
@@ -193,15 +191,6 @@ export const useLibraryStore = defineStore('library', () => {
     await updateSettings({ libraryDir: portableLibraryDir(dir, oneDrive) })
   }
 
-  /** Garde une couleur personnalisée en tête de liste (les huit dernières). */
-  async function rememberCustomColor(hex: string): Promise<void> {
-    const current = settings.value
-    if (!current) return
-    if (current.palette.some((color) => color.hex.toLowerCase() === hex.toLowerCase())) return
-    const others = current.customColors.filter((color) => color.toLowerCase() !== hex.toLowerCase())
-    await updateSettings({ customColors: [hex, ...others].slice(0, MAX_CUSTOM_COLORS) })
-  }
-
   async function addRecentFile(path: string): Promise<void> {
     const others = recentFiles.value.filter((candidate) => candidate !== path)
     await updateSettings({ recentFiles: [path, ...others].slice(0, MAX_RECENT_FILES) })
@@ -223,7 +212,6 @@ export const useLibraryStore = defineStore('library', () => {
     ids,
     defaultProfile,
     palette,
-    customColors,
     defaultWireColor,
     recentFiles,
     lastProjectDir,
@@ -240,7 +228,6 @@ export const useLibraryStore = defineStore('library', () => {
     updateSettings,
     reloadSharedSettings,
     chooseDir,
-    rememberCustomColor,
     addRecentFile,
     removeRecentFile
   }
