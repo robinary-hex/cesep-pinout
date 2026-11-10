@@ -48,7 +48,8 @@ distingue cette copie du profil affiché (`profile` = `profilePreview` s'il y en
 toucher à l'historique ; à la validation, les paramètres sont enregistrés et chaque montage ouvert
 qui suivait l'ancien profil reçoit une commande (`followGeneralProfile`). Un montage dont le style
 s'écarte du profil général garde le sien ; ses écarts (`profileDifferences`) sont surlignés dans le
-panneau, où un bouton l'aligne.
+panneau, où un bouton l'aligne ; le style d'un montage se modifie depuis ce panneau, avec la même
+boîte ouverte en mode `montage`.
 
 ## Interface partagée (`src/ui/`)
 
@@ -132,12 +133,12 @@ définitions embarquées migrées à chaque version des composants), paramètres
 et `endLabelFont` du profil par défaut, thème sombre par défaut, ouverture du panneau, affichage de
 la bibliothèque).
 
-| Donnée                  | Schéma                      | Emplacement                                                                               |
-| ----------------------- | --------------------------- | ----------------------------------------------------------------------------------------- |
-| Définition de composant | `componentDefinitionSchema` | `<bibliothèque>/<id>/component.json` (+ `image.png` pour un visuel PNG)                   |
-| Projet                  | `projectSchema`             | où l'utilisateur veut, `*.pinout.json`, autonome                                          |
-| Profil de style         | `styleProfileSchema`        | général dans les paramètres, copié dans chaque projet ; modèles dans `userData/profiles/` |
-| Paramètres              | `settingsSchema`            | `userData/settings.json` (`userData` = `%APPDATA%\Pinout`)                                |
+| Donnée                  | Schéma                      | Emplacement                                                                                                                                                                   |
+| ----------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Définition de composant | `componentDefinitionSchema` | `<bibliothèque>/<id>/component.json` (+ `image.png` pour un visuel PNG)                                                                                                       |
+| Projet                  | `projectSchema`             | où l'utilisateur veut, `*.pinout.json`, autonome                                                                                                                              |
+| Profil de style         | `styleProfileSchema`        | général dans les paramètres, copié dans chaque projet ; modèles dans `userData/profiles/`                                                                                     |
+| Paramètres              | `settingsSchema`            | partagés : `<OneDrive>\(Cours)\Robotique\(Ressources)\Pinout\settings.json` ; locaux (copie et fichiers récents) : `userData/settings.json` (`userData` = `%APPDATA%\Pinout`) |
 
 La bibliothèque vit par défaut dans OneDrive (`(Cours)\Robotique\(Ressources)\Pinout\library` sous la racine
 `OneDriveCommercial` ou `OneDrive` de la machine), sinon dans `userData/library` ; les paramètres

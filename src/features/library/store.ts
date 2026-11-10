@@ -16,7 +16,14 @@ import {
 import { bridge } from '@/io/bridge'
 import { listComponents, type LibraryEntry } from '@/io/library'
 import { baseName, dirOf } from '@/io/paths'
-import { loadSettings, portableLibraryDir, resolveLibraryDir, saveSettings } from '@/io/settings'
+import {
+  loadSettings,
+  portableLibraryDir,
+  readSharedSettings,
+  resolveLibraryDir,
+  saveSettings,
+  withLocalPart
+} from '@/io/settings'
 
 export interface LibraryGroup {
   name: string
@@ -30,6 +37,8 @@ const MAX_RECENT_FILES = 10
 /** Bibliothèque de composants sur disque et paramètres de l'application. */
 export const useLibraryStore = defineStore('library', () => {
   const settings = shallowRef<Settings | null>(null)
+  /** Fichier de paramètres partagé (OneDrive), ou null s'ils restent sur cette machine. */
+  const sharedSettingsPath = ref<string | null>(null)
   const libraryDir = ref('')
   const entries = shallowRef<LibraryEntry[]>([])
   const loading = ref(false)
@@ -113,6 +122,7 @@ export const useLibraryStore = defineStore('library', () => {
     try {
       const loaded = await loadSettings()
       settings.value = loaded.settings
+      sharedSettingsPath.value = loaded.sharedPath
       problem.value = loaded.problem ?? ''
       libraryDir.value = await resolveLibraryDir(loaded.settings)
       await refresh()
@@ -130,8 +140,38 @@ export const useLibraryStore = defineStore('library', () => {
     }
   }
 
-  /** Enregistre un sous-ensemble de paramètres ; un nouveau dossier de bibliothèque est relu. */
+  /**
+   * Reprend le fichier partagé s'il a changé depuis une autre machine ; vrai si les réglages ont
+   * changé. Ce qui est propre à cette machine (fichiers récents) reste.
+   */
+  async function reloadSharedSettings(): Promise<boolean> {
+    const current = settings.value
+    if (!current) return false
+    try {
+      const shared = await readSharedSettings()
+      if (!shared) return false
+      const next = withLocalPart(shared, current)
+      if (JSON.stringify(next) === JSON.stringify(current)) return false
+      settings.value = next
+      // La copie locale suit ; le fichier partagé, identique, n'est pas réécrit.
+      await saveSettings(next)
+      if (next.libraryDir !== current.libraryDir) {
+        libraryDir.value = await resolveLibraryDir(next)
+        await refresh()
+      }
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Enregistre un sous-ensemble de paramètres ; un nouveau dossier de bibliothèque est relu. On
+   * part des réglages partagés les plus frais : ce qu'une autre machine a changé entre-temps
+   * n'est écrasé que pour les réglages de `patch`.
+   */
   async function updateSettings(patch: Partial<Settings>): Promise<void> {
+    await reloadSharedSettings()
     const current = settings.value ?? structuredClone(DEFAULT_SETTINGS)
     const next: Settings = { ...current, ...patch }
     await persist(next)
@@ -175,6 +215,7 @@ export const useLibraryStore = defineStore('library', () => {
 
   return {
     settings,
+    sharedSettingsPath,
     libraryDir,
     entries,
     filtered,
@@ -197,6 +238,7 @@ export const useLibraryStore = defineStore('library', () => {
     init,
     refresh,
     updateSettings,
+    reloadSharedSettings,
     chooseDir,
     rememberCustomColor,
     addRecentFile,

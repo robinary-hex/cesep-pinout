@@ -7,18 +7,24 @@ import { deleteProfile, listProfiles, saveProfile, type SavedProfile } from '@/i
 import ModalDialog from '@/ui/ModalDialog.vue'
 import ProfileFields from './ProfileFields.vue'
 
-// Profil de style général de l'application, et profils nommés qu'on peut y charger. Chaque
-// changement s'affiche aussitôt sur le montage affiché s'il suit le profil général (aperçu) ;
-// « Appliquer » l'enregistre dans les paramètres et le donne aux montages ouverts qui suivaient
-// l'ancien ; « Annuler » ou Échap ne change rien.
+// Boîte de profil de style, pour deux usages. `general` : le profil général de l'application ;
+// l'aperçu se voit sur le montage affiché s'il le suit, et « Appliquer » l'enregistre dans les
+// paramètres puis le donne aux montages ouverts qui suivaient l'ancien. `montage` : le style
+// propre au montage affiché ; l'aperçu est immédiat et « Appliquer » en fait une commande du
+// montage. Les profils nommés se chargent dans les deux cas ; « Annuler » ou Échap ne change rien.
 
+const props = defineProps<{ target: 'general' | 'montage' }>()
 const emit = defineEmits<{ close: [] }>()
 const library = useLibraryStore()
 const schematic = useSchematicStore()
 
-const draft = ref<StyleProfile>(structuredClone(library.defaultProfile))
-/** Le montage affiché suit le profil général : il sert d'aperçu. Sinon il garde son style. */
-const previewable = schematic.followsGeneralProfile
+const general = props.target === 'general'
+const draft = ref<StyleProfile>(
+  structuredClone(general ? library.defaultProfile : schematic.doc.profile)
+)
+/** Le profil général ne s'aperçoit que sur un montage qui le suit ; un style propre, toujours. */
+const previewable = !general || schematic.followsGeneralProfile
+const title = general ? 'Profil de style général' : `Style du montage « ${schematic.doc.name} »`
 const saved = ref<SavedProfile[]>([])
 const message = ref('')
 const failed = ref(false)
@@ -66,14 +72,21 @@ function valid(): StyleProfile | null {
   return parsed.data
 }
 
-/** Le profil devient le profil général ; les montages ouverts qui suivaient l'ancien le prennent. */
+/**
+ * Profil général : il est enregistré, et les montages ouverts qui suivaient l'ancien le prennent.
+ * Style d'un montage : une commande du montage, annulable.
+ */
 async function apply(): Promise<void> {
   const profile = valid()
   if (!profile) return
-  const previous = library.defaultProfile
-  await library.updateSettings({ defaultProfile: profile })
   schematic.profilePreview = null
-  schematic.followGeneralProfile(previous, profile)
+  if (general) {
+    const previous = library.defaultProfile
+    await library.updateSettings({ defaultProfile: profile })
+    schematic.followGeneralProfile(previous, profile)
+  } else {
+    schematic.setProfile(profile)
+  }
   emit('close')
 }
 
@@ -91,7 +104,11 @@ async function saveNamed(): Promise<void> {
 
 function load(entry: SavedProfile): void {
   draft.value = structuredClone(entry.profile)
-  report(`Profil « ${entry.profile.name} » chargé : Appliquer en fait le profil général.`)
+  report(
+    general
+      ? `Profil « ${entry.profile.name} » chargé : Appliquer en fait le profil général.`
+      : `Profil « ${entry.profile.name} » chargé : Appliquer le donne à ce montage.`
+  )
 }
 
 async function remove(entry: SavedProfile): Promise<void> {
@@ -102,7 +119,7 @@ async function remove(entry: SavedProfile): Promise<void> {
 </script>
 
 <template>
-  <ModalDialog title="Profil de style" @close="emit('close')">
+  <ModalDialog :title="title" @close="emit('close')">
     <ProfileFields v-model="draft" />
     <p v-if="!previewable" class="hint">
       Le montage affiché a son propre style : il ne montre pas l’aperçu et ne suivra pas ces

@@ -1,7 +1,13 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS } from '@/domain'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { DEFAULT_SETTINGS, parseSettings, serializeSettings } from '@/domain'
 import { setBridge } from './bridge'
-import { portableLibraryDir, resolveLibraryDir } from './settings'
+import {
+  loadSettings,
+  portableLibraryDir,
+  readSharedSettings,
+  resolveLibraryDir,
+  saveSettings
+} from './settings'
 import { FakeFs } from './testing/fakeFs'
 
 let fs: FakeFs
@@ -38,5 +44,71 @@ describe('dossier de la bibliothèque', () => {
     )
     expect(portableLibraryDir('F:/ailleurs', 'D:/Cesep/OneDrive - CESEP')).toBe('F:/ailleurs')
     expect(portableLibraryDir('F:/ailleurs', null)).toBe('F:/ailleurs')
+  })
+})
+
+describe('paramètres locaux et partagés', () => {
+  const LOCAL = 'C:/fake/Pinout/settings.json'
+  const SHARED = 'D:/OneDrive/(Cours)/Robotique/(Ressources)/Pinout/settings.json'
+  const mine = {
+    ...DEFAULT_SETTINGS,
+    theme: 'light' as const,
+    recentFiles: ['C:/Docs/a.pinout']
+  }
+
+  it('sans OneDrive, tout reste dans le fichier local', async () => {
+    await saveSettings(mine)
+    expect([...fs.texts.keys()]).toEqual([LOCAL])
+    const loaded = await loadSettings()
+    expect(loaded.sharedPath).toBeNull()
+    expect(loaded.settings).toEqual(mine)
+  })
+
+  it('initialise le fichier partagé avec les réglages de la machine, sans ses fichiers récents', async () => {
+    await saveSettings(mine)
+    fs.oneDrive = 'D:/OneDrive'
+    const loaded = await loadSettings()
+    expect(loaded.sharedPath).toBe(SHARED)
+    expect(loaded.settings).toEqual(mine)
+    const shared = parseSettings(await fs.readTextFile(SHARED))
+    expect(shared.theme).toBe('light')
+    expect(shared.recentFiles).toEqual([])
+  })
+
+  it('prend les réglages partagés et garde les fichiers récents de la machine', async () => {
+    await saveSettings(mine)
+    fs.oneDrive = 'D:/OneDrive'
+    const elsewhere = {
+      ...DEFAULT_SETTINGS,
+      theme: 'dark' as const,
+      defaultProfile: { ...DEFAULT_SETTINGS.defaultProfile, name: 'Cours', wireWidth: 0.2 },
+      recentFiles: []
+    }
+    await fs.writeTextFile(SHARED, serializeSettings(elsewhere))
+    const loaded = await loadSettings()
+    expect(loaded.settings.theme).toBe('dark')
+    expect(loaded.settings.defaultProfile.name).toBe('Cours')
+    expect(loaded.settings.recentFiles).toEqual(['C:/Docs/a.pinout'])
+    expect((await readSharedSettings())?.defaultProfile.wireWidth).toBe(0.2)
+  })
+
+  it('ne réécrit pas le fichier partagé quand seuls les fichiers récents changent', async () => {
+    fs.oneDrive = 'D:/OneDrive'
+    await saveSettings(mine)
+    const write = vi.spyOn(fs, 'writeTextFile')
+    await saveSettings({ ...mine, recentFiles: ['C:/Docs/b.pinout', 'C:/Docs/a.pinout'] })
+    expect(write.mock.calls.map(([path]) => path)).toEqual([LOCAL])
+    await saveSettings({ ...mine, theme: 'dark' })
+    expect(write.mock.calls.map(([path]) => path)).toEqual([LOCAL, LOCAL, SHARED])
+  })
+
+  it('garde les réglages de la machine quand le fichier partagé est illisible', async () => {
+    await saveSettings(mine)
+    fs.oneDrive = 'D:/OneDrive'
+    await fs.writeTextFile(SHARED, '{ "schemaVersion": ')
+    const loaded = await loadSettings()
+    expect(loaded.settings).toEqual(mine)
+    expect(loaded.problem).toContain('partagés illisibles')
+    expect(await readSharedSettings()).toBeNull()
   })
 })

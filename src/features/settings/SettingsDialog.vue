@@ -276,6 +276,14 @@ async function save(): Promise<void> {
       </div>
     </div>
 
+    <p class="hint">
+      {{
+        library.sharedSettingsPath
+          ? `Paramètres et profil de style général synchronisés par OneDrive : ${library.sharedSettingsPath}`
+          : 'Paramètres enregistrés sur cette machine seulement (pas de OneDrive détecté).'
+      }}
+    </p>
+
     <ul v-if="errors.length > 0" class="errors">
       <li v-for="error in errors" :key="error">{{ error }}</li>
     </ul>

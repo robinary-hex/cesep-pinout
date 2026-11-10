@@ -17,10 +17,10 @@ import { useSchematicStore } from './store'
 // Panneau de droite du montage (replié par défaut, touche I). Toujours : le projet, avec son nom
 // et le bouton d'export. Sans sélection : le profil et le contenu du montage. Avec une
 // sélection : seulement les propriétés de l'élément (composant, fil(s), étiquette, groupe). Le
-// profil de style se modifie ailleurs (il est général) ; ici, les réglages où ce montage s'en
-// écarte sont surlignés, avec un bouton pour l'aligner.
+// bloc « Profil de style » décrit le style propre à ce montage, modifiable d'ici ; les réglages
+// où il s'écarte du profil général sont surlignés, avec un bouton pour l'y aligner.
 
-const emit = defineEmits<{ exportImage: [] }>()
+const emit = defineEmits<{ editProfile: []; exportImage: [] }>()
 const store = useSchematicStore()
 const library = useLibraryStore()
 const doc = computed(() => store.doc)
@@ -281,15 +281,25 @@ function setLabelSize(event: Event): void {
             {{ fact.text }}
           </li>
         </ul>
-        <button
-          v-if="store.profileDiffs.length > 0"
-          type="button"
-          class="small with-icon"
-          title="Remplace le style de ce montage par le profil général (annulable)"
-          @click="store.adoptGeneralProfile()"
-        >
-          <Icon name="refresh" :size="13" /> Appliquer le profil général
-        </button>
+        <div class="row">
+          <button
+            type="button"
+            class="small with-icon"
+            title="Modifier le style de ce montage seulement"
+            @click="emit('editProfile')"
+          >
+            <Icon name="sliders" :size="13" /> Modifier le style…
+          </button>
+          <button
+            v-if="store.profileDiffs.length > 0"
+            type="button"
+            class="small with-icon"
+            title="Remplace le style de ce montage par le profil général (annulable)"
+            @click="store.adoptGeneralProfile()"
+          >
+            <Icon name="refresh" :size="13" /> Profil général
+          </button>
+        </div>
       </section>
 
       <section class="block">

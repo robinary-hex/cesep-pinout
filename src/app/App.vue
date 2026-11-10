@@ -160,7 +160,7 @@ function fileMenuItems(): MenuItem[] {
       { icon: 'settings' }
     ),
     item(
-      'Profil de style…',
+      'Profil de style général…',
       () => {
         showProfile.value = true
       },
@@ -290,6 +290,18 @@ async function openExternal(path: string): Promise<void> {
   }
 }
 
+/**
+ * La fenêtre reprend la main : si une autre machine a changé les paramètres partagés (OneDrive),
+ * ils sont repris, et les montages qui suivaient l'ancien profil général prennent le nouveau.
+ */
+async function onWindowFocus(): Promise<void> {
+  if (openModals.value > 0) return
+  const previous = library.defaultProfile
+  if (await library.reloadSharedSettings()) {
+    schematic.followGeneralProfile(previous, library.defaultProfile)
+  }
+}
+
 function onWindowDragOver(event: DragEvent): void {
   if (!event.dataTransfer?.types.includes('Files')) return
   event.preventDefault()
@@ -394,12 +406,14 @@ function commitFocusedField(event: PointerEvent): void {
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('pointerdown', commitFocusedField, true)
+  window.addEventListener('focus', onWindowFocus)
   window.addEventListener('dragover', onWindowDragOver)
   window.addEventListener('drop', onWindowDrop)
 })
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
   window.removeEventListener('pointerdown', commitFocusedField, true)
+  window.removeEventListener('focus', onWindowFocus)
   window.removeEventListener('dragover', onWindowDragOver)
   window.removeEventListener('drop', onWindowDrop)
 })
@@ -498,7 +512,7 @@ onUnmounted(() => {
         <button
           type="button"
           class="ghost icon-only"
-          title="Profil de style de l’application"
+          title="Profil de style général"
           @click="showProfile = true"
         >
           <Icon name="sliders" :size="18" />
@@ -519,7 +533,7 @@ onUnmounted(() => {
       <SchematicEditor v-else ref="schematicEditor" />
     </main>
     <SettingsDialog v-if="showSettings" @close="showSettings = false" />
-    <ProfileDialog v-if="showProfile" @close="showProfile = false" />
+    <ProfileDialog v-if="showProfile" target="general" @close="showProfile = false" />
     <ShortcutsHelp v-if="showHelp" @close="showHelp = false" />
     <ContextMenu
       v-if="fileMenu"

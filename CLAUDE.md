@@ -149,14 +149,22 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   opacité unique : deux fils qui se chevauchent ne s'additionnent pas.
   Les marques d'extrémité libre et de broche reliée à rien prennent `--alert` (rouge en clair, ambre
   en sombre) ; l'aperçu d'export transparent est hachuré (`--hatch-*`).
-- Profil de style : général à l'application (`defaultProfile` des paramètres), modifié par la boîte
-  « Profil de style » (`settings/ProfileDialog.vue`, bouton de la barre d'application entre l'aide
-  et les paramètres, et menu Fichier), avec aperçu sur le montage affiché s'il le suit
-  (`profilePreview`). « Appliquer » l'enregistre et le donne aux montages ouverts qui suivaient
-  l'ancien (`followGeneralProfile`). Chaque fichier de montage garde la copie du profil avec
-  laquelle il se dessine : un montage dont le style s'écarte du profil général garde le sien, et
-  son panneau surligne en `--alert` les réglages qui diffèrent (`profileDifferences`), avec
-  « Appliquer le profil général » pour l'aligner (`adoptGeneralProfile`).
+- Profil de style : l'application a un profil général (`defaultProfile` des paramètres) et chaque
+  montage a le sien, enregistré dans son fichier, avec lequel il se dessine. Une seule boîte,
+  `settings/ProfileDialog.vue`, pour les deux : `target="general"` (bouton de la barre
+  d'application entre l'aide et les paramètres, et menu Fichier) modifie le profil général, avec
+  aperçu sur le montage affiché s'il le suit, et « Appliquer » l'enregistre puis le donne aux
+  montages ouverts qui suivaient l'ancien (`followGeneralProfile`) ; `target="montage"` (bouton
+  « Modifier le style… » du panneau) modifie le style du montage affiché, en une commande. Le
+  panneau surligne en `--alert` les réglages où le montage s'écarte du profil général
+  (`profileDifferences`) et propose de l'y aligner (`adoptGeneralProfile`).
+- Paramètres en deux fichiers (`src/io/settings.ts`) : un fichier partagé
+  `<OneDrive>\(Cours)\Robotique\(Ressources)\Pinout\settings.json`, que OneDrive synchronise entre
+  les machines (tout sauf les fichiers récents ; profil général compris), et le fichier local
+  `userData/settings.json`, copie complète avec les fichiers récents. Sans OneDrive, seul le local
+  existe. Le fichier partagé est relu au lancement, avant chaque enregistrement (seuls les
+  réglages modifiés écrasent) et quand la fenêtre reprend la main (`reloadSharedSettings`) ; il
+  n'est réécrit que si son contenu change.
 - Bibliothèque de composants : dossier par défaut = racine OneDrive de la machine (variables
   `OneDriveCommercial` puis `OneDrive`, exposées par `getAppPaths().oneDrive`) + `(Cours)\Robotique\(Ressources)\Pinout\library`,
   sinon `userData/library` ; un dossier choisi dans OneDrive est enregistré avec le préfixe
