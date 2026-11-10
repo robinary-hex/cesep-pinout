@@ -33,7 +33,8 @@ const SELECTION: Row[] = [
 const VIEW: Row[] = [
   ['Molette', 'Zoom autour du curseur'],
   ['Espace + glisser, bouton du milieu', 'Déplacer la vue'],
-  ['Double-clic du bouton du milieu, 0', 'Ajuster la vue au contenu']
+  ['Double-clic du bouton du milieu, 0', 'Ajuster la vue au contenu'],
+  ['1', 'Zoom 100 %']
 ]
 
 const sections: { title: string; rows: Row[] }[] = [
@@ -61,7 +62,6 @@ const sections: { title: string; rows: Row[] }[] = [
       ],
       ['Clic droit', 'Menu contextuel : composant, fil, étiquette ou vide'],
       ...VIEW,
-      ['1', 'Zoom 100 %'],
       ['I', 'Afficher / masquer le panneau de propriétés'],
       ['Ctrl+N / O / S', 'Nouveau / ouvrir (dans un onglet) / enregistrer (Ctrl+Maj+S : sous…)'],
       ['Ctrl+E', 'Exporter en PNG ou SVG'],
@@ -91,6 +91,10 @@ const sections: { title: string; rows: Row[] }[] = [
         'Ctrl+glisser sur un nœud',
         'Tirer un lien de son point d’accroche le plus proche (l’anneau vert) jusqu’au point de relâchement'
       ],
+      [
+        'Glisser l’étiquette d’un lien',
+        'Elle longe le trait, toujours à la même distance, et change de côté quand on le traverse'
+      ],
       ['E', 'Texte libre : deux clics ou un glisser pour les deux coins de sa boîte'],
       ['R', 'Tourner une barre de fourche d’un quart de tour'],
       ...SELECTION,
@@ -101,7 +105,6 @@ const sections: { title: string; rows: Row[] }[] = [
       ],
       ['Clic droit', 'Menu contextuel : nœud, lien, texte ou vide'],
       ...VIEW,
-      ['1', 'Zoom 100 %'],
       ['I', 'Afficher / masquer le panneau de propriétés'],
       ['Ctrl+N / O / S', 'Nouveau / ouvrir (dans un onglet) / enregistrer en .pinuml'],
       ['Ctrl+E', 'Exporter en PNG ou SVG'],
