@@ -42,6 +42,9 @@ export interface SvgExport {
   heightPx: number
   widthCells: number
   heightCells: number
+  /** Coin supérieur gauche du cadre exporté, en cellules : l'origine du viewBox. */
+  originX: number
+  originY: number
 }
 
 export function escapeXml(text: string): string {
@@ -426,5 +429,5 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
     })}>` +
     parts.join('') +
     '</svg>'
-  return { svg, widthPx, heightPx, widthCells, heightCells }
+  return { svg, widthPx, heightPx, widthCells, heightCells, originX: x0, originY: y0 }
 }

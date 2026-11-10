@@ -18,6 +18,7 @@ describe('export SVG', () => {
     expect(result.widthPx).toBe(result.widthCells * 40)
     expect(result.svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg"')).toBe(true)
     expect(result.svg).toContain('viewBox="0 -3 26 21"')
+    expect([result.originX, result.originY]).toEqual([0, -3])
     expect(result.svg).toContain('width="1040"')
   })
 

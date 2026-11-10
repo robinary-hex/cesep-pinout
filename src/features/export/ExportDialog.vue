@@ -30,6 +30,25 @@ watch([backgroundChoice, customBackground], ([choice, custom]) => {
 
 const result = computed(() => buildProjectSvg(store.doc, { ...options }))
 const previewUrl = ref<string | null>(null)
+
+/**
+ * Fond transparent : un point à chaque intersection de la grille, derrière le dessin. Une tuile de
+ * fond par cellule, en pourcentage de l'image, pour que les points suivent sa taille à l'écran ;
+ * le décalage amène le premier point sur la première intersection quand le cadre ne commence pas
+ * sur une cellule entière.
+ */
+const transparencyDots = computed(() => {
+  const value = result.value
+  if (!value || options.background !== 'transparent') return undefined
+  const offset = (origin: number, cells: number): string => {
+    const first = ((-origin % 1) + 1) % 1
+    return cells > 1 ? `${(first / (cells - 1)) * 100}%` : '0%'
+  }
+  return {
+    backgroundSize: `${100 / value.widthCells}% ${100 / value.heightCells}%`,
+    backgroundPosition: `${offset(value.originX, value.widthCells)} ${offset(value.originY, value.heightCells)}`
+  }
+})
 const busy = ref(false)
 const message = ref('')
 const failed = ref(false)
@@ -171,7 +190,12 @@ function setMargin(event: Event): void {
       </form>
 
       <div class="preview" :class="{ transparent: options.background === 'transparent' }">
-        <img v-if="previewUrl" :src="previewUrl" alt="Aperçu de l’export" />
+        <img
+          v-if="previewUrl"
+          :src="previewUrl"
+          :style="transparencyDots"
+          alt="Aperçu de l’export"
+        />
       </div>
     </div>
 
@@ -268,16 +292,15 @@ legend {
   outline-offset: 4px;
 }
 
-/* Fond transparent : hachures légères sous le dessin seulement. */
+/* Fond transparent : un point à chaque intersection de la grille, sous le dessin seulement. Chaque
+   tuile (une cellule, taille donnée en ligne) porte un quart de point à ses quatre coins. */
 .preview.transparent img {
-  background-color: var(--hatch-bg);
-  background-image: repeating-linear-gradient(
-    45deg,
-    var(--hatch-line) 0,
-    var(--hatch-line) 1px,
-    transparent 1px,
-    transparent 9px
-  );
+  background-color: var(--transparent-bg);
+  background-image:
+    radial-gradient(circle at 0 0, var(--transparent-dot) 1.3px, transparent 1.9px),
+    radial-gradient(circle at 100% 0, var(--transparent-dot) 1.3px, transparent 1.9px),
+    radial-gradient(circle at 0 100%, var(--transparent-dot) 1.3px, transparent 1.9px),
+    radial-gradient(circle at 100% 100%, var(--transparent-dot) 1.3px, transparent 1.9px);
 }
 
 .message {

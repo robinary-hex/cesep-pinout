@@ -44,8 +44,9 @@
   --checker-b: #e6e9ed;
   --ink: #000000;
   --alert: #cf222e;
-  --hatch-bg: #ffffff;
-  --hatch-line: #e3e6ea;
+  /* Aperçu d'export transparent : fond et points de la grille. */
+  --transparent-bg: #ffffff;
+  --transparent-dot: #b9c0c9;
   /* Traits d'un composant dont la bibliothèque a une version plus récente : rouge en clair. */
   --stale: #d1242f;
   /* Entourage de l'aperçu d'export : gris, pour que la zone exportée se détache. */
@@ -98,8 +99,8 @@
   --ink: #e6edf3;
   /* Extrémités et broches reliées à rien : ambre, le rouge jure sur le papier sombre. */
   --alert: #d29922;
-  --hatch-bg: #2a2f36;
-  --hatch-line: #3a414b;
+  --transparent-bg: #2a2f36;
+  --transparent-dot: #566070;
   /* Jaune en sombre : le rouge se perdrait sur le papier gris-bleu. */
   --stale: #e3b341;
   --preview-bg: #262c35;

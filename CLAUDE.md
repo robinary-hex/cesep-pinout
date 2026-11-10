@@ -150,7 +150,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   l'export reste noir. Les surbrillances (net survolé, fils sélectionnés) sont des groupes à
   opacité unique : deux fils qui se chevauchent ne s'additionnent pas.
   Les marques d'extrémité libre et de broche reliée à rien prennent `--alert` (rouge en clair, ambre
-  en sombre) ; l'aperçu d'export transparent est hachuré (`--hatch-*`).
+  en sombre) ; l'aperçu d'export transparent montre un point à chaque
+  intersection de la grille (`--transparent-*`).
 - Profil de style : l'application a un profil général (`defaultProfile` des paramètres) et chaque
   montage a le sien, enregistré dans son fichier, avec lequel il se dessine. Une seule boîte,
   `settings/ProfileDialog.vue`, pour les deux : `target="general"` (bouton de la barre
