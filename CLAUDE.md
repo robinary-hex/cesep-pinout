@@ -129,6 +129,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   dans `electron/main.ts` (le rendu tient `setDirty` à jour, puis répond à `discard-then-quit` (efface la copie de secours) ou `save-then-quit` : Enregistrer / Ne pas enregistrer /
   Annuler, `cancelQuit` si l'enregistrement est abandonné ; l'enregistrement lui-même est dans
   `projectActions.ts` et `componentActions.ts`, partagé avec les éditeurs).
+- Modes (`src/app/App.vue`) : un bouton à pictogramme par mode (puce = Composants, résistance =
+  Montage ; nom en infobulle), l'application démarre sur le montage. Ce que la coque demande à un
+  mode (onglets, fermeture, enregistrement avant de quitter, statut) passe par son `ModeAdapter`.
 - Barre d'application (`src/app/App.vue`) : menu Fichier (nouveau, ouvrir, récents, enregistrer,
   exporter, paramètres, raccourcis, quitter) construit avec `ContextMenu` et appelant les actions
   que `SchematicEditor` / `ComponentEditor` exposent par `defineExpose` selon le mode. Enregistrer
@@ -147,10 +150,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   clic du milieu pour fermer (s'il est
   modifié : Enregistrer / Ne pas enregistrer / Annuler, dialogue natif `confirmSave` du pont, flux
   dans `closeTabAsking`), « + » pour un nouveau, Ctrl+Tab / Ctrl+Maj+Tab pour passer de l'un à l'autre,
-  glisser-déposer pour les réordonner (`moveTab`). Le store
-  du montage reste unique : l'onglet actif vit dans ses refs, les autres sont rangés dans
-  `tabStates` (historique, fichier, vue, sélection, couleur courante) ; `activateTab` range l'un et
-  charge l'autre. Nouveau et Ouvrir créent un onglet, ou prennent la place de l'onglet actif s'il
+  glisser-déposer pour les réordonner (`moveTab`). La mécanique d'onglets est commune aux
+  éditeurs (`useDocumentTabs` de `src/state/tabs.ts`) : le document affiché vit dans des refs, les
+  autres sont rangés avec leur historique, leur fichier et leur état d'édition (vue, sélection,
+  couleur courante : ce que le store donne à `capture` et reprend dans `restore`) ; `activateTab`
+  range l'un et charge l'autre. Nouveau et Ouvrir créent un onglet, ou prennent la place de l'onglet actif s'il
   est vierge (`pristine` : jamais enregistré, jamais modifié) ; rouvrir un fichier déjà ouvert
   ramène son onglet. Un montage n'est « modifié » que s'il a quelque chose à enregistrer : pas
   s'il est intact, ni s'il n'a jamais eu de fichier et qu'il est vide (`needsSaving`) ; de même un
@@ -158,7 +162,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   coller dans un autre montage y embarque les définitions qui manquent.
 - Onglets de composants : en mode Composants, la rangée d'onglets de la barre d'application montre
   les composants ouverts (même mécanique que les montages, dans le store de l'éditeur de
-  composants : `tabStates`, `activateTab`, `newComponent`, `open` qui ramène l'onglet d'un
+  composants : `useDocumentTabs`, `activateTab`, `newComponent`, `open` qui ramène l'onglet d'un
   composant de la bibliothèque déjà ouvert, `closeComponentTabAsking` pour la question à trois
   boutons). Le presse-papiers des formes est commun : on copie d'un composant à l'autre.
 - Thème clair ou sombre choisi dans les paramètres (`theme`) : `src/ui/theme.ts` pose

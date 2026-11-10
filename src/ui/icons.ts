@@ -53,6 +53,20 @@ export const ICONS = {
   ],
   trash: ['M3 6h18', 'M8 6V4h8v2', 'M19 6l-1 14H6L5 6', 'M10 11v6', 'M14 11v6'],
   cursor: ['M4 4l7 17 2-7 7-2z'],
+  // Modes de l'application : composants (puce), montage (résistance), diagramme (organigramme).
+  chip: [
+    'M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z',
+    'M9 2v3',
+    'M15 2v3',
+    'M9 19v3',
+    'M15 19v3',
+    'M2 9h3',
+    'M2 15h3',
+    'M19 9h3',
+    'M19 15h3'
+  ],
+  schematic: ['M2 12h4l1.5-4l3 8l3-8l3 8l1.5-4h4'],
+  diagram: ['M9 3h6v5H9z', 'M3 16h6v5H3z', 'M15 16h6v5h-6z', 'M12 8v4', 'M6 16v-4h12v4'],
   wire: ['M3 18h8V6h8', 'M1 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0', 'M17 6a2 2 0 1 0 4 0a2 2 0 1 0-4 0'],
   type: ['M4 7V4h16v3', 'M9 20h6', 'M12 4v16'],
   'zoom-in': ['M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z', 'M21 21l-4.3-4.3', 'M11 8v6', 'M8 11h6'],

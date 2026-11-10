@@ -4,6 +4,7 @@ import {
   absolutePinPosition,
   boxHandles,
   dragVertex,
+  gridLines,
   instanceBounds,
   instanceMatrix,
   instanceTextPlacements,
@@ -19,6 +20,7 @@ import {
   resizeBox,
   rotatedSize,
   routeLAuto,
+  screenToWorld,
   textContent,
   textEmphasisAttrs,
   textStyleAttrs,
@@ -72,7 +74,6 @@ const PIN_COLORS: Record<PinKind, string> = {
   io: '#1d4ed8',
   power: '#d62828'
 }
-const MIN_GRID_PX = 6
 const ZOOM_STEP = 1.1
 const PIN_SNAP_CELLS = 0.5
 /** Saisie d'une broche en mode sélection : 8 px autour d'elle, 0,4 cellule au plus en vue éloignée. */
@@ -160,10 +161,7 @@ function screenPoint(event: { clientX: number; clientY: number }): { x: number; 
 }
 
 function toWorld(screen: { x: number; y: number }): LocalPoint {
-  return {
-    x: (screen.x - view.value.panX) / cell.value,
-    y: (screen.y - view.value.panY) / cell.value
-  }
+  return screenToWorld(view.value, cell.value, screen.x, screen.y)
 }
 
 function snapGrid(point: LocalPoint): GridPoint {
@@ -195,26 +193,7 @@ function wireAt(point: GridPoint): Wire | null {
 
 // Grille, en pixels d'écran
 
-interface GridLine {
-  px: number
-  major: boolean
-}
-
-const gridLines = computed<{ xs: GridLine[]; ys: GridLine[] }>(() => {
-  const c = cell.value
-  if (c < MIN_GRID_PX) return { xs: [], ys: [] }
-  const { width, height } = store.viewport
-  const { panX, panY } = view.value
-  const xs: GridLine[] = []
-  for (let i = Math.floor(-panX / c); i <= Math.ceil((width - panX) / c); i++) {
-    xs.push({ px: panX + i * c, major: i % 5 === 0 })
-  }
-  const ys: GridLine[] = []
-  for (let j = Math.floor(-panY / c); j <= Math.ceil((height - panY) / c); j++) {
-    ys.push({ px: panY + j * c, major: j % 5 === 0 })
-  }
-  return { xs, ys }
-})
+const grid = computed(() => gridLines(view.value, cell.value, store.viewport))
 
 // Déplacement en cours
 
@@ -1149,7 +1128,7 @@ const cursorClass = computed(() => {
       >
         <g class="grid">
           <line
-            v-for="(line, i) in gridLines.xs"
+            v-for="(line, i) in grid.xs"
             :key="`x${i}`"
             :x1="line.px"
             :x2="line.px"
@@ -1158,7 +1137,7 @@ const cursorClass = computed(() => {
             :class="{ major: line.major }"
           />
           <line
-            v-for="(line, j) in gridLines.ys"
+            v-for="(line, j) in grid.ys"
             :key="`y${j}`"
             x1="0"
             :x2="store.viewport.width"

@@ -6,12 +6,15 @@ import {
   computeCrossings,
   createEmptyProject,
   crossingPieces,
+  DEFAULT_VIEW,
+  fittingView,
   flippedInstance,
   isEmptyProject,
   instanceBounds,
   nearestCrossing,
   nextNumberedId,
   normalizePoints,
+  pannedView,
   projectBounds,
   profileDifferences,
   projectPins,
@@ -28,6 +31,7 @@ import {
   wireGeometryProblem,
   wiresFollowingJunctions,
   wiresFollowingPins,
+  zoomedView,
   type ComponentDefinition,
   type ComponentInstance,
   type FlipAxis,
@@ -40,13 +44,14 @@ import {
   type StyleProfile,
   type TextAnchor,
   type TextLabel,
+  type ViewState,
   type Wire,
   type Box
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import { samePath } from '@/io/paths'
 import { readProject } from '@/io/projectFiles'
-import { History } from '@/state/history'
+import { useDocumentTabs } from '@/state/tabs'
 
 export type SchematicTool = 'select' | 'place' | 'wire' | 'text'
 export type StackMove = 'up' | 'down' | 'top' | 'bottom'
@@ -57,13 +62,7 @@ export interface Placement {
   mirror: boolean
 }
 
-export interface ViewState {
-  /** Facteur appliqué à la taille de cellule du profil. */
-  zoom: number
-  /** Position, en pixels d'écran, de l'origine de la grille. */
-  panX: number
-  panY: number
-}
+export type { ViewState }
 
 export interface ClipboardItem {
   instance: ComponentInstance
@@ -100,12 +99,8 @@ export interface TabInfo {
   dirty: boolean
 }
 
-/** Ce qu'un onglet garde quand il n'est pas affiché : son document, son historique, son édition. */
-interface TabState {
-  id: number
-  history: History<Project>
-  savedDoc: Project | null
-  filePath: string | null
+/** État d'édition qu'un onglet garde quand il n'est pas affiché. */
+interface TabEditing {
   view: ViewState
   selection: string[]
   selectedWires: string[]
@@ -120,60 +115,24 @@ export interface DirtyDocument {
   originalPath: string | null
 }
 
-const MIN_ZOOM = 0.2
 /** Couleurs personnalisées gardées par montage, les plus récentes d'abord. */
 const MAX_CUSTOM_COLORS = 8
-const MAX_ZOOM = 6
-const FIT_MARGIN_CELLS = 2
 const CROSSING_PICK_CELLS = 0.6
-const DEFAULT_VIEW: ViewState = { zoom: 1, panX: 80, panY: 80 }
 
 /**
  * Montages ouverts, un par onglet, et celui en cours d'édition. Le projet est immuable ; chaque
  * commande passe par l'historique de son onglet. Le store porte aussi l'état de vue (zoom, pan)
  * et l'état des outils, pour que la barre d'outils, le clavier et le canevas agissent sur la
- * même chose. L'onglet actif vit dans les refs du store ; les autres attendent dans `tabStates`
- * et `activateTab` range l'un pour charger l'autre. Le presse-papiers est commun aux onglets.
+ * même chose. Les onglets sont ceux de `useDocumentTabs` (`src/state/tabs.ts`) : l'onglet actif
+ * vit dans des refs, les autres attendent, rangés. Le presse-papiers est commun aux onglets.
  */
 export const useSchematicStore = defineStore('schematic', () => {
   const library = useLibraryStore()
-
-  let nextTabId = 1
 
   function blankProject(): Project {
     return createEmptyProject('Nouveau montage', library.defaultProfile)
   }
 
-  function freshTab(project: Project, saved: Project | null, path: string | null): TabState {
-    return {
-      id: nextTabId++,
-      history: new History<Project>(project),
-      savedDoc: saved,
-      filePath: path,
-      view: { ...DEFAULT_VIEW },
-      selection: [],
-      selectedWires: [],
-      selectedLabels: [],
-      currentColor: library.defaultWireColor
-    }
-  }
-
-  /** Onglet d'un montage vierge : il n'a rien à enregistrer tant qu'on n'y touche pas. */
-  function blankTab(): TabState {
-    const blank = blankProject()
-    return freshTab(blank, blank, null)
-  }
-
-  const firstTab = blankTab()
-  /** Historique de l'onglet actif ; remplacé à chaque changement d'onglet. */
-  let history = firstTab.history
-  /** États rangés des onglets ; celui de l'onglet actif n'y est à jour qu'après `stash`. */
-  const tabStates = shallowRef<TabState[]>([firstTab])
-  const activeTabId = ref(firstTab.id)
-
-  const doc = shallowRef<Project>(history.value)
-  const savedDoc = shallowRef<Project | null>(firstTab.savedDoc)
-  const filePath = ref<string | null>(null)
   /** Identifiants des composants sélectionnés. */
   const selection = ref<string[]>([])
   /** Identifiants des fils sélectionnés. */
@@ -197,8 +156,6 @@ export const useSchematicStore = defineStore('schematic', () => {
   const shiftHeld = ref(false)
   const hoverWireId = ref<string | null>(null)
   const status = ref('')
-  const undoLabel = ref<string | null>(null)
-  const redoLabel = ref<string | null>(null)
 
   /**
    * Un montage a-t-il quelque chose à enregistrer ? Pas s'il est intact, ni s'il n'a jamais eu de
@@ -208,22 +165,54 @@ export const useSchematicStore = defineStore('schematic', () => {
     return project !== saved && !(path === null && isEmptyProject(project))
   }
 
-  const dirty = computed(() => needsSaving(doc.value, savedDoc.value, filePath.value))
-  /** Onglet vierge : jamais enregistré, jamais touché. Un montage qu'on ouvre prend sa place. */
-  const pristine = computed(() => filePath.value === null && doc.value === savedDoc.value)
+  // Onglets : mécanique partagée (`useDocumentTabs`) ; ici, ce qu'un onglet garde de l'édition.
+  const base = useDocumentTabs<Project, TabEditing>({
+    blank: blankProject,
+    needsSaving,
+    freshEditing: () => ({
+      view: { ...DEFAULT_VIEW },
+      selection: [],
+      selectedWires: [],
+      selectedLabels: [],
+      currentColor: library.defaultWireColor
+    }),
+    capture: () => ({
+      view: view.value,
+      selection: selection.value,
+      selectedWires: selectedWires.value,
+      selectedLabels: selectedLabels.value,
+      currentColor: currentColor.value
+    }),
+    restore: (editing) => {
+      view.value = editing.view
+      selection.value = editing.selection
+      selectedWires.value = editing.selectedWires
+      selectedLabels.value = editing.selectedLabels
+      currentColor.value = editing.currentColor
+      // Pose, tracé et aperçus appartenaient au document qu'on quitte.
+      placement.value = null
+      drawing.value = null
+      tool.value = 'select'
+      profilePreview.value = null
+      hoverWireId.value = null
+    },
+    // Un fil en cours de tracé est gardé s'il a deux sommets, abandonné sinon.
+    beforeLeave: () => {
+      stopWireDrawing()
+    },
+    afterSync: pruneSelection
+  })
+  const { doc, activeTabId, dirty, pristine, anyDirty, undoLabel, redoLabel, cycleTab, moveTab } =
+    base
+  const filePath = base.path
   const tabs = computed<TabInfo[]>(() =>
-    tabStates.value.map((tab) =>
-      tab.id === activeTabId.value
-        ? { id: tab.id, name: doc.value.name, filePath: filePath.value, dirty: dirty.value }
-        : {
-            id: tab.id,
-            name: tab.history.value.name,
-            filePath: tab.filePath,
-            dirty: needsSaving(tab.history.value, tab.savedDoc, tab.filePath)
-          }
-    )
+    base.tabs.value.map((tab) => ({
+      id: tab.id,
+      name: tab.name,
+      filePath: tab.path,
+      dirty: tab.dirty
+    }))
   )
-  const anyDirty = computed(() => tabs.value.some((tab) => tab.dirty))
   /** Profil effectif pour l'affichage : l'aperçu de la boîte de dialogue, sinon celui du projet. */
   const profile = computed<StyleProfile>(() => profilePreview.value ?? doc.value.profile)
   const cellPx = computed(() => profile.value.cellPx * view.value.zoom)
@@ -259,10 +248,8 @@ export const useSchematicStore = defineStore('schematic', () => {
       selectedLabels.value.length > 0
   )
 
-  function sync(): void {
-    doc.value = history.value
-    undoLabel.value = history.undoLabel
-    redoLabel.value = history.redoLabel
+  /** Après chaque changement du montage : la sélection ne garde que ce qui existe encore. */
+  function pruneSelection(): void {
     const instanceIds = new Set(doc.value.components.map((instance) => instance.id))
     if (selection.value.some((id) => !instanceIds.has(id))) {
       selection.value = selection.value.filter((id) => instanceIds.has(id))
@@ -282,8 +269,8 @@ export const useSchematicStore = defineStore('schematic', () => {
    * exceptions de croisement orphelines sont élaguées.
    */
   function apply(label: string, recipe: (draft: Draft<Project>) => void): boolean {
-    const wiresBefore = history.value.wires
-    const changed = history.apply(label, (draft) => {
+    const wiresBefore = doc.value.wires
+    return base.apply(label, (draft) => {
       recipe(draft)
       // Jonctions : les extrémités posées sur un fil dont le tracé vient de changer le suivent.
       const now = snapshot(draft) as Project
@@ -298,8 +285,6 @@ export const useSchematicStore = defineStore('schematic', () => {
         draft.crossingOverrides = castDraft(pruned)
       }
     })
-    if (changed) sync()
-    return changed
   }
 
   /**
@@ -329,17 +314,13 @@ export const useSchematicStore = defineStore('schematic', () => {
   }
 
   function undo(): void {
-    const label = history.undo()
-    if (label === null) return
-    sync()
-    status.value = `Annulé : ${label}`
+    const label = base.undo()
+    if (label !== null) status.value = `Annulé : ${label}`
   }
 
   function redo(): void {
-    const label = history.redo()
-    if (label === null) return
-    sync()
-    status.value = `Rétabli : ${label}`
+    const label = base.redo()
+    if (label !== null) status.value = `Rétabli : ${label}`
   }
 
   /** Ouvre le panneau de propriétés si les paramètres le demandent (clic sur un élément). */
@@ -357,7 +338,7 @@ export const useSchematicStore = defineStore('schematic', () => {
 
   /** Couleur des prochains fils : celle du dernier fil du montage, sinon celle des paramètres. */
   function syncCurrentColor(): void {
-    const last = history.value.wires.reduce<Wire | null>(
+    const last = doc.value.wires.reduce<Wire | null>(
       (best, wire) => (best === null || wire.stack > best.stack ? wire : best),
       null
     )
@@ -366,84 +347,13 @@ export const useSchematicStore = defineStore('schematic', () => {
 
   // Onglets
 
-  /** Range l'état vivant dans l'onglet actif, avant d'en montrer un autre. */
-  function stash(): void {
-    const id = activeTabId.value
-    const state: TabState = {
-      id,
-      history,
-      savedDoc: savedDoc.value,
-      filePath: filePath.value,
-      view: view.value,
-      selection: selection.value,
-      selectedWires: selectedWires.value,
-      selectedLabels: selectedLabels.value,
-      currentColor: currentColor.value
-    }
-    tabStates.value = tabStates.value.map((tab) => (tab.id === id ? state : tab))
-  }
-
-  /** Montre un onglet : document, historique, vue et sélection deviennent l'état vivant. */
-  function load(tab: TabState): void {
-    history = tab.history
-    savedDoc.value = tab.savedDoc
-    filePath.value = tab.filePath
-    view.value = tab.view
-    selection.value = tab.selection
-    selectedWires.value = tab.selectedWires
-    selectedLabels.value = tab.selectedLabels
-    currentColor.value = tab.currentColor
-    activeTabId.value = tab.id
-    // Pose, tracé et aperçus appartenaient au document qu'on quitte.
-    placement.value = null
-    drawing.value = null
-    tool.value = 'select'
-    profilePreview.value = null
-    hoverWireId.value = null
-    sync()
-  }
-
   function activateTab(id: number): void {
-    if (id === activeTabId.value) return
-    const target = tabStates.value.find((tab) => tab.id === id)
-    if (!target) return
-    // Un fil en cours de tracé est gardé s'il a deux sommets, abandonné sinon.
-    stopWireDrawing()
-    stash()
-    load(target)
-    status.value = ''
-  }
-
-  /** Onglet suivant (1) ou précédent (-1), en boucle. */
-  function cycleTab(step: 1 | -1): void {
-    const list = tabStates.value
-    const index = list.findIndex((tab) => tab.id === activeTabId.value)
-    const next = list[(index + step + list.length) % list.length]
-    if (next) activateTab(next.id)
-  }
-
-  /** Déplace un onglet à la position donnée dans la rangée (glisser-déposer). */
-  function moveTab(id: number, toIndex: number): void {
-    const list = [...tabStates.value]
-    const from = list.findIndex((tab) => tab.id === id)
-    const [tab] = from === -1 ? [] : list.splice(from, 1)
-    if (!tab) return
-    list.splice(Math.max(0, Math.min(toIndex, list.length)), 0, tab)
-    tabStates.value = list
+    if (base.activateTab(id)) status.value = ''
   }
 
   /** Montre un document dans un onglet : l'onglet actif s'il est vierge, sinon un nouveau. */
   function showInTab(project: Project, saved: Project | null, path: string | null): void {
-    stopWireDrawing()
-    const tab = freshTab(project, saved, path)
-    if (pristine.value) {
-      const replaced = activeTabId.value
-      tabStates.value = tabStates.value.map((other) => (other.id === replaced ? tab : other))
-    } else {
-      stash()
-      tabStates.value = [...tabStates.value, tab]
-    }
-    load(tab)
+    base.showInTab(project, saved, path)
     syncCurrentColor()
   }
 
@@ -491,8 +401,7 @@ export const useSchematicStore = defineStore('schematic', () => {
   }
 
   function markSaved(path: string): void {
-    savedDoc.value = doc.value
-    filePath.value = path
+    base.markSaved(path)
   }
 
   /**
@@ -501,30 +410,17 @@ export const useSchematicStore = defineStore('schematic', () => {
    * vierge.
    */
   function closeTab(id: number): boolean {
-    const index = tabStates.value.findIndex((tab) => tab.id === id)
-    if (index === -1) return false
-    const remaining = tabStates.value.filter((tab) => tab.id !== id)
-    if (id !== activeTabId.value) {
-      tabStates.value = remaining
-      return true
-    }
-    // L'onglet affiché disparaît : son voisin prend sa place, sans rien ranger.
-    const next = remaining[Math.min(index, remaining.length - 1)] ?? blankTab()
-    tabStates.value = remaining.length > 0 ? remaining : [next]
-    load(next)
-    status.value = ''
-    return true
+    const wasActive = id === activeTabId.value
+    const closed = base.closeTab(id)
+    if (closed && wasActive) status.value = ''
+    return closed
   }
 
   /** Montages modifiés, un par onglet concerné : ce que la copie de secours doit contenir. */
   function dirtyDocuments(): DirtyDocument[] {
-    return tabStates.value.flatMap((tab) => {
-      const active = tab.id === activeTabId.value
-      const project = active ? doc.value : tab.history.value
-      const saved = active ? savedDoc.value : tab.savedDoc
-      const path = active ? filePath.value : tab.filePath
-      return needsSaving(project, saved, path) ? [{ key: tab.id, project, originalPath: path }] : []
-    })
+    return base
+      .unsavedDocuments()
+      .map(({ key, doc: project, path }) => ({ key, project, originalPath: path }))
   }
 
   function setProjectName(name: string): void {
@@ -558,11 +454,10 @@ export const useSchematicStore = defineStore('schematic', () => {
     const set = (draft: Draft<Project>): void => {
       draft.profile = castDraft(structuredClone(next))
     }
-    tabStates.value = tabStates.value.map((tab) => {
-      if (tab.id === activeTabId.value) return tab
+    base.updateStashedTabs((tab) => {
       const current = tab.history.value
       if (!sameProfile(current.profile, previous)) return tab
-      if (tab.filePath === null && current === tab.savedDoc) {
+      if (tab.path === null && current === tab.savedDoc) {
         const blank = createEmptyProject(current.name, next)
         tab.history.reset(blank)
         return { ...tab, savedDoc: blank }
@@ -573,9 +468,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     if (!sameProfile(doc.value.profile, previous)) return
     if (pristine.value) {
       const blank = createEmptyProject(doc.value.name, next)
-      history.reset(blank)
-      savedDoc.value = blank
-      sync()
+      base.reset(blank, blank)
     } else {
       apply(label, set)
     }
@@ -1243,25 +1136,15 @@ export const useSchematicStore = defineStore('schematic', () => {
 
   // Vue
 
-  function clampZoom(zoom: number): number {
-    return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom))
-  }
-
   /** Zoom par un facteur autour d'un point d'écran (par défaut le centre de la zone visible). */
   function zoomAround(factor: number, screenX?: number, screenY?: number): void {
-    const current = view.value
-    const zoom = clampZoom(current.zoom * factor)
-    if (zoom === current.zoom) return
-    const base = profile.value.cellPx
-    const anchorX = screenX ?? viewport.value.width / 2
-    const anchorY = screenY ?? viewport.value.height / 2
-    const worldX = (anchorX - current.panX) / (base * current.zoom)
-    const worldY = (anchorY - current.panY) / (base * current.zoom)
-    view.value = {
-      zoom,
-      panX: anchorX - worldX * base * zoom,
-      panY: anchorY - worldY * base * zoom
-    }
+    view.value = zoomedView(
+      view.value,
+      factor,
+      screenX ?? viewport.value.width / 2,
+      screenY ?? viewport.value.height / 2,
+      profile.value.cellPx
+    )
   }
 
   function resetZoom(): void {
@@ -1269,27 +1152,11 @@ export const useSchematicStore = defineStore('schematic', () => {
   }
 
   function panBy(dx: number, dy: number): void {
-    view.value = { ...view.value, panX: view.value.panX + dx, panY: view.value.panY + dy }
+    view.value = pannedView(view.value, dx, dy)
   }
 
   function fitToContent(): void {
-    const bounds = projectBounds(doc.value)
-    if (!bounds) {
-      view.value = { ...DEFAULT_VIEW }
-      return
-    }
-    const base = profile.value.cellPx
-    const width = bounds.width + 2 * FIT_MARGIN_CELLS
-    const height = bounds.height + 2 * FIT_MARGIN_CELLS
-    const zoom = clampZoom(
-      Math.min(viewport.value.width / (width * base), viewport.value.height / (height * base))
-    )
-    const scale = base * zoom
-    view.value = {
-      zoom,
-      panX: (viewport.value.width - bounds.width * scale) / 2 - bounds.x * scale,
-      panY: (viewport.value.height - bounds.height * scale) / 2 - bounds.y * scale
-    }
+    view.value = fittingView(projectBounds(doc.value), viewport.value, profile.value.cellPx)
   }
 
   return {

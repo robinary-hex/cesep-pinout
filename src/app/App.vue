@@ -19,6 +19,7 @@ import { baseName } from '@/io/paths'
 import ContextMenu from '@/ui/ContextMenu.vue'
 import { heading, item, SEPARATOR, type MenuItem } from '@/ui/contextMenu'
 import Icon from '@/ui/Icon.vue'
+import type { IconName } from '@/ui/icons'
 import { openModals } from '@/ui/modalState'
 import { applyTheme } from '@/ui/theme'
 import type { UpdateStatus } from '../../electron/api'
@@ -26,9 +27,11 @@ import { openExternalFile } from './externalFiles'
 import ShortcutsHelp from './ShortcutsHelp.vue'
 import { updateButtonLabel, updateButtonTitle } from './update'
 
-// Coque applicative : menu Fichier, bascule entre les deux modes, onglets des montages ouverts,
-// thème, paramètres, aide, copies de secours et garde à la fermeture. Un seul éditeur est monté à la fois, donc un seul
-// jeu de raccourcis ; le menu Fichier appelle les actions exposées par l'éditeur visible.
+// Coque applicative : menu Fichier, bascule entre les modes (un pictogramme chacun), onglets des
+// documents ouverts du mode affiché, thème, paramètres, aide, copies de secours et garde à la
+// fermeture. Un seul éditeur est monté à la fois, donc un seul jeu de raccourcis ; le menu Fichier
+// appelle les actions exposées par l'éditeur visible. Ce que la coque demande à chaque mode
+// (onglets, enregistrement, statut) passe par son `ModeAdapter`.
 
 type Mode = 'components' | 'schematic'
 
@@ -104,44 +107,104 @@ interface StripTab {
   dirty: boolean
 }
 
-const strip = computed<{ tabs: StripTab[]; activeId: number; kind: string }>(() =>
-  mode.value === 'components'
-    ? {
-        tabs: editor.tabs.map((tab) => ({
-          id: tab.id,
-          name: tab.name,
-          title: tab.folder ?? 'Pas encore enregistré',
-          dirty: tab.dirty
-        })),
-        activeId: editor.activeTabId,
-        kind: 'composant'
-      }
-    : {
-        tabs: schematic.tabs.map((tab) => ({
-          id: tab.id,
-          name: tab.name,
-          title: tab.filePath ?? 'Pas encore enregistré',
-          dirty: tab.dirty
-        })),
-        activeId: schematic.activeTabId,
-        kind: 'montage'
-      }
-)
+/** Ce que la coque demande à un mode, quel que soit son éditeur. */
+interface ModeAdapter {
+  /** Nom du mode : infobulle de son bouton. */
+  label: string
+  icon: IconName
+  /** Nom d'un document de ce mode, dans les infobulles (« Nouveau montage »). */
+  kind: string
+  /** Infobulle du point « modifié » sur le bouton du mode quand on en regarde un autre. */
+  dirtyTitle: string
+  tabs: () => StripTab[]
+  activeId: () => number
+  anyDirty: () => boolean
+  activate: (id: number) => void
+  create: () => void
+  /** Ferme un onglet ; s'il est modifié, la question vient d'abord. */
+  close: (id: number) => Promise<unknown>
+  move: (id: number, toIndex: number) => void
+  cycle: (step: 1 | -1) => void
+  /** Enregistre le document affiché ; faux si Robin renonce ou si l'écriture échoue. */
+  saveActive: () => Promise<boolean>
+  setStatus: (message: string) => void
+}
+
+const NOT_SAVED = 'Pas encore enregistré'
+
+const modes: Record<Mode, ModeAdapter> = {
+  components: {
+    label: 'Composants',
+    icon: 'chip',
+    kind: 'composant',
+    dirtyTitle: "Un composant ouvert n'est pas enregistré",
+    tabs: () =>
+      editor.tabs.map((tab) => ({
+        id: tab.id,
+        name: tab.name,
+        title: tab.folder ?? NOT_SAVED,
+        dirty: tab.dirty
+      })),
+    activeId: () => editor.activeTabId,
+    anyDirty: () => editor.anyDirty,
+    activate: (id) => editor.activateTab(id),
+    create: () => editor.newComponent(),
+    close: (id) => closeComponentTabAsking(editor, library, id),
+    move: (id, toIndex) => editor.moveTab(id, toIndex),
+    cycle: (step) => editor.cycleTab(step),
+    saveActive: () => saveComponentDoc(editor, library),
+    setStatus: (message) => {
+      editor.status = message
+    }
+  },
+  schematic: {
+    label: 'Montage',
+    icon: 'schematic',
+    kind: 'montage',
+    dirtyTitle: "Un montage ouvert n'est pas enregistré",
+    tabs: () =>
+      schematic.tabs.map((tab) => ({
+        id: tab.id,
+        name: tab.name,
+        title: tab.filePath ?? NOT_SAVED,
+        dirty: tab.dirty
+      })),
+    activeId: () => schematic.activeTabId,
+    anyDirty: () => schematic.anyDirty,
+    activate: (id) => schematic.activateTab(id),
+    create: () => schematic.newProject(),
+    close: (id) => closeTabAsking(schematic, library, id),
+    move: (id, toIndex) => schematic.moveTab(id, toIndex),
+    cycle: (step) => schematic.cycleTab(step),
+    saveActive: () => saveProject(schematic, library),
+    setStatus: (message) => {
+      schematic.status = message
+    }
+  }
+}
+/** Ordre des boutons de mode dans la barre. */
+const MODE_ORDER: Mode[] = ['components', 'schematic']
+/** Ordre des enregistrements avant de quitter : les montages d'abord. */
+const SAVE_ORDER: Mode[] = ['schematic', 'components']
+
+const current = computed(() => modes[mode.value])
+const strip = computed<{ tabs: StripTab[]; activeId: number; kind: string }>(() => ({
+  tabs: current.value.tabs(),
+  activeId: current.value.activeId(),
+  kind: current.value.kind
+}))
 
 function showTab(id: number): void {
-  if (mode.value === 'components') editor.activateTab(id)
-  else schematic.activateTab(id)
+  current.value.activate(id)
 }
 
 function newTab(): void {
-  if (mode.value === 'components') editor.newComponent()
-  else schematic.newProject()
+  current.value.create()
 }
 
 /** Ferme un onglet ; s'il est modifié, la question vient d'abord : enregistrer, ne pas enregistrer, annuler. */
 async function closeTab(id: number): Promise<void> {
-  if (mode.value === 'components') await closeComponentTabAsking(editor, library, id)
-  else await closeTabAsking(schematic, library, id)
+  await current.value.close(id)
 }
 
 function closeTabOnMiddle(id: number, event: MouseEvent): void {
@@ -175,8 +238,7 @@ function onTabDragOver(id: number, event: DragEvent): void {
   const rect = target.getBoundingClientRect()
   const pastMiddle = event.clientX > rect.left + rect.width / 2
   if (from < to ? !pastMiddle : pastMiddle) return
-  if (mode.value === 'components') editor.moveTab(dragged, to)
-  else schematic.moveTab(dragged, to)
+  current.value.move(dragged, to)
 }
 
 /** La molette fait défiler la rangée d'onglets quand elle déborde. */
@@ -323,8 +385,7 @@ async function openExternal(path: string): Promise<void> {
     mode.value = result.kind === 'project' ? 'schematic' : 'components'
   } else if (result.message.length > 0) {
     // Le refus s'affiche dans la barre d'état de l'éditeur visible.
-    if (mode.value === 'components') editor.status = result.message
-    else schematic.status = result.message
+    current.value.setStatus(result.message)
   }
 }
 
@@ -360,6 +421,19 @@ function onWindowDrop(event: DragEvent): void {
   })()
 }
 
+/** Enregistre tous les documents modifiés, mode par mode ; faux dès qu'un enregistrement échoue. */
+async function saveEverything(): Promise<boolean> {
+  for (const key of SAVE_ORDER) {
+    const adapter = modes[key]
+    for (const tab of adapter.tabs().filter((candidate) => candidate.dirty)) {
+      mode.value = key
+      adapter.activate(tab.id)
+      if (!(await adapter.saveActive())) return false
+    }
+  }
+  return true
+}
+
 let unsubscribe: (() => void) | null = null
 let unsubscribeOpenFile: (() => void) | null = null
 
@@ -367,28 +441,9 @@ onMounted(async () => {
   unsubscribe = bridge().onAppRequest((request) => {
     void (async () => {
       if (request === 'save-then-quit') {
-        // « Enregistrer » avant de quitter : chaque montage modifié, puis chaque composant
-        // modifié, affiché à son tour ; un refus garde la fenêtre.
-        let saved = true
-        for (const tab of schematic.tabs.filter((candidate) => candidate.dirty)) {
-          mode.value = 'schematic'
-          schematic.activateTab(tab.id)
-          if (!(await saveProject(schematic, library))) {
-            saved = false
-            break
-          }
-        }
-        if (saved) {
-          for (const tab of editor.tabs.filter((candidate) => candidate.dirty)) {
-            mode.value = 'components'
-            editor.activateTab(tab.id)
-            if (!(await saveComponentDoc(editor, library))) {
-              saved = false
-              break
-            }
-          }
-        }
-        if (saved) await bridge().confirmQuit()
+        // « Enregistrer » avant de quitter : chaque document modifié de chaque mode, affiché à
+        // son tour ; un refus garde la fenêtre.
+        if (await saveEverything()) await bridge().confirmQuit()
         else await bridge().cancelQuit()
         return
       }
@@ -429,9 +484,7 @@ function onKeyDown(event: KeyboardEvent): void {
   } else if (event.key === 'Tab' && event.ctrlKey && openModals.value === 0) {
     // Ctrl+Tab / Ctrl+Maj+Tab : onglet suivant / précédent, dans l'éditeur visible.
     event.preventDefault()
-    const step = event.shiftKey ? -1 : 1
-    if (mode.value === 'components') editor.cycleTab(step)
-    else schematic.cycleTab(step)
+    current.value.cycle(event.shiftKey ? -1 : 1)
   }
 }
 
@@ -479,23 +532,19 @@ onUnmounted(() => {
       </button>
       <nav class="modes">
         <button
+          v-for="key in MODE_ORDER"
+          :key="key"
           type="button"
-          :class="{ active: mode === 'components' }"
-          @click="mode = 'components'"
+          :class="{ active: mode === key }"
+          :title="modes[key].label"
+          :aria-label="modes[key].label"
+          @click="mode = key"
         >
-          Composants
+          <Icon :name="modes[key].icon" :size="20" />
           <span
-            v-if="mode !== 'components' && editor.anyDirty"
+            v-if="mode !== key && modes[key].anyDirty()"
             class="doc-tab-dot"
-            title="Un composant ouvert n'est pas enregistré"
-          />
-        </button>
-        <button type="button" :class="{ active: mode === 'schematic' }" @click="mode = 'schematic'">
-          Montage
-          <span
-            v-if="mode !== 'schematic' && schematic.anyDirty"
-            class="doc-tab-dot"
-            title="Un montage ouvert n'est pas enregistré"
+            :title="modes[key].dirtyTitle"
           />
         </button>
       </nav>

@@ -159,14 +159,23 @@ body,
   gap: 4px;
 }
 
-/* Le point « modifié » d'un mode qu'on ne regarde pas se met en exposant, comme sur un onglet. */
+/* Un pictogramme par mode ; le point « modifié » d'un mode qu'on ne regarde pas se met dans le
+   coin du bouton, comme l'exposant d'un onglet. */
 .modes button {
+  position: relative;
   display: inline-flex;
-  align-items: flex-start;
-  gap: 2px;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 9px;
   color: var(--topbar-text);
   background: transparent;
   border-color: transparent;
+}
+
+.modes .doc-tab-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
 }
 
 .modes button.active {

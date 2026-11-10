@@ -21,7 +21,7 @@ import {
   type StackMove
 } from '@/domain'
 import { samePath } from '@/io/paths'
-import { History } from '@/state/history'
+import { useDocumentTabs } from '@/state/tabs'
 import { fittingCellPx } from './pinLabelLayout'
 import type { ToolId } from './tools'
 
@@ -39,12 +39,8 @@ export interface ComponentTabInfo {
   dirty: boolean
 }
 
-/** Ce qu'un onglet garde quand il n'est pas affiché : son composant, son historique, son édition. */
-interface TabState {
-  id: number
-  history: History<ComponentDefinition>
-  savedDoc: ComponentDefinition | null
-  folder: string | null
+/** État d'édition qu'un onglet garde quand il n'est pas affiché : sa sélection et son zoom. */
+interface TabEditing {
   selection: Selection | null
   cellPx: number
 }
@@ -84,49 +80,15 @@ function needsSaving(
 
 /**
  * Composants ouverts dans l'éditeur, un par onglet, et celui en cours d'édition. Le document est
- * immuable ; chaque commande passe par l'historique de son onglet (patches Immer). L'onglet actif
- * vit dans les refs du store ; les autres attendent dans `tabStates` et `activateTab` range l'un
- * pour charger l'autre. Le presse-papiers des formes est commun aux onglets.
+ * immuable ; chaque commande passe par l'historique de son onglet (patches Immer). Les onglets
+ * sont ceux de `useDocumentTabs` (`src/state/tabs.ts`) : l'onglet actif vit dans des refs, les
+ * autres attendent, rangés. Le presse-papiers des formes est commun aux onglets.
  */
 export const useComponentEditorStore = defineStore('componentEditor', () => {
-  let nextTabId = 1
-
   function blankComponent(): ComponentDefinition {
     return createEmptyComponent('nouveau-composant', 'Nouveau composant')
   }
 
-  function freshTab(
-    def: ComponentDefinition,
-    saved: ComponentDefinition | null,
-    sourceFolder: string | null
-  ): TabState {
-    return {
-      id: nextTabId++,
-      history: new History<ComponentDefinition>(def),
-      savedDoc: saved,
-      folder: sourceFolder,
-      selection: null,
-      cellPx: DEFAULT_CELL_PX
-    }
-  }
-
-  /** Onglet d'un composant vierge : il n'a rien à enregistrer tant qu'on n'y touche pas. */
-  function blankTab(): TabState {
-    const blank = blankComponent()
-    return freshTab(blank, blank, null)
-  }
-
-  const firstTab = blankTab()
-  /** Historique de l'onglet actif ; remplacé à chaque changement d'onglet. */
-  let history = firstTab.history
-  /** États rangés des onglets ; celui de l'onglet actif n'y est à jour qu'après `stash`. */
-  const tabStates = shallowRef<TabState[]>([firstTab])
-  const activeTabId = ref(firstTab.id)
-
-  const doc = shallowRef<ComponentDefinition>(history.value)
-  /** Dernier état enregistré (même objet que doc quand rien n'a changé) ; null = à enregistrer. */
-  const savedDoc = shallowRef<ComponentDefinition | null>(firstTab.savedDoc)
-  const folder = ref<string | null>(null)
   const selection = ref<Selection | null>(null)
   const tool = ref<ToolId>('select')
   /** Pixels par cellule dans l'éditeur (zoom), continu. */
@@ -134,25 +96,35 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   const viewport = ref({ width: 800, height: 600 })
   const hoverPinId = ref<string | null>(null)
   const status = ref('')
-  const undoLabel = ref<string | null>(null)
-  const redoLabel = ref<string | null>(null)
 
-  const dirty = computed(() => needsSaving(doc.value, savedDoc.value, folder.value))
-  /** Onglet vierge : jamais enregistré, jamais touché. Un composant qu'on ouvre prend sa place. */
-  const pristine = computed(() => folder.value === null && doc.value === savedDoc.value)
+  // Onglets : mécanique partagée (`useDocumentTabs`) ; ici, ce qu'un onglet garde de l'édition.
+  const base = useDocumentTabs<ComponentDefinition, TabEditing>({
+    blank: blankComponent,
+    needsSaving,
+    freshEditing: () => ({ selection: null, cellPx: DEFAULT_CELL_PX }),
+    capture: () => ({ selection: selection.value, cellPx: cellPx.value }),
+    restore: (editing) => {
+      selection.value = editing.selection
+      cellPx.value = editing.cellPx
+      tool.value = 'select'
+      hoverPinId.value = null
+      status.value = ''
+    },
+    afterSync: pruneSelection
+  })
+  const { doc, activeTabId, pristine, anyDirty, undoLabel, redoLabel, apply, cycleTab, moveTab } =
+    base
+  /** Dossier du composant dans la bibliothèque ; null tant qu'il n'y est pas enregistré. */
+  const folder = base.path
+  const dirty = base.dirty
   const tabs = computed<ComponentTabInfo[]>(() =>
-    tabStates.value.map((tab) =>
-      tab.id === activeTabId.value
-        ? { id: tab.id, name: doc.value.name, folder: folder.value, dirty: dirty.value }
-        : {
-            id: tab.id,
-            name: tab.history.value.name,
-            folder: tab.folder,
-            dirty: needsSaving(tab.history.value, tab.savedDoc, tab.folder)
-          }
-    )
+    base.tabs.value.map((tab) => ({
+      id: tab.id,
+      name: tab.name,
+      folder: tab.path,
+      dirty: tab.dirty
+    }))
   )
-  const anyDirty = computed(() => tabs.value.some((tab) => tab.dirty))
   const issues = computed(() => componentIssues(doc.value))
   const hasErrors = computed(() => issues.value.some((issue) => issue.level === 'error'))
   const selectedIndexes = computed<readonly number[]>(() => selection.value?.indexes ?? [])
@@ -179,10 +151,8 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     return doc.value.pins.find((pin) => pin.id === id) ?? null
   })
 
-  function sync(): void {
-    doc.value = history.value
-    undoLabel.value = history.undoLabel
-    redoLabel.value = history.redoLabel
+  /** Après chaque changement du composant : la sélection ne garde que ce qui existe encore. */
+  function pruneSelection(): void {
     const current = selection.value
     if (!current) return
     const count = doc.value.visual.kind === 'drawing' ? doc.value.visual.primitives.length : 0
@@ -193,80 +163,20 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     }
   }
 
-  function apply(label: string, recipe: (draft: Draft<ComponentDefinition>) => void): boolean {
-    const changed = history.apply(label, recipe)
-    if (changed) sync()
-    return changed
-  }
-
   function undo(): void {
-    const label = history.undo()
-    if (label === null) return
-    sync()
-    status.value = `Annulé : ${label}`
+    const label = base.undo()
+    if (label !== null) status.value = `Annulé : ${label}`
   }
 
   function redo(): void {
-    const label = history.redo()
-    if (label === null) return
-    sync()
-    status.value = `Rétabli : ${label}`
+    const label = base.redo()
+    if (label !== null) status.value = `Rétabli : ${label}`
   }
 
   // Onglets
 
-  /** Range l'état vivant dans l'onglet actif, avant d'en montrer un autre. */
-  function stash(): void {
-    const id = activeTabId.value
-    const state: TabState = {
-      id,
-      history,
-      savedDoc: savedDoc.value,
-      folder: folder.value,
-      selection: selection.value,
-      cellPx: cellPx.value
-    }
-    tabStates.value = tabStates.value.map((tab) => (tab.id === id ? state : tab))
-  }
-
-  /** Montre un onglet : composant, historique, zoom et sélection deviennent l'état vivant. */
-  function load(tab: TabState): void {
-    history = tab.history
-    savedDoc.value = tab.savedDoc
-    folder.value = tab.folder
-    selection.value = tab.selection
-    cellPx.value = tab.cellPx
-    activeTabId.value = tab.id
-    tool.value = 'select'
-    hoverPinId.value = null
-    status.value = ''
-    sync()
-  }
-
   function activateTab(id: number): void {
-    if (id === activeTabId.value) return
-    const target = tabStates.value.find((tab) => tab.id === id)
-    if (!target) return
-    stash()
-    load(target)
-  }
-
-  /** Onglet suivant (1) ou précédent (-1), en boucle. */
-  function cycleTab(step: 1 | -1): void {
-    const list = tabStates.value
-    const index = list.findIndex((tab) => tab.id === activeTabId.value)
-    const next = list[(index + step + list.length) % list.length]
-    if (next) activateTab(next.id)
-  }
-
-  /** Déplace un onglet à la position donnée dans la rangée (glisser-déposer). */
-  function moveTab(id: number, toIndex: number): void {
-    const list = [...tabStates.value]
-    const from = list.findIndex((tab) => tab.id === id)
-    const [tab] = from === -1 ? [] : list.splice(from, 1)
-    if (!tab) return
-    list.splice(Math.max(0, Math.min(toIndex, list.length)), 0, tab)
-    tabStates.value = list
+    base.activateTab(id)
   }
 
   /** Montre un composant dans un onglet : l'onglet actif s'il est vierge, sinon un nouveau. */
@@ -275,15 +185,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     saved: ComponentDefinition | null,
     sourceFolder: string | null
   ): void {
-    const tab = freshTab(def, saved, sourceFolder)
-    if (pristine.value) {
-      const replaced = activeTabId.value
-      tabStates.value = tabStates.value.map((other) => (other.id === replaced ? tab : other))
-    } else {
-      stash()
-      tabStates.value = [...tabStates.value, tab]
-    }
-    load(tab)
+    base.showInTab(def, saved, sourceFolder)
     // Un composant qui s'ouvre occupe toute la zone d'édition.
     fitToViewport()
   }
@@ -313,8 +215,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   }
 
   function markSaved(savedFolder: string): void {
-    savedDoc.value = doc.value
-    folder.value = savedFolder
+    base.markSaved(savedFolder)
   }
 
   /**
@@ -323,17 +224,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
    * composant vierge.
    */
   function closeTab(id: number): boolean {
-    const index = tabStates.value.findIndex((tab) => tab.id === id)
-    if (index === -1) return false
-    const remaining = tabStates.value.filter((tab) => tab.id !== id)
-    if (id !== activeTabId.value) {
-      tabStates.value = remaining
-      return true
-    }
-    const next = remaining[Math.min(index, remaining.length - 1)] ?? blankTab()
-    tabStates.value = remaining.length > 0 ? remaining : [next]
-    load(next)
-    return true
+    return base.closeTab(id)
   }
 
   /** Ferme les onglets d'un composant qui vient d'être supprimé de la bibliothèque. */

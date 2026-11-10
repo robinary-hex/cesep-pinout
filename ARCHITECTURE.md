@@ -4,16 +4,16 @@ Le domaine ne dépend de rien ; tout le reste dépend de lui.
 
 ## Couches
 
-| Couche             | Dossier         | Contenu                                                                                                   | Peut importer                           |
-| ------------------ | --------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| Coque applicative  | `src/app/`      | Fenêtre Vue, bascule Composants / Montage                                                                 | features, state, io, render, ui, domain |
-| Fonctionnalités    | `src/features/` | `component-editor/`, `library/`, `schematic-editor/`, `export/`, `settings/` ; un store Pinia par éditeur | state, io, render, ui, domain           |
-| État               | `src/state/`    | `History` : commandes nommées, patches Immer, undo/redo                                                   | domain                                  |
-| Entrées / sorties  | `src/io/`       | Pont IPC (`bridge.ts`), paramètres, bibliothèque, projets, exports, profils, copie de secours, chemins    | domain                                  |
-| Rendu              | `src/render/`   | Composants Vue SVG sans état qui dessinent les objets du domaine (composants)                             | domain                                  |
-| Interface partagée | `src/ui/`       | Boutons, panneaux, palette de couleurs (rien du métier)                                                   | rien                                    |
-| Domaine            | `src/domain/`   | Types, grille, formes, placement, fils, connectivité (jonctions, nets), schémas Zod, migrations, PNG      | zod seulement                           |
-| Coque Electron     | `electron/`     | `main.ts` (fenêtre, fichiers, dialogues : seul code Node), `preload.ts` (pont), `api.ts` (contrat)        | Node, Electron                          |
+| Couche             | Dossier         | Contenu                                                                                                    | Peut importer                           |
+| ------------------ | --------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| Coque applicative  | `src/app/`      | Fenêtre Vue, bascule Composants / Montage                                                                  | features, state, io, render, ui, domain |
+| Fonctionnalités    | `src/features/` | `component-editor/`, `library/`, `schematic-editor/`, `export/`, `settings/` ; un store Pinia par éditeur  | state, io, render, ui, domain           |
+| État               | `src/state/`    | `History` (commandes nommées, patches Immer, undo/redo) ; `useDocumentTabs` (documents ouverts par onglet) | domain                                  |
+| Entrées / sorties  | `src/io/`       | Pont IPC (`bridge.ts`), paramètres, bibliothèque, projets, exports, profils, copie de secours, chemins     | domain                                  |
+| Rendu              | `src/render/`   | Composants Vue SVG sans état qui dessinent les objets du domaine (composants)                              | domain                                  |
+| Interface partagée | `src/ui/`       | Boutons, panneaux, palette de couleurs (rien du métier)                                                    | rien                                    |
+| Domaine            | `src/domain/`   | Types, grille, formes, placement, fils, connectivité (jonctions, nets), schémas Zod, migrations, PNG       | zod seulement                           |
+| Coque Electron     | `electron/`     | `main.ts` (fenêtre, fichiers, dialogues : seul code Node), `preload.ts` (pont), `api.ts` (contrat)         | Node, Electron                          |
 
 La règle ESLint `no-restricted-imports` sur `src/domain/**` rend la ligne du domaine vérifiable.
 
@@ -33,6 +33,12 @@ Immer). Toute modification passe par une commande nommée du store (`setSize`, `
 `movePin`…) qui appelle `History.apply(label, recipe)` : Immer produit un nouveau document et les
 patches inverses, l'annulation les rejoue. Les champs de l'inspecteur valident au changement,
 pas à chaque touche, donc une saisie = une commande.
+
+Les documents ouverts d'un éditeur, un par onglet, sont tenus par `useDocumentTabs`
+(`src/state/tabs.ts`) : le document affiché vit dans des refs, les autres attendent avec leur
+historique et leur état d'édition, que chaque store décrit par `capture` et `restore`. La vue d'un
+canevas infini (zoom autour d'un point, déplacement, ajustement au contenu, lignes de grille
+visibles) est faite de fonctions pures dans `src/domain/view.ts`, communes aux canevas.
 
 Dans le montage, toute commande qui déplace ou réoriente des composants passe par
 `applyWithElasticWires` : après la recette, `wiresFollowingPins` (`src/domain/elastic.ts`) compare
