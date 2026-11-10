@@ -10,7 +10,8 @@ import EditorToolbar from './EditorToolbar.vue'
 import { useComponentEditorStore } from './store'
 import { TOOL_BY_KEY } from './tools'
 
-// Éditeur de composants : barre d'outils, canevas, inspecteur, raccourcis clavier,
+// Éditeur de composants : barre d'outils, canevas, inspecteur (replié par défaut, comme dans les
+// autres éditeurs), raccourcis clavier,
 // enregistrement dans la bibliothèque. Les touches communes aux trois éditeurs (flèches, Ctrl+A,
 // 0, Retour arrière pendant un tracé) font ici la même chose qu'ailleurs.
 
@@ -96,6 +97,10 @@ function onKeyDown(event: KeyboardEvent): void {
     store.tool = tool
     return
   }
+  if (key === 'i') {
+    store.inspectorOpen = !store.inspectorOpen
+    return
+  }
   if (key === 'backspace') {
     // Pendant une polyligne : retire son dernier point, comme pour un fil ou un lien.
     if (!canvas.value?.popPolylinePoint()) store.removeSelection()
@@ -126,7 +131,7 @@ defineExpose({ save, createNew })
     <EditorToolbar @save="save" />
     <div class="editor-body">
       <EditorCanvas ref="canvas" />
-      <EditorInspector />
+      <EditorInspector v-if="store.inspectorOpen" :class="{ floating: store.inspectorFloating }" />
     </div>
   </section>
 </template>
@@ -140,6 +145,7 @@ defineExpose({ save, createNew })
 }
 
 .editor-body {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;

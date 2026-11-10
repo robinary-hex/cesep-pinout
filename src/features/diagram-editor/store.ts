@@ -48,6 +48,7 @@ import { useLibraryStore } from '@/features/library/store'
 import { readDiagram } from '@/io/diagramFiles'
 import { samePath } from '@/io/paths'
 import { nodeTextMeasurer } from '@/render/textMeasure'
+import { useInspectorPanel } from '@/state/inspector'
 import { useDocumentTabs } from '@/state/tabs'
 
 export type DiagramTool = 'select' | 'place' | 'link' | 'text'
@@ -133,8 +134,6 @@ export const useDiagramStore = defineStore('diagram', () => {
   const clipboard = shallowRef<DiagramClipboard>({ nodes: [], links: [], texts: [] })
   const view = ref<ViewState>({ ...DEFAULT_VIEW })
   const viewport = ref({ width: 1200, height: 800 })
-  /** Panneau de propriétés à droite : replié par défaut (touche I). */
-  const inspectorOpen = ref(false)
   const panKeyHeld = ref(false)
   const shiftHeld = ref(false)
   /** Ctrl enfoncée : en sélection, le canevas montre l'accroche qu'un Ctrl+glisser saisirait. */
@@ -211,6 +210,13 @@ export const useDiagramStore = defineStore('diagram', () => {
       selectedLinks.value.length > 0 ||
       selectedTexts.value.length > 0
   )
+  /** Panneau de propriétés à droite (`useInspectorPanel`) : replié par défaut, touche I. */
+  const inspector = useInspectorPanel({
+    hasSelection: () => hasSelection.value,
+    autoOpen: () => library.autoOpenInspector
+  })
+  const inspectorOpen = inspector.open
+  const inspectorFloating = inspector.floating
   /** La palette agit sur les liens quand on en trace ou qu'on n'a sélectionné qu'eux. */
   const paletteOnLinks = computed(
     () =>
@@ -266,9 +272,12 @@ export const useDiagramStore = defineStore('diagram', () => {
     if (label !== null) status.value = `Rétabli : ${label}`
   }
 
-  /** Ouvre le panneau de propriétés si les paramètres le demandent (clic sur un élément). */
+  /**
+   * Un clic vient de sélectionner un élément : le panneau de propriétés se montre si les
+   * paramètres le demandent, le temps de la sélection.
+   */
   function revealInspector(): void {
-    if (library.autoOpenInspector) inspectorOpen.value = true
+    inspector.reveal()
   }
 
   function clearSelection(): void {
@@ -1054,6 +1063,7 @@ export const useDiagramStore = defineStore('diagram', () => {
     view,
     viewport,
     inspectorOpen,
+    inspectorFloating,
     panKeyHeld,
     shiftHeld,
     ctrlHeld,

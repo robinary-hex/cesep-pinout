@@ -11,7 +11,7 @@ import { TOOLS } from './tools'
 // Barre d'outils de l'éditeur de composants. D'abord le début commun aux trois éditeurs
 // (`ToolbarBasics` : zoom, annuler, rétablir, corbeille), puis les outils de dessin (pictogramme
 // seul, raccourci dans l'infobulle) et l'import d'une image, posée comme une forme ; à droite, le
-// nom du composant avec son fichier, puis
+// nom du composant avec son fichier, le bouton du panneau de propriétés tout au bout, et
 // Enregistrer (aussi dans le menu Fichier). Quand la place manque, la partie gauche passe à la
 // ligne ; la droite reste sur la première.
 
@@ -81,6 +81,15 @@ const fileLabel = computed(() =>
         @click="emit('save')"
       >
         <Icon name="save" /> Enregistrer
+      </button>
+      <button
+        type="button"
+        class="tool icon-only"
+        :class="{ active: store.inspectorOpen }"
+        title="Afficher ou masquer le panneau de propriétés (I)"
+        @click="store.inspectorOpen = !store.inspectorOpen"
+      >
+        <Icon name="panel" :size="18" />
       </button>
     </div>
   </div>

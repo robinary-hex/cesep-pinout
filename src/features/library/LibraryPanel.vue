@@ -5,17 +5,19 @@ import { useSchematicStore } from '@/features/schematic-editor/store'
 import { deleteComponent, type LibraryEntry } from '@/io/library'
 import { baseName } from '@/io/paths'
 import ComponentThumbnail from '@/render/ComponentThumbnail.vue'
+import ContextMenu from '@/ui/ContextMenu.vue'
+import { heading, item, SEPARATOR, type MenuItem } from '@/ui/contextMenu'
 import { confirmAction } from '@/ui/dialogs'
 import Icon from '@/ui/Icon.vue'
 import { useLibraryStore } from './store'
 
 // Panneau de gauche : la bibliothèque de composants sur disque, en liste (nom, broches) ou en
 // grille de vignettes (nom au survol) selon le paramètre `libraryView`.
-// En mode « edit », un clic ouvre le composant dans l'éditeur ; en mode « place », il le pose
-// sur le montage.
+// En mode « edit », un clic ouvre le composant dans l'éditeur et un clic droit propose de le
+// dupliquer ou de le supprimer ; en mode « place », un clic le pose sur le montage. Un nouveau
+// composant se crée par le « + » des onglets (ou Ctrl+N), pas ici.
 
 const props = defineProps<{ mode: 'edit' | 'place' }>()
-const emit = defineEmits<{ create: [] }>()
 
 const library = useLibraryStore()
 const editor = useComponentEditorStore()
@@ -92,6 +94,26 @@ function duplicate(entry: LibraryEntry): void {
   editor.open(copy, null)
 }
 
+// Menu contextuel d'un composant de la bibliothèque (mode « edit »).
+
+const menu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
+
+function openMenu(entry: LibraryEntry, event: MouseEvent): void {
+  if (props.mode !== 'edit') return
+  event.preventDefault()
+  const def = entry.def
+  const items: MenuItem[] = [heading(def?.name ?? baseName(entry.folder))]
+  if (def) {
+    items.push(
+      item('Ouvrir', () => pick(entry), { icon: 'edit' }),
+      item('Dupliquer', () => duplicate(entry), { icon: 'duplicate' }),
+      SEPARATOR
+    )
+  }
+  items.push(item('Supprimer…', () => void remove(entry), { icon: 'trash', danger: true }))
+  menu.value = { x: event.clientX, y: event.clientY, items }
+}
+
 async function remove(entry: LibraryEntry): Promise<void> {
   const name = entry.def?.name ?? baseName(entry.folder)
   const confirmed = await confirmAction({
@@ -115,17 +137,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
 <template>
   <aside class="library">
     <header class="library-head">
-      <div class="title-row">
-        <h2>Composants</h2>
-        <button
-          type="button"
-          class="primary with-icon"
-          title="Nouveau composant (Ctrl+N)"
-          @click="emit('create')"
-        >
-          <Icon name="file-plus" /> Nouveau
-        </button>
-      </div>
+      <h2>Composants</h2>
       <div class="dir-row" :title="library.libraryDir">
         <span class="dir">{{ baseName(library.libraryDir) || '…' }}</span>
         <button
@@ -177,6 +189,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
               :draggable="mode === 'place' && entry.def !== null"
               @dragstart="onDragStart(entry, $event)"
               @dragend="onDragEnd"
+              @contextmenu="openMenu(entry, $event)"
             >
               <button
                 type="button"
@@ -194,20 +207,6 @@ async function remove(entry: LibraryEntry): Promise<void> {
                 <span v-else class="thumb-missing">?</span>
                 <span class="tile-name">{{ entry.def?.name ?? baseName(entry.folder) }}</span>
               </button>
-              <div v-if="mode === 'edit'" class="tile-actions">
-                <button
-                  v-if="entry.def"
-                  type="button"
-                  class="small"
-                  title="Dupliquer"
-                  @click="duplicate(entry)"
-                >
-                  ⧉
-                </button>
-                <button type="button" class="small danger" title="Supprimer" @click="remove(entry)">
-                  ✕
-                </button>
-              </div>
             </div>
           </div>
         </template>
@@ -221,6 +220,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
             :draggable="mode === 'place' && entry.def !== null"
             @dragstart="onDragStart(entry, $event)"
             @dragend="onDragEnd"
+            @contextmenu="openMenu(entry, $event)"
           >
             <button
               type="button"
@@ -250,24 +250,11 @@ async function remove(entry: LibraryEntry): Promise<void> {
                 <span v-else class="meta">Fichier illisible</span>
               </span>
             </button>
-            <div v-if="mode === 'edit'" class="actions">
-              <button
-                v-if="entry.def"
-                type="button"
-                class="small"
-                title="Dupliquer"
-                @click="duplicate(entry)"
-              >
-                ⧉
-              </button>
-              <button type="button" class="small danger" title="Supprimer" @click="remove(entry)">
-                ✕
-              </button>
-            </div>
           </div>
         </template>
       </section>
     </div>
+    <ContextMenu v-if="menu" :x="menu.x" :y="menu.y" :items="menu.items" @close="menu = null" />
   </aside>
 </template>
 
@@ -289,7 +276,6 @@ async function remove(entry: LibraryEntry): Promise<void> {
   gap: 8px;
 }
 
-.title-row,
 .dir-row {
   display: flex;
   align-items: center;
@@ -503,36 +489,5 @@ async function remove(entry: LibraryEntry): Promise<void> {
 
 .tile.broken .tile-name {
   color: var(--danger);
-}
-
-.tile-actions {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  display: flex;
-  gap: 2px;
-  opacity: 0;
-}
-
-.tile:hover .tile-actions {
-  opacity: 1;
-}
-
-.tile-actions button {
-  padding: 0 4px;
-  font-size: 11px;
-  line-height: 1.4;
-}
-
-.actions {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  opacity: 0;
-}
-
-.item:hover .actions,
-.item.current .actions {
-  opacity: 1;
 }
 </style>

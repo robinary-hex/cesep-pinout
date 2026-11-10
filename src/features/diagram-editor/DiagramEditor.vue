@@ -474,7 +474,11 @@ defineExpose({ createNew, open, openRecent, save, openExport })
         @edit-link="editLinkLabel"
         @edit-text="editText"
       />
-      <DiagramInspector v-if="store.inspectorOpen" @export-image="openExport" />
+      <DiagramInspector
+        v-if="store.inspectorOpen"
+        :class="{ floating: store.inspectorFloating }"
+        @export-image="openExport"
+      />
     </div>
     <ExportDialog
       v-if="showExport"
@@ -509,6 +513,7 @@ defineExpose({ createNew, open, openRecent, save, openExport })
 }
 
 .editor-body {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;

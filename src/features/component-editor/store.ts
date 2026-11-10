@@ -22,7 +22,9 @@ import {
   type Size,
   type StackMove
 } from '@/domain'
+import { useLibraryStore } from '@/features/library/store'
 import { samePath } from '@/io/paths'
+import { useInspectorPanel } from '@/state/inspector'
 import { useDocumentTabs } from '@/state/tabs'
 import { fittingCellPx } from './pinLabelLayout'
 import type { ToolId } from './tools'
@@ -89,8 +91,24 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     return createEmptyComponent('nouveau-composant', 'Nouveau composant')
   }
 
+  const library = useLibraryStore()
   const selection = ref<Selection | null>(null)
   const tool = ref<ToolId>('select')
+  /** Panneau de propriétés à droite (`useInspectorPanel`) : replié par défaut, touche I. */
+  const inspector = useInspectorPanel({
+    hasSelection: () => selection.value !== null,
+    autoOpen: () => library.autoOpenInspector
+  })
+  const inspectorOpen = inspector.open
+  const inspectorFloating = inspector.floating
+
+  /**
+   * Un clic vient de sélectionner une forme ou une broche : le panneau de propriétés se montre si
+   * les paramètres le demandent, le temps de la sélection.
+   */
+  function revealInspector(): void {
+    inspector.reveal()
+  }
   /** Pixels par cellule dans l'éditeur (zoom), continu. */
   const cellPx = ref(DEFAULT_CELL_PX)
   const viewport = ref({ width: 800, height: 600 })
@@ -692,6 +710,9 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     pristine,
     selection,
     tool,
+    inspectorOpen,
+    inspectorFloating,
+    revealInspector,
     cellPx,
     viewport,
     hoverPinId,

@@ -15,6 +15,9 @@ export async function saveComponentDoc(
   library: LibraryStore
 ): Promise<boolean> {
   if (store.hasErrors) {
+    // Les erreurs sont dans le panneau, sous le composant : on le montre, sans forme sélectionnée.
+    store.selection = null
+    store.inspectorOpen = true
     store.status = 'Corrige les erreurs listées à droite avant d’enregistrer.'
     return false
   }

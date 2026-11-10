@@ -466,6 +466,7 @@ function startHandleDrag(index: number, handleId: string, event: PointerEvent): 
   const primitive = primitiveAt(index)
   if (!primitive) return
   store.selectPrimitives([index])
+  store.revealInspector()
   drag.value = { kind: 'handle', index, handleId, original: primitive, preview: primitive }
   capture(event)
 }
@@ -490,6 +491,7 @@ function onPrimitiveDown(index: number, event: PointerEvent): void {
     return
   }
   if (!store.selectedIndexes.includes(index)) store.selectPrimitives([index])
+  store.revealInspector()
   const start = toQuarters(pointerCells(event))
   drag.value = {
     kind: 'move-primitives',
@@ -578,6 +580,7 @@ function onPinDown(id: string, event: PointerEvent): void {
     store.selectPin(id)
     drag.value = { kind: 'move-pin', id, current: { x: pin.x, y: pin.y } }
   }
+  store.revealInspector()
   capture(event)
 }
 
@@ -787,9 +790,20 @@ function pinsInBand(bandDrag: Extract<Drag, { kind: 'band' }>): string[] {
     .map((pin) => pin.id)
 }
 
-/** Clic dans l'espace de travail, hors de la feuille : la sélection tombe, comme sur la feuille. */
+/**
+ * Clic dans l'espace de travail, hors de la feuille. En sélection, la sélection tombe, comme sur
+ * la feuille. Avec un outil de dessin, on le quitte : le tracé en cours se termine (une polyligne
+ * d'au moins deux points est gardée) et l'éditeur revient à l'outil Sélection.
+ */
 function onOutsideDown(event: PointerEvent): void {
-  if (event.button === 0 && store.tool === 'select') store.selection = null
+  if (event.button !== 0) return
+  if (store.tool === 'select') {
+    store.selection = null
+    return
+  }
+  finishPolyline()
+  drag.value = null
+  store.tool = 'select'
 }
 
 function samePrimitive(a: Primitive, b: Primitive): boolean {
@@ -842,6 +856,7 @@ function onPointerUp(event: PointerEvent): void {
           [...current.base, ...primitivesInBand(current)],
           [...current.basePins, ...pinsInBand(current)]
         )
+        if (store.selection) store.revealInspector()
       }
       break
     }
@@ -1228,7 +1243,7 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
 .canvas-status {
   /* Hauteur fixe : la barre ne se replie pas quand elle est vide, le canevas ne bouge pas. */
   flex: none;
-  min-height: 26px;
+  min-height: var(--status-height);
   display: flex;
   align-items: center;
   justify-content: space-between;

@@ -16,7 +16,8 @@ import Icon from '@/ui/Icon.vue'
 import type { IconName } from '@/ui/icons'
 import { useComponentEditorStore } from './store'
 
-// Panneau de droite. Sans sélection : le composant (propriétés, taille, broches). Avec des
+// Panneau de droite, replié par défaut comme dans les autres éditeurs (touche I, bouton de la
+// barre). Sans sélection : le composant (propriétés, taille, broches). Avec des
 // formes sélectionnées : seulement elles. Une broche sélectionnée reste dans la liste du
 // composant, mise en évidence, avec les contrôles de cohérence ; une forme sélectionnée les cache.
 // Les champs valident au changement (pas à chaque touche), donc une modification = une commande.
@@ -318,19 +319,21 @@ function setClosed(event: Event): void {
 
 <template>
   <aside class="inspector">
+    <header class="panel-head">
+      <span>Propriétés</span>
+      <button
+        type="button"
+        class="small"
+        title="Masquer le panneau (I)"
+        @click="store.inspectorOpen = false"
+      >
+        ✕
+      </button>
+    </header>
+
     <!-- Une forme seule -->
     <section v-if="primitive" class="block">
-      <div class="head-row">
-        <h3>{{ KIND_LABELS[primitive.kind] }}</h3>
-        <button
-          type="button"
-          class="small"
-          title="Revenir au composant (Échap)"
-          @click="store.selection = null"
-        >
-          ✕
-        </button>
-      </div>
+      <h3>{{ KIND_LABELS[primitive.kind] }}</h3>
       <div class="row order">
         <span class="hint">Ordre {{ primitiveIndex + 1 }} / {{ primitiveCount }}</span>
         <div class="toggles">
@@ -598,17 +601,7 @@ function setClosed(event: Event): void {
 
     <!-- Plusieurs éléments : formes, broches, ou les deux -->
     <section v-else-if="multiCount > 1" class="block">
-      <div class="head-row">
-        <h3>{{ multiCount }} éléments sélectionnés</h3>
-        <button
-          type="button"
-          class="small"
-          title="Revenir au composant (Échap)"
-          @click="store.selection = null"
-        >
-          ✕
-        </button>
-      </div>
+      <h3 class="alone">{{ multiCount }} éléments sélectionnés</h3>
     </section>
 
     <!-- Rien de sélectionné, ou une broche : le composant, la broche en évidence dans la liste -->
@@ -728,15 +721,21 @@ function setClosed(event: Event): void {
   color: var(--text-muted);
 }
 
-.head-row {
+.panel-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
+  padding: 6px 8px 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--surface-2);
 }
 
-.head-row h3 {
+.block h3.alone {
   margin: 0;
 }
 

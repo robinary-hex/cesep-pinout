@@ -66,7 +66,10 @@ const sections: { title: string; rows: Row[] }[] = [
       ],
       ['Clic droit', 'Menu contextuel : composant, fil, étiquette ou vide'],
       ...VIEW,
-      ['I', 'Afficher / masquer le panneau de propriétés'],
+      [
+        'I',
+        'Panneau de propriétés : l’ouvrir pour de bon ou le masquer ; un clic sur un élément le montre le temps de la sélection'
+      ],
       ['Ctrl+N / O / S', 'Nouveau / ouvrir (dans un onglet) / enregistrer (Ctrl+Maj+S : sous…)'],
       ['Ctrl+E', 'Exporter en PNG ou SVG'],
       [
@@ -109,7 +112,10 @@ const sections: { title: string; rows: Row[] }[] = [
       ],
       ['Clic droit', 'Menu contextuel : nœud, lien, texte ou vide'],
       ...VIEW,
-      ['I', 'Afficher / masquer le panneau de propriétés'],
+      [
+        'I',
+        'Panneau de propriétés : l’ouvrir pour de bon ou le masquer ; un clic sur un élément le montre le temps de la sélection'
+      ],
       ['Ctrl+N / O / S', 'Nouveau / ouvrir (dans un onglet) / enregistrer en .pinuml'],
       ['Ctrl+E', 'Exporter en PNG ou SVG'],
       [
@@ -136,7 +142,16 @@ const sections: { title: string; rows: Row[] }[] = [
       ['Ctrl (sans sélection)', 'Poignées de la boîte du composant : glisser un coin ou un côté'],
       ...SELECTION,
       ['Ctrl+Page haut / bas', 'Avancer / reculer la forme (Maj : premier / arrière-plan)'],
+      [
+        'Clic hors de la feuille',
+        'Désélectionner ; avec un outil de dessin, le quitter et revenir à la sélection'
+      ],
+      ['Clic droit dans la bibliothèque', 'Ouvrir, dupliquer ou supprimer un composant'],
       ...VIEW,
+      [
+        'I',
+        'Panneau de propriétés : l’ouvrir pour de bon ou le masquer ; un clic sur un élément le montre le temps de la sélection'
+      ],
       ['Ctrl+N / S', 'Nouveau / enregistrer dans la bibliothèque'],
       [
         'Ctrl+Tab / Ctrl+Maj+Tab',

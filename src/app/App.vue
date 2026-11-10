@@ -108,12 +108,6 @@ watch(
 
 watch(() => library.theme, applyTheme, { immediate: true })
 
-/** Bouton « Nouveau » du panneau des composants : un composant vierge, dans son onglet. */
-function createComponent(): void {
-  editor.newComponent()
-  mode.value = 'components'
-}
-
 // Onglets, à droite des boutons de mode : ceux des composants ouverts en mode Composants, ceux
 // des montages ouverts en mode Montage. Les deux éditeurs offrent la même chose : activer,
 // fermer (avec la question à trois boutons si l'onglet est modifié), créer, réordonner.
@@ -778,11 +772,7 @@ onUnmounted(() => {
     </header>
     <main class="workspace">
       <DiagramLibrary v-if="mode === 'diagram'" />
-      <LibraryPanel
-        v-else
-        :mode="mode === 'components' ? 'edit' : 'place'"
-        @create="createComponent"
-      />
+      <LibraryPanel v-else :mode="mode === 'components' ? 'edit' : 'place'" />
       <ComponentEditor v-if="mode === 'components'" ref="componentEditor" />
       <DiagramEditor v-else-if="mode === 'diagram'" ref="diagramEditor" />
       <SchematicEditor v-else ref="schematicEditor" />

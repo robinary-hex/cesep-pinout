@@ -51,6 +51,7 @@ import {
 import { useLibraryStore } from '@/features/library/store'
 import { samePath } from '@/io/paths'
 import { readProject } from '@/io/projectFiles'
+import { useInspectorPanel } from '@/state/inspector'
 import { useDocumentTabs } from '@/state/tabs'
 
 export type SchematicTool = 'select' | 'place' | 'wire' | 'text'
@@ -148,8 +149,6 @@ export const useSchematicStore = defineStore('schematic', () => {
   const viewport = ref({ width: 1200, height: 800 })
   const showPins = ref(true)
   const showUnconnected = ref(true)
-  /** Panneau de propriétés à droite : replié par défaut (touche I). */
-  const inspectorOpen = ref(false)
   /** Profil en cours d'édition dans la boîte de dialogue : affiché à la place de celui du projet. */
   const profilePreview = shallowRef<StyleProfile | null>(null)
   const panKeyHeld = ref(false)
@@ -252,6 +251,14 @@ export const useSchematicStore = defineStore('schematic', () => {
       selectedLabels.value.length > 0
   )
 
+  /** Panneau de propriétés à droite (`useInspectorPanel`) : replié par défaut, touche I. */
+  const inspector = useInspectorPanel({
+    hasSelection: () => hasSelection.value,
+    autoOpen: () => library.autoOpenInspector
+  })
+  const inspectorOpen = inspector.open
+  const inspectorFloating = inspector.floating
+
   /** Après chaque changement du montage : la sélection ne garde que ce qui existe encore. */
   function pruneSelection(): void {
     const instanceIds = new Set(doc.value.components.map((instance) => instance.id))
@@ -327,9 +334,12 @@ export const useSchematicStore = defineStore('schematic', () => {
     if (label !== null) status.value = `Rétabli : ${label}`
   }
 
-  /** Ouvre le panneau de propriétés si les paramètres le demandent (clic sur un élément). */
+  /**
+   * Un clic vient de sélectionner un élément : le panneau de propriétés se montre si les
+   * paramètres le demandent, le temps de la sélection.
+   */
   function revealInspector(): void {
-    if (library.autoOpenInspector) inspectorOpen.value = true
+    inspector.reveal()
   }
 
   function clearSelection(): void {
@@ -1210,6 +1220,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     showPins,
     showUnconnected,
     inspectorOpen,
+    inspectorFloating,
     profilePreview,
     panKeyHeld,
     shiftHeld,

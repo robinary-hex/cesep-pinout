@@ -5,10 +5,12 @@ import {
   createEmptyComponent,
   createEmptyProject,
   DEFAULT_PROFILE,
+  DEFAULT_SETTINGS,
   parseProject,
   serializeProject,
   type ComponentDefinition
 } from '@/domain'
+import { useLibraryStore } from '@/features/library/store'
 import { useSchematicStore } from './store'
 
 function resistor(): ComponentDefinition {
@@ -876,5 +878,40 @@ describe('montage : composants derrière les fils, fils à 45°', () => {
       [1, 2],
       [6, 2]
     ])
+  })
+})
+
+describe('montage : panneau de propriétés', () => {
+  it('montré par un clic sur un élément, il se referme quand plus rien n’est sélectionné', () => {
+    const store = useSchematicStore()
+    const id = store.addLabel(2, 0)
+    store.clearSelection()
+    expect(store.inspectorOpen).toBe(false)
+    // Ce que fait le canevas au clic sur un élément.
+    store.selectedLabels = [id]
+    store.revealInspector()
+    expect(store.inspectorOpen).toBe(true)
+    expect(store.inspectorFloating).toBe(true)
+    store.clearSelection()
+    expect(store.inspectorOpen).toBe(false)
+    // Supprimer l'élément sélectionné le referme aussi.
+    store.selectedLabels = [id]
+    store.revealInspector()
+    store.removeSelection()
+    expect(store.inspectorOpen).toBe(false)
+  })
+
+  it('ouvert par la touche I, il reste ; décoché dans les paramètres, il ne s’ouvre pas tout seul', () => {
+    const store = useSchematicStore()
+    const id = store.addLabel(2, 0)
+    store.inspectorOpen = true
+    expect(store.inspectorFloating).toBe(false)
+    store.clearSelection()
+    expect(store.inspectorOpen).toBe(true)
+    store.inspectorOpen = false
+    useLibraryStore().settings = { ...DEFAULT_SETTINGS, autoOpenInspector: false }
+    store.selectedLabels = [id]
+    store.revealInspector()
+    expect(store.inspectorOpen).toBe(false)
   })
 })

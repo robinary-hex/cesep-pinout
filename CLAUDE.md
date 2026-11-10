@@ -118,8 +118,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     du milieu = ajuster au contenu, E étiquette texte (deux clics ou un glisser donnent deux coins
     opposés de la boîte ; deux clics au même point, la boîte par défaut),
     Alt+clic sur un croisement = inverser l'ordre à cet endroit seulement, I = panneau de
-    propriétés (replié par défaut, ouvert au clic sur un élément si le paramètre
-    `autoOpenInspector` est actif), clic droit = menu contextuel (composant, fil, étiquette ou
+    propriétés (voir « Panneau de propriétés »), clic droit = menu contextuel (composant, fil, étiquette ou
     vide ; termine un fil en cours, arrête une pose), double-clic = valeur d'un composant ou texte
     d'une étiquette. Pose d'un composant : clic dans le panneau puis clic sur le montage, ou
     glisser-déposer ; une pose = un composant (la pose s'arrête, le composant posé est sélectionné).
@@ -336,7 +335,23 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   sinon `userData/library` ; un dossier choisi dans OneDrive est enregistré avec le préfixe
   `${OneDrive}` (`portableDir`), résolu sur chaque machine (`resolveLibraryDir`). Panneau en
   liste (nom, broches) ou en grille de vignettes (nom en petit dessous) selon `libraryView`
-  (paramètres) ; catégories repliables.
+  (paramètres) ; catégories repliables. Le panneau n'a pas de bouton « Nouveau » (un composant ou
+  un montage se crée par le « + » des onglets ou Ctrl+N) et ses composants ne portent pas de
+  boutons : en mode Composants, un clic droit propose Ouvrir, Dupliquer, Supprimer (`openMenu`
+  de `LibraryPanel.vue`).
+- Panneau de propriétés : le même fonctionnement dans les trois éditeurs (décision du 11
+  novembre 2026 ; `useInspectorPanel` de `src/state/inspector.ts`, `inspectorOpen` et
+  `revealInspector` de chaque store). Replié au départ. La touche I, le bouton tout à droite de
+  la barre d'outils, l'entrée « Propriétés » des menus et la croix du panneau l'ouvrent pour de
+  bon ou le ferment : ouvert ainsi, il prend sa place à droite du canevas et reste. Avec le
+  paramètre `autoOpenInspector`, un clic sur un élément (ou un lasso qui en prend) le montre
+  aussi, mais seulement le temps de la sélection : il se referme dès que plus rien n'est
+  sélectionné. Montré ainsi (`inspectorFloating`), il flotte sur le bord droit de la zone de
+  dessin, au-dessus de la barre d'état (`.inspector.floating` de style.css, `--status-height`) :
+  le canevas ne change pas de taille à chaque clic et la feuille centrée de l'éditeur de
+  composants ne glisse pas sous le pointeur. Sans sélection, il montre le document (montage,
+  diagramme, composant). Pas de croix à côté du nom d'un élément : la seule croix du panneau le
+  masque.
 - Champs des panneaux : ils valident au `change`. Un clic hors du champ en cours de saisie le
   valide d'abord (`commitFocusedField` dans `App.vue`, en phase de capture), pour que la saisie ne
   soit pas perdue quand le clic retire le champ. Hors des champs, le texte de l'interface ne se
@@ -399,7 +414,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     l'ajustement à la fenêtre en tient compte (`pinLabelLayout.ts`).
     Sélection multiple : lasso dans le vide (formes et broches), Maj+clic ajoute ou retire une forme
     ou une broche, glisser déplace tout ce qui est sélectionné (par cellules entières dès qu'une
-    broche en fait partie, `moveSelection`), un clic hors de la feuille désélectionne, Alt+glisser en dépose une copie, Ctrl+C / V / D copient,
+    broche en fait partie, `moveSelection`), un clic hors de la feuille désélectionne (avec un outil de dessin actif, il
+    le quitte d'abord et revient à la sélection, en terminant la polyligne en cours :
+    `onOutsideDown`), Alt+glisser en dépose une copie, Ctrl+C / V / D copient,
     collent (décalées d'une cellule) et dupliquent ; le panneau de droite ne montre que l'élément
     sélectionné (forme, formes ou broche), sinon le composant.
     Maj pendant le tracé d'un rectangle ou d'une ellipse impose un carré ou un cercle. Tailles des

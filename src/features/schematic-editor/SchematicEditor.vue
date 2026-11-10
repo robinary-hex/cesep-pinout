@@ -540,6 +540,7 @@ defineExpose({ createNew, open, openRecent, save, openExport })
       />
       <SchematicInspector
         v-if="store.inspectorOpen"
+        :class="{ floating: store.inspectorFloating }"
         @edit-profile="showProfile = true"
         @export-image="openExport"
       />
@@ -578,6 +579,7 @@ defineExpose({ createNew, open, openRecent, save, openExport })
 }
 
 .editor-body {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
