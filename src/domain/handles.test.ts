@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { arrowHeadPoints, pointsAttribute } from './arrows'
 import { DEFAULT_SHAPE_STYLE, NO_ARROWS, type Primitive } from './component'
 import { dragHandle, nearestHandle, primitiveHandles } from './handles'
+import { pngHeaderDataUrl } from './testing/pngHeader'
 
 const style = DEFAULT_SHAPE_STYLE
 const rect: Primitive = { kind: 'rect', x: 4, y: 2, w: 8, h: 4, rx: 0, style }
@@ -100,5 +101,27 @@ describe('pointes de flèche', () => {
     expect(points?.[2]?.y).toBeCloseTo(-0.14)
     expect(arrowHeadPoints({ x: 1, y: 1 }, { x: 1, y: 1 }, 0.1)).toBeNull()
     expect(pointsAttribute(points ?? [])).toBe('4,0 3.65,0.14 3.65,-0.14')
+  })
+})
+
+describe('poignées d’une image', () => {
+  const image: Primitive = { kind: 'image', x: 0, y: 0, w: 8, h: 12, file: 'image.png' }
+
+  it('n’a que ses coins', () => {
+    expect(primitiveHandles(image).map((handle) => handle.id)).toEqual(['nw', 'ne', 'se', 'sw'])
+  })
+
+  it('garde ses proportions : la dimension la plus tirée commande, le coin opposé reste', () => {
+    // Coin bas droit vers (4, 5) : 4 de large demande 6 de haut, plus que les 5 tirés.
+    expect(dragHandle(image, 'se', [4, 5])).toMatchObject({ x: 0, y: 0, w: 4, h: 6 })
+    // Coin haut gauche vers (4, 3) : 9 de haut demande 6 de large ; le coin bas droit ne bouge pas.
+    expect(dragHandle(image, 'nw', [4, 3])).toMatchObject({ x: 2, y: 3, w: 6, h: 9 })
+    // Jamais moins d'un quart de cellule.
+    expect(dragHandle(image, 'se', [-5, -5])).toMatchObject({ w: 1, h: 2 })
+  })
+
+  it('reprend les proportions du fichier, même après avoir été déformée', () => {
+    const squashed: Primitive = { ...image, h: 8, dataUrl: pngHeaderDataUrl(160, 240) }
+    expect(dragHandle(squashed, 'se', [4, 0])).toMatchObject({ w: 4, h: 6 })
   })
 })

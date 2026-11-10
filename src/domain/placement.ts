@@ -237,7 +237,6 @@ export function instanceTextPlacements(
   instance: ComponentInstance,
   def: ComponentDefinition
 ): InstanceTextPlacement[] {
-  if (def.visual.kind !== 'drawing') return []
   const matrix = instanceMatrix(instance, def)
   return def.visual.primitives.flatMap((primitive): InstanceTextPlacement[] => {
     if (primitive.kind !== 'text') return []

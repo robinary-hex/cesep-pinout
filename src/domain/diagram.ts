@@ -9,7 +9,7 @@ import { textLabelSchema, wireGeometryProblem } from './project'
 // verticaux) ; des textes libres. Rien ne dit dans le fichier qu'un lien est accroché à un nœud :
 // cela se déduit de la géométrie (une extrémité posée sur un point d'accroche du nœud).
 
-export const DIAGRAM_SCHEMA_VERSION = 3
+export const DIAGRAM_SCHEMA_VERSION = 4
 
 /** Formes du catalogue, dans l'ordre de la bibliothèque. */
 export const NODE_SHAPES = [
@@ -199,7 +199,9 @@ export const diagramLinkSchema = z
      * De quel côté du trait : -1 au-dessus d'un segment horizontal ou à gauche d'un vertical,
      * 1 en dessous ou à droite.
      */
-    labelSide: z.union([z.literal(-1), z.literal(1)])
+    labelSide: z.union([z.literal(-1), z.literal(1)]),
+    /** Fond de la couleur du papier sous l'étiquette, pour masquer ce qui passe derrière. */
+    labelBackground: z.boolean()
   })
   .superRefine((link, ctx) => {
     const problem = wireGeometryProblem(link.points)

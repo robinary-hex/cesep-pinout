@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   absolutePinPosition,
   boxHandles,
+  componentImages,
   dragVertex,
   gridLines,
   instanceBounds,
@@ -1268,7 +1269,7 @@ const cursorClass = computed(() => {
               skip-texts
             />
             <rect
-              v-if="store.staleDefIds.has(item.def.id) && item.def.visual.kind === 'png'"
+              v-if="store.staleDefIds.has(item.def.id) && componentImages(item.def).length > 0"
               class="stale-frame"
               :width="item.def.size.widthCells"
               :height="item.def.size.heightCells"
@@ -1324,6 +1325,14 @@ const cursorClass = computed(() => {
               @dblclick="onLabelDoubleClick(entry.label.id, $event)"
               @contextmenu="onContextMenu($event, { kind: 'label', id: entry.label.id })"
             >
+              <rect
+                v-if="entry.label.background"
+                class="label-back"
+                :x="entry.box.x"
+                :y="entry.box.y"
+                :width="entry.box.w"
+                :height="entry.box.h"
+              />
               <text
                 :transform="entry.transform"
                 :font-size="entry.fontCells"
@@ -1695,6 +1704,11 @@ const cursorClass = computed(() => {
 
 .text-label {
   cursor: move;
+}
+
+/* Fond optionnel d'une étiquette : sa boîte, de la couleur du papier. */
+.label-back {
+  fill: var(--paper);
 }
 
 /* La couleur d'une étiquette vient de son attribut `fill` (noir pur = encre du thème). */

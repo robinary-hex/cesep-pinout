@@ -124,6 +124,10 @@ const sections: { title: string; rows: Row[] }[] = [
       ['Entrée / double-clic', 'Terminer la polyligne'],
       ['Retour arrière', 'Retirer le dernier point de la polyligne en cours'],
       ['E / B', 'Texte / broche (sur une intersection du composant)'],
+      [
+        'Bouton Image',
+        'Importer un PNG, posé comme une forme : 80 px du fichier par cellule, donc des broches à dessiner tous les 80 px'
+      ],
       ['Ctrl+glisser sur une forme', 'Saisir sa poignée la plus proche'],
       ['Ctrl (sans sélection)', 'Poignées de la boîte du composant : glisser un coin ou un côté'],
       ...SELECTION,

@@ -88,7 +88,7 @@ export interface WireDrawing {
 /** Styles d'une étiquette texte : ceux des textes de composant, sans le texte variable. */
 export type LabelStyle = Pick<
   TextLabel,
-  'bold' | 'italic' | 'underline' | 'strike' | 'vertical' | 'color'
+  'bold' | 'italic' | 'underline' | 'strike' | 'vertical' | 'color' | 'background'
 >
 
 /** Onglet affiché dans la barre d'application. */
@@ -608,7 +608,8 @@ export const useSchematicStore = defineStore('schematic', () => {
         underline: false,
         strike: false,
         vertical: false,
-        color: '#000000'
+        color: '#000000',
+        background: false
       })
     })
     selection.value = []
@@ -653,7 +654,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     setLabelStyle(id, bold ? 'Étiquette en gras' : 'Étiquette normale', { bold })
   }
 
-  /** Change un ou plusieurs styles d'une étiquette (graisse, italique, décorations, couleur). */
+  /** Change un ou plusieurs styles d'une étiquette (graisse, italique, décorations, couleur, fond). */
   function setLabelStyle(id: string, name: string, style: Partial<LabelStyle>): void {
     apply(name, (draft) => {
       const label = draft.labels.find((candidate) => candidate.id === id)

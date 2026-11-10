@@ -4,13 +4,15 @@ import { computed, ref, shallowRef } from 'vue'
 import {
   componentIssues,
   createEmptyComponent,
+  importedImageSize,
   isInsideBox,
+  naturalImageSize,
   pinsInside,
-  PNG_PX_PER_CELL,
   QUARTERS_PER_CELL,
   renumberPins,
   reorderItem,
   translatePrimitive,
+  withFreeImageFiles,
   type Box,
   type ComponentDefinition,
   type LocalPoint,
@@ -61,9 +63,7 @@ function nextPinId(pins: ReadonlyArray<Pin>): string {
 
 /** Composant vierge : rien de dessiné, aucune broche. */
 function isBlank(def: ComponentDefinition): boolean {
-  return (
-    def.visual.kind === 'drawing' && def.visual.primitives.length === 0 && def.pins.length === 0
-  )
+  return def.visual.primitives.length === 0 && def.pins.length === 0
 }
 
 /**
@@ -133,12 +133,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   const selectedPrimitive = computed<Primitive | null>(() => {
     const indexes = selectedIndexes.value
     const index = indexes[0]
-    if (
-      indexes.length !== 1 ||
-      index === undefined ||
-      selectedPinIds.value.length > 0 ||
-      doc.value.visual.kind !== 'drawing'
-    ) {
+    if (indexes.length !== 1 || index === undefined || selectedPinIds.value.length > 0) {
       return null
     }
     return doc.value.visual.primitives[index] ?? null
@@ -155,7 +150,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   function pruneSelection(): void {
     const current = selection.value
     if (!current) return
-    const count = doc.value.visual.kind === 'drawing' ? doc.value.visual.primitives.length : 0
+    const count = doc.value.visual.primitives.length
     const indexes = current.indexes.filter((index) => index < count)
     const pinIds = current.pinIds.filter((id) => doc.value.pins.some((pin) => pin.id === id))
     if (indexes.length !== current.indexes.length || pinIds.length !== current.pinIds.length) {
@@ -234,8 +229,8 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     }
   }
 
-  function drawing(draft: Draft<ComponentDefinition>): Draft<Primitive>[] | null {
-    return draft.visual.kind === 'drawing' ? draft.visual.primitives : null
+  function drawing(draft: Draft<ComponentDefinition>): Draft<Primitive>[] {
+    return draft.visual.primitives
   }
 
   // Sélection
@@ -252,7 +247,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
 
   /** Sélectionne toutes les formes et toutes les broches. */
   function selectAll(): void {
-    const count = doc.value.visual.kind === 'drawing' ? doc.value.visual.primitives.length : 0
+    const count = doc.value.visual.primitives.length
     select(
       Array.from({ length: count }, (_, index) => index),
       doc.value.pins.map((pin) => pin.id)
@@ -337,7 +332,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     apply('Redimensionner', (draft) => {
       draft.size = size
       const list = drawing(draft)
-      if (list && (dx !== 0 || dy !== 0)) {
+      if (dx !== 0 || dy !== 0) {
         for (let i = 0; i < list.length; i++) {
           const primitive = list[i]
           if (primitive) {
@@ -353,21 +348,55 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     if (removed > 0) status.value = `${removed} broche(s) hors de la nouvelle boîte supprimée(s).`
   }
 
-  function setVisualPng(dataUrl: string, size: Size): void {
-    const kept = pinsInside(doc.value.pins, size)
-    apply('Importer un PNG', (draft) => {
-      draft.visual = { kind: 'png', file: 'image.png', pxPerCell: PNG_PX_PER_CELL, dataUrl }
-      draft.size = { widthCells: size.widthCells, heightCells: size.heightCells }
-      if (kept.length !== draft.pins.length) draft.pins = castDraft(renumberPins(kept))
+  /**
+   * Pose une image importée comme une forme : à sa taille naturelle (80 px par cellule), par-dessus
+   * le dessin, sélectionnée. Un composant vierge prend la taille de l'image ; sinon elle se centre
+   * dans la boîte, sur des cellules entières, pour que ses repères tombent sur la grille.
+   */
+  function importImage(dataUrl: string, widthPx: number, heightPx: number): void {
+    const { w, h } = importedImageSize(widthPx, heightPx)
+    const blank = isBlank(doc.value)
+    const size: Size = blank
+      ? {
+          widthCells: Math.ceil(w / QUARTERS_PER_CELL),
+          heightCells: Math.ceil(h / QUARTERS_PER_CELL)
+        }
+      : doc.value.size
+    const centered = (cells: number, quarters: number): number =>
+      Math.max(0, Math.round((cells - quarters / QUARTERS_PER_CELL) / 2)) * QUARTERS_PER_CELL
+    const [image] = withFreeImageFiles(doc.value.visual.primitives, [
+      {
+        kind: 'image',
+        x: centered(size.widthCells, w),
+        y: centered(size.heightCells, h),
+        w,
+        h,
+        file: 'image.png',
+        dataUrl
+      }
+    ])
+    if (!image) return
+    let index = -1
+    apply('Importer une image', (draft) => {
+      if (blank) draft.size = size
+      const list = drawing(draft)
+      list.push(castDraft(image))
+      index = list.length - 1
     })
-    selection.value = null
+    tool.value = 'select'
+    if (index >= 0) selectPrimitives([index])
+    if (blank) fitToViewport()
   }
 
-  function setVisualDrawing(): void {
-    apply('Revenir au dessin', (draft) => {
-      draft.visual = { kind: 'drawing', primitives: [] }
+  /** Rend à une image sa taille naturelle (80 px par cellule), son coin supérieur gauche en place. */
+  function resetImageSize(index: number): void {
+    const primitive = doc.value.visual.primitives[index]
+    if (primitive?.kind !== 'image') return
+    const natural = naturalImageSize(primitive)
+    if (!natural || (natural.w === primitive.w && natural.h === primitive.h)) return
+    updatePrimitive(index, 'Taille d’origine de l’image', (target) => {
+      if (target.kind === 'image') Object.assign(target, natural)
     })
-    selection.value = null
   }
 
   // Commandes des formes
@@ -376,7 +405,6 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     let index = -1
     apply(label, (draft) => {
       const list = drawing(draft)
-      if (!list) return
       list.push(castDraft(primitive))
       index = list.length - 1
     })
@@ -390,7 +418,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     mutate: (primitive: Draft<Primitive>) => void
   ): void {
     apply(label, (draft) => {
-      const primitive = drawing(draft)?.[index]
+      const primitive = drawing(draft)[index]
       if (primitive) mutate(primitive)
     })
   }
@@ -399,7 +427,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   function setPrimitive(index: number, primitive: Primitive, label: string): void {
     apply(label, (draft) => {
       const list = drawing(draft)
-      if (list && index < list.length) list[index] = castDraft(primitive)
+      if (index < list.length) list[index] = castDraft(primitive)
     })
   }
 
@@ -451,11 +479,9 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
           : 'Déplacer la broche'
     return apply(label, (draft) => {
       const list = drawing(draft)
-      if (list) {
-        for (const index of indexes) {
-          const primitive = list[index]
-          if (primitive) list[index] = castDraft(translatePrimitive(primitive, dx, dy))
-        }
+      for (const index of indexes) {
+        const primitive = list[index]
+        if (primitive) list[index] = castDraft(translatePrimitive(primitive, dx, dy))
       }
       for (const pin of draft.pins) {
         if (!moving.has(pin.id)) continue
@@ -475,9 +501,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     const indexes = selectedIndexes.value
     const index = indexes[0]
     if (indexes.length !== 1 || index === undefined || selectedPinIds.value.length > 0) return
-    const list = doc.value.visual.kind === 'drawing' ? doc.value.visual.primitives : null
-    if (!list) return
-    const result = reorderItem(list, index, move)
+    const result = reorderItem(doc.value.visual.primitives, index, move)
     if (result.index === index) return
     const labels: Record<StackMove, string> = {
       up: 'Avancer la forme',
@@ -487,7 +511,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     }
     apply(labels[move], (draft) => {
       const target = drawing(draft)
-      if (target) target.splice(0, target.length, ...castDraft(result.list))
+      target.splice(0, target.length, ...castDraft(result.list))
     })
     selectPrimitives([result.index])
   }
@@ -496,7 +520,6 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     if (indexes.length === 0) return
     apply(indexes.length > 1 ? 'Supprimer les formes' : 'Supprimer la forme', (draft) => {
       const list = drawing(draft)
-      if (!list) return
       for (const index of [...indexes].sort((a, b) => b - a)) list.splice(index, 1)
     })
     selection.value = null
@@ -559,7 +582,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
       const remaining = doc.value.pins.filter((pin) => !pinIds.includes(pin.id))
       apply('Supprimer la sélection', (draft) => {
         const list = drawing(draft)
-        if (list) for (const index of [...indexes].sort((a, b) => b - a)) list.splice(index, 1)
+        for (const index of [...indexes].sort((a, b) => b - a)) list.splice(index, 1)
         draft.pins = castDraft(renumberPins(remaining))
       })
       selection.value = null
@@ -572,7 +595,6 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   const clipboardEmpty = computed(() => clipboard.value.length === 0)
 
   function primitivesAt(indexes: readonly number[]): Primitive[] {
-    if (doc.value.visual.kind !== 'drawing') return []
     const list = doc.value.visual.primitives
     return indexes.flatMap((index) => {
       const primitive = list[index]
@@ -580,7 +602,10 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     })
   }
 
-  /** Ajoute des copies translatées (quarts de cellule) et les sélectionne, en une commande. */
+  /**
+   * Ajoute des copies translatées (quarts de cellule) et les sélectionne, en une commande. Une
+   * image collée depuis un autre composant ne prend jamais le fichier d'une image d'ici.
+   */
   function insertPrimitiveCopies(
     source: readonly Primitive[],
     dx: number,
@@ -588,12 +613,12 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     label: string
   ): void {
     if (source.length === 0) return
+    const copies = withFreeImageFiles(doc.value.visual.primitives, source)
     let first = -1
     apply(label, (draft) => {
       const list = drawing(draft)
-      if (!list) return
       first = list.length
-      for (const primitive of source) list.push(castDraft(translatePrimitive(primitive, dx, dy)))
+      for (const primitive of copies) list.push(castDraft(translatePrimitive(primitive, dx, dy)))
     })
     if (first >= 0) selectPrimitives(source.map((_, offset) => first + offset))
   }
@@ -700,8 +725,8 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     setId,
     setSize,
     setBox,
-    setVisualPng,
-    setVisualDrawing,
+    importImage,
+    resetImageSize,
     addPrimitive,
     updatePrimitive,
     setPrimitive,

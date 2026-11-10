@@ -83,7 +83,7 @@ export function pinLabelSideAt(
   cellPx: number
 ): LabelSide {
   const text = pinLabelText(pin, index)
-  const primitives = def.visual.kind === 'drawing' ? def.visual.primitives : []
+  const primitives = def.visual.primitives
   return pinLabelSide(point, def.size, primitives, (side) => pinLabelBox(point, text, side, cellPx))
 }
 

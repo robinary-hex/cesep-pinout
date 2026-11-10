@@ -81,6 +81,7 @@ function link(points: [number, number][], patch: Partial<DiagramLink> = {}): Dia
     label: '',
     labelAt: 0.5,
     labelSide: 1,
+    labelBackground: false,
     ...patch
   }
 }
@@ -88,7 +89,7 @@ function link(points: [number, number][], patch: Partial<DiagramLink> = {}): Dia
 describe('diagramme : format', () => {
   it('lit et réécrit un fichier sans rien perdre', () => {
     const diagram = parseDiagram(fixture)
-    expect(diagram.schemaVersion).toBe(3)
+    expect(diagram.schemaVersion).toBe(4)
     expect(diagram.nodes.map((entry) => entry.shape)).toEqual([
       'start',
       'diamond',
@@ -129,7 +130,7 @@ describe('diagramme : format', () => {
   it('v1 → v2 : chaque nœud reçoit un style de texte qui garde son allure', () => {
     // Diagramme en chasse fixe : le titre y était maigre, il le reste.
     const mono = parseDiagram(fixtureV1)
-    expect(mono.schemaVersion).toBe(3)
+    expect(mono.schemaVersion).toBe(4)
     expect(mono.nodes[1]).toMatchObject({
       title: 'condition',
       font: null,
@@ -147,7 +148,7 @@ describe('diagramme : format', () => {
 
   it('v2 → v3 : l’étiquette d’un lien revient au milieu du tracé, du côté où elle était', () => {
     const diagram = parseDiagram(fixtureV2)
-    expect(diagram.schemaVersion).toBe(3)
+    expect(diagram.schemaVersion).toBe(4)
     // « vrai » était décalée vers la droite d'un lien vertical : elle reste à droite.
     expect(diagram.links[1]).toMatchObject({ label: 'vrai', labelAt: 0.5, labelSide: 1 })
     expect('labelDx' in (diagram.links[1] ?? {})).toBe(false)
@@ -156,6 +157,17 @@ describe('diagramme : format', () => {
     const second = raw.links[1]
     if (second) second.labelDx = -6
     expect(parseDiagram(JSON.stringify(raw)).links[1]?.labelSide).toBe(-1)
+  })
+
+  it('v3 → v4 : étiquettes de lien et textes libres restent sans fond', () => {
+    const diagram = parseDiagram(fixture)
+    expect(diagram.links.map((entry) => entry.labelBackground)).toEqual([false, false, false])
+    expect(diagram.texts.every((text) => !text.background)).toBe(true)
+    // Un fond déjà choisi n'est pas effacé par la migration.
+    const raw = JSON.parse(fixture) as { links: { labelBackground?: boolean }[] }
+    const second = raw.links[1]
+    if (second) second.labelBackground = true
+    expect(parseDiagram(JSON.stringify(raw)).links[1]?.labelBackground).toBe(true)
   })
 
   it('pose un nœud neuf au style de texte par défaut du diagramme', () => {

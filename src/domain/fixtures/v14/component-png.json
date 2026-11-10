@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 14,
+  "id": "led",
+  "name": "LED",
+  "category": "Opto",
+  "description": "LED vue de face, image PNG à 80 px par cellule",
+  "size": {
+    "widthCells": 2,
+    "heightCells": 3
+  },
+  "visual": {
+    "kind": "png",
+    "file": "image.png",
+    "pxPerCell": 80
+  },
+  "pins": [
+    {
+      "id": "a",
+      "name": "A",
+      "kind": "io",
+      "x": 1,
+      "y": 0
+    },
+    {
+      "id": "k",
+      "name": "K",
+      "kind": "io",
+      "x": 1,
+      "y": 3
+    }
+  ]
+}

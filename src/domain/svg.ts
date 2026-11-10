@@ -144,6 +144,24 @@ export function primitiveSvg(
   if (primitive.kind === 'dot') {
     return `<circle ${attrs({ cx: q(primitive.x), cy: q(primitive.y), r: dotRadiusCells(primitive.scale, componentStroke), fill: primitive.color })}/>`
   }
+  if (primitive.kind === 'image') {
+    const box = {
+      x: q(primitive.x),
+      y: q(primitive.y),
+      width: q(primitive.w),
+      height: q(primitive.h)
+    }
+    // Sans son image (fichier perdu) : un cadre gris à sa place.
+    if (!primitive.dataUrl) {
+      return `<rect ${attrs({ ...box, fill: '#eef1f4', stroke: '#8c959f', 'stroke-width': 0.05 })}/>`
+    }
+    return `<image ${attrs({
+      href: primitive.dataUrl,
+      'xlink:href': primitive.dataUrl,
+      ...box,
+      preserveAspectRatio: 'none'
+    })}/>`
+  }
   const width = strokeWidthCells(primitive.style, componentStroke)
   const style = {
     stroke: primitive.style.stroke,
@@ -191,30 +209,17 @@ export function primitiveSvg(
   }
 }
 
-/** Contenu d'un composant dans son repère local (cellules), PNG ou formes. */
+/** Contenu d'un composant dans son repère local (cellules) : ses formes, images comprises. */
 export function componentSvg(
   def: ComponentDefinition,
   componentStroke: number,
   fields?: FieldValues,
   options: { skipTexts?: boolean } = {}
 ): string {
-  const { widthCells, heightCells } = def.size
-  if (def.visual.kind === 'drawing') {
-    return def.visual.primitives
-      .filter((primitive) => !(options.skipTexts && primitive.kind === 'text'))
-      .map((primitive) => primitiveSvg(primitive, componentStroke, fields))
-      .join('')
-  }
-  if (!def.visual.dataUrl) {
-    return `<rect ${attrs({ width: widthCells, height: heightCells, fill: '#eef1f4', stroke: '#8c959f', 'stroke-width': 0.05 })}/>`
-  }
-  return `<image ${attrs({
-    href: def.visual.dataUrl,
-    'xlink:href': def.visual.dataUrl,
-    width: widthCells,
-    height: heightCells,
-    preserveAspectRatio: 'none'
-  })}/>`
+  return def.visual.primitives
+    .filter((primitive) => !(options.skipTexts && primitive.kind === 'text'))
+    .map((primitive) => primitiveSvg(primitive, componentStroke, fields))
+    .join('')
 }
 
 /** Petite flèche au bout d'une extrémité libre « prolongée », dans la direction du dernier segment. */
@@ -411,6 +416,11 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
   if (labelParts.length > 0) parts.push(`<g class="labels">${labelParts.join('')}</g>`)
 
   if (project.labels.length > 0) {
+    // Couleur du fond de l'image ; blanc si elle est transparente.
+    const paper =
+      options.background === 'transparent' || options.background === 'white'
+        ? '#ffffff'
+        : options.background
     const textParts = project.labels.map((label) => {
       const layout = layoutLabel(label, profile.cellPx)
       const spans = layout.lines
@@ -418,7 +428,11 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
           (line) => `<tspan ${attrs({ x: layout.x, y: line.y })}>${escapeXml(line.text)}</tspan>`
         )
         .join('')
-      return `<text ${attrs({ 'font-size': label.size / profile.cellPx, 'text-anchor': label.anchor, fill: label.color, ...textEmphasisAttrs(label), transform: textTransform(label) })}>${spans}</text>`
+      // Fond optionnel : la boîte de l'étiquette, de la couleur du fond de l'image.
+      const back = label.background
+        ? `<rect ${attrs({ x: label.x, y: label.y, width: label.w, height: label.h, fill: paper })}/>`
+        : ''
+      return `${back}<text ${attrs({ 'font-size': label.size / profile.cellPx, 'text-anchor': label.anchor, fill: label.color, ...textEmphasisAttrs(label), transform: textTransform(label) })}>${spans}</text>`
     })
     parts.push(`<g class="texts">${textParts.join('')}</g>`)
   }

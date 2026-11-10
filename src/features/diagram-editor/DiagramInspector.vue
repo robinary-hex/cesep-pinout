@@ -199,6 +199,11 @@ function flipLinkLabel(): void {
   if (link) store.setLinkLabelPlacement(link.id, link.labelAt, link.labelSide === 1 ? -1 : 1)
 }
 
+function setLinkLabelBackground(event: Event): void {
+  const link = singleLink.value
+  if (link) store.setLinksStyle([link.id], { labelBackground: checked(event) })
+}
+
 // Texte libre
 
 function setTextContent(event: Event): void {
@@ -250,6 +255,13 @@ function toggleTextStyle(option: (typeof TEXT_STYLE_OPTIONS)[number]): void {
 function setTextColor(event: Event): void {
   const text = singleText.value
   if (text) store.setTextStyle(text.id, 'Couleur du texte', { color: inputValue(event) })
+}
+
+function setTextBackground(event: Event): void {
+  const text = singleText.value
+  if (!text) return
+  const background = checked(event)
+  store.setTextStyle(text.id, background ? 'Fond du texte' : 'Texte sans fond', { background })
 }
 
 function setTextVertical(event: Event): void {
@@ -476,6 +488,18 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
           <Icon name="swap" /> Côté
         </button>
       </div>
+      <label
+        v-if="singleLink.label.length > 0"
+        class="check"
+        title="Un fond de la couleur du papier masque ce qui passe derrière l'étiquette"
+      >
+        <input
+          type="checkbox"
+          :checked="singleLink.labelBackground"
+          @change="setLinkLabelBackground"
+        />
+        <span>Fond de l’étiquette</span>
+      </label>
       <div class="field">
         <span>Couleur</span>
         <div class="swatches">
@@ -579,6 +603,10 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
         <label class="check" title="Le texte est tourné de 90° et se lit de haut en bas">
           <input type="checkbox" :checked="singleText.vertical" @change="setTextVertical" />
           <span>Vertical</span>
+        </label>
+        <label class="check" title="Un fond de la couleur du papier masque ce qui passe derrière">
+          <input type="checkbox" :checked="singleText.background" @change="setTextBackground" />
+          <span>Fond</span>
         </label>
         <div class="row">
           <button type="button" class="with-icon" @click="store.duplicateSelection()">

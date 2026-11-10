@@ -4,12 +4,14 @@ import { COMPONENT_FILE } from '@/io/library'
 import { baseName } from '@/io/paths'
 import Icon from '@/ui/Icon.vue'
 import ToolbarBasics from '@/ui/ToolbarBasics.vue'
+import { importImage } from './pngImport'
 import { useComponentEditorStore } from './store'
 import { TOOLS } from './tools'
 
 // Barre d'outils de l'éditeur de composants. D'abord le début commun aux trois éditeurs
 // (`ToolbarBasics` : zoom, annuler, rétablir, corbeille), puis les outils de dessin (pictogramme
-// seul, raccourci dans l'infobulle) ; à droite, le nom du composant avec son fichier, puis
+// seul, raccourci dans l'infobulle) et l'import d'une image, posée comme une forme ; à droite, le
+// nom du composant avec son fichier, puis
 // Enregistrer (aussi dans le menu Fichier). Quand la place manque, la partie gauche passe à la
 // ligne ; la droite reste sur la première.
 
@@ -49,6 +51,17 @@ const fileLabel = computed(() =>
           @click="store.tool = tool.id"
         >
           <Icon :name="tool.icon" :size="18" />
+        </button>
+      </div>
+
+      <div class="group">
+        <button
+          type="button"
+          class="icon-only"
+          title="Importer une image PNG (80 px par cellule), posée comme une forme"
+          @click="importImage(store)"
+        >
+          <Icon name="image" :size="18" />
         </button>
       </div>
     </div>

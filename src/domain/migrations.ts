@@ -1,4 +1,4 @@
-import { COMPONENT_SCHEMA_VERSION } from './component'
+import { COMPONENT_SCHEMA_VERSION, IMAGE_FILE_PATTERN } from './component'
 import { DIAGRAM_SCHEMA_VERSION } from './diagram'
 import { pathPointAt } from './diagramLinks'
 import { DEFAULT_COMPONENT_STROKE, DEFAULT_END_LABEL_SIZE } from './profile'
@@ -266,6 +266,30 @@ function migrateComponentV12(raw: RawRecord): RawRecord {
   }
 }
 
+// Composant v14 → v15 : une image est une forme comme les autres. Un composant fait d'une image
+// (visuel « png ») devient un dessin dont la seule forme est cette image, sur toute sa boîte.
+
+function migrateComponentV14(raw: RawRecord): RawRecord {
+  const visual = raw['visual']
+  if (!isRecord(visual) || visual['kind'] !== 'png') return raw
+  const size = isRecord(raw['size']) ? raw['size'] : {}
+  const cells = (value: unknown): number =>
+    typeof value === 'number' && value > 0 ? Math.round(value) : 1
+  const image: RawRecord = {
+    kind: 'image',
+    x: 0,
+    y: 0,
+    w: cells(size['widthCells']) * 4,
+    h: cells(size['heightCells']) * 4,
+    file:
+      typeof visual['file'] === 'string' && IMAGE_FILE_PATTERN.test(visual['file'])
+        ? visual['file']
+        : 'image.png'
+  }
+  if (typeof visual['dataUrl'] === 'string') image['dataUrl'] = visual['dataUrl']
+  return { ...raw, visual: { kind: 'drawing', primitives: [image] } }
+}
+
 export const componentMigrations: MigrationTable = {
   current: COMPONENT_SCHEMA_VERSION,
   steps: {
@@ -289,7 +313,8 @@ export const componentMigrations: MigrationTable = {
     11: (raw) => raw,
     12: migrateComponentV12,
     // v13 → v14 : textes verticaux, horizontaux par défaut.
-    13: (raw) => withTextDefaults(raw, { vertical: false })
+    13: (raw) => withTextDefaults(raw, { vertical: false }),
+    14: migrateComponentV14
   }
 }
 
@@ -444,7 +469,16 @@ export const projectMigrations: MigrationTable = {
     16: (raw) => ({ customColors: [], ...raw }),
     // Projet v17 → v18 : définitions embarquées migrées (textes verticaux).
     17: migrateEmbeddedDefs,
-    18: migrateProjectV18
+    18: migrateProjectV18,
+    // Projet v19 → v20 : fond optionnel des étiquettes texte, absent au départ ; définitions
+    // embarquées migrées (images en formes).
+    19: (raw) => {
+      const labels = Array.isArray(raw['labels']) ? raw['labels'] : []
+      return migrateEmbeddedDefs({
+        ...raw,
+        labels: labels.map((label) => (isRecord(label) ? { background: false, ...label } : label))
+      })
+    }
   }
 }
 
@@ -498,9 +532,21 @@ function migrateDiagramV2(raw: RawRecord): RawRecord {
   }
 }
 
+// Diagramme v3 → v4 : fond optionnel des étiquettes de lien et des textes libres, absent au départ.
+
+function migrateDiagramV3(raw: RawRecord): RawRecord {
+  const links = Array.isArray(raw['links']) ? raw['links'] : []
+  const texts = Array.isArray(raw['texts']) ? raw['texts'] : []
+  return {
+    ...raw,
+    links: links.map((link) => (isRecord(link) ? { labelBackground: false, ...link } : link)),
+    texts: texts.map((text) => (isRecord(text) ? { background: false, ...text } : text))
+  }
+}
+
 export const diagramMigrations: MigrationTable = {
   current: DIAGRAM_SCHEMA_VERSION,
-  steps: { 1: migrateDiagramV1, 2: migrateDiagramV2 }
+  steps: { 1: migrateDiagramV1, 2: migrateDiagramV2, 3: migrateDiagramV3 }
 }
 
 // Paramètres v1 → v2 : export et copie de secours ; v2 → v3 : trait des composants du profil ;
@@ -532,6 +578,8 @@ export const settingsMigrations: MigrationTable = {
     7: (raw) => ({ ...raw, libraryView: 'list' }),
     8: migrateSettingsV8,
     // v9 → v10 : style général des diagrammes, au style par défaut.
-    9: (raw) => ({ ...raw, diagramDefaults: structuredClone(DEFAULT_DIAGRAM_DEFAULTS) })
+    9: (raw) => ({ ...raw, diagramDefaults: structuredClone(DEFAULT_DIAGRAM_DEFAULTS) }),
+    // v10 → v11 : dossier du fichier de paramètres partagé, au choix ; vide = celui par défaut.
+    10: (raw) => ({ ...raw, settingsDir: '' })
   }
 }

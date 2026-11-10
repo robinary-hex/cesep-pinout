@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import {
   DOT_SCALES,
-  fitPngToCells,
+  naturalImageSize,
   PIN_KIND_LABELS,
   PIN_KINDS,
   STROKE_WEIGHTS,
@@ -10,15 +10,13 @@ import {
   TEXT_SCALES,
   turnedTextBox,
   type Arrows,
-  type PinKind,
-  type PngFit
+  type PinKind
 } from '@/domain'
 import Icon from '@/ui/Icon.vue'
 import type { IconName } from '@/ui/icons'
-import { pickPng, resizePng } from './pngImport'
 import { useComponentEditorStore } from './store'
 
-// Panneau de droite. Sans sélection : le composant (propriétés, broches, visuel). Avec des
+// Panneau de droite. Sans sélection : le composant (propriétés, taille, broches). Avec des
 // formes sélectionnées : seulement elles. Une broche sélectionnée reste dans la liste du
 // composant, mise en évidence, avec les contrôles de cohérence ; une forme sélectionnée les cache.
 // Les champs valident au changement (pas à chaque touche), donc une modification = une commande.
@@ -52,44 +50,6 @@ function setSize(axis: 'widthCells' | 'heightCells', event: Event): void {
   store.setSize({ ...doc.value.size, [axis]: value })
 }
 
-// Import d'un PNG
-
-const pending = ref<{ dataUrl: string; width: number; height: number; fit: PngFit } | null>(null)
-const importError = ref('')
-
-async function importPng(): Promise<void> {
-  importError.value = ''
-  pending.value = null
-  try {
-    const picked = await pickPng()
-    if (!picked) return
-    const fit = fitPngToCells(picked.width, picked.height)
-    if (fit.exact) {
-      store.setVisualPng(picked.dataUrl, fit)
-      return
-    }
-    pending.value = { dataUrl: picked.dataUrl, width: picked.width, height: picked.height, fit }
-  } catch (error) {
-    importError.value = error instanceof Error ? error.message : String(error)
-  }
-}
-
-async function acceptResize(): Promise<void> {
-  const current = pending.value
-  if (!current) return
-  try {
-    const resized = await resizePng(
-      current.dataUrl,
-      current.fit.targetWidth,
-      current.fit.targetHeight
-    )
-    store.setVisualPng(resized, current.fit)
-    pending.value = null
-  } catch (error) {
-    importError.value = error instanceof Error ? error.message : String(error)
-  }
-}
-
 // Broches
 
 function selectPin(id: string): void {
@@ -113,9 +73,7 @@ function setPinKind(id: string, event: Event): void {
 
 const primitive = computed(() => store.selectedPrimitive)
 const primitiveIndex = computed(() => store.selectedIndexes[0] ?? -1)
-const primitiveCount = computed(() =>
-  doc.value.visual.kind === 'drawing' ? doc.value.visual.primitives.length : 0
-)
+const primitiveCount = computed(() => doc.value.visual.primitives.length)
 /** Formes et broches sélectionnées, ensemble. */
 const multiCount = computed(() => store.selectedIndexes.length + store.selectedPinIds.length)
 const shapeStyle = computed(() =>
@@ -134,8 +92,26 @@ const KIND_LABELS: Record<string, string> = {
   line: 'Ligne',
   polyline: 'Polyligne',
   dot: 'Point',
-  text: 'Texte'
+  text: 'Texte',
+  image: 'Image'
 }
+
+// Image : sa taille à l'écran, et le retour à sa taille d'origine (80 px par cellule).
+
+const QUARTERS = 4
+const cells = (quarters: number): string =>
+  (quarters / QUARTERS).toLocaleString('fr-BE', { maximumFractionDigits: 2 })
+
+const imageSize = computed(() => {
+  const current = primitive.value
+  if (current?.kind !== 'image') return null
+  const natural = naturalImageSize(current)
+  return {
+    shown: `${cells(current.w)} × ${cells(current.h)} cellules`,
+    natural: natural ? `${cells(natural.w)} × ${cells(natural.h)} cellules` : null,
+    resized: natural !== null && (natural.w !== current.w || natural.h !== current.h)
+  }
+})
 
 function setStroke(event: Event): void {
   store.updateStyle(primitiveIndex.value, { stroke: inputValue(event) })
@@ -481,6 +457,21 @@ function setClosed(event: Event): void {
         </label>
       </template>
 
+      <template v-else-if="primitive.kind === 'image' && imageSize">
+        <p class="hint">
+          {{ imageSize.shown
+          }}{{ imageSize.resized ? ` (taille d’origine : ${imageSize.natural})` : '' }}
+        </p>
+        <button
+          type="button"
+          :disabled="!imageSize.resized"
+          title="Rendre à l’image sa taille d’origine : 80 px du fichier par cellule"
+          @click="store.resetImageSize(primitiveIndex)"
+        >
+          Taille d’origine
+        </button>
+      </template>
+
       <template v-else-if="primitive.kind === 'dot'">
         <div class="row">
           <label class="field">
@@ -703,34 +694,6 @@ function setClosed(event: Event): void {
       </section>
 
       <section class="block">
-        <h3>Visuel</h3>
-        <p v-if="doc.visual.kind === 'png'" class="hint">
-          Image PNG à {{ doc.visual.pxPerCell }} px par cellule.
-        </p>
-        <div class="row">
-          <button type="button" class="with-icon" @click="importPng">
-            <Icon name="image" /> Importer un PNG…
-          </button>
-          <button v-if="doc.visual.kind === 'png'" type="button" @click="store.setVisualDrawing()">
-            Revenir au dessin
-          </button>
-        </div>
-        <div v-if="pending" class="notice">
-          <p>
-            Le PNG fait {{ pending.width }} × {{ pending.height }} px, soit
-            {{ (pending.width / 80).toFixed(2) }} × {{ (pending.height / 80).toFixed(2) }} cellules.
-            Le redimensionner en {{ pending.fit.targetWidth }} × {{ pending.fit.targetHeight }} px
-            ({{ pending.fit.widthCells }} × {{ pending.fit.heightCells }} cellules) ?
-          </p>
-          <div class="row">
-            <button type="button" class="primary" @click="acceptResize">Redimensionner</button>
-            <button type="button" @click="pending = null">Annuler</button>
-          </div>
-        </div>
-        <p v-if="importError" class="error">{{ importError }}</p>
-      </section>
-
-      <section class="block">
         <h3>Contrôles</h3>
         <p v-if="store.issues.length === 0" class="ok">Aucun problème.</p>
         <ul v-else class="issues">
@@ -907,24 +870,6 @@ function setClosed(event: Event): void {
   font-size: 12px;
   color: var(--text-muted);
   word-break: break-word;
-}
-
-.notice {
-  margin-top: 8px;
-  padding: 8px;
-  border: 1px solid var(--warning-border);
-  border-radius: 4px;
-  background: var(--warning-bg);
-  font-size: 12px;
-}
-
-.notice p {
-  margin: 0 0 8px;
-}
-
-.error {
-  color: var(--danger);
-  font-size: 12px;
 }
 
 .ok {

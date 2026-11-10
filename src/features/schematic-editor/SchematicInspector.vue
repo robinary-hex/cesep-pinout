@@ -255,6 +255,15 @@ function setLabelColor(event: Event): void {
   if (label) store.setLabelStyle(label.id, 'Couleur de l’étiquette', { color: inputValue(event) })
 }
 
+function setLabelBackground(event: Event): void {
+  const label = singleLabel.value
+  if (!label) return
+  const background = (event.target as HTMLInputElement).checked
+  store.setLabelStyle(label.id, background ? 'Fond de l’étiquette' : 'Étiquette sans fond', {
+    background
+  })
+}
+
 function setLabelVertical(event: Event): void {
   const label = singleLabel.value
   if (label) store.setLabelVertical(label.id, (event.target as HTMLInputElement).checked)
@@ -580,6 +589,10 @@ function setLabelVertical(event: Event): void {
         <label class="check" title="Le texte est tourné de 90° et se lit de haut en bas">
           <input type="checkbox" :checked="singleLabel.vertical" @change="setLabelVertical" />
           <span>Vertical</span>
+        </label>
+        <label class="check" title="Un fond de la couleur du papier masque ce qui passe derrière">
+          <input type="checkbox" :checked="singleLabel.background" @change="setLabelBackground" />
+          <span>Fond</span>
         </label>
         <div class="row">
           <button type="button" class="with-icon" @click="store.duplicateSelection()">

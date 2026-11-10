@@ -132,7 +132,7 @@ describe('projet : charger, valider, réenregistrer', () => {
 })
 
 describe('composants', () => {
-  it('charge un composant dessiné et un composant PNG, sans avertissement', () => {
+  it('charge un composant dessiné, et un ancien composant « PNG » devenu une image du dessin', () => {
     const resistor = parseComponentDefinition(drawingText)
     expect(resistor.visual.kind).toBe('drawing')
     expect(resistor.pins.map((pin) => [pin.x, pin.y])).toEqual([
@@ -142,8 +142,14 @@ describe('composants', () => {
     expect(componentIssues(resistor)).toEqual([])
 
     const nano = parseComponentDefinition(pngText)
-    expect(nano.visual.kind === 'png' && nano.visual.pxPerCell).toBe(80)
-    expect(componentIssues(nano)).toEqual([])
+    // 6 × 14 cellules : l'image couvre toute la boîte, en quarts de cellule.
+    expect(nano.visual.primitives).toEqual([
+      { kind: 'image', x: 0, y: 0, w: 24, h: 56, file: 'image.png' }
+    ])
+    // Le JSON de la bibliothèque ne porte pas l'image : elle se rattache à la lecture du dossier.
+    expect(componentIssues(nano).map((issue) => issue.message)).toEqual([
+      'Une image a perdu son fichier'
+    ])
   })
 
   it('se réenregistre à l’identique', () => {

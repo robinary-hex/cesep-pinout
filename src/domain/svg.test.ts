@@ -85,7 +85,8 @@ describe('export SVG', () => {
       underline: true,
       strike: false,
       vertical: true,
-      color: '#d62828'
+      color: '#d62828',
+      background: false
     }
     const result = buildProjectSvg(
       { ...project, components: [], wires: [], labels: [label] },
@@ -122,6 +123,24 @@ describe('export SVG', () => {
     const plainText = /<text [^>]*>(?=<tspan[^>]*>Alim)/.exec(plain?.svg ?? '')?.[0] ?? ''
     expect(plainText).toContain('fill="#000000"')
     expect(plainText).not.toMatch(/transform|font-weight|font-style|text-decoration/)
+    // Sans fond demandé, rien sous le texte ; avec, sa boîte de la couleur du fond de l'image.
+    expect(result.svg).not.toContain('<g class="texts"><rect')
+    const backed = buildProjectSvg(
+      { ...project, components: [], wires: [], labels: [{ ...label, background: true }] },
+      { ...DEFAULT_EXPORT, background: '#102030' }
+    )
+    expect(backed?.svg).toContain(
+      '<g class="texts"><rect x="2" y="0" width="1" height="4" fill="#102030"/><text '
+    )
+  })
+
+  it('exporte une image à la place de sa forme, ou un cadre gris si son fichier manque', () => {
+    const image = { kind: 'image' as const, x: 4, y: 0, w: 8, h: 12, file: 'image.png' }
+    const dataUrl = 'data:image/png;base64,AAAA'
+    expect(primitiveSvg({ ...image, dataUrl }, 0.1)).toBe(
+      `<image href="${dataUrl}" xlink:href="${dataUrl}" x="1" y="0" width="2" height="3" preserveAspectRatio="none"/>`
+    )
+    expect(primitiveSvg(image, 0.1)).toMatch(/^<rect x="1" y="0" width="2" height="3" /)
   })
 
   it('retourne null pour un montage vide et échappe le texte', () => {

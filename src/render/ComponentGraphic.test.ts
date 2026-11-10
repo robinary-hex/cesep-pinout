@@ -91,25 +91,41 @@ describe('ComponentGraphic', () => {
     expect(placed.find('text').text()).toBe('4,7 kΩ')
   })
 
-  it('affiche un PNG embarqué à la taille du composant', () => {
+  it('affiche une image à la place et à la taille de sa forme', () => {
     const def = createEmptyComponent('n', 'N')
-    def.size = { widthCells: 6, heightCells: 14 }
     def.visual = {
-      kind: 'png',
-      file: 'image.png',
-      pxPerCell: 80,
-      dataUrl: 'data:image/png;base64,AAAA'
+      kind: 'drawing',
+      primitives: [
+        {
+          kind: 'image',
+          x: 4,
+          y: 0,
+          w: 8,
+          h: 12,
+          file: 'image.png',
+          dataUrl: 'data:image/png;base64,AAAA'
+        }
+      ]
     }
     const wrapper = mount(ComponentGraphic, { props: { def, cellPx: 20 } })
-    const image = wrapper.find('image')
-    expect(image.attributes('width')).toBe('120')
-    expect(image.attributes('height')).toBe('280')
+    // Quarts de cellule à 20 px par cellule : 5 px par quart.
+    expect(wrapper.get('image').attributes()).toMatchObject({
+      x: '20',
+      y: '0',
+      width: '40',
+      height: '60'
+    })
   })
 
   it('signale une image manquante au lieu de planter', () => {
     const def = createEmptyComponent('n', 'N')
-    def.visual = { kind: 'png', file: 'image.png', pxPerCell: 80 }
+    def.visual = {
+      kind: 'drawing',
+      primitives: [{ kind: 'image', x: 4, y: 0, w: 8, h: 12, file: 'image.png' }]
+    }
     const wrapper = mount(ComponentGraphic, { props: { def, cellPx: 20 } })
-    expect(wrapper.text()).toContain('image.png manquante')
+    expect(wrapper.find('image').exists()).toBe(false)
+    expect(wrapper.get('.missing-image rect').attributes('width')).toBe('40')
+    expect(wrapper.text()).toContain('Image manquante')
   })
 })

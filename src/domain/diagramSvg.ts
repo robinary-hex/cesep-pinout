@@ -180,15 +180,16 @@ export function buildDiagramSvg(
         (line) => `<tspan ${svgAttrs({ x: layout.x, y: line.y })}>${escapeXml(line.text)}</tspan>`
       )
       .join('')
-    // Un voile de la couleur du papier sous l'étiquette : elle reste lisible posée sur un trait.
-    const back = `<rect ${svgAttrs({
-      x: box.x - 0.2,
-      y: box.y,
-      width: box.w + 0.4,
-      height: box.h,
-      fill: ground.paper,
-      'fill-opacity': 0.85
-    })}/>`
+    // Fond optionnel, de la couleur du papier : l'étiquette masque ce qui passe derrière elle.
+    const back = link.labelBackground
+      ? `<rect ${svgAttrs({
+          x: box.x - 0.2,
+          y: box.y,
+          width: box.w + 0.4,
+          height: box.h,
+          fill: ground.paper
+        })}/>`
+      : ''
     return [
       `${back}<text ${svgAttrs({
         'text-anchor': layout.anchor,
@@ -210,7 +211,10 @@ export function buildDiagramSvg(
           (line) => `<tspan ${svgAttrs({ x: layout.x, y: line.y })}>${escapeXml(line.text)}</tspan>`
         )
         .join('')
-      return `<text ${svgAttrs({
+      const back = text.background
+        ? `<rect ${svgAttrs({ x: text.x, y: text.y, width: text.w, height: text.h, fill: ground.paper })}/>`
+        : ''
+      return `${back}<text ${svgAttrs({
         'font-size': text.size / style.cellPx,
         'text-anchor': text.anchor,
         fill: inkColor(text.color, ground),

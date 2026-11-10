@@ -21,6 +21,9 @@ import componentV10 from './fixtures/v10/component-drawing.json?raw'
 import componentV11 from './fixtures/v11/component-drawing.json?raw'
 import componentV12 from './fixtures/v12/component-drawing.json?raw'
 import componentV13 from './fixtures/v13/component-drawing.json?raw'
+import componentPngV14 from './fixtures/v14/component-png.json?raw'
+import projectV19 from './fixtures/v19/project.json?raw'
+import settingsV10 from './fixtures/v10/settings.json?raw'
 import projectV17 from './fixtures/v17/project.json?raw'
 import projectV18 from './fixtures/v18/project.json?raw'
 import projectV15 from './fixtures/v15/project.json?raw'
@@ -102,7 +105,7 @@ describe('migrations', () => {
 describe('composant v1 → v4', () => {
   it('convertit les épaisseurs en multiplicateurs, ajoute flèches, textes variables et unité, retire le préfixe', () => {
     const def = parseComponentDefinition(componentV1)
-    expect(def.schemaVersion).toBe(14)
+    expect(def.schemaVersion).toBe(15)
     expect('labelPrefix' in def).toBe(false)
     if (def.visual.kind !== 'drawing') throw new Error('dessin attendu')
     const [line, rect, , text] = def.visual.primitives
@@ -138,7 +141,7 @@ describe('composant v1 → v4', () => {
 describe('composant v2 → v4', () => {
   it('ajoute une unité vide aux textes et garde le reste', () => {
     const def = parseComponentDefinition(componentV2)
-    expect(def.schemaVersion).toBe(14)
+    expect(def.schemaVersion).toBe(15)
     if (def.visual.kind !== 'drawing') throw new Error('dessin attendu')
     const text = def.visual.primitives[3]
     expect(text).toMatchObject({
@@ -160,12 +163,12 @@ describe('composant v2 → v4', () => {
 describe('projet v1 → v5', () => {
   it('ajoute le trait des composants au profil, les champs aux instances, et migre les définitions', () => {
     const project = parseProject(projectV1)
-    expect(project.schemaVersion).toBe(19)
+    expect(project.schemaVersion).toBe(20)
     expect(project.wires[0]?.endLabels).toEqual({ start: '', end: '' })
     expect(project.profile.componentStroke).toBe(0.1)
     expect(project.components.every((instance) => instance.fields !== undefined)).toBe(true)
     for (const def of Object.values(project.embeddedDefs)) {
-      expect(def.schemaVersion).toBe(14)
+      expect(def.schemaVersion).toBe(15)
       expect('labelPrefix' in def).toBe(false)
     }
   })
@@ -174,10 +177,10 @@ describe('projet v1 → v5', () => {
 describe('projet v2 → v5', () => {
   it('migre les définitions embarquées et garde les valeurs des instances', () => {
     const project = parseProject(projectV2)
-    expect(project.schemaVersion).toBe(19)
+    expect(project.schemaVersion).toBe(20)
     expect(project.components[0]?.fields).toEqual({ R: '4,7 kΩ' })
     const def = project.embeddedDefs['resistor']
-    expect(def?.schemaVersion).toBe(14)
+    expect(def?.schemaVersion).toBe(15)
     if (def?.visual.kind !== 'drawing') throw new Error('dessin attendu')
     expect(def.visual.primitives[1]).toMatchObject({ kind: 'text', unit: '', bold: false })
     expect(project.wires[0]?.color).toBe('#d62828')
@@ -187,7 +190,7 @@ describe('projet v2 → v5', () => {
 describe('projet v3 → v5', () => {
   it('ajoute des étiquettes d’extrémité vides aux fils et garde le style des extrémités', () => {
     const project = parseProject(projectV3)
-    expect(project.schemaVersion).toBe(19)
+    expect(project.schemaVersion).toBe(20)
     expect(project.wires[0]).toMatchObject({ freeEnds: 'arrow', endLabels: { start: '', end: '' } })
   })
 })
@@ -195,7 +198,7 @@ describe('projet v3 → v5', () => {
 describe('composant v3 → v4', () => {
   it('ajoute une graisse normale aux textes et garde l’unité', () => {
     const def = parseComponentDefinition(componentV3)
-    expect(def.schemaVersion).toBe(14)
+    expect(def.schemaVersion).toBe(15)
     if (def.visual.kind !== 'drawing') throw new Error('dessin attendu')
     expect(def.visual.primitives[1]).toMatchObject({ kind: 'text', unit: 'kΩ', bold: false })
   })
@@ -204,11 +207,11 @@ describe('composant v3 → v4', () => {
 describe('projet v4 → v5', () => {
   it('ajoute la graisse aux étiquettes et migre les définitions embarquées', () => {
     const project = parseProject(projectV4)
-    expect(project.schemaVersion).toBe(19)
+    expect(project.schemaVersion).toBe(20)
     expect(project.labels[0]).toMatchObject({ text: 'Diviseur', bold: false })
     expect(project.wires[0]).toMatchObject({ freeEnds: 'dotted', endLabels: { end: 'OUT' } })
     const def = project.embeddedDefs['resistor']
-    expect(def?.schemaVersion).toBe(14)
+    expect(def?.schemaVersion).toBe(15)
     if (def?.visual.kind !== 'drawing') throw new Error('dessin attendu')
     expect(def.visual.primitives[0]).toMatchObject({ kind: 'text', bold: false })
   })
@@ -217,7 +220,7 @@ describe('projet v4 → v5', () => {
 describe('composant v4 → v5', () => {
   it('ajoute la flèche du milieu, absente, et garde les autres', () => {
     const def = parseComponentDefinition(componentV4)
-    expect(def.schemaVersion).toBe(14)
+    expect(def.schemaVersion).toBe(15)
     if (def.visual.kind !== 'drawing') throw new Error('dessin attendu')
     expect(def.visual.primitives[0]).toMatchObject({
       kind: 'line',
@@ -230,10 +233,10 @@ describe('composant v4 → v5', () => {
 describe('projet v5 → v8', () => {
   it('migre les définitions embarquées et garde les étiquettes en gras', () => {
     const project = parseProject(projectV5)
-    expect(project.schemaVersion).toBe(19)
+    expect(project.schemaVersion).toBe(20)
     expect(project.labels[0]).toMatchObject({ bold: true, size: 16.5 })
     const def = project.embeddedDefs['arrow-line']
-    expect(def?.schemaVersion).toBe(14)
+    expect(def?.schemaVersion).toBe(15)
     if (def?.visual.kind !== 'drawing') throw new Error('dessin attendu')
     expect(def.visual.primitives[0]).toMatchObject({ arrows: { middle: false, end: true } })
   })
@@ -242,7 +245,7 @@ describe('projet v5 → v8', () => {
 describe('projet v6 → v8', () => {
   it('donne au profil une police d’étiquettes d’extrémité, de la famille des repères', () => {
     const project = parseProject(projectV6)
-    expect(project.schemaVersion).toBe(19)
+    expect(project.schemaVersion).toBe(20)
     expect(project.profile.endLabelFont).toEqual({ family: 'Consolas', size: 14 })
     expect(project.wires[0]?.endLabels.start).toBe('VCC')
   })
@@ -251,7 +254,7 @@ describe('projet v6 → v8', () => {
 describe('composant v5 → v8', () => {
   it('donne au texte une boîte déduite de son ancre, centrée sur l’ancien point', () => {
     const def = parseComponentDefinition(componentV5)
-    expect(def.schemaVersion).toBe(14)
+    expect(def.schemaVersion).toBe(15)
     if (def.visual.kind !== 'drawing') throw new Error('dessin attendu')
     // « R » de 0,5 cellule ancré au centre en (8, 1) : boîte 2 × 2 quarts autour de ce point.
     expect(def.visual.primitives[1]).toMatchObject({
@@ -268,9 +271,9 @@ describe('composant v5 → v8', () => {
 describe('projet v7 → v8', () => {
   it('migre les textes des définitions embarquées', () => {
     const project = parseProject(projectV7)
-    expect(project.schemaVersion).toBe(19)
+    expect(project.schemaVersion).toBe(20)
     const def = project.embeddedDefs['motor']
-    expect(def?.schemaVersion).toBe(14)
+    expect(def?.schemaVersion).toBe(15)
     if (def?.visual.kind !== 'drawing') throw new Error('dessin attendu')
     // « M » d’une cellule ancré au centre en (8, 4) : hauteur 4, largeur 3, boîte décalée autour.
     expect(def.visual.primitives[0]).toMatchObject({ kind: 'text', w: 3, h: 4, y: 2 })
@@ -280,7 +283,7 @@ describe('projet v7 → v8', () => {
 describe('projet v8 → v9', () => {
   it('donne aux étiquettes une boîte en cellules sous leur ancienne ligne de base', () => {
     const project = parseProject(projectV8)
-    expect(project.schemaVersion).toBe(19)
+    expect(project.schemaVersion).toBe(20)
     // « Exemple » en 11 pt sur 20 px : 0,55 cellule de haut, 7 caractères → boîte 3 × 1 au-dessus de y = 0.
     expect(project.labels[0]).toMatchObject({ x: 2, y: -1, w: 3, h: 1, anchor: 'start' })
   })
@@ -289,7 +292,7 @@ describe('projet v8 → v9', () => {
 describe('composant v6 → v8', () => {
   it('garde les textes droits sur le montage par défaut', () => {
     const def = parseComponentDefinition(componentV6)
-    expect(def.schemaVersion).toBe(14)
+    expect(def.schemaVersion).toBe(15)
     if (def.visual.kind !== 'drawing') throw new Error('dessin attendu')
     expect(def.visual.primitives[0]).toMatchObject({ kind: 'text', followsRotation: false })
   })
@@ -298,7 +301,7 @@ describe('composant v6 → v8', () => {
 describe('projet v9 → v10', () => {
   it('migre les définitions embarquées et garde les boîtes des étiquettes', () => {
     const project = parseProject(projectV9)
-    expect(project.schemaVersion).toBe(19)
+    expect(project.schemaVersion).toBe(20)
     const motor = project.embeddedDefs['motor']
     expect(motor?.visual.kind === 'drawing' && motor.visual.primitives[0]).toMatchObject({
       followsRotation: false
@@ -310,7 +313,7 @@ describe('projet v9 → v10', () => {
 describe('composant v7 → v8', () => {
   it('reporte le réglage global sur chaque texte et le retire du composant', () => {
     const def = parseComponentDefinition(componentV7)
-    expect(def.schemaVersion).toBe(14)
+    expect(def.schemaVersion).toBe(15)
     expect('textFollowsTransform' in def).toBe(false)
     if (def.visual.kind !== 'drawing') throw new Error('dessin attendu')
     expect(def.visual.primitives[0]).toMatchObject({ kind: 'text', followsRotation: true })
@@ -320,9 +323,9 @@ describe('composant v7 → v8', () => {
 describe('projet v10 → v11', () => {
   it('migre les définitions embarquées (orientation texte par texte)', () => {
     const project = parseProject(projectV10)
-    expect(project.schemaVersion).toBe(19)
+    expect(project.schemaVersion).toBe(20)
     const motor = project.embeddedDefs['motor']
-    expect(motor?.schemaVersion).toBe(14)
+    expect(motor?.schemaVersion).toBe(15)
     expect(motor?.visual.kind === 'drawing' && motor.visual.primitives[0]).toMatchObject({
       followsRotation: true
     })
@@ -332,7 +335,7 @@ describe('projet v10 → v11', () => {
 describe('composant v8 → v9', () => {
   it('ajoute italique, souligné et barré, désactivés', () => {
     const def = parseComponentDefinition(componentV8)
-    expect(def.schemaVersion).toBe(14)
+    expect(def.schemaVersion).toBe(15)
     if (def.visual.kind !== 'drawing') throw new Error('dessin attendu')
     expect(def.visual.primitives[0]).toMatchObject({
       kind: 'text',
@@ -347,9 +350,9 @@ describe('composant v8 → v9', () => {
 describe('projet v11 → v12', () => {
   it('migre les définitions embarquées (styles de texte)', () => {
     const project = parseProject(projectV11)
-    expect(project.schemaVersion).toBe(19)
+    expect(project.schemaVersion).toBe(20)
     const motor = project.embeddedDefs['motor']
-    expect(motor?.schemaVersion).toBe(14)
+    expect(motor?.schemaVersion).toBe(15)
     expect(motor?.visual.kind === 'drawing' && motor.visual.primitives[0]).toMatchObject({
       followsRotation: true,
       strike: false
@@ -360,7 +363,7 @@ describe('projet v11 → v12', () => {
 describe('composant v9 → v10', () => {
   it('retire la chasse fixe et garde les autres styles', () => {
     const def = parseComponentDefinition(componentV9)
-    expect(def.schemaVersion).toBe(14)
+    expect(def.schemaVersion).toBe(15)
     if (def.visual.kind !== 'drawing') throw new Error('dessin attendu')
     const text = def.visual.primitives[0]
     expect(text).toMatchObject({ kind: 'text', italic: true, bold: true })
@@ -371,9 +374,9 @@ describe('composant v9 → v10', () => {
 describe('projet v12 → v13', () => {
   it('migre les définitions embarquées (plus de chasse fixe)', () => {
     const project = parseProject(projectV12)
-    expect(project.schemaVersion).toBe(19)
+    expect(project.schemaVersion).toBe(20)
     const motor = project.embeddedDefs['motor']
-    expect(motor?.schemaVersion).toBe(14)
+    expect(motor?.schemaVersion).toBe(15)
     const text = motor?.visual.kind === 'drawing' ? motor.visual.primitives[0] : undefined
     expect(text).toMatchObject({ italic: true })
     expect(text && 'mono' in text).toBe(false)
@@ -383,7 +386,7 @@ describe('projet v12 → v13', () => {
 describe('composant v10 → v11', () => {
   it('rend le remplissage opaque par défaut', () => {
     const def = parseComponentDefinition(componentV10)
-    expect(def.schemaVersion).toBe(14)
+    expect(def.schemaVersion).toBe(15)
     if (def.visual.kind !== 'drawing') throw new Error('dessin attendu')
     expect(def.visual.primitives[0]).toMatchObject({
       kind: 'rect',
@@ -395,9 +398,9 @@ describe('composant v10 → v11', () => {
 describe('projet v13 → v14', () => {
   it('migre les définitions embarquées (opacité du remplissage)', () => {
     const project = parseProject(projectV13)
-    expect(project.schemaVersion).toBe(19)
+    expect(project.schemaVersion).toBe(20)
     const motor = project.embeddedDefs['motor']
-    expect(motor?.schemaVersion).toBe(14)
+    expect(motor?.schemaVersion).toBe(15)
     const rect = motor?.visual.kind === 'drawing' ? motor.visual.primitives[0] : undefined
     expect(rect).toMatchObject({ style: { fillOpacity: 1 } })
   })
@@ -406,7 +409,7 @@ describe('projet v13 → v14', () => {
 describe('composant v11 → v12', () => {
   it('garde les formes telles quelles, opacité comprise', () => {
     const def = parseComponentDefinition(componentV11)
-    expect(def.schemaVersion).toBe(14)
+    expect(def.schemaVersion).toBe(15)
     if (def.visual.kind !== 'drawing') throw new Error('dessin attendu')
     expect(def.visual.primitives[0]).toMatchObject({ kind: 'rect', style: { fillOpacity: 0.5 } })
   })
@@ -415,15 +418,15 @@ describe('composant v11 → v12', () => {
 describe('projet v14 → v15', () => {
   it('migre les définitions embarquées (forme point)', () => {
     const project = parseProject(projectV14)
-    expect(project.schemaVersion).toBe(19)
-    expect(project.embeddedDefs['motor']?.schemaVersion).toBe(14)
+    expect(project.schemaVersion).toBe(20)
+    expect(project.embeddedDefs['motor']?.schemaVersion).toBe(15)
   })
 })
 
 describe('composant v12 → v13', () => {
   it('donne aux polylignes des angles vifs et garde le point', () => {
     const def = parseComponentDefinition(componentV12)
-    expect(def.schemaVersion).toBe(14)
+    expect(def.schemaVersion).toBe(15)
     if (def.visual.kind !== 'drawing') throw new Error('dessin attendu')
     expect(def.visual.primitives.find((primitive) => primitive.kind === 'polyline')).toMatchObject({
       closed: true,
@@ -438,15 +441,15 @@ describe('composant v12 → v13', () => {
 describe('projet v15 → v16', () => {
   it('migre les définitions embarquées (angles arrondis)', () => {
     const project = parseProject(projectV15)
-    expect(project.schemaVersion).toBe(19)
-    expect(project.embeddedDefs['motor']?.schemaVersion).toBe(14)
+    expect(project.schemaVersion).toBe(20)
+    expect(project.embeddedDefs['motor']?.schemaVersion).toBe(15)
   })
 })
 
 describe('projet v16 → v17', () => {
   it('reçoit une liste vide de couleurs propres au montage', () => {
     const project = parseProject(projectV16)
-    expect(project.schemaVersion).toBe(19)
+    expect(project.schemaVersion).toBe(20)
     expect(project.customColors).toEqual([])
   })
 })
@@ -454,7 +457,7 @@ describe('projet v16 → v17', () => {
 describe('composant v13 → v14', () => {
   it('laisse les textes horizontaux et garde les angles arrondis', () => {
     const def = parseComponentDefinition(componentV13)
-    expect(def.schemaVersion).toBe(14)
+    expect(def.schemaVersion).toBe(15)
     if (def.visual.kind !== 'drawing') throw new Error('dessin attendu')
     expect(def.visual.primitives.find((primitive) => primitive.kind === 'text')).toMatchObject({
       vertical: false
@@ -468,16 +471,16 @@ describe('composant v13 → v14', () => {
 describe('projet v17 → v18', () => {
   it('migre les définitions embarquées et garde les couleurs du montage', () => {
     const project = parseProject(projectV17)
-    expect(project.schemaVersion).toBe(19)
+    expect(project.schemaVersion).toBe(20)
     expect(project.customColors).toEqual(['#ff00aa'])
-    expect(project.embeddedDefs['motor']?.schemaVersion).toBe(14)
+    expect(project.embeddedDefs['motor']?.schemaVersion).toBe(15)
   })
 })
 
 describe('projet v18 → v19', () => {
   it('donne aux étiquettes les styles de texte et une couleur noire', () => {
     const project = parseProject(projectV18)
-    expect(project.schemaVersion).toBe(19)
+    expect(project.schemaVersion).toBe(20)
     expect(project.labels[0]).toMatchObject({
       text: 'Pompe',
       bold: true,
@@ -490,10 +493,69 @@ describe('projet v18 → v19', () => {
   })
 })
 
+describe('composant v14 → v15', () => {
+  it('fait d’un composant « PNG » un dessin dont la seule forme est cette image', () => {
+    const def = parseComponentDefinition(componentPngV14)
+    expect(def.schemaVersion).toBe(15)
+    // 2 × 3 cellules : l'image couvre toute la boîte, en quarts de cellule.
+    expect(def.visual).toEqual({
+      kind: 'drawing',
+      primitives: [{ kind: 'image', x: 0, y: 0, w: 8, h: 12, file: 'image.png' }]
+    })
+    expect(def.pins.map((pin) => [pin.x, pin.y])).toEqual([
+      [1, 0],
+      [1, 3]
+    ])
+  })
+
+  it('remplace un nom de fichier douteux par image.png', () => {
+    const raw = JSON.parse(componentPngV14) as { visual: { file: string } }
+    raw.visual.file = '../ailleurs/secret.png'
+    const def = parseComponentDefinition(JSON.stringify(raw))
+    expect(def.visual.primitives[0]).toMatchObject({ kind: 'image', file: 'image.png' })
+  })
+})
+
+describe('projet v19 → v20', () => {
+  it('laisse les étiquettes sans fond et migre les images embarquées avec leur contenu', () => {
+    const project = parseProject(projectV19)
+    expect(project.schemaVersion).toBe(20)
+    expect(project.labels[0]).toMatchObject({
+      text: 'Pompe',
+      underline: true,
+      color: '#d62828',
+      background: false
+    })
+    const led = project.embeddedDefs['led']
+    expect(led?.schemaVersion).toBe(15)
+    expect(led?.visual.primitives[0]).toMatchObject({
+      kind: 'image',
+      w: 8,
+      h: 12,
+      file: 'image.png'
+    })
+    const image = led?.visual.primitives[0]
+    expect(image?.kind === 'image' && image.dataUrl?.startsWith('data:image/png;base64,')).toBe(
+      true
+    )
+  })
+})
+
+describe('paramètres v10 → v11', () => {
+  it('garde le fichier partagé dans le dossier par défaut, et tous les réglages', () => {
+    const settings = parseSettings(settingsV10)
+    expect(settings.schemaVersion).toBe(11)
+    expect(settings.settingsDir).toBe('')
+    expect(settings.libraryDir).toBe('${OneDrive}/Pinout/lib')
+    expect(settings.diagramDefaults).toMatchObject({ nodeColor: '#1d4ed8', nodeFill: 'none' })
+    expect(settings.diagramDefaults.style).toMatchObject({ lineWidth: 0.2, font: 'mono' })
+  })
+})
+
 describe('paramètres v9 → v10', () => {
   it('reçoit le style général des diagrammes par défaut et garde le reste', () => {
     const settings = parseSettings(settingsV9)
-    expect(settings.schemaVersion).toBe(10)
+    expect(settings.schemaVersion).toBe(11)
     expect(settings.diagramDefaults).toEqual({
       style: DEFAULT_DIAGRAM_STYLE,
       nodeColor: '#000000',
@@ -508,7 +570,7 @@ describe('paramètres v9 → v10', () => {
 describe('paramètres v8 → v9', () => {
   it('range les couleurs personnalisées dans la palette, sans doublon', () => {
     const settings = parseSettings(settingsV8)
-    expect(settings.schemaVersion).toBe(10)
+    expect(settings.schemaVersion).toBe(11)
     expect('customColors' in settings).toBe(false)
     // #D62828 est déjà le rouge de la palette ; #ff00aa s'y ajoute sous son code.
     expect(settings.palette.map((color) => color.hex.toLowerCase())).toEqual([
@@ -524,7 +586,7 @@ describe('paramètres v8 → v9', () => {
 describe('paramètres v7 → v8', () => {
   it('affiche la bibliothèque en liste par défaut et garde le reste', () => {
     const settings = parseSettings(settingsV7)
-    expect(settings.schemaVersion).toBe(10)
+    expect(settings.schemaVersion).toBe(11)
     expect(settings.libraryView).toBe('list')
     expect(settings.theme).toBe('dark')
   })
@@ -533,7 +595,7 @@ describe('paramètres v7 → v8', () => {
 describe('paramètres v6 → v8', () => {
   it('passe au thème sombre et garde le reste', () => {
     const settings = parseSettings(settingsV6)
-    expect(settings.schemaVersion).toBe(10)
+    expect(settings.schemaVersion).toBe(11)
     expect(settings.theme).toBe('dark')
     expect(settings.autoOpenInspector).toBe(true)
     expect(settings.autosaveSeconds).toBe(120)
@@ -543,7 +605,7 @@ describe('paramètres v6 → v8', () => {
 describe('paramètres v5 → v8', () => {
   it('ouvre le panneau de propriétés à la sélection par défaut', () => {
     const settings = parseSettings(settingsV5)
-    expect(settings.schemaVersion).toBe(10)
+    expect(settings.schemaVersion).toBe(11)
     expect(settings.autoOpenInspector).toBe(true)
   })
 })
@@ -551,7 +613,7 @@ describe('paramètres v5 → v8', () => {
 describe('paramètres v4 → v8', () => {
   it('complète le profil par défaut et garde le thème', () => {
     const settings = parseSettings(settingsV4)
-    expect(settings.schemaVersion).toBe(10)
+    expect(settings.schemaVersion).toBe(11)
     expect(settings.theme).toBe('dark')
     expect(settings.defaultProfile.endLabelFont).toEqual({ family: 'Segoe UI', size: 14 })
   })
@@ -560,7 +622,7 @@ describe('paramètres v4 → v8', () => {
 describe('paramètres v1 → v8', () => {
   it('ajoute export, copie de secours, trait des composants et thème', () => {
     const settings = parseSettings(settingsV1)
-    expect(settings.schemaVersion).toBe(10)
+    expect(settings.schemaVersion).toBe(11)
     expect(settings.defaultProfile.componentStroke).toBe(0.1)
     expect(settings.export.scale).toBe(2)
     expect(settings.theme).toBe('dark')
@@ -570,7 +632,7 @@ describe('paramètres v1 → v8', () => {
 describe('paramètres v3 → v8', () => {
   it('ajoute le thème, sombre désormais, et garde le reste', () => {
     const settings = parseSettings(settingsV3)
-    expect(settings.schemaVersion).toBe(10)
+    expect(settings.schemaVersion).toBe(11)
     expect(settings.theme).toBe('dark')
     expect(settings.recentFiles).toEqual(['D:/Documents/diviseur.pinout.json'])
     expect(settings.autosaveSeconds).toBe(60)

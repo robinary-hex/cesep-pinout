@@ -1,4 +1,4 @@
-import type { Primitive, QuarterPoint } from './component'
+import { imageRatio, type Primitive, type QuarterPoint } from './component'
 
 /**
  * Poignées de modification d'une forme du mini-éditeur, en quarts de cellule :
@@ -48,11 +48,37 @@ export function resizeBox(box: Box, handleId: string, target: readonly [number, 
   return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 }
 }
 
+/**
+ * La boîte après glisser d'un coin vers `target`, proportions gardées (`ratio` = largeur sur
+ * hauteur) : le coin opposé reste en place, la dimension la plus tirée commande et l'autre suit.
+ * Les dimensions restent entières, d'au moins 1.
+ */
+export function resizeBoxKeepingRatio(
+  box: Box,
+  handleId: string,
+  target: readonly [number, number],
+  ratio: number = box.w / box.h
+): Box {
+  const [tx, ty] = target
+  const west = handleId.includes('w')
+  const north = handleId.includes('n')
+  const anchorX = west ? box.x + box.w : box.x
+  const anchorY = north ? box.y + box.h : box.y
+  const wantedW = west ? anchorX - tx : tx - anchorX
+  const wantedH = north ? anchorY - ty : ty - anchorY
+  const w = Math.max(1, Math.round(Math.max(wantedW, wantedH * ratio)))
+  const h = Math.max(1, Math.round(w / ratio))
+  return { x: west ? anchorX - w : anchorX, y: north ? anchorY - h : anchorY, w, h }
+}
+
 export function primitiveHandles(primitive: Primitive): Handle[] {
   switch (primitive.kind) {
     case 'rect':
     case 'text':
       return boxHandles(primitive)
+    case 'image':
+      // Une image garde ses proportions : seuls ses coins se saisissent.
+      return boxHandles(primitive).filter((handle) => handle.id.length === 2)
     case 'dot':
       // Un point se déplace en le glissant ; sa taille se règle dans le panneau.
       return []
@@ -86,6 +112,11 @@ export function dragHandle(
     case 'rect':
     case 'text':
       return { ...primitive, ...resizeBox(primitive, handleId, target) }
+    case 'image':
+      return {
+        ...primitive,
+        ...resizeBoxKeepingRatio(primitive, handleId, target, imageRatio(primitive))
+      }
     case 'dot':
       return primitive
     case 'ellipse':

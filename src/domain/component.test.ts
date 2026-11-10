@@ -5,6 +5,9 @@ import {
   createEmptyComponent,
   DEFAULT_SHAPE_STYLE,
   dotRadiusCells,
+  imageRatio,
+  importedImageSize,
+  naturalImageSize,
   reorderItem,
   NO_ARROWS,
   primitiveBounds,
@@ -12,9 +15,12 @@ import {
   textEmphasisAttrs,
   translatePrimitive,
   turnedTextBox,
+  withFreeImageFiles,
+  type ImagePrimitive,
   type Primitive
 } from './component'
 import { nearestInsidePoint } from './grid'
+import { pngHeaderDataUrl } from './testing/pngHeader'
 
 const style = DEFAULT_SHAPE_STYLE
 
@@ -241,5 +247,60 @@ describe('point', () => {
     expect(componentIssues(def).some((issue) => /dépasse/.test(issue.message))).toBe(false)
     def.visual = { kind: 'drawing', primitives: [{ ...dot, x: -4, y: 4 }] }
     expect(componentIssues(def).some((issue) => /dépasse/.test(issue.message))).toBe(true)
+  })
+})
+
+describe('images du mini-éditeur', () => {
+  /** LED de 160 × 240 px : 2 × 3 cellules à 80 px par cellule. */
+  const lost: ImagePrimitive = { kind: 'image', x: 4, y: 0, w: 8, h: 12, file: 'image.png' }
+  const led: ImagePrimitive = { ...lost, dataUrl: pngHeaderDataUrl(160, 240) }
+
+  it('a une boîte et se déplace comme une autre forme', () => {
+    expect(primitiveBounds(led)).toEqual({ x1: 4, y1: 0, x2: 12, y2: 12 })
+    expect(translatePrimitive(led, -4, 4)).toMatchObject({ x: 0, y: 4, w: 8, h: 12 })
+  })
+
+  it('s’importe à 80 px par cellule, au quart de cellule le plus proche', () => {
+    expect(importedImageSize(160, 240)).toEqual({ w: 8, h: 12 })
+    expect(importedImageSize(170, 251)).toEqual({ w: 9, h: 13 })
+    expect(importedImageSize(3, 3)).toEqual({ w: 1, h: 1 })
+    // Sa taille d'origine et ses proportions viennent du fichier, pas de la boîte du moment.
+    expect(naturalImageSize({ ...led, w: 4, h: 4 })).toEqual({ w: 8, h: 12 })
+    expect(imageRatio({ ...led, w: 4, h: 4 })).toBeCloseTo(2 / 3)
+    expect(naturalImageSize(lost)).toBeNull()
+    expect(imageRatio({ ...lost, w: 3, h: 6 })).toBe(0.5)
+  })
+
+  it('signale une image qui a perdu son fichier', () => {
+    const def = createEmptyComponent('led', 'LED')
+    def.size = { widthCells: 2, heightCells: 3 }
+    def.pins = [{ id: 'a', name: 'A', kind: 'io', x: 1, y: 0 }]
+    def.visual = { kind: 'drawing', primitives: [{ ...led, x: 0 }] }
+    expect(componentIssues(def)).toEqual([])
+    def.visual = { kind: 'drawing', primitives: [{ ...lost, x: 0 }] }
+    expect(componentIssues(def).map((issue) => issue.message)).toEqual([
+      'Une image a perdu son fichier'
+    ])
+  })
+
+  it('nomme les images ajoutées pour qu’un fichier ne porte qu’une image', () => {
+    const other = pngHeaderDataUrl(80, 80)
+    const dot: Primitive = { kind: 'dot', x: 0, y: 0, scale: 1, color: '#000000' }
+    // Un nom libre est gardé ; les autres formes passent telles quelles.
+    expect(withFreeImageFiles([], [led, dot])).toEqual([led, dot])
+    // La même image, déjà là : son fichier, même si la copie en portait un autre.
+    expect(withFreeImageFiles([led], [{ ...led, file: 'copie.png' }])[0]).toMatchObject({
+      file: 'image.png'
+    })
+    // Une autre image sous le même nom : un nom libre, partagé par ses copies.
+    const [renamed, again] = withFreeImageFiles(
+      [led],
+      [
+        { ...led, dataUrl: other },
+        { ...led, x: 0, dataUrl: other }
+      ]
+    )
+    expect(renamed).toMatchObject({ file: 'image-2.png', dataUrl: other })
+    expect(again).toMatchObject({ file: 'image-2.png', x: 0 })
   })
 })

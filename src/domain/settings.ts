@@ -3,7 +3,7 @@ import { hexColorSchema } from './color'
 import { DEFAULT_DIAGRAM_STYLE, diagramStyleSchema, nodeFillSchema } from './diagram'
 import { DEFAULT_PROFILE, styleProfileSchema } from './profile'
 
-export const SETTINGS_SCHEMA_VERSION = 10
+export const SETTINGS_SCHEMA_VERSION = 11
 
 export const paletteColorSchema = z.object({
   name: z.string().min(1),
@@ -85,6 +85,11 @@ export const settingsSchema = z.object({
   schemaVersion: z.literal(SETTINGS_SCHEMA_VERSION),
   /** Dossier de la bibliothèque de composants ; vide = dossier par défaut dans userData. */
   libraryDir: z.string(),
+  /**
+   * Dossier du fichier de paramètres partagé (settings.json), propre à chaque machine : vide =
+   * le dossier Pinout de OneDrive. Un dossier de OneDrive s'écrit `${OneDrive}…`.
+   */
+  settingsDir: z.string(),
   palette: z.array(paletteColorSchema).min(1),
   defaultWireColor: hexColorSchema,
   defaultProfile: styleProfileSchema,
@@ -104,6 +109,7 @@ export type Settings = z.infer<typeof settingsSchema>
 export const DEFAULT_SETTINGS: Settings = {
   schemaVersion: SETTINGS_SCHEMA_VERSION,
   libraryDir: '',
+  settingsDir: '',
   palette: [...DEFAULT_PALETTE],
   defaultWireColor: '#000000',
   defaultProfile: structuredClone(DEFAULT_PROFILE),

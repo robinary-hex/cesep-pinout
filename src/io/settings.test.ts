@@ -3,9 +3,11 @@ import { DEFAULT_SETTINGS, parseSettings, serializeSettings } from '@/domain'
 import { setBridge } from './bridge'
 import {
   loadSettings,
-  portableLibraryDir,
+  portableDir,
   readSharedSettings,
+  relocateSharedSettings,
   resolveLibraryDir,
+  resolveSettingsDir,
   saveSettings
 } from './settings'
 import { FakeFs } from './testing/fakeFs'
@@ -36,14 +38,14 @@ describe('dossier de la bibliothèque', () => {
   })
 
   it('enregistre un dossier choisi dans OneDrive sous forme relative', () => {
-    expect(
-      portableLibraryDir('D:/Cesep/OneDrive - CESEP/Pinout/lib', 'D:/Cesep/OneDrive - CESEP')
-    ).toBe('${OneDrive}/Pinout/lib')
-    expect(portableLibraryDir('D:/Cesep/OneDrive - CESEP', 'D:/Cesep/OneDrive - CESEP/')).toBe(
+    expect(portableDir('D:/Cesep/OneDrive - CESEP/Pinout/lib', 'D:/Cesep/OneDrive - CESEP')).toBe(
+      '${OneDrive}/Pinout/lib'
+    )
+    expect(portableDir('D:/Cesep/OneDrive - CESEP', 'D:/Cesep/OneDrive - CESEP/')).toBe(
       '${OneDrive}'
     )
-    expect(portableLibraryDir('F:/ailleurs', 'D:/Cesep/OneDrive - CESEP')).toBe('F:/ailleurs')
-    expect(portableLibraryDir('F:/ailleurs', null)).toBe('F:/ailleurs')
+    expect(portableDir('F:/ailleurs', 'D:/Cesep/OneDrive - CESEP')).toBe('F:/ailleurs')
+    expect(portableDir('F:/ailleurs', null)).toBe('F:/ailleurs')
   })
 })
 
@@ -89,7 +91,7 @@ describe('paramètres locaux et partagés', () => {
     expect(loaded.settings.theme).toBe('dark')
     expect(loaded.settings.defaultProfile.name).toBe('Cours')
     expect(loaded.settings.recentFiles).toEqual(['C:/Docs/a.pinout'])
-    expect((await readSharedSettings())?.defaultProfile.wireWidth).toBe(0.2)
+    expect((await readSharedSettings(''))?.defaultProfile.wireWidth).toBe(0.2)
   })
 
   it('ne réécrit pas le fichier partagé quand seuls les fichiers récents changent', async () => {
@@ -109,6 +111,67 @@ describe('paramètres locaux et partagés', () => {
     const loaded = await loadSettings()
     expect(loaded.settings).toEqual(mine)
     expect(loaded.problem).toContain('partagés illisibles')
-    expect(await readSharedSettings()).toBeNull()
+    expect(await readSharedSettings('')).toBeNull()
+  })
+})
+
+describe('dossier du fichier de paramètres partagé', () => {
+  const LOCAL = 'C:/fake/Pinout/settings.json'
+  const ELSEWHERE = 'F:/partage/settings.json'
+  const mine = {
+    ...DEFAULT_SETTINGS,
+    theme: 'light' as const,
+    recentFiles: ['C:/Docs/a.pinout']
+  }
+
+  it('est celui de OneDrive par défaut, ou un dossier noté relativement à OneDrive', async () => {
+    expect(await resolveSettingsDir('')).toBeNull()
+    expect(await resolveSettingsDir('${OneDrive}/Commun')).toBeNull()
+    expect(await resolveSettingsDir('F:/partage')).toBe('F:/partage')
+    fs.oneDrive = 'D:/OneDrive'
+    expect(await resolveSettingsDir('')).toBe('D:/OneDrive/(Cours)/Robotique/(Ressources)/Pinout')
+    expect(await resolveSettingsDir('${OneDrive}/Commun')).toBe('D:/OneDrive/Commun')
+  })
+
+  it('suit le dossier choisi sur cette machine, même sans OneDrive', async () => {
+    await saveSettings({ ...mine, settingsDir: 'F:/partage' })
+    // Le fichier partagé ne dit ni où il est rangé ni quels fichiers la machine a ouverts.
+    const shared = parseSettings(await fs.readTextFile(ELSEWHERE))
+    expect(shared.theme).toBe('light')
+    expect(shared.settingsDir).toBe('')
+    expect(shared.recentFiles).toEqual([])
+    const loaded = await loadSettings()
+    expect(loaded.sharedPath).toBe(ELSEWHERE)
+    expect(loaded.settings).toEqual({ ...mine, settingsDir: 'F:/partage' })
+  })
+
+  it('déplacé dans un dossier vide, y écrit les réglages courants', async () => {
+    const moved = await relocateSharedSettings(mine, 'F:/partage')
+    expect(moved.adopted).toBe(false)
+    expect(moved.sharedPath).toBe(ELSEWHERE)
+    expect(moved.settings).toEqual({ ...mine, settingsDir: 'F:/partage' })
+    expect(parseSettings(await fs.readTextFile(ELSEWHERE)).theme).toBe('light')
+    expect(parseSettings(await fs.readTextFile(LOCAL)).settingsDir).toBe('F:/partage')
+  })
+
+  it('déplacé dans un dossier qui a déjà des paramètres, les reprend', async () => {
+    await fs.writeTextFile(
+      ELSEWHERE,
+      serializeSettings({ ...DEFAULT_SETTINGS, autosaveSeconds: 300 })
+    )
+    const moved = await relocateSharedSettings(mine, 'F:/partage')
+    expect(moved.adopted).toBe(true)
+    expect(moved.settings.autosaveSeconds).toBe(300)
+    expect(moved.settings.theme).toBe(DEFAULT_SETTINGS.theme)
+    // Ce qui est propre à la machine reste.
+    expect(moved.settings.recentFiles).toEqual(['C:/Docs/a.pinout'])
+    expect(moved.settings.settingsDir).toBe('F:/partage')
+  })
+
+  it('refuse un dossier dont le fichier est illisible, sans l’écraser', async () => {
+    await fs.writeTextFile(ELSEWHERE, '{ "schemaVersion": ')
+    await expect(relocateSharedSettings(mine, 'F:/partage')).rejects.toThrow(/illisible/)
+    expect(await fs.readTextFile(ELSEWHERE)).toBe('{ "schemaVersion": ')
+    expect(fs.texts.has(LOCAL)).toBe(false)
   })
 })

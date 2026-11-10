@@ -1,5 +1,3 @@
-import { PNG_PX_PER_CELL } from './grid'
-
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
 
 export interface PngDimensions {
@@ -45,27 +43,13 @@ export function dataUrlToBase64(dataUrl: string): string {
   return dataUrl.slice(DATA_URL_PREFIX.length)
 }
 
-export interface PngFit {
-  widthCells: number
-  heightCells: number
-  /** Vrai si l'image fait déjà un nombre entier de cellules. */
-  exact: boolean
-  /** Dimensions en pixels à atteindre pour tomber juste. */
-  targetWidth: number
-  targetHeight: number
-}
-
-/** Nombre de cellules le plus proche pour une image donnée, à la convention de 80 px par cellule. */
-export function fitPngToCells(width: number, height: number, pxPerCell = PNG_PX_PER_CELL): PngFit {
-  const widthCells = Math.max(1, Math.round(width / pxPerCell))
-  const heightCells = Math.max(1, Math.round(height / pxPerCell))
-  const targetWidth = widthCells * pxPerCell
-  const targetHeight = heightCells * pxPerCell
-  return {
-    widthCells,
-    heightCells,
-    exact: width === targetWidth && height === targetHeight,
-    targetWidth,
-    targetHeight
+/** Dimensions d'un PNG en data URL, lues dans son seul en-tête (24 octets, 32 caractères). */
+export function pngDataUrlDimensions(dataUrl: string): PngDimensions | null {
+  if (!dataUrl.startsWith(DATA_URL_PREFIX)) return null
+  const header = dataUrl.slice(DATA_URL_PREFIX.length, DATA_URL_PREFIX.length + 32)
+  try {
+    return pngDimensions(base64ToBytes(header))
+  } catch {
+    return null
   }
 }

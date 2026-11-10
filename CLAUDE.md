@@ -49,6 +49,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   mêmes styles (`bold`, `italic`, `underline`, `strike`, `vertical`) et une couleur (`color`, le
   noir pur prenant l'encre du thème à l'écran), sans le texte variable ; elles gardent la police
   des libellés du profil (`textEmphasisAttrs`, commandes `setLabelStyle` et `setLabelVertical`).
+  Fond des étiquettes : une case « Fond » du panneau (`background`, pas de fond par défaut,
+  décision du 10 novembre 2026) peint la boîte de l'étiquette de la couleur du papier, à l'écran
+  (`--paper`) comme à l'export (couleur du fond de l'image) ; même chose pour les textes libres
+  d'un diagramme et pour l'étiquette d'un lien (`labelBackground`).
   Un texte occupe une boîte (`x`, `y`, `w`, `h` en
   quarts) redimensionnable par poignées : lignes (retours à la ligne permis) centrées
   verticalement, alignées à gauche, au centre ou à droite selon `anchor` (`layoutTextBox`, ligne de base
@@ -62,7 +66,18 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   deux cas un miroir ne reflète jamais un texte, et l'alignement gauche/droite s'inverse quand la
   transformation retourne l'axe de lecture, pour que le texte reste collé au même bord. L'`unit`
   éventuelle suit toujours la valeur (espace insécable).
-- PNG de composant : 80 px par cellule (4× la cellule d'affichage de 20 px).
+- Image dans un composant : une forme comme les autres (`image` : boîte en quarts de cellule,
+  `file`, et `dataUrl` en mémoire ou dans un projet), pas un type de composant (décision du 10
+  novembre 2026 ; les anciens visuels « PNG » sont migrés en un dessin d'une image). Convention :
+  80 px du fichier par cellule (4× la cellule d'affichage de 20 px), donc 20 px par quart ; les
+  broches d'un dessin se placent tous les 80 px. Le bouton Image de la barre d'outils
+  (`importImage` de `pngImport.ts`, puis du store) pose le PNG à sa taille naturelle, par-dessus
+  le dessin, centré sur des cellules entières ; un composant vierge prend la taille de l'image.
+  Elle n'a que ses poignées de coin et garde les proportions de son fichier (`imageRatio`,
+  `resizeBoxKeepingRatio`) ; le panneau la ramène à sa taille d'origine (`resetImageSize`). Dans
+  la bibliothèque, un PNG par image à côté de component.json (`saveComponent` retire ceux qui
+  ne servent plus, `loadComponentFile` les rattache) ; `withFreeImageFiles` nomme les images
+  ajoutées ou collées pour qu'un fichier ne porte qu'une image.
 - Orientation d'une instance : miroir local puis rotation horaire (`transformLocalPoint`,
   `instanceMatrix`). Un miroir à l'écran bascule `mirror` et inverse la rotation
   (`flippedInstance`) ; une rotation à l'écran garde le centre de la boîte (`rotatedInstance`).
@@ -171,7 +186,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   boutons à pictogramme seul (raccourci dans l'infobulle) ; quand la place manque, la partie gauche
   passe à la ligne, le nom du document et le bouton de droite restent sur la première ligne. Un
   composant dont la bibliothèque a une version plus récente se dessine dans `--stale` (traits
-  rouges en clair, jaunes en sombre ; cadre pour un PNG). Pictogrammes : `src/ui/Icon.vue` dessine les
+  rouges en clair, jaunes en sombre ; cadre s'il contient une image). Pictogrammes : `src/ui/Icon.vue` dessine les
   tracés de `src/ui/icons.ts` (SVG inline, trait de la couleur courante, pas de police d'icônes).
 - Onglets de montage (`App.vue`, à droite du bouton Montage) : un par montage ouvert, au nom du
   montage, point s'il est modifié (le bouton du mode qu'on ne regarde pas, Montage ou
@@ -197,7 +212,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Diagramme (`src/features/diagram-editor/`, domaine `src/domain/diagram.ts`,
   `diagramShapes.ts`, `diagramLinks.ts`, `diagramSvg.ts`) : organigrammes, diagrammes d'activité,
   schémas de communication ; pas de diagrammes de séquence ni de classes (décision du 10 novembre
-  2026). Document à part, fichier `.pinuml` (JSON, `schemaVersion` 3), même grille infinie que le
+  2026). Document à part, fichier `.pinuml` (JSON, `schemaVersion` 4), même grille infinie que le
   montage mais plus fine (`style.cellPx` = 10).
   - Nœuds : une boîte en cellules entières, une forme du catalogue en dur (`NODE_SHAPES`,
     `NODE_SPECS` : action arrondie, rectangle, décision, départ, fin, fin de flot, fourche, envoi,
@@ -292,17 +307,22 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   « Modifier le style… » du panneau) modifie le style du montage affiché, en une commande. Le
   panneau surligne en `--alert` les réglages où le montage s'écarte du profil général
   (`profileDifferences`) et propose de l'y aligner (`adoptGeneralProfile`).
-- Paramètres en deux fichiers (`src/io/settings.ts`) : un fichier partagé
-  `<OneDrive>\(Cours)\Robotique\(Ressources)\Pinout\settings.json`, que OneDrive synchronise entre
-  les machines (tout sauf les fichiers récents ; profil général compris), et le fichier local
-  `userData/settings.json`, copie complète avec les fichiers récents. Sans OneDrive, seul le local
-  existe. Le fichier partagé est relu au lancement, avant chaque enregistrement (seuls les
-  réglages modifiés écrasent) et quand la fenêtre reprend la main (`reloadSharedSettings`) ; il
-  n'est réécrit que si son contenu change.
+- Paramètres en deux fichiers (`src/io/settings.ts`) : un fichier partagé `settings.json`, commun
+  aux machines (tout sauf ce qui est propre à chacune ; profil général compris), et le fichier
+  local `userData/settings.json`, copie complète avec les fichiers récents et `settingsDir`. Le
+  fichier partagé vit dans le dossier choisi dans les paramètres (`settingsDir`, réglage local,
+  noté `${OneDrive}…` s'il est dans OneDrive ; `resolveSettingsDir`), par défaut
+  `<OneDrive>\(Cours)\Robotique\(Ressources)\Pinout` ; sans dossier choisi ni OneDrive, seul le
+  local existe. Changer de dossier (`relocateSharedSettings`, `chooseSettingsDir`) reprend les
+  paramètres qui s'y trouvent déjà, sinon y écrit les réglages courants ; un fichier illisible
+  n'est pas écrasé. Le fichier partagé est relu au lancement, avant chaque enregistrement
+  (seuls les réglages modifiés écrasent) et quand la fenêtre reprend la main
+  (`reloadSharedSettings`) ; il n'est réécrit que si son contenu change. La boîte des paramètres
+  n'enregistre que ses propres réglages : les deux dossiers changent dès qu'on les choisit.
 - Bibliothèque de composants : dossier par défaut = racine OneDrive de la machine (variables
   `OneDriveCommercial` puis `OneDrive`, exposées par `getAppPaths().oneDrive`) + `(Cours)\Robotique\(Ressources)\Pinout\library`,
   sinon `userData/library` ; un dossier choisi dans OneDrive est enregistré avec le préfixe
-  `${OneDrive}` (`portableLibraryDir`), résolu sur chaque machine (`resolveLibraryDir`). Panneau en
+  `${OneDrive}` (`portableDir`), résolu sur chaque machine (`resolveLibraryDir`). Panneau en
   liste (nom, broches) ou en grille de vignettes (nom en petit dessous) selon `libraryView`
   (paramètres) ; catégories repliables.
 - Champs des panneaux : ils valident au `change`. Un clic hors du champ en cours de saisie le
@@ -360,8 +380,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     composant posé s'appelle « libellé » dans l'interface.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 14, projet 19, paramètres 10,
-  diagramme 3
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 15, projet 20, paramètres 11,
+  diagramme 4
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

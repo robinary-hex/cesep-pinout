@@ -1,8 +1,9 @@
 import { z } from 'zod'
 import { hexColorSchema } from './color'
 import { isInsideBox, PNG_PX_PER_CELL, QUARTERS_PER_CELL, sizeSchema, type Size } from './grid'
+import { pngDataUrlDimensions } from './png'
 
-export const COMPONENT_SCHEMA_VERSION = 14
+export const COMPONENT_SCHEMA_VERSION = 15
 
 export const pinKindSchema = z.enum(['in', 'out', 'io', 'power'])
 export type PinKind = z.infer<typeof pinKindSchema>
@@ -23,6 +24,9 @@ export const pinSchema = z.object({
   y: z.number().int().nonnegative()
 })
 export type Pin = z.infer<typeof pinSchema>
+
+/** Nom d'un fichier d'image d'un composant : lettres, chiffres, tirets, points, et `.png` au bout. */
+export const IMAGE_FILE_PATTERN = /^[A-Za-z0-9_-][A-Za-z0-9_.-]*\.png$/
 
 /** Coordonnée en quarts de cellule (entier), repère local du composant. */
 const quarterSchema = z.number().int()
@@ -134,6 +138,18 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
     vertical: z.boolean()
   }),
   z.object({
+    kind: z.literal('image'),
+    /** Boîte de l'image (coin supérieur gauche, taille) : l'image la remplit en entier. */
+    x: quarterSchema,
+    y: quarterSchema,
+    w: z.number().int().positive(),
+    h: z.number().int().positive(),
+    /** Nom du fichier PNG rangé à côté de component.json dans la bibliothèque : un nom seul, sans dossier. */
+    file: z.string().regex(IMAGE_FILE_PATTERN),
+    /** Copie embarquée de l'image (dans un projet ou en mémoire) ; absente du fichier de la bibliothèque. */
+    dataUrl: z.string().startsWith('data:image/png;base64,').optional()
+  }),
+  z.object({
     kind: z.literal('dot'),
     /** Centre du point. */
     x: quarterSchema,
@@ -147,7 +163,8 @@ export type Primitive = z.infer<typeof primitiveSchema>
 export type PrimitiveKind = Primitive['kind']
 export type TextPrimitive = Extract<Primitive, { kind: 'text' }>
 export type DotPrimitive = Extract<Primitive, { kind: 'dot' }>
-export type StyledPrimitive = Exclude<Primitive, { kind: 'text' | 'dot' }>
+export type ImagePrimitive = Extract<Primitive, { kind: 'image' }>
+export type StyledPrimitive = Exclude<Primitive, { kind: 'text' | 'dot' | 'image' }>
 
 /** Tailles de point proposées par l'interface ; le schéma accepte tout multiplicateur positif. */
 export const DOT_SCALES = [1, 1.5, 2, 2.5, 3] as const
@@ -208,20 +225,14 @@ export function textStyleAttrs(primitive: TextEmphasis): Record<string, string |
   return { ...textEmphasisAttrs(primitive), 'font-family': TEXT_FONT_FAMILY }
 }
 
-export const visualSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('png'),
-    /** Nom du fichier à côté de component.json dans la bibliothèque. */
-    file: z.string().min(1),
-    pxPerCell: z.number().int().positive(),
-    /** Copie embarquée de l'image (dans un projet ou en mémoire) ; absent dans la bibliothèque. */
-    dataUrl: z.string().startsWith('data:image/png;base64,').optional()
-  }),
-  z.object({
-    kind: z.literal('drawing'),
-    primitives: z.array(primitiveSchema)
-  })
-])
+/**
+ * Visuel d'un composant : un dessin, c'est-à-dire des formes dans l'ordre d'empilement. Une image
+ * importée est une forme parmi les autres (`image`), pas un type de visuel à part.
+ */
+export const visualSchema = z.object({
+  kind: z.literal('drawing'),
+  primitives: z.array(primitiveSchema)
+})
 export type Visual = z.infer<typeof visualSchema>
 
 const componentShape = z.object({
@@ -360,7 +371,6 @@ export function layoutText(primitive: TextPrimitive, fields?: FieldValues): Text
 }
 
 export function componentFields(def: ComponentDefinition): ComponentField[] {
-  if (def.visual.kind !== 'drawing') return []
   const seen = new Set<string>()
   const fields: ComponentField[] = []
   for (const primitive of def.visual.primitives) {
@@ -439,6 +449,7 @@ export function primitiveBounds(primitive: Primitive): Bounds {
       }
     }
     case 'text':
+    case 'image':
       return {
         x1: primitive.x,
         y1: primitive.y,
@@ -478,6 +489,7 @@ export function translatePrimitive(primitive: Primitive, dx: number, dy: number)
     case 'rect':
     case 'text':
     case 'dot':
+    case 'image':
       return { ...primitive, x: primitive.x + dx, y: primitive.y + dy }
     case 'ellipse':
       return { ...primitive, cx: primitive.cx + dx, cy: primitive.cy + dy }
@@ -556,7 +568,7 @@ export function componentIssues(def: ComponentDefinition): ComponentIssue[] {
   }
 
   // Un dessin encore vide n'a rien à câbler : l'avertissement attend la première forme.
-  const blankDrawing = def.visual.kind === 'drawing' && def.visual.primitives.length === 0
+  const blankDrawing = def.visual.primitives.length === 0
   if (def.pins.length === 0 && !blankDrawing) {
     issues.push({
       level: 'warning',
@@ -564,25 +576,19 @@ export function componentIssues(def: ComponentDefinition): ComponentIssue[] {
     })
   }
 
-  if (def.visual.kind === 'png' && def.visual.pxPerCell !== PNG_PX_PER_CELL) {
-    issues.push({
-      level: 'warning',
-      message: `PNG à ${def.visual.pxPerCell} px par cellule au lieu de ${PNG_PX_PER_CELL}`
-    })
+  const maxX = def.size.widthCells * QUARTERS_PER_CELL
+  const maxY = def.size.heightCells * QUARTERS_PER_CELL
+  if (def.visual.primitives.some((primitive) => !primitiveWithin(primitive, maxX, maxY))) {
+    issues.push({ level: 'warning', message: 'Une forme dépasse la boîte du composant' })
   }
-
-  if (def.visual.kind === 'drawing') {
-    const maxX = def.size.widthCells * QUARTERS_PER_CELL
-    const maxY = def.size.heightCells * QUARTERS_PER_CELL
-    if (def.visual.primitives.some((primitive) => !primitiveWithin(primitive, maxX, maxY))) {
-      issues.push({ level: 'warning', message: 'Une forme dépasse la boîte du composant' })
-    }
-    const emptyField = def.visual.primitives.find(
-      (primitive) => primitive.kind === 'text' && primitive.variable && primitive.text.trim() === ''
-    )
-    if (emptyField) {
-      issues.push({ level: 'error', message: 'Un texte variable doit avoir un nom de champ' })
-    }
+  const emptyField = def.visual.primitives.find(
+    (primitive) => primitive.kind === 'text' && primitive.variable && primitive.text.trim() === ''
+  )
+  if (emptyField) {
+    issues.push({ level: 'error', message: 'Un texte variable doit avoir un nom de champ' })
+  }
+  if (componentImages(def).some((image) => image.dataUrl === undefined)) {
+    issues.push({ level: 'warning', message: 'Une image a perdu son fichier' })
   }
 
   return issues
@@ -595,3 +601,72 @@ export const componentDefinitionSchema = componentShape.superRefine((def, ctx) =
     }
   }
 })
+
+/** Images d'un composant, dans l'ordre du dessin. */
+export function componentImages(def: ComponentDefinition): ImagePrimitive[] {
+  return def.visual.primitives.filter(
+    (primitive): primitive is ImagePrimitive => primitive.kind === 'image'
+  )
+}
+
+/**
+ * Taille d'une image qu'on importe, en quarts de cellule : sa taille naturelle à 80 px par
+ * cellule (20 px par quart), au quart le plus proche et jamais nulle.
+ */
+export function importedImageSize(widthPx: number, heightPx: number): { w: number; h: number } {
+  const pxPerQuarter = PNG_PX_PER_CELL / QUARTERS_PER_CELL
+  return {
+    w: Math.max(1, Math.round(widthPx / pxPerQuarter)),
+    h: Math.max(1, Math.round(heightPx / pxPerQuarter))
+  }
+}
+
+/** Taille naturelle d'une image posée (quarts de cellule), ou null quand son fichier manque. */
+export function naturalImageSize(image: ImagePrimitive): { w: number; h: number } | null {
+  const pixels = image.dataUrl === undefined ? null : pngDataUrlDimensions(image.dataUrl)
+  return pixels ? importedImageSize(pixels.width, pixels.height) : null
+}
+
+/** Largeur sur hauteur d'une image : celle de son fichier, sinon celle de sa boîte. */
+export function imageRatio(image: ImagePrimitive): number {
+  const pixels = image.dataUrl === undefined ? null : pngDataUrlDimensions(image.dataUrl)
+  return pixels && pixels.height > 0 && pixels.width > 0
+    ? pixels.width / pixels.height
+    : image.w / image.h
+}
+
+/**
+ * Formes qu'on ajoute à un dessin (importées, collées, dupliquées) : leurs images sont nommées
+ * pour que, dans le composant, un fichier ne porte qu'une image. Une image déjà là sous un autre
+ * nom reprend ce nom (un seul fichier pour deux formes de la même image) ; une image dont le nom
+ * est pris par une autre en reçoit un libre (image.png, image-2.png…).
+ */
+export function withFreeImageFiles(
+  existing: readonly Primitive[],
+  incoming: readonly Primitive[]
+): Primitive[] {
+  const contents = new Map<string, string | undefined>()
+  for (const primitive of existing) {
+    if (primitive.kind === 'image') contents.set(primitive.file, primitive.dataUrl)
+  }
+  const freeName = (): string => {
+    if (!contents.has('image.png')) return 'image.png'
+    for (let n = 2; ; n++) {
+      const candidate = `image-${n}.png`
+      if (!contents.has(candidate)) return candidate
+    }
+  }
+  return incoming.map((primitive) => {
+    if (primitive.kind !== 'image') return primitive
+    const { dataUrl } = primitive
+    if (dataUrl !== undefined) {
+      for (const [file, content] of contents) {
+        if (content === dataUrl) return file === primitive.file ? primitive : { ...primitive, file }
+      }
+    }
+    const taken = contents.has(primitive.file) && contents.get(primitive.file) !== dataUrl
+    const file = taken ? freeName() : primitive.file
+    contents.set(file, dataUrl)
+    return file === primitive.file ? primitive : { ...primitive, file }
+  })
+}

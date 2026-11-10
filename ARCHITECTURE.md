@@ -128,7 +128,9 @@ restent claires.
   (`handles.ts`) et les pointes de flèche (`arrows.ts`) sont de la géométrie pure du domaine.
 - Textes variables : un texte marqué `variable` porte le nom d'un champ ; chaque instance posée
   garde ses valeurs dans `fields` (nom → texte), la définition fournit `defaultValue`.
-- PNG : 80 px par cellule. Un PNG d'une autre taille est rééchantillonné sur confirmation.
+- Images : une forme du dessin (`image`), importée à 80 px du fichier par cellule (20 px par quart
+  de cellule), redimensionnable par ses coins en gardant ses proportions. Un composant n'est
+  jamais « une image » : les broches se posent sur la grille, par-dessus.
   Le profil de style (`cellPx`, par défaut 20) ne règle que l'affichage.
 
 ## Croisements et connectivité
@@ -180,26 +182,26 @@ un arrêt brutal : c'est alors qu'elles sont proposées.
 
 Tous en JSON indenté, avec `schemaVersion`, validés par Zod à l'ouverture, migrés étape par étape
 (`src/domain/migrations.ts`). Un fichier d'exemple par version dans `src/domain/fixtures/`.
-Versions courantes : composant 14 (textes verticaux, angles arrondis des polylignes, forme point, opacité du remplissage, italique, souligné et barré des textes, orientation réglée texte par texte, textes droits sur le montage, boîtes de texte multilignes, flèche au milieu, graisse des textes, épaisseur en multiplicateur, flèches, textes variables avec
-unité, plus de `labelPrefix`), projet 19 (styles, sens et couleur des étiquettes texte, couleurs de fil propres au montage, étiquettes texte en boîte, police des étiquettes d'extrémité dans le profil, graisse des étiquettes, étiquettes d'extrémité des fils, `componentStroke` dans le profil, `fields` par instance,
-définitions embarquées migrées à chaque version des composants), diagramme 3 (étiquette d'un lien tenue le long du tracé, style de texte par nœud ; nœuds, liens, textes libres, style et couleurs du diagramme), paramètres 10 (style général des diagrammes, `componentStroke`
+Versions courantes : composant 15 (image en forme du dessin, textes verticaux, angles arrondis des polylignes, forme point, opacité du remplissage, italique, souligné et barré des textes, orientation réglée texte par texte, textes droits sur le montage, boîtes de texte multilignes, flèche au milieu, graisse des textes, épaisseur en multiplicateur, flèches, textes variables avec
+unité, plus de `labelPrefix`), projet 20 (fond optionnel des étiquettes texte, styles, sens et couleur des étiquettes texte, couleurs de fil propres au montage, étiquettes texte en boîte, police des étiquettes d'extrémité dans le profil, graisse des étiquettes, étiquettes d'extrémité des fils, `componentStroke` dans le profil, `fields` par instance,
+définitions embarquées migrées à chaque version des composants), diagramme 4 (fond optionnel des étiquettes de lien et des textes, étiquette d'un lien tenue le long du tracé, style de texte par nœud ; nœuds, liens, textes libres, style et couleurs du diagramme), paramètres 11 (dossier du fichier partagé au choix, style général des diagrammes, `componentStroke`
 et `endLabelFont` du profil par défaut, thème sombre par défaut, ouverture du panneau, affichage de
 la bibliothèque).
 
-| Donnée                  | Schéma                      | Emplacement                                                                                                                                                                   |
-| ----------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Définition de composant | `componentDefinitionSchema` | `<bibliothèque>/<id>/component.json` (+ `image.png` pour un visuel PNG)                                                                                                       |
-| Projet                  | `projectSchema`             | où l'utilisateur veut, `*.pinout.json`, autonome                                                                                                                              |
-| Profil de style         | `styleProfileSchema`        | général dans les paramètres, copié dans chaque projet ; modèles dans `userData/profiles/`                                                                                     |
-| Paramètres              | `settingsSchema`            | partagés : `<OneDrive>\(Cours)\Robotique\(Ressources)\Pinout\settings.json` ; locaux (copie et fichiers récents) : `userData/settings.json` (`userData` = `%APPDATA%\Pinout`) |
+| Donnée                  | Schéma                      | Emplacement                                                                                                                                                                                                                  |
+| ----------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Définition de composant | `componentDefinitionSchema` | `<bibliothèque>/<id>/component.json` (+ un PNG par image du dessin)                                                                                                                                                          |
+| Projet                  | `projectSchema`             | où l'utilisateur veut, `*.pinout.json`, autonome                                                                                                                                                                             |
+| Profil de style         | `styleProfileSchema`        | général dans les paramètres, copié dans chaque projet ; modèles dans `userData/profiles/`                                                                                                                                    |
+| Paramètres              | `settingsSchema`            | partagés : `settings.json` du dossier choisi (par défaut `<OneDrive>\(Cours)\Robotique\(Ressources)\Pinout`) ; locaux (copie, fichiers récents, dossier choisi) : `userData/settings.json` (`userData` = `%APPDATA%\Pinout`) |
 
 La bibliothèque vit par défaut dans OneDrive (`(Cours)\Robotique\(Ressources)\Pinout\library` sous la racine
 `OneDriveCommercial` ou `OneDrive` de la machine), sinon dans `userData/library` ; les paramètres
 peuvent pointer ailleurs, un dossier pris dans OneDrive étant enregistré relativement à sa racine. Le nom du dossier d'un composant est son identifiant,
 dérivé du nom à la première sauvegarde et stable ensuite.
 
-Un projet embarque une copie de chaque définition utilisée (`embeddedDefs`, une par type, PNG en
-dataUrl) et de son profil : il se rouvre à l'identique sans bibliothèque. Les jonctions ne sont
+Un projet embarque une copie de chaque définition utilisée (`embeddedDefs`, une par type, images
+en dataUrl) et de son profil : il se rouvre à l'identique sans bibliothèque. Les jonctions ne sont
 pas stockées, elles se déduisent de la géométrie des fils.
 
 ## Dépendances et pourquoi

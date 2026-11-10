@@ -1,5 +1,6 @@
 import { base64ToBytes, pngDataUrl, pngDimensions } from '@/domain'
 import { bridge } from '@/io/bridge'
+import type { useComponentEditorStore } from './store'
 
 export interface PickedPng {
   path: string
@@ -21,24 +22,19 @@ export async function pickPng(): Promise<PickedPng | null> {
   return { path, dataUrl: pngDataUrl(base64), ...dimensions }
 }
 
-/** Rééchantillonne une image PNG aux dimensions voulues, via un canvas du navigateur. */
-export function resizePng(dataUrl: string, width: number, height: number): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const image = new Image()
-    image.onload = () => {
-      const canvas = document.createElement('canvas')
-      canvas.width = width
-      canvas.height = height
-      const context = canvas.getContext('2d')
-      if (!context) {
-        reject(new Error('Canvas 2D indisponible'))
-        return
-      }
-      context.imageSmoothingQuality = 'high'
-      context.drawImage(image, 0, 0, width, height)
-      resolve(canvas.toDataURL('image/png'))
-    }
-    image.onerror = () => reject(new Error('Image illisible'))
-    image.src = dataUrl
-  })
+/**
+ * Importer une image : le dialogue, puis l'image posée comme une forme du composant affiché. Un
+ * fichier illisible le dit dans la barre d'état.
+ */
+export async function importImage(
+  store: ReturnType<typeof useComponentEditorStore>
+): Promise<void> {
+  try {
+    const picked = await pickPng()
+    if (!picked) return
+    store.importImage(picked.dataUrl, picked.width, picked.height)
+    store.status = `Image de ${picked.width} × ${picked.height} px importée.`
+  } catch (error) {
+    store.status = `Import impossible : ${error instanceof Error ? error.message : String(error)}`
+  }
 }

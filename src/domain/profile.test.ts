@@ -48,7 +48,8 @@ describe('profil de style et paramètres', () => {
       underline: false,
       strike: false,
       vertical: false,
-      color: '#000000'
+      color: '#000000',
+      background: false
     }
     expect(isEmptyProject({ ...project, labels: [label] })).toBe(false)
   })

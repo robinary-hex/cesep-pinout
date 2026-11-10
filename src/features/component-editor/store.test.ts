@@ -1,6 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { DEFAULT_SHAPE_STYLE, NO_ARROWS, type Primitive } from '@/domain'
+import { pngHeaderDataUrl } from '@/domain/testing/pngHeader'
 import { useComponentEditorStore } from './store'
 
 beforeEach(() => {
@@ -320,5 +321,76 @@ describe('éditeur de composants : gestes communs aux éditeurs', () => {
     expect(store.moveSelection([0], [pin], 1, 0)).toBe(false)
     expect(store.moveSelection([0], [pin], 4, 0)).toBe(true)
     expect(store.doc.pins[0]).toMatchObject({ x: 2, y: 1 })
+  })
+})
+
+describe('éditeur de composants : images', () => {
+  /** LED de 160 × 240 px : 2 × 3 cellules à 80 px par cellule. */
+  const led = pngHeaderDataUrl(160, 240)
+  const square = pngHeaderDataUrl(80, 80)
+
+  it('pose une image importée comme une forme ; un composant vierge prend sa taille', () => {
+    const store = useComponentEditorStore()
+    store.tool = 'rect'
+    store.importImage(led, 160, 240)
+    expect(store.doc.size).toEqual({ widthCells: 2, heightCells: 3 })
+    expect(store.doc.visual.primitives).toEqual([
+      { kind: 'image', x: 0, y: 0, w: 8, h: 12, file: 'image.png', dataUrl: led }
+    ])
+    expect(store.selectedIndexes).toEqual([0])
+    expect(store.tool).toBe('select')
+    expect(store.undoLabel).toBe('Importer une image')
+    // Une broche se pose sur l'image, sur la grille ; tout s'annule pas à pas.
+    store.addPin({ x: 1, y: 0 })
+    store.undo()
+    store.undo()
+    expect(store.doc.size).toEqual({ widthCells: 4, heightCells: 2 })
+    expect(store.doc.visual.primitives).toHaveLength(0)
+  })
+
+  it('centre l’image sur des cellules entières dans un composant déjà dessiné, par-dessus', () => {
+    const store = useComponentEditorStore()
+    store.setSize({ widthCells: 6, heightCells: 6 })
+    store.addPrimitive({ kind: 'dot', x: 4, y: 4, scale: 1, color: '#000000' }, 'Ajouter un point')
+    store.importImage(led, 160, 240)
+    expect(store.doc.size).toEqual({ widthCells: 6, heightCells: 6 })
+    // (6 − 2) / 2 = 2 cellules ; (6 − 3) / 2 = 1,5, arrondi à 2 cellules.
+    expect(store.doc.visual.primitives[1]).toMatchObject({ kind: 'image', x: 8, y: 8, w: 8, h: 12 })
+    // Une seconde image, différente, ne prend pas le fichier de la première.
+    store.importImage(square, 80, 80)
+    expect(store.doc.visual.primitives[2]).toMatchObject({ file: 'image-2.png', w: 4, h: 4 })
+    expect(store.selectedIndexes).toEqual([2])
+  })
+
+  it('rend à une image redimensionnée sa taille d’origine', () => {
+    const store = useComponentEditorStore()
+    store.importImage(led, 160, 240)
+    const image = store.doc.visual.primitives[0]
+    if (image?.kind !== 'image') throw new Error('image attendue')
+    store.setPrimitive(0, { ...image, w: 4, h: 6 }, 'Modifier')
+    store.resetImageSize(0)
+    expect(store.doc.visual.primitives[0]).toMatchObject({ x: 0, y: 0, w: 8, h: 12 })
+    expect(store.undoLabel).toBe('Taille d’origine de l’image')
+    // Déjà à sa taille : rien à faire, rien à annuler de plus.
+    store.resetImageSize(0)
+    store.undo()
+    expect(store.doc.visual.primitives[0]).toMatchObject({ w: 4, h: 6 })
+  })
+
+  it('colle une image d’un autre composant sans lui donner le fichier d’une image d’ici', () => {
+    const store = useComponentEditorStore()
+    store.importImage(led, 160, 240)
+    store.copySelection()
+    store.newComponent()
+    store.importImage(square, 80, 80)
+    store.pasteClipboard()
+    const files = (): (string | null)[] =>
+      store.doc.visual.primitives.map((primitive) =>
+        primitive.kind === 'image' ? primitive.file : null
+      )
+    expect(files()).toEqual(['image.png', 'image-2.png'])
+    // Dupliquer l'image collée : la même image, le même fichier.
+    store.duplicateSelection()
+    expect(files()).toEqual(['image.png', 'image-2.png', 'image-2.png'])
   })
 })

@@ -9,17 +9,23 @@ import {
   type Settings,
   type Theme
 } from '@/domain'
+import { useDiagramStore } from '@/features/diagram-editor/store'
 import { useLibraryStore } from '@/features/library/store'
+import { useSchematicStore } from '@/features/schematic-editor/store'
+import { dirOf } from '@/io/paths'
 import Icon from '@/ui/Icon.vue'
 import ModalDialog from '@/ui/ModalDialog.vue'
 import { applyTheme } from '@/ui/theme'
 
-// Paramètres de l'application : apparence, bibliothèque et palette à gauche ; copie de secours
-// et export à droite. On édite une copie et on n'enregistre qu'à la validation. Le profil de
+// Paramètres de l'application : apparence, dossiers et palette à gauche ; copie de secours et
+// export à droite. On édite une copie et on n'enregistre qu'à la validation ; les deux dossiers
+// (bibliothèque, paramètres) changent tout de suite, dès qu'on en choisit un autre. Le profil de
 // style a sa propre boîte (ProfileDialog), ouverte depuis la barre d'application.
 
 const emit = defineEmits<{ close: [] }>()
 const library = useLibraryStore()
+const schematic = useSchematicStore()
+const diagram = useDiagramStore()
 
 const draft = ref<Settings>(structuredClone(library.settings ?? DEFAULT_SETTINGS))
 const errors = ref<string[]>([])
@@ -69,13 +75,58 @@ function setTheme(theme: Theme): void {
 
 onUnmounted(() => applyTheme(library.theme))
 
+// Dossier du fichier de paramètres partagé
+
+const settingsPlace = computed(() =>
+  library.sharedSettingsPath ? dirOf(library.sharedSettingsPath) : 'Sur cette machine seulement'
+)
+const settingsNote = ref('')
+
+/**
+ * Change le dossier des paramètres. S'il en contenait déjà, ils remplacent ceux de l'application :
+ * la boîte les montre, et les documents ouverts qui suivaient l'ancien style général prennent le
+ * nouveau.
+ */
+async function relocate(move: () => Promise<'adopted' | 'moved' | 'failed' | null>): Promise<void> {
+  const previousProfile = library.defaultProfile
+  const previousStyle = library.diagramDefaults.style
+  const result = await move()
+  if (result === null) return
+  if (result === 'failed') {
+    settingsNote.value = library.problem
+    return
+  }
+  if (result === 'moved') {
+    settingsNote.value = 'Paramètres enregistrés dans ce dossier.'
+    return
+  }
+  settingsNote.value = 'Paramètres repris de ce dossier.'
+  draft.value = structuredClone(library.settings ?? DEFAULT_SETTINGS)
+  applyTheme(draft.value.theme)
+  schematic.followGeneralProfile(previousProfile, library.defaultProfile)
+  diagram.followGeneralStyle(previousStyle, library.diagramDefaults.style)
+  diagram.syncDefaults()
+}
+
 async function save(): Promise<void> {
   const parsed = settingsSchema.safeParse(draft.value)
   if (!parsed.success) {
     errors.value = parsed.error.issues.map((issue) => `${issue.path.join('.')} : ${issue.message}`)
     return
   }
-  await library.updateSettings(parsed.data)
+  // Seuls les réglages de cette boîte sont enregistrés : les dossiers ont déjà changé à leur
+  // choix, et le reste (profils, fichiers récents) ne se modifie pas ici.
+  const { theme, libraryView, autoOpenInspector, palette, defaultWireColor, autosaveSeconds } =
+    parsed.data
+  await library.updateSettings({
+    theme,
+    libraryView,
+    autoOpenInspector,
+    palette,
+    defaultWireColor,
+    autosaveSeconds,
+    export: parsed.data.export
+  })
   emit('close')
 }
 </script>
@@ -145,6 +196,34 @@ async function save(): Promise<void> {
           <button type="button" class="with-icon" @click="library.chooseDir()">
             <Icon name="folder-open" /> Choisir un autre dossier…
           </button>
+        </section>
+
+        <section class="block">
+          <h3>Paramètres de l’application</h3>
+          <p
+            class="hint path"
+            title="Dossier du fichier settings.json : réglages et profil de style général, communs aux machines qui pointent sur lui. Les fichiers récents restent sur chaque machine."
+          >
+            {{ settingsPlace }}
+          </p>
+          <div class="row tight">
+            <button
+              type="button"
+              class="with-icon"
+              @click="relocate(() => library.chooseSettingsDir())"
+            >
+              <Icon name="folder-open" /> Choisir un autre dossier…
+            </button>
+            <button
+              v-if="library.settingsDir.length > 0"
+              type="button"
+              title="Revenir au dossier Pinout de OneDrive"
+              @click="relocate(() => library.setSettingsDir(''))"
+            >
+              Dossier par défaut
+            </button>
+          </div>
+          <p v-if="settingsNote" class="hint">{{ settingsNote }}</p>
         </section>
 
         <section class="block">
@@ -272,14 +351,6 @@ async function save(): Promise<void> {
         </section>
       </div>
     </div>
-
-    <p class="hint">
-      {{
-        library.sharedSettingsPath
-          ? `Paramètres et profil de style général synchronisés par OneDrive : ${library.sharedSettingsPath}`
-          : 'Paramètres enregistrés sur cette machine seulement (pas de OneDrive détecté).'
-      }}
-    </p>
 
     <ul v-if="errors.length > 0" class="errors">
       <li v-for="error in errors" :key="error">{{ error }}</li>
@@ -410,6 +481,11 @@ async function save(): Promise<void> {
   gap: 6px;
   font-size: 13px;
   padding: 2px 0;
+}
+
+/* Boutons qui suivent directement un chemin : pas de marge en plus. */
+.row.tight {
+  margin-top: 0;
 }
 
 /* Un peu d'air entre les choix d'apparence et la case à cocher. */

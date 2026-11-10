@@ -87,10 +87,13 @@ interface TabEditing {
 }
 
 export type NodeStyle = Pick<DiagramNode, 'color' | 'fill'>
-export type LinkStyle = Pick<DiagramLink, 'color' | 'dash' | 'startArrow' | 'endArrow'>
+export type LinkStyle = Pick<
+  DiagramLink,
+  'color' | 'dash' | 'startArrow' | 'endArrow' | 'labelBackground'
+>
 export type TextStyle = Pick<
   TextLabel,
-  'bold' | 'italic' | 'underline' | 'strike' | 'vertical' | 'color'
+  'bold' | 'italic' | 'underline' | 'strike' | 'vertical' | 'color' | 'background'
 >
 
 /** Couleurs personnalisées gardées par diagramme, les plus récentes d'abord. */
@@ -642,7 +645,8 @@ export const useDiagramStore = defineStore('diagram', () => {
       endArrow: linkEndArrow.value,
       label: '',
       labelAt: 0.5,
-      labelSide: 1
+      labelSide: 1,
+      labelBackground: false
     }
     apply('Tracer un lien', (draft) => {
       draft.links.push(castDraft(link))
@@ -775,7 +779,8 @@ export const useDiagramStore = defineStore('diagram', () => {
         underline: false,
         strike: false,
         vertical: false,
-        color: DEFAULT_COLOR
+        color: DEFAULT_COLOR,
+        background: false
       })
     })
     clearSelection()

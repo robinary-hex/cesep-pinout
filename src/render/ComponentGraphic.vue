@@ -23,7 +23,8 @@ import {
 } from '@/domain'
 import { screenColor } from './ink'
 
-// Dessin d'un composant (PNG ou primitives) dans un <g> SVG, à une taille de cellule donnée.
+// Dessin d'un composant (ses formes, images comprises) dans un <g> SVG, à une taille de cellule
+// donnée.
 // Sans état : partagé par l'éditeur de composants, les vignettes et le montage.
 
 const props = withDefaults(
@@ -61,11 +62,8 @@ const emit = defineEmits<{ primitiveDown: [index: number, event: PointerEvent] }
 type Stroked = Extract<Primitive, { kind: 'line' | 'polyline' }>
 
 const q = (value: number): number => (value * props.cellPx) / QUARTERS_PER_CELL
-const widthPx = computed(() => props.def.size.widthCells * props.cellPx)
-const heightPx = computed(() => props.def.size.heightCells * props.cellPx)
-const image = computed(() => (props.def.visual.kind === 'png' ? props.def.visual : null))
 const primitives = computed(() => {
-  const all = props.def.visual.kind === 'drawing' ? props.def.visual.primitives : []
+  const all = props.def.visual.primitives
   const hideTexts = props.skipTexts
   const list = hideTexts ? all.filter((primitive) => primitive.kind !== 'text') : all
   const preview = props.preview
@@ -208,35 +206,6 @@ function down(index: number, event: PointerEvent): void {
 
 <template>
   <g class="component-graphic">
-    <template v-if="image">
-      <image
-        v-if="image.dataUrl"
-        :href="image.dataUrl"
-        :width="widthPx"
-        :height="heightPx"
-        preserveAspectRatio="none"
-      />
-      <g v-else>
-        <rect
-          :width="widthPx"
-          :height="heightPx"
-          fill="#eef1f4"
-          stroke="#8c959f"
-          stroke-dasharray="6 4"
-        />
-        <text
-          :x="widthPx / 2"
-          :y="heightPx / 2"
-          text-anchor="middle"
-          dominant-baseline="middle"
-          font-size="12"
-          fill="#57606a"
-        >
-          {{ image.file }} manquante
-        </text>
-      </g>
-    </template>
-
     <g
       v-for="(p, i) in primitives"
       :key="i"
@@ -330,6 +299,49 @@ function down(index: number, event: PointerEvent): void {
           :cx="q(p.x)"
           :cy="q(p.y)"
           :r="dotHitRadiusPx(p.scale)"
+          fill="transparent"
+        />
+      </template>
+
+      <template v-else-if="p.kind === 'image'">
+        <image
+          v-if="p.dataUrl"
+          :href="p.dataUrl"
+          :x="q(p.x)"
+          :y="q(p.y)"
+          :width="q(p.w)"
+          :height="q(p.h)"
+          preserveAspectRatio="none"
+        />
+        <!-- Fichier perdu : un cadre gris à la place de l'image. -->
+        <g v-else class="missing-image">
+          <rect
+            :x="q(p.x)"
+            :y="q(p.y)"
+            :width="q(p.w)"
+            :height="q(p.h)"
+            fill="#eef1f4"
+            stroke="#8c959f"
+            stroke-dasharray="6 4"
+            vector-effect="non-scaling-stroke"
+          />
+          <text
+            :x="q(p.x + p.w / 2)"
+            :y="q(p.y + p.h / 2)"
+            text-anchor="middle"
+            dominant-baseline="middle"
+            :font-size="Math.min(q(p.w) / 9, q(p.h) / 2)"
+            fill="#57606a"
+          >
+            Image manquante
+          </text>
+        </g>
+        <rect
+          v-if="interactive"
+          :x="q(p.x)"
+          :y="q(p.y)"
+          :width="q(p.w)"
+          :height="q(p.h)"
           fill="transparent"
         />
       </template>

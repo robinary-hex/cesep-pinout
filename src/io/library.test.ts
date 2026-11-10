@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createEmptyComponent, DEFAULT_SHAPE_STYLE, type ComponentDefinition } from '@/domain'
+import {
+  createEmptyComponent,
+  dataUrlToBase64,
+  DEFAULT_SHAPE_STYLE,
+  type ComponentDefinition
+} from '@/domain'
+import { pngHeaderDataUrl } from '@/domain/testing/pngHeader'
 import { setBridge } from './bridge'
 import {
   deleteComponent,
@@ -31,10 +37,18 @@ function nano(): ComponentDefinition {
   const def = createEmptyComponent('arduino-nano', 'Arduino Nano')
   def.size = { widthCells: 6, heightCells: 14 }
   def.visual = {
-    kind: 'png',
-    file: 'image.png',
-    pxPerCell: 80,
-    dataUrl: `data:image/png;base64,${ONE_PIXEL}`
+    kind: 'drawing',
+    primitives: [
+      {
+        kind: 'image',
+        x: 0,
+        y: 0,
+        w: 24,
+        h: 56,
+        file: 'image.png',
+        dataUrl: `data:image/png;base64,${ONE_PIXEL}`
+      }
+    ]
   }
   def.pins = [{ id: 'gnd', name: 'GND', kind: 'power', x: 6, y: 1 }]
   return def
@@ -63,6 +77,36 @@ describe('bibliothèque sur disque', () => {
     expect(fs.binaries.get(`${folder}/image.png`)).toBe(ONE_PIXEL)
     expect(fs.texts.get(`${folder}/component.json`)).not.toContain('dataUrl')
     expect(await loadComponent(folder)).toEqual(nano())
+  })
+
+  it('range un PNG par image, sans doublon, et retire ceux qui ne servent plus', async () => {
+    const def = nano()
+    const first = def.visual.primitives[0]
+    if (first?.kind !== 'image') throw new Error('image attendue')
+    const other = pngHeaderDataUrl(80, 80)
+    // La même image posée deux fois, puis une autre.
+    def.visual.primitives.push(
+      { ...first, x: 24 },
+      { ...first, file: 'image-2.png', dataUrl: other }
+    )
+    const folder = await saveComponent(LIB, def)
+    expect([...fs.binaries.keys()].sort()).toEqual([`${folder}/image-2.png`, `${folder}/image.png`])
+    expect(fs.binaries.get(`${folder}/image-2.png`)).toBe(dataUrlToBase64(other))
+    expect(await loadComponent(folder)).toEqual(def)
+    // L'autre image retirée du dessin : son fichier s'en va ; un fichier étranger reste.
+    def.visual.primitives.pop()
+    await fs.writeBinaryFile(`${folder}/photo.png`, ONE_PIXEL)
+    await saveComponent(LIB, def)
+    expect([...fs.binaries.keys()].sort()).toEqual([`${folder}/image.png`, `${folder}/photo.png`])
+  })
+
+  it('relit une image dont le fichier a disparu, sans son contenu', async () => {
+    const folder = await saveComponent(LIB, nano())
+    await fs.deleteFile(`${folder}/image.png`)
+    const loaded = await loadComponent(folder)
+    expect(loaded.visual.primitives).toEqual([
+      { kind: 'image', x: 0, y: 0, w: 24, h: 56, file: 'image.png' }
+    ])
   })
 
   it('liste les composants triés par nom et garde les dossiers illisibles', async () => {

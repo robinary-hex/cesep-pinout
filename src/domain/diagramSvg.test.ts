@@ -117,6 +117,30 @@ describe('export SVG d’un diagramme', () => {
     expect(first?.querySelector('polygon')?.getAttribute('points')).toContain('8,5.6')
   })
 
+  it('ne met un fond sous une étiquette de lien ou un texte que s’il est demandé', () => {
+    const read = (svg: string | undefined): Document =>
+      new DOMParser().parseFromString(svg ?? '', 'image/svg+xml')
+    const plain = read(buildDiagramSvg(diagram, DEFAULT_EXPORT)?.svg)
+    expect(plain.querySelectorAll('g.link-labels rect, g.texts rect')).toHaveLength(0)
+    const backed = read(
+      buildDiagramSvg(
+        {
+          ...diagram,
+          links: diagram.links.map((link) => ({ ...link, labelBackground: true })),
+          texts: diagram.texts.map((text) => ({ ...text, background: true }))
+        },
+        DEFAULT_EXPORT
+      )?.svg
+    )
+    // Un fond par étiquette écrite et par texte, de la couleur du fond de l'image.
+    const labelled = diagram.links.filter((link) => link.label.length > 0).length
+    expect(labelled).toBeGreaterThan(0)
+    expect(backed.querySelectorAll('g.link-labels rect')).toHaveLength(labelled)
+    expect(backed.querySelector('g.link-labels rect')?.getAttribute('fill')).toBe('#ffffff')
+    expect(backed.querySelector('g.link-labels rect')?.hasAttribute('fill-opacity')).toBe(false)
+    expect(backed.querySelectorAll('g.texts rect')).toHaveLength(diagram.texts.length)
+  })
+
   it('n’a pas de fond en transparent et retourne null pour un diagramme vide', () => {
     const result = buildDiagramSvg(diagram, { ...DEFAULT_EXPORT, background: 'transparent' })
     expect(result?.svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg" width=')).toBe(true)

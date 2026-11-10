@@ -20,8 +20,9 @@ import { listComponents, type LibraryEntry } from '@/io/library'
 import { baseName, dirOf } from '@/io/paths'
 import {
   loadSettings,
-  portableLibraryDir,
+  portableDir,
   readSharedSettings,
+  relocateSharedSettings,
   resolveLibraryDir,
   saveSettings,
   withLocalPart
@@ -38,8 +39,10 @@ const MAX_RECENT_FILES = 10
 /** Bibliothèque de composants sur disque et paramètres de l'application. */
 export const useLibraryStore = defineStore('library', () => {
   const settings = shallowRef<Settings | null>(null)
-  /** Fichier de paramètres partagé (OneDrive), ou null s'ils restent sur cette machine. */
+  /** Fichier de paramètres partagé, ou null s'ils restent sur cette machine. */
   const sharedSettingsPath = ref<string | null>(null)
+  /** Dossier choisi pour ce fichier sur cette machine ; vide = le dossier par défaut. */
+  const settingsDir = computed(() => settings.value?.settingsDir ?? '')
   const libraryDir = ref('')
   const entries = shallowRef<LibraryEntry[]>([])
   const loading = ref(false)
@@ -152,7 +155,7 @@ export const useLibraryStore = defineStore('library', () => {
     const current = settings.value
     if (!current) return false
     try {
-      const shared = await readSharedSettings()
+      const shared = await readSharedSettings(current.settingsDir)
       if (!shared) return false
       const next = withLocalPart(shared, current)
       if (JSON.stringify(next) === JSON.stringify(current)) return false
@@ -194,7 +197,43 @@ export const useLibraryStore = defineStore('library', () => {
     if (dir === null) return
     problem.value = ''
     const { oneDrive } = await bridge().getAppPaths()
-    await updateSettings({ libraryDir: portableLibraryDir(dir, oneDrive) })
+    await updateSettings({ libraryDir: portableDir(dir, oneDrive) })
+  }
+
+  /**
+   * Met le fichier de paramètres partagé dans un autre dossier (vide = le dossier par défaut),
+   * réglage propre à cette machine. Un dossier qui a déjà des paramètres les donne à
+   * l'application (`adopted`) ; sinon les réglages courants y sont écrits (`moved`). Un échec
+   * (`failed`) ne change rien et s'explique dans `problem`.
+   */
+  async function setSettingsDir(dir: string): Promise<'adopted' | 'moved' | 'failed'> {
+    const current = settings.value ?? structuredClone(DEFAULT_SETTINGS)
+    try {
+      const moved = await relocateSharedSettings(current, dir)
+      settings.value = moved.settings
+      sharedSettingsPath.value = moved.sharedPath
+      problem.value = ''
+      if (moved.settings.libraryDir !== current.libraryDir) {
+        libraryDir.value = await resolveLibraryDir(moved.settings)
+        await refresh()
+      }
+      return moved.adopted ? 'adopted' : 'moved'
+    } catch (error) {
+      problem.value = `Emplacement des paramètres inchangé : ${describe(error)}`
+      return 'failed'
+    }
+  }
+
+  /** Dialogue de choix du dossier des paramètres ; null si l'utilisateur annule. */
+  async function chooseSettingsDir(): Promise<'adopted' | 'moved' | 'failed' | null> {
+    const dir = await bridge().showOpenDialog({
+      title: 'Dossier des paramètres de l’application',
+      directory: true,
+      ...(sharedSettingsPath.value ? { defaultPath: dirOf(sharedSettingsPath.value) } : {})
+    })
+    if (dir === null) return null
+    const { oneDrive } = await bridge().getAppPaths()
+    return setSettingsDir(portableDir(dir, oneDrive))
   }
 
   async function addRecentFile(path: string): Promise<void> {
@@ -211,6 +250,7 @@ export const useLibraryStore = defineStore('library', () => {
   return {
     settings,
     sharedSettingsPath,
+    settingsDir,
     libraryDir,
     entries,
     filtered,
@@ -235,6 +275,8 @@ export const useLibraryStore = defineStore('library', () => {
     updateSettings,
     reloadSharedSettings,
     chooseDir,
+    setSettingsDir,
+    chooseSettingsDir,
     addRecentFile,
     removeRecentFile
   }

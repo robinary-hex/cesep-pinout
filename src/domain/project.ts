@@ -17,7 +17,7 @@ import {
 import { styleProfileSchema, type StyleProfile } from './profile'
 import { isUTurn } from './wires'
 
-export const PROJECT_SCHEMA_VERSION = 19
+export const PROJECT_SCHEMA_VERSION = 20
 
 /** Composant posé sur le montage ; (x, y) = coin supérieur gauche de sa boîte, en grille. */
 export const componentInstanceSchema = z.object({
@@ -107,7 +107,9 @@ export const textLabelSchema = z.object({
   /** Texte tourné d'un quart de tour (lu de haut en bas) autour du centre de sa boîte. */
   vertical: z.boolean(),
   /** Couleur du texte ; le noir pur prend l'encre du thème à l'écran. */
-  color: hexColorSchema
+  color: hexColorSchema,
+  /** Fond de la couleur du papier sous le texte, pour masquer ce qui passe derrière. */
+  background: z.boolean()
 })
 export type TextLabel = z.infer<typeof textLabelSchema>
 

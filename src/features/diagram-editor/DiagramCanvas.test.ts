@@ -228,3 +228,27 @@ describe('canevas du diagramme : liens', () => {
     expect(store.undoLabel).toBe('Déplacer l’étiquette du lien')
   })
 })
+
+describe('canevas du diagramme : fond des étiquettes', () => {
+  it('ne peint le fond d’une étiquette de lien ou d’un texte que si on le demande', async () => {
+    const store = useDiagramStore()
+    const id = store.addLink([
+      [0, 0],
+      [0, 10]
+    ])
+    if (!id) throw new Error('lien attendu')
+    store.setLinkLabel(id, 'vrai')
+    const textId = store.addText(10, 4)
+    expect(store.doc.links[0]?.labelBackground).toBe(false)
+    expect(store.doc.texts[0]?.background).toBe(false)
+    const wrapper = mount(DiagramCanvas)
+    // La boîte de l'étiquette d'un lien reste là pour la saisir, mais ne se voit pas.
+    expect(wrapper.get('.link-label .label-back').classes()).not.toContain('filled')
+    expect(wrapper.find('.text-label .label-back').exists()).toBe(false)
+    store.setLinksStyle([id], { labelBackground: true })
+    store.setTextStyle(textId, 'Fond du texte', { background: true })
+    await nextTick()
+    expect(wrapper.get('.link-label .label-back').classes()).toContain('filled')
+    expect(wrapper.get('.text-label .label-back').classes()).toContain('filled')
+  })
+})

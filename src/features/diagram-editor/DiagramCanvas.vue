@@ -1198,6 +1198,7 @@ const cursorClass = computed(() => {
               >
                 <rect
                   class="label-back"
+                  :class="{ filled: item.link.labelBackground }"
                   :x="item.labelBox.x - 0.2"
                   :y="item.labelBox.y"
                   :width="item.labelBox.w + 0.4"
@@ -1231,6 +1232,14 @@ const cursorClass = computed(() => {
               @dblclick="onTextDoubleClick(entry.text.id, $event)"
               @contextmenu="onContextMenu($event, { kind: 'text', id: entry.text.id })"
             >
+              <rect
+                v-if="entry.text.background"
+                class="label-back filled"
+                :x="entry.box.x"
+                :y="entry.box.y"
+                :width="entry.box.w"
+                :height="entry.box.h"
+              />
               <text
                 :transform="entry.transform"
                 :font-size="entry.fontCells"
@@ -1516,10 +1525,14 @@ const cursorClass = computed(() => {
   pointer-events: none;
 }
 
-/* Fond couleur papier sous l'étiquette d'un lien : elle reste lisible posée sur un trait. */
+/* Boîte d'une étiquette : toujours là pour la saisir, peinte en couleur du papier quand
+   l'étiquette a un fond (elle masque alors ce qui passe derrière). */
 .label-back {
+  fill: transparent;
+}
+
+.label-back.filled {
   fill: var(--paper);
-  fill-opacity: 0.85;
 }
 
 /* Point d'accroche qu'un Ctrl+glisser saisirait : un lien partira de lui. */

@@ -272,7 +272,7 @@ const ghostDef = computed<ComponentDefinition | null>(() => {
   if (current?.kind !== 'move-primitives' || !current.duplicate) return null
   const dx = current.current.x - current.start.x
   const dy = current.current.y - current.start.y
-  if ((dx === 0 && dy === 0) || store.doc.visual.kind !== 'drawing') return null
+  if (dx === 0 && dy === 0) return null
   const list = store.doc.visual.primitives
   const copies = current.indexes.flatMap((index) => {
     const primitive = list[index]
@@ -287,7 +287,7 @@ const handlePreview = computed(() => {
 })
 
 function primitiveAt(index: number): Primitive | null {
-  return store.doc.visual.kind === 'drawing' ? (store.doc.visual.primitives[index] ?? null) : null
+  return store.doc.visual.primitives[index] ?? null
 }
 
 /** Une forme telle qu'affichée (aperçu de poignée compris). */
@@ -766,7 +766,6 @@ function commitBox(box: Extract<Drag, { kind: 'box' }>): void {
 
 /** Formes dont la boîte touche le lasso (lasso en cellules, boîtes en quarts). */
 function primitivesInBand(bandDrag: Extract<Drag, { kind: 'band' }>): number[] {
-  if (store.doc.visual.kind !== 'drawing') return []
   const x1 = Math.min(bandDrag.start.x, bandDrag.current.x) * QUARTERS_PER_CELL
   const y1 = Math.min(bandDrag.start.y, bandDrag.current.y) * QUARTERS_PER_CELL
   const x2 = Math.max(bandDrag.start.x, bandDrag.current.x) * QUARTERS_PER_CELL

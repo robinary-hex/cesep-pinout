@@ -205,4 +205,27 @@ describe('canevas du montage : étiquettes texte', () => {
     // Les lignes se posent au centre de la boîte tournée.
     expect(wrapper.get('.text-label tspan').attributes('x')).toBe('2.5')
   })
+
+  it('ne met un fond sous une étiquette que si on le demande', async () => {
+    const store = useSchematicStore()
+    const id = store.addLabelBox({ x: 2, y: 0, w: 4, h: 1 })
+    const wrapper = mount(SchematicCanvas)
+    expect(store.doc.labels[0]?.background).toBe(false)
+    expect(wrapper.find('.label-back').exists()).toBe(false)
+    store.setLabelStyle(id, 'Fond de l’étiquette', { background: true })
+    await wrapper.vm.$nextTick()
+    // Sa boîte, sous le texte.
+    expect(wrapper.get('.text-label .label-back').attributes()).toMatchObject({
+      x: '2',
+      y: '0',
+      width: '4',
+      height: '1'
+    })
+    expect(
+      wrapper.get('.text-label').element.firstElementChild?.classList.contains('label-back')
+    ).toBe(true)
+    store.undo()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.label-back').exists()).toBe(false)
+  })
 })

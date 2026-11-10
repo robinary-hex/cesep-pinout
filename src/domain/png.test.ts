@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { base64ToBytes, dataUrlToBase64, fitPngToCells, pngDataUrl, pngDimensions } from './png'
+import {
+  base64ToBytes,
+  dataUrlToBase64,
+  pngDataUrl,
+  pngDataUrlDimensions,
+  pngDimensions
+} from './png'
+import { pngHeaderDataUrl } from './testing/pngHeader'
 
 // PNG de 1 × 1 pixel, le même que dans le fixture de projet.
 const ONE_PIXEL =
@@ -23,25 +30,15 @@ describe('lecture de PNG', () => {
   })
 })
 
-describe('ajustement d’un PNG à la grille', () => {
-  it('accepte un multiple exact de 80 px', () => {
-    expect(fitPngToCells(480, 1120)).toEqual({
-      widthCells: 6,
-      heightCells: 14,
-      exact: true,
-      targetWidth: 480,
-      targetHeight: 1120
-    })
+describe('dimensions d’un PNG en data URL', () => {
+  it('se lisent dans son seul en-tête', () => {
+    expect(pngDataUrlDimensions(pngDataUrl(ONE_PIXEL))).toEqual({ width: 1, height: 1 })
+    expect(pngDataUrlDimensions(pngHeaderDataUrl(160, 240))).toEqual({ width: 160, height: 240 })
   })
 
-  it('propose la taille entière la plus proche sinon', () => {
-    const fit = fitPngToCells(500, 1100)
-    expect(fit.exact).toBe(false)
-    expect([fit.widthCells, fit.heightCells]).toEqual([6, 14])
-    expect([fit.targetWidth, fit.targetHeight]).toEqual([480, 1120])
-  })
-
-  it('ne descend jamais sous une cellule', () => {
-    expect(fitPngToCells(10, 10).widthCells).toBe(1)
+  it('sont nulles pour tout autre contenu', () => {
+    expect(pngDataUrlDimensions('data:image/jpeg;base64,AAAA')).toBeNull()
+    expect(pngDataUrlDimensions('data:image/png;base64,!!!')).toBeNull()
+    expect(pngDataUrlDimensions('data:image/png;base64,AAAA')).toBeNull()
   })
 })

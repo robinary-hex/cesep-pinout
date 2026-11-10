@@ -100,6 +100,7 @@ export function primitiveTouchesBox(primitive: Primitive, box: Box): boolean {
   switch (primitive.kind) {
     case 'text':
     case 'dot':
+    case 'image':
       return boxesOverlap(bounds, target)
     case 'rect':
     case 'ellipse':
