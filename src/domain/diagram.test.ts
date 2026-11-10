@@ -23,12 +23,15 @@ import {
 } from './diagramLinks'
 import {
   DARK_GROUND,
+  estimatedNodeTextMeasurer,
   groundOf,
   layoutNodeText,
   LIGHT_GROUND,
   mixColors,
+  nodeBoxForText,
   nodePaint,
-  nodeParts
+  nodeParts,
+  nodeSizeForText
 } from './diagramShapes'
 import fixture from './fixtures/v1/diagram.json?raw'
 import { FileFormatError } from './migrations'
@@ -201,6 +204,43 @@ describe('diagramme : formes', () => {
     expect(nodePaint({ color: '#000000', fill: 'solid' }, DARK_GROUND)).toMatchObject({
       fill: '#e6edf3',
       text: '#000000'
+    })
+  })
+
+  it('calcule la taille qu’il faut à un nœud pour son texte, selon sa forme', () => {
+    // Mesure simple : une cellule par caractère.
+    const measure = (text: string): number => text.length
+    // « Titre » : 5 de large + 2 × 1,5 de marge ; une ligne de 1,68 + 2 × 1 de marge.
+    expect(nodeSizeForText(node(), style, measure)).toEqual({ w: 8, h: 4 })
+    // Deux lignes : la plus longue fait la largeur, les deux la hauteur.
+    expect(
+      nodeSizeForText(node({ title: 'Brancher', subtitle: '(Arduino connecté)' }), style, measure)
+    ).toEqual({ w: 21, h: 6 })
+    // Losange : le texte n'a que la moitié de chaque dimension ; dimensions paires.
+    expect(nodeSizeForText(node({ shape: 'diamond' }), style, measure)).toEqual({ w: 16, h: 8 })
+    // Envoi : la pointe s'ajoute à la largeur.
+    expect(nodeSizeForText(node({ shape: 'send' }), style, measure)).toEqual({ w: 10, h: 4 })
+    expect(nodeSizeForText(node({ title: '' }), style, measure)).toBeNull()
+    expect(nodeSizeForText(node({ shape: 'start', w: 2, h: 2 }), style, measure)).toBeNull()
+    // L'estimation sans écran : un caractère moyen par lettre.
+    expect(estimatedNodeTextMeasurer(style)('abcd', 'title')).toBeCloseTo(4 * 0.55 * 1.4)
+  })
+
+  it('ajuste la boîte autour de son centre, ou la fait seulement grandir', () => {
+    const measure = (text: string): number => text.length
+    const wide = node({ title: 'Un titre vraiment très long' })
+    // 27 + 3 = 30 de large : la boîte de 16 grandit de 14, moitié de chaque côté.
+    expect(nodeBoxForText(wide, style, measure, true)).toEqual({ x: -7, y: 0, w: 30, h: 6 })
+    // Au plus près : la hauteur redescend à 4, d'une cellule en haut et en bas.
+    expect(nodeBoxForText(wide, style, measure, false)).toEqual({ x: -7, y: 1, w: 30, h: 4 })
+    // Le texte tient déjà : rien à faire pour grandir.
+    expect(nodeBoxForText(node(), style, measure, true)).toBeNull()
+    // Écart impair : une cellule de plus, pour que le centre reste sur la grille.
+    expect(nodeBoxForText(node({ title: 'Abcdefgh' }), style, measure, false)).toEqual({
+      x: 2,
+      y: 1,
+      w: 12,
+      h: 4
     })
   })
 })

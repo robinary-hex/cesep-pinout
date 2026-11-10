@@ -75,6 +75,43 @@ describe('diagramme : nœuds', () => {
     expect(store.doc.nodes.map((node) => node.id)).toEqual([a, b])
   })
 
+  it('agrandit un nœud dont le texte déborde, et l’ajuste au plus près sur demande', () => {
+    const store = useDiagramStore()
+    const id = store.addNode('rounded', 10, 10)
+    store.addLink([
+      [18, 16],
+      [18, 22]
+    ])
+    // Texte court : la boîte de 16 × 6 suffit.
+    store.setNodeText(id, { title: 'Arduino' })
+    expect(store.doc.nodes[0]).toMatchObject({ x: 10, y: 10, w: 16, h: 6 })
+    // Texte long (estimé à 0,77 cellule par caractère) : la boîte grandit autour de son centre,
+    // en une seule commande avec le texte, et le lien accroché au milieu du bas y reste.
+    store.setNodeText(id, { title: 'Publier le message sur le sujet de la partie' })
+    const grown = store.doc.nodes[0]
+    expect(grown?.w).toBeGreaterThan(16)
+    expect((grown?.x ?? 0) + (grown?.w ?? 0) / 2).toBe(18)
+    expect(store.doc.links[0]?.points.at(0)).toEqual([18, 16])
+    expect(store.undoLabel).toBe('Modifier le texte du nœud')
+    store.undo()
+    expect(store.doc.nodes[0]).toMatchObject({ title: 'Arduino', w: 16 })
+    // « Ajuster » resserre la boîte autour du texte ; le lien suit le bord qui remonte.
+    store.fitNodeToText(id)
+    expect(store.doc.nodes[0]).toMatchObject({ w: 10, h: 4, x: 13, y: 11 })
+    expect(store.doc.links[0]?.points.at(0)).toEqual([18, 15])
+    expect(store.undoLabel).toBe('Ajuster le nœud à son texte')
+  })
+
+  it('règle le style du diagramme, en une commande annulable', () => {
+    const store = useDiagramStore()
+    store.addNode('rounded', 0, 0)
+    store.setStyle({ lineWidth: 0.3, titleSize: 18 })
+    expect(store.style).toMatchObject({ lineWidth: 0.3, titleSize: 18, font: 'sans' })
+    expect(store.undoLabel).toBe('Changer le style du diagramme')
+    store.undo()
+    expect(store.style.lineWidth).toBe(0.15)
+  })
+
   it('prend le style courant, que la palette règle en colorant la sélection', () => {
     const store = useDiagramStore()
     const a = store.addNode('rounded', 0, 0)

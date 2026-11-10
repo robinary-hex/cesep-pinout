@@ -386,3 +386,69 @@ export function resizeNodeBox(node: DiagramNode, handleId: string, target: GridP
     h: size.h
   }
 }
+
+/** Marge gardée entre le texte d'un nœud et son contour, en cellules. */
+export const NODE_TEXT_PAD_X = 1.5
+export const NODE_TEXT_PAD_Y = 1
+
+/** Largeur d'une ligne de texte de nœud, en cellules. */
+export type NodeTextMeasurer = (text: string, role: 'title' | 'subtitle') => number
+
+/** Largeur moyenne d'un caractère, en multiple de la hauteur de police. */
+const NODE_CHAR_WIDTH: Record<DiagramFont, number> = { sans: 0.55, mono: 0.6 }
+
+/** Mesure estimée, sans écran : un caractère moyen par lettre. Les tests et l'export s'en servent. */
+export function estimatedNodeTextMeasurer(style: DiagramStyle): NodeTextMeasurer {
+  return (text, role) => {
+    const size = (role === 'title' ? style.titleSize : style.subtitleSize) / style.cellPx
+    return text.length * NODE_CHAR_WIDTH[style.font] * size
+  }
+}
+
+/**
+ * Taille qu'il faut à un nœud pour contenir son texte, marges comprises, ramenée à ce que sa forme
+ * permet ; null pour un nœud sans texte. Un losange n'offre à son texte que la moitié de chaque
+ * dimension ; un signal perd la profondeur de sa pointe ou de son encoche.
+ */
+export function nodeSizeForText(
+  node: DiagramNode,
+  style: DiagramStyle,
+  measure: NodeTextMeasurer
+): { w: number; h: number } | null {
+  const layout = layoutNodeText(node, style)
+  if (!layout) return null
+  const width = layout.lines.reduce((max, line) => Math.max(max, measure(line.text, line.role)), 0)
+  const height = layout.lines.reduce((sum, line) => sum + line.size * TEXT_LINE_HEIGHT, 0)
+  let w = width + 2 * NODE_TEXT_PAD_X
+  let h = height + 2 * NODE_TEXT_PAD_Y
+  if (node.shape === 'diamond') {
+    w *= 2
+    h *= 2
+  } else if (node.shape === 'send' || node.shape === 'receive') {
+    w += Math.max(1, Math.floor(Math.ceil(h) / 2))
+  }
+  return fittedNodeSize(node.shape, Math.ceil(w), Math.ceil(h))
+}
+
+/**
+ * Boîte d'un nœud ajustée à son texte, centre gardé (les écarts de taille sont pairs, pour que le
+ * centre reste sur la grille). `onlyGrow` : la boîte ne fait que grandir, là où le texte déborde.
+ * Null s'il n'y a rien à changer.
+ */
+export function nodeBoxForText(
+  node: DiagramNode,
+  style: DiagramStyle,
+  measure: NodeTextMeasurer,
+  onlyGrow: boolean
+): Box | null {
+  const needed = nodeSizeForText(node, style, measure)
+  if (!needed) return null
+  const even = (target: number, current: number): number => {
+    const wanted = onlyGrow ? Math.max(target, current) : target
+    return (wanted - current) % 2 === 0 ? wanted : wanted + 1
+  }
+  const w = even(needed.w, node.w)
+  const h = even(needed.h, node.h)
+  if (w === node.w && h === node.h) return null
+  return { x: node.x - (w - node.w) / 2, y: node.y - (h - node.h) / 2, w, h }
+}

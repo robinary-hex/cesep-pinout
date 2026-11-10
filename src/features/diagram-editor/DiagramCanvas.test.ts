@@ -30,6 +30,9 @@ async function fire(
   await nextTick()
 }
 
+/** Ctrl enfoncée : les événements de souris la portent, comme dans la vraie fenêtre. */
+const CTRL = { ctrlKey: true }
+
 beforeEach(() => {
   setActivePinia(createPinia())
   vi.stubGlobal(
@@ -123,21 +126,37 @@ describe('canevas du diagramme : nœuds', () => {
 })
 
 describe('canevas du diagramme : liens', () => {
-  it('tire un lien depuis un point d’accroche jusqu’à celui d’un autre nœud', async () => {
+  it('sans Ctrl, rien ne s’annonce au bord d’un nœud et le glisser le déplace', async () => {
+    const store = useDiagramStore()
+    store.addNode('rounded', 0, 0)
+    store.clearSelection()
+    const wrapper = mount(DiagramCanvas)
+    const svg = wrapper.get('svg.diagram')
+    await fire(svg, 'pointermove', at(store, 8, 6))
+    expect(wrapper.find('.anchor-grab').exists()).toBe(false)
+    await fire(wrapper.get('.node .hit'), 'pointerdown', at(store, 8, 5.9))
+    await fire(svg, 'pointermove', at(store, 11, 9.9))
+    await fire(svg, 'pointerup', at(store, 11, 9.9))
+    expect(store.doc.links).toHaveLength(0)
+    expect(store.doc.nodes[0]).toMatchObject({ x: 3, y: 4 })
+  })
+
+  it('Ctrl+glisser sur un nœud tire un lien de son accroche la plus proche vers un autre nœud', async () => {
     const store = useDiagramStore()
     store.addNode('rounded', 0, 0)
     store.addNode('rounded', 0, 12)
     store.clearSelection()
     const wrapper = mount(DiagramCanvas)
     const svg = wrapper.get('svg.diagram')
-    // Milieu du bas du premier nœud : l'anneau de saisie apparaît.
-    await fire(svg, 'pointermove', at(store, 8.1, 6.1))
+    // Dans le premier nœud, près du milieu de son bord bas : l'anneau s'y met.
+    await fire(svg, 'pointermove', at(store, 8.1, 4.6), CTRL)
+    expect(store.ctrlHeld).toBe(true)
     const ring = wrapper.get('.anchor-grab')
     expect([ring.attributes('cx'), ring.attributes('cy')]).toEqual(['8', '6'])
-    await fire(ring, 'pointerdown', at(store, 8.1, 6.1))
-    await fire(svg, 'pointermove', at(store, 8.3, 11.6))
+    await fire(wrapper.findAll('.node .hit')[0] ?? svg, 'pointerdown', at(store, 8.1, 4.6), CTRL)
+    await fire(svg, 'pointermove', at(store, 8.3, 11.6), CTRL)
     expect(wrapper.find('.drawing .pending').exists()).toBe(true)
-    await fire(svg, 'pointerup', at(store, 8.3, 11.6))
+    await fire(svg, 'pointerup', at(store, 8.3, 11.6), CTRL)
     expect(store.doc.links).toHaveLength(1)
     expect(store.doc.links[0]).toMatchObject({
       points: [
@@ -147,20 +166,21 @@ describe('canevas du diagramme : liens', () => {
       endArrow: true,
       startArrow: false
     })
-    // Une pointe ouverte à l'arrivée.
+    // Le nœud n'a pas bougé ; une pointe ouverte à l'arrivée.
+    expect(store.doc.nodes[0]).toMatchObject({ x: 0, y: 0 })
     expect(wrapper.findAll('.link-head')).toHaveLength(1)
     expect(store.undoLabel).toBe('Tracer un lien')
   })
 
-  it('un simple clic sur une accroche sélectionne le nœud', async () => {
+  it('un simple Ctrl+clic sélectionne le nœud', async () => {
     const store = useDiagramStore()
     const id = store.addNode('rounded', 0, 0)
     store.clearSelection()
     const wrapper = mount(DiagramCanvas)
     const svg = wrapper.get('svg.diagram')
-    await fire(svg, 'pointermove', at(store, 0, 3))
-    await fire(wrapper.get('.anchor-grab'), 'pointerdown', at(store, 0, 3))
-    await fire(svg, 'pointerup', at(store, 0, 3))
+    await fire(svg, 'pointermove', at(store, 0, 3), CTRL)
+    await fire(svg, 'pointerdown', at(store, 0, 3), CTRL)
+    await fire(svg, 'pointerup', at(store, 0, 3), CTRL)
     expect(store.doc.links).toHaveLength(0)
     expect(store.selectedNodes).toEqual([id])
   })

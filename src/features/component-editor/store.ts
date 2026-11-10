@@ -250,6 +250,15 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
         : null
   }
 
+  /** Sélectionne toutes les formes et toutes les broches. */
+  function selectAll(): void {
+    const count = doc.value.visual.kind === 'drawing' ? doc.value.visual.primitives.length : 0
+    select(
+      Array.from({ length: count }, (_, index) => index),
+      doc.value.pins.map((pin) => pin.id)
+    )
+  }
+
   function selectPrimitives(indexes: readonly number[]): void {
     select(indexes, [])
   }
@@ -675,6 +684,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     closeTab,
     closeFolderTabs,
     select,
+    selectAll,
     selectPrimitives,
     selectPin,
     togglePrimitive,

@@ -285,3 +285,40 @@ describe('éditeur de composants : formes et broches sélectionnées ensemble', 
     expect(store.doc.pins).toHaveLength(2)
   })
 })
+
+describe('éditeur de composants : gestes communs aux éditeurs', () => {
+  const rect: Primitive = {
+    kind: 'rect',
+    x: 0,
+    y: 0,
+    w: 8,
+    h: 4,
+    rx: 0,
+    style: DEFAULT_SHAPE_STYLE
+  }
+
+  it('Ctrl+A sélectionne toutes les formes et toutes les broches', () => {
+    const store = useComponentEditorStore()
+    store.addPrimitive(rect, 'Ajouter un rectangle')
+    store.addPrimitive({ ...rect, x: 8 }, 'Ajouter un rectangle')
+    const pin = store.addPin({ x: 0, y: 1 })
+    store.selection = null
+    store.selectAll()
+    expect(store.selection).toEqual({ indexes: [0, 1], pinIds: [pin] })
+  })
+
+  it('les flèches déplacent d’un quart de cellule, d’une cellule avec une broche', () => {
+    const store = useComponentEditorStore()
+    store.addPrimitive(rect, 'Ajouter un rectangle')
+    const pin = store.addPin({ x: 1, y: 1 })
+    // Une forme seule : un quart de cellule, le pas de sa grille.
+    expect(store.moveSelection([0], [], 1, 0)).toBe(true)
+    expect(store.doc.visual.kind === 'drawing' && store.doc.visual.primitives[0]).toMatchObject({
+      x: 1
+    })
+    // Avec une broche : un quart est refusé, une cellule entière passe.
+    expect(store.moveSelection([0], [pin], 1, 0)).toBe(false)
+    expect(store.moveSelection([0], [pin], 4, 0)).toBe(true)
+    expect(store.doc.pins[0]).toMatchObject({ x: 2, y: 1 })
+  })
+})

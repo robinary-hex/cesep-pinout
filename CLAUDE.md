@@ -68,6 +68,24 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   (`flippedInstance`) ; une rotation à l'écran garde le centre de la boîte (`rotatedInstance`).
 - Jonctions : dérivées de la géométrie (une extrémité de fil sur un autre fil), jamais stockées ;
   un croisement en milieu de segment ne connecte pas.
+- Touches de modification et gestes de souris : le même sens dans les trois éditeurs (décision du
+  10 novembre 2026). Avant d'en ajouter un, vérifier qu'il ne contredit pas ce tableau, et le dire
+  de la même façon dans l'aide (`SELECTION` et `VIEW` de `src/app/ShortcutsHelp.vue`).
+  - Maj : ajoute à la sélection ou en retire (Maj+clic, Maj+lasso) ; pendant un tracé, le
+    contraint ou le varie (carré ou cercle dans l'éditeur de composants, L inversé d'un fil ou
+    d'un lien). Jamais autre chose.
+  - Alt : copie (Alt+glisser dépose une copie de la sélection) ; seule exception, Alt+clic sur un
+    croisement du montage inverse l'ordre des deux fils.
+  - Ctrl : saisit le point d'attache le plus proche de ce qu'on survole, au lieu de l'élément
+    entier. Éditeur de composants : Ctrl+glisser sur une forme saisit sa poignée la plus proche,
+    Ctrl sans sélection montre les poignées de la boîte. Montage : Ctrl+glisser sur un composant
+    tire un fil de sa broche la plus proche. Diagramme : Ctrl+glisser sur un nœud tire un lien de
+    son point d'accroche le plus proche. Sans Ctrl, glisser un élément le déplace, toujours.
+  - Molette = zoom autour du curseur ; Espace + glisser ou bouton du milieu = déplacer la vue ;
+    double-clic du bouton du milieu ou 0 = ajuster la vue.
+  - Flèches = déplacer la sélection d'un pas de grille ; Ctrl+A / D / C / V / Z / Y ; Suppr ;
+    Entrée termine un tracé, Retour arrière retire son dernier point ; Échap annule le geste, puis
+    la sélection, puis revient à l'outil Sélection.
 - Raccourcis définis par la lettre (`KeyboardEvent.key`), clavier AZERTY belge, jamais de crochets
   ni de touches AltGr. Les deux seuls chiffres (0, 1) se lisent par touche physique (`event.code`)
   car la rangée du haut demande Maj sur ce clavier.
@@ -90,11 +108,13 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     Poser un composant remplace la copie embarquée de sa définition par celle de la bibliothèque
     si elle a changé, pour tout le montage (fils élastiques compris). Alt+glisser dépose une copie
     de la sélection (Alt+clic sur un croisement garde son rôle) ; double-clic sur l'extrémité
-    libre d'un fil saisit son étiquette d'extrémité. En sélection, la broche sous le pointeur
-    montre un anneau (`pinGrab`, 8 px autour d'elle) : glisser depuis lui tire un fil de la broche
-    jusqu'au point de relâchement (L selon l'axe dominant, Maj l'inverse, arrivée accrochée aux
-    broches ; glisser `pin-wire` du canevas, une commande `addWire`), un simple clic sélectionne
-    le composant, Maj et Alt gardent leurs gestes sur le composant.
+    libre d'un fil saisit son étiquette d'extrémité. En sélection, Ctrl enfoncée (`ctrlHeld`),
+    un anneau montre la broche qui serait saisie (`pinGrab` : la plus proche du pointeur parmi
+    celles du composant survolé, sinon une broche à portée) : Ctrl+glisser tire un fil de cette
+    broche jusqu'au point de relâchement (L selon l'axe dominant, Maj l'inverse, arrivée accrochée
+    aux broches ; glisser `pin-wire` du canevas, pris en phase de capture avant tout autre geste,
+    une commande `addWire`), un simple Ctrl+clic sélectionne le composant. Sans Ctrl, glisser un
+    composant le déplace, même par une broche.
 - Fils : la géométrie pure est dans `src/domain/wires.ts` (tracé, coins arrondis, édition de
   segments et de sommets), la connectivité dérivée dans `src/domain/connectivity.ts` (jonctions,
   extrémités libres, nets par union-find). Un fil garde ses extrémités fixes quand on déplace un
@@ -177,9 +197,20 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     décrit ce que chaque forme dessine (`nodeParts`, `layoutNodeText`) ; `DiagramNodeGraphic.vue`
     à l'écran et `buildDiagramSvg` à l'export peignent la même chose. Losange et disques ont des
     dimensions paires (pointes sur la grille), les disques sont carrés, une barre a une épaisseur
-    nulle (`fittedNodeSize`, `resizeNodeBox`). Texte à l'encre du thème, sauf sur un fond plein où
-    il contraste (`nodeTextTone`) ; un fond teinté se pose sur une sous-couche couleur papier.
-    Police du diagramme : normale (titre demi-gras) ou chasse fixe (sous-titre en italique).
+    nulle (`fittedNodeSize`, `resizeNodeBox`). Couleurs d'un nœud (`nodePaint`, ce que l'export
+    écrit ; l'écran applique les mêmes règles avec les variables du thème) : en contour, le trait
+    a la couleur et il n'y a pas de fond ; en teinté (fond d'un nouveau nœud), le fond est la
+    couleur mêlée au papier, opaque, donc plus clair que le contour en thème clair et plus sombre
+    en thème sombre (`TINT_SHARE`, `--node-tint` dans style.css) ; en plein, le fond est la
+    couleur même et le contour s'en détache, éclairci sur une couleur sombre, foncé sur une
+    couleur claire (`SOLID_BORDER_SHARE`). Texte à l'encre du thème, sauf sur un fond plein où il
+    contraste avec lui. Trois pastilles dans la barre montrent les fonds dans la couleur courante.
+    Police du diagramme : normale (titre demi-gras) ou chasse fixe (sous-titre en italique). Un
+    nœud grandit de lui-même quand le texte qu'on vient d'y écrire déborde (`setNodeText`, même
+    commande que le texte, centre gardé) ; « Ajuster » (panneau, menu contextuel) le ramène au
+    plus près (`fitNodeToText`, `nodeBoxForText`). La largeur du texte se mesure sur un canevas
+    hors écran (`src/render/textMeasure.ts`), estimée sans navigateur. Le style du diagramme
+    (trait, coins, coudes, tailles de texte, police) se règle dans le panneau, sans sélection.
   - Liens : la géométrie des fils (`wires.ts`), coudes posés à la main, pas de routage
     automatique. Pointe ouverte au départ et/ou à l'arrivée, trait plein ou pointillé, couleur,
     étiquette (`label`, décalage en quarts de cellule depuis le milieu du tracé). L'accroche se
@@ -194,11 +225,15 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     tape aussitôt sur place (petit éditeur HTML par-dessus le nœud : Entrée valide, Maj+Entrée va
     à la ligne, Échap abandonne) ; double-clic ou Entrée sur un nœud pour y revenir. V sélection,
     F lien, E texte libre (le modèle des étiquettes texte du montage), R tourne une barre, I
-    panneau, Ctrl+Page haut/bas ordre des nœuds, le reste comme le montage. En sélection, le
-    point d'accroche sous le pointeur montre un anneau : glisser depuis lui tire un lien.
+    panneau, Ctrl+Page haut/bas ordre des nœuds, le reste comme le montage. En sélection, Ctrl
+    enfoncée, un anneau montre le point d'accroche qui serait saisi (`anchorGrab` : le plus
+    proche du pointeur sur le nœud survolé) : Ctrl+glisser tire un lien de ce point.
   - Onglets, copies de secours (`diagramme-<onglet>.*`), question à la fermeture, fichiers
     récents (mêlés à ceux des montages, chaque menu ne montre que les siens), export PNG/SVG
-    (`ExportDialog` reçoit de l'éditeur ce qu'il exporte) : comme le montage.
+    (`ExportDialog` reçoit de l'éditeur ce qu'il exporte) : comme le montage. À l'export d'un
+    diagramme l'encre suit le fond de l'image (`exportGround`) : noire sur un fond clair, claire
+    sur un fond sombre ; pour un fond transparent, une case dit si l'image ira sur une page
+    sombre (non mémorisée).
 - Thème clair ou sombre choisi dans les paramètres (`theme`) : `src/ui/theme.ts` pose
   `data-theme` sur `<html>` et toutes les couleurs de l'interface passent par les variables CSS de
   `src/app/style.css`, jamais en dur dans les styles ; les surfaces de dessin (`--paper`) sont blanches en clair et
@@ -257,8 +292,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     B broche, Suppr, Échap, Entrée (termine une polyligne), Ctrl+Z / Ctrl+Y, Ctrl+S, Ctrl+N,
     Ctrl+Page haut/bas (Maj pour premier/arrière-plan) = ordre d'empilement de la forme
     sélectionnée (`reorderItem`, aussi par boutons dans le panneau),
-    Ctrl+molette = zoom centré sur le curseur (boutons −/+/Ajuster dans la barre), bouton du milieu
-    maintenu = déplacer la vue, double-clic du bouton du milieu = ajuster à la fenêtre. Le composant est centré dans la zone et ajusté à la fenêtre à
+    molette = zoom centré sur le curseur (boutons −/+/Ajuster dans la barre), bouton du milieu
+    maintenu ou Espace + glisser = déplacer la vue, double-clic du bouton du milieu ou 0 =
+    ajuster à la fenêtre, flèches = déplacer la sélection (d'un quart de cellule, d'une cellule
+    avec une broche), Ctrl+A = tout sélectionner, Retour arrière = retirer le dernier point
+    d'une polyligne en cours. Le composant est centré dans la zone et ajusté à la fenêtre à
     l'ouverture (premier affichage, nouveau composant, composant chargé), sans ascenseur. La forme
     sélectionnée montre ses poignées (`src/domain/handles.ts`, curseurs en double flèche selon le
     coin ou le côté) ; Ctrl+glisser sur une forme saisit la poignée la plus proche ; sans sélection,

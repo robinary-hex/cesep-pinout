@@ -348,6 +348,7 @@ function onKeyDown(event: KeyboardEvent): void {
   const editable = isEditable(event.target)
 
   if (key === 'shift') store.shiftHeld = true
+  if (key === 'control') store.ctrlHeld = true
   if (openModals.value > 0) return
 
   if (key === ' ' && !editable) {
@@ -484,11 +485,13 @@ function onKeyDown(event: KeyboardEvent): void {
 function onKeyUp(event: KeyboardEvent): void {
   if (event.key === ' ') store.panKeyHeld = false
   if (event.key === 'Shift') store.shiftHeld = false
+  if (event.key === 'Control') store.ctrlHeld = false
 }
 
 function onBlur(): void {
   store.panKeyHeld = false
   store.shiftHeld = false
+  store.ctrlHeld = false
 }
 
 onMounted(() => {
@@ -503,6 +506,7 @@ onUnmounted(() => {
   window.removeEventListener('blur', onBlur)
   store.panKeyHeld = false
   store.shiftHeld = false
+  store.ctrlHeld = false
 })
 
 // Actions de fichier appelées par le menu Fichier de la barre d'application.

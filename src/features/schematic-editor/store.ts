@@ -154,6 +154,8 @@ export const useSchematicStore = defineStore('schematic', () => {
   const profilePreview = shallowRef<StyleProfile | null>(null)
   const panKeyHeld = ref(false)
   const shiftHeld = ref(false)
+  /** Ctrl enfoncée : en sélection, le canevas montre la broche qu'un Ctrl+glisser saisirait. */
+  const ctrlHeld = ref(false)
   const hoverWireId = ref<string | null>(null)
   const status = ref('')
 
@@ -1181,6 +1183,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     profilePreview,
     panKeyHeld,
     shiftHeld,
+    ctrlHeld,
     hoverWireId,
     status,
     undoLabel,

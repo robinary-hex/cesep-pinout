@@ -138,13 +138,31 @@ watch(
 
 /** Ctrl enfoncée : sans sélection, les poignées de la boîte du composant apparaissent. */
 const ctrlHeld = ref(false)
+/** Espace enfoncée : glisser déplace la vue, comme sur le montage et le diagramme. */
+const spaceHeld = ref(false)
+
+function isEditable(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+  )
+}
 
 function onModifierKey(event: KeyboardEvent): void {
   ctrlHeld.value = event.ctrlKey
+  if (event.key !== ' ') return
+  if (event.type === 'keyup') {
+    spaceHeld.value = false
+  } else if (!isEditable(event.target)) {
+    spaceHeld.value = true
+    // Sans ceci, Espace ferait défiler la zone ou cliquerait le bouton qui a le focus.
+    event.preventDefault()
+  }
 }
 
 function onWindowBlur(): void {
   ctrlHeld.value = false
+  spaceHeld.value = false
 }
 
 onMounted(() => {
@@ -569,6 +587,15 @@ async function fitAndCenter(): Promise<void> {
   scroller.value?.scrollTo({ left: 0, top: 0 })
 }
 
+/** Espace + glisser : déplacement de la vue, avant tout autre geste (forme, broche, poignée). */
+function onPanDown(event: PointerEvent): void {
+  if (event.button !== 0 || !spaceHeld.value) return
+  event.stopImmediatePropagation()
+  event.preventDefault()
+  drag.value = { kind: 'pan', lastX: event.clientX, lastY: event.clientY }
+  capture(event)
+}
+
 function onPointerDown(event: PointerEvent): void {
   if (event.button === 1) {
     event.preventDefault()
@@ -824,6 +851,15 @@ function onPointerUp(event: PointerEvent): void {
     svg.value.releasePointerCapture(event.pointerId)
 }
 
+/** Retire le dernier point d'une polyligne en cours ; vrai s'il y en avait une. */
+function popPolylinePoint(): boolean {
+  const current = drag.value
+  if (current?.kind !== 'polyline') return false
+  if (current.points.length <= 1) drag.value = null
+  else current.points.pop()
+  return true
+}
+
 function finishPolyline(): void {
   const current = drag.value
   if (current?.kind !== 'polyline') return
@@ -849,9 +885,11 @@ function cancel(): boolean {
   return true
 }
 
-/** Ctrl+molette : zoom centré sur le curseur ; la molette seule fait défiler. */
+/**
+ * Molette : zoom centré sur le curseur, comme sur le montage et le diagramme. La vue se déplace
+ * avec le bouton du milieu, Espace + glisser ou les ascenseurs.
+ */
 async function onWheel(event: WheelEvent): Promise<void> {
-  if (!event.ctrlKey) return
   event.preventDefault()
   const element = svg.value
   const container = scroller.value
@@ -868,12 +906,19 @@ async function onWheel(event: WheelEvent): Promise<void> {
   container.scrollTop = containerRect.top + SCROLL_PADDING_PX - event.clientY + newY
 }
 
-defineExpose({ cancel, finishPolyline })
+defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
 </script>
 
 <template>
   <div class="canvas-wrap">
-    <div ref="scroller" class="canvas-scroll" @wheel="onWheel" @pointerdown.self="onOutsideDown">
+    <div
+      ref="scroller"
+      class="canvas-scroll"
+      :class="{ panning: spaceHeld || drag?.kind === 'pan' }"
+      @wheel="onWheel"
+      @pointerdown.capture="onPanDown"
+      @pointerdown.self="onOutsideDown"
+    >
       <svg
         ref="svg"
         class="canvas"
@@ -1077,6 +1122,12 @@ defineExpose({ cancel, finishPolyline })
   /* Tout l'espace de travail a la couleur du papier : les repères des broches débordent sans
      coupure visible autour de la boîte du composant. */
   background: var(--paper);
+}
+
+/* Espace enfoncée ou vue en cours de déplacement : la main, par-dessus le curseur des formes. */
+.canvas-scroll.panning,
+.canvas-scroll.panning :deep(*) {
+  cursor: grab;
 }
 
 .canvas-scroll {

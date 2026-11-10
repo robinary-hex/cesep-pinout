@@ -64,7 +64,7 @@ const editorBox = ref<HTMLDivElement | null>(null)
 const ZOOM_STEP = 1.1
 /** Départ ou arrivée d'un lien : un point d'accroche à moins d'une cellule l'emporte sur la grille. */
 const ANCHOR_SNAP_CELLS = 1
-/** Saisie d'un point d'accroche en mode sélection : 8 px autour de lui, une demi-cellule au plus. */
+/** Anneau de l'accroche qu'un Ctrl+glisser saisirait : 8 px de rayon, une demi-cellule au plus. */
 const ANCHOR_GRAB_PX = 8
 const ANCHOR_GRAB_CELLS = 0.5
 /** Déplacement du pointeur, en pixels, à partir duquel un appui sur une accroche devient un lien. */
@@ -104,7 +104,7 @@ type Drag =
       preview: GridPoint[]
     }
   | {
-      /** Lien tiré d'un point d'accroche en mode sélection : relâcher le pose. */
+      /** Lien tiré d'un point d'accroche par Ctrl+glisser en mode sélection : relâcher le pose. */
       kind: 'anchor-link'
       nodeId: string
       origin: GridPoint
@@ -158,10 +158,16 @@ function snapGrid(point: LocalPoint): GridPoint {
   return [Math.round(point.x), Math.round(point.y)]
 }
 
-function nearestAnchor(point: LocalPoint, reach: number): NodeAnchor | null {
+/** Point d'accroche le plus proche à portée ; `nodeId` ne regarde que ceux d'un nœud. */
+function nearestAnchor(
+  point: LocalPoint,
+  reach: number,
+  nodeId: string | null = null
+): NodeAnchor | null {
   let best: NodeAnchor | null = null
   let bestDistance = reach
   for (const anchor of store.anchors) {
+    if (nodeId !== null && anchor.nodeId !== nodeId) continue
     const distance = Math.hypot(anchor.point[0] - point.x, anchor.point[1] - point.y)
     if (distance <= bestDistance) {
       best = anchor
@@ -405,16 +411,44 @@ const ghostCopies = computed(() => {
 
 const anchorReach = computed(() => Math.min(ANCHOR_GRAB_CELLS, ANCHOR_GRAB_PX / cell.value))
 
+/** Nœud sous un point : le dernier dessiné dont la zone cliquable le contient. */
+function nodeAt(point: LocalPoint): string | null {
+  for (let index = store.doc.nodes.length - 1; index >= 0; index--) {
+    const node = store.doc.nodes[index]
+    if (!node) continue
+    const rect = hitRect(node)
+    if (
+      point.x >= rect.x &&
+      point.x <= rect.x + rect.width &&
+      point.y >= rect.y &&
+      point.y <= rect.y + rect.height
+    ) {
+      return node.id
+    }
+  }
+  return null
+}
+
 /**
- * Point d'accroche sous le pointeur en mode sélection, hors de tout geste : tirer depuis lui trace
- * un lien. Il reste saisi pendant un simple clic, pour que clic et double-clic arrivent sur lui.
+ * Point d'accroche qu'un Ctrl+glisser saisirait, en mode sélection : le plus proche du pointeur
+ * parmi ceux du nœud survolé, sinon une accroche à portée. Ctrl tient ici le rôle qu'il a dans
+ * l'éditeur de composants, où il saisit la poignée la plus proche d'une forme. Sans Ctrl, rien :
+ * glisser un nœud le déplace. L'anneau reste pendant un simple Ctrl+clic.
  */
-const anchorGrab = computed(() => {
-  const point = hover.value
+const anchorGrab = computed<NodeAnchor | null>(() => {
   const current = drag.value
-  if (store.tool !== 'select' || store.panKeyHeld || editing.value || !point) return null
-  if (current && (current.kind !== 'anchor-link' || current.moved)) return null
-  return nearestAnchor(point, anchorReach.value)
+  if (current) {
+    if (current.kind !== 'anchor-link' || current.moved) return null
+    return { nodeId: current.nodeId, point: current.origin }
+  }
+  const point = hover.value
+  if (store.tool !== 'select' || !store.ctrlHeld || store.panKeyHeld || editing.value || !point) {
+    return null
+  }
+  const over = nodeAt(point)
+  return over === null
+    ? nearestAnchor(point, ANCHOR_SNAP_CELLS)
+    : nearestAnchor(point, Number.POSITIVE_INFINITY, over)
 })
 
 /** Sommets posés du tracé en cours : ceux de l'outil Lien, ou l'accroche d'où l'on tire un lien. */
@@ -727,17 +761,15 @@ function onTextHandleDown(textId: string, handleId: string, event: PointerEvent)
 }
 
 /**
- * Appui sur un point d'accroche en mode sélection : tirer trace un lien depuis lui, relâcher le
- * pose ; un simple clic sélectionne le nœud. Maj et Alt gardent leurs gestes sur le nœud.
+ * Ctrl+appui en mode sélection, avant tout autre geste : glisser trace un lien depuis l'accroche
+ * saisie, relâcher le pose ; un simple Ctrl+clic sélectionne le nœud.
  */
-function onAnchorGrabDown(event: PointerEvent): void {
+function onGrabDown(event: PointerEvent): void {
+  if (event.button !== 0 || !event.ctrlKey || store.tool !== 'select' || store.panKeyHeld) return
   const anchor = anchorGrab.value
-  if (!anchor || event.button !== 0) return
-  if (event.shiftKey || event.altKey) {
-    onNodeDown(anchor.nodeId, event)
-    return
-  }
-  event.stopPropagation()
+  if (!anchor) return
+  // Ni le nœud, ni le lien, ni le canevas ne voient cet appui.
+  event.stopImmediatePropagation()
   drag.value = {
     kind: 'anchor-link',
     nodeId: anchor.nodeId,
@@ -747,16 +779,6 @@ function onAnchorGrabDown(event: PointerEvent): void {
     moved: false
   }
   capture(event)
-}
-
-function onAnchorGrabDoubleClick(event: MouseEvent): void {
-  const anchor = anchorGrab.value
-  if (anchor) onNodeDoubleClick(anchor.nodeId, event)
-}
-
-function onAnchorGrabMenu(event: MouseEvent): void {
-  const anchor = anchorGrab.value
-  if (anchor) onContextMenu(event, { kind: 'node', id: anchor.nodeId })
 }
 
 function onPointerDown(event: PointerEvent): void {
@@ -820,6 +842,8 @@ function onPointerDown(event: PointerEvent): void {
 function onPointerMove(event: PointerEvent): void {
   const world = toWorld(screenPoint(event))
   hover.value = world
+  // Ctrl a pu être enfoncée ou relâchée hors de la fenêtre : l'événement fait foi.
+  if (store.ctrlHeld !== event.ctrlKey) store.ctrlHeld = event.ctrlKey
   const current = drag.value
   if (!current) return
   switch (current.kind) {
@@ -1075,7 +1099,10 @@ const cursorClass = computed(() => {
   if (store.panKeyHeld || drag.value?.kind === 'pan') return 'panning'
   if (store.tool === 'place') return 'placing'
   if (store.tool === 'text') return 'texting'
-  return store.tool === 'link' || drag.value?.kind === 'anchor-link' ? 'linking' : ''
+  // Ctrl sur une accroche saisissable : le curseur annonce le lien.
+  return store.tool === 'link' || drag.value?.kind === 'anchor-link' || anchorGrab.value
+    ? 'linking'
+    : ''
 })
 </script>
 
@@ -1088,6 +1115,7 @@ const cursorClass = computed(() => {
         :class="cursorClass"
         :width="store.viewport.width"
         :height="store.viewport.height"
+        @pointerdown.capture="onGrabDown"
         @pointerdown="onPointerDown"
         @pointermove="onPointerMove"
         @pointerup="onPointerUp"
@@ -1255,9 +1283,6 @@ const cursorClass = computed(() => {
             :cy="anchorGrab.point[1]"
             :r="anchorReach"
             vector-effect="non-scaling-stroke"
-            @pointerdown="onAnchorGrabDown"
-            @dblclick="onAnchorGrabDoubleClick"
-            @contextmenu="onAnchorGrabMenu"
           />
 
           <rect
@@ -1437,6 +1462,14 @@ const cursorClass = computed(() => {
   cursor: text;
 }
 
+/* Lien en cours ou accroche saisissable (Ctrl) : la croix l'emporte sur le curseur des éléments. */
+.diagram.linking .node,
+.diagram.linking .link-hit,
+.diagram.linking .link-label,
+.diagram.linking .text-label {
+  cursor: crosshair;
+}
+
 .diagram.panning {
   cursor: grab;
 }
@@ -1496,12 +1529,12 @@ const cursorClass = computed(() => {
   fill-opacity: 0.85;
 }
 
-/* Point d'accroche sous le pointeur en mode sélection : tirer depuis lui trace un lien. */
+/* Point d'accroche qu'un Ctrl+glisser saisirait : un lien partira de lui. */
 .anchor-grab {
   fill: rgba(26, 127, 55, 0.25);
   stroke: #1a7f37;
   stroke-width: 1.5;
-  cursor: crosshair;
+  pointer-events: none;
 }
 
 .selection {

@@ -68,6 +68,23 @@ concernées en réutilisant `wiresFollowingPins`. Il n'y a pas de routage automa
 sont ceux que Robin pose. Le store (`diagram-editor/store.ts`) reprend la structure de celui du
 montage : commandes nommées, onglets de `useDocumentTabs`, vue de `view.ts`.
 
+Les couleurs d'un nœud sont une règle du domaine (`nodePaint`) : contour, fond teinté (la couleur
+mêlée au papier), fond plein (la couleur, avec un contour qui s'en détache). L'export l'applique
+en `#rrggbb` pour le fond de l'image, dont il déduit aussi l'encre (`exportGround`) ; l'écran
+applique la même règle avec les variables CSS du thème (`color-mix`, `--node-tint`). La taille
+qu'il faut à un nœud pour son texte (`nodeSizeForText`) prend un mesureur en paramètre : la mesure
+réelle vient du rendu (`src/render/textMeasure.ts`), le domaine en garde une estimation.
+
+## Gestes et touches de modification
+
+Les trois canevas partagent une convention plutôt que du code : Maj ajoute à la sélection ou
+contraint un tracé, Alt copie, Ctrl saisit le point d'attache le plus proche de ce qu'on survole
+(poignée d'une forme, broche d'un composant, point d'accroche d'un nœud). Dans le montage et le
+diagramme, ce Ctrl+glisser est pris en phase de capture sur le SVG (`onGrabDown`), avant les
+gestes propres aux éléments ; l'anneau qui l'annonce n'apparaît que Ctrl enfoncée (`ctrlHeld` du
+store, tenu par le clavier et recalé sur chaque mouvement du pointeur). CLAUDE.md tient le
+tableau de ces gestes ; l'aide F1 les dit de la même façon dans chaque section.
+
 ## Profil de style
 
 Le profil de style est général à l'application (`defaultProfile` des paramètres) ; chaque montage

@@ -76,7 +76,7 @@ const PIN_COLORS: Record<PinKind, string> = {
 }
 const ZOOM_STEP = 1.1
 const PIN_SNAP_CELLS = 0.5
-/** Saisie d'une broche en mode sélection : 8 px autour d'elle, 0,4 cellule au plus en vue éloignée. */
+/** Anneau de la broche qu'un Ctrl+glisser saisirait : 8 px de rayon, 0,4 cellule au plus de loin. */
 const PIN_GRAB_PX = 8
 const PIN_GRAB_CELLS = 0.4
 /** Déplacement du pointeur, en pixels, à partir duquel un appui sur une broche devient un fil. */
@@ -109,9 +109,10 @@ type Drag =
   | { kind: 'text-box'; start: GridPoint; current: GridPoint }
   | { kind: 'label-handle'; id: string; handleId: string; original: Box; preview: Box }
   | {
-      /** Fil tiré d'une broche en mode sélection : relâcher le pose. */
+      /** Fil tiré d'une broche par Ctrl+glisser en mode sélection : relâcher le pose. */
       kind: 'pin-wire'
       instanceId: string
+      pinKey: string
       origin: GridPoint
       downX: number
       downY: number
@@ -168,10 +169,16 @@ function snapGrid(point: LocalPoint): GridPoint {
   return [Math.round(point.x), Math.round(point.y)]
 }
 
-function nearestPin(point: LocalPoint, reach = PIN_SNAP_CELLS): PinRef | null {
+/** Broche la plus proche à portée ; `instanceId` ne regarde que celles d'un composant. */
+function nearestPin(
+  point: LocalPoint,
+  reach = PIN_SNAP_CELLS,
+  instanceId: string | null = null
+): PinRef | null {
   let best: PinRef | null = null
   let bestDistance = reach
   for (const pin of store.pinRefs) {
+    if (instanceId !== null && pin.instanceId !== instanceId) continue
     const distance = Math.hypot(pin.point[0] - point.x, pin.point[1] - point.y)
     if (distance <= bestDistance) {
       best = pin
@@ -537,20 +544,43 @@ const vertexHandles = computed(() =>
     )
 )
 
-/** Rayon de saisie d'une broche en mode sélection, en cellules. */
+/** Rayon de l'anneau montré sur la broche saisie, en cellules. */
 const pinGrabReach = computed(() => Math.min(PIN_GRAB_CELLS, PIN_GRAB_PX / cell.value))
 
+/** Composant sous un point : le dernier dessiné dont la boîte le contient. */
+function instanceAt(point: LocalPoint): string | null {
+  for (let index = store.placed.length - 1; index >= 0; index--) {
+    const item = store.placed[index]
+    if (!item) continue
+    const bounds = instanceBounds(item.instance, item.def)
+    if (
+      point.x >= bounds.x &&
+      point.x <= bounds.x + bounds.width &&
+      point.y >= bounds.y &&
+      point.y <= bounds.y + bounds.height
+    ) {
+      return item.instance.id
+    }
+  }
+  return null
+}
+
 /**
- * Broche sous le pointeur en mode sélection, hors de tout geste : tirer depuis elle trace un fil.
- * Elle reste saisie pendant un simple clic (appui sans déplacement), pour que clic et double-clic
- * arrivent bien sur elle.
+ * Broche qu'un Ctrl+glisser saisirait, en mode sélection : la plus proche du pointeur parmi celles
+ * du composant survolé, sinon une broche à portée. Ctrl tient ici le rôle qu'il a dans l'éditeur
+ * de composants, où il saisit la poignée la plus proche d'une forme. Sans Ctrl, rien : glisser un
+ * composant le déplace. L'anneau reste pendant un simple Ctrl+clic.
  */
-const pinGrab = computed(() => {
-  const point = hover.value
+const pinGrab = computed<PinRef | null>(() => {
   const current = drag.value
-  if (store.tool !== 'select' || store.panKeyHeld || !point) return null
-  if (current && (current.kind !== 'pin-wire' || current.moved)) return null
-  return nearestPin(point, pinGrabReach.value)
+  if (current) {
+    if (current.kind !== 'pin-wire' || current.moved) return null
+    return store.pinRefs.find((pin) => pin.key === current.pinKey) ?? null
+  }
+  const point = hover.value
+  if (store.tool !== 'select' || !store.ctrlHeld || store.panKeyHeld || !point) return null
+  const over = instanceAt(point)
+  return over === null ? nearestPin(point) : nearestPin(point, Number.POSITIVE_INFINITY, over)
 })
 
 /** Sommets posés du tracé en cours : ceux de l'outil Fil, ou la broche d'où l'on tire un fil. */
@@ -689,37 +719,25 @@ function onInstanceDown(id: string, event: PointerEvent): void {
 }
 
 /**
- * Appui sur une broche en mode sélection : tirer trace un fil depuis elle, relâcher le pose ; un
- * simple clic sélectionne le composant. Maj et Alt gardent leurs gestes sur le composant
- * (ajouter à la sélection, déposer une copie).
+ * Ctrl+appui en mode sélection, avant tout autre geste : glisser trace un fil depuis la broche
+ * saisie, relâcher le pose ; un simple Ctrl+clic sélectionne le composant.
  */
-function onPinGrabDown(event: PointerEvent): void {
+function onGrabDown(event: PointerEvent): void {
+  if (event.button !== 0 || !event.ctrlKey || store.tool !== 'select' || store.panKeyHeld) return
   const pin = pinGrab.value
-  if (!pin || event.button !== 0) return
-  if (event.shiftKey || event.altKey) {
-    onInstanceDown(pin.instanceId, event)
-    return
-  }
-  event.stopPropagation()
+  if (!pin) return
+  // Ni le composant, ni le fil, ni le canevas ne voient cet appui.
+  event.stopImmediatePropagation()
   drag.value = {
     kind: 'pin-wire',
     instanceId: pin.instanceId,
+    pinKey: pin.key,
     origin: pin.point,
     downX: event.clientX,
     downY: event.clientY,
     moved: false
   }
   capture(event)
-}
-
-function onPinGrabDoubleClick(event: MouseEvent): void {
-  const pin = pinGrab.value
-  if (pin) onInstanceDoubleClick(pin.instanceId, event)
-}
-
-function onPinGrabMenu(event: MouseEvent): void {
-  const pin = pinGrab.value
-  if (pin) onContextMenu(event, { kind: 'instance', id: pin.instanceId })
 }
 
 function onLabelDown(label: TextLabel, event: PointerEvent): void {
@@ -863,6 +881,8 @@ function onPointerDown(event: PointerEvent): void {
 function onPointerMove(event: PointerEvent): void {
   const world = toWorld(screenPoint(event))
   hover.value = world
+  // Ctrl a pu être enfoncée ou relâchée hors de la fenêtre : l'événement fait foi.
+  if (store.ctrlHeld !== event.ctrlKey) store.ctrlHeld = event.ctrlKey
   const current = drag.value
   if (!current) return
   switch (current.kind) {
@@ -1102,7 +1122,8 @@ const cursorClass = computed(() => {
   if (store.panKeyHeld || drag.value?.kind === 'pan') return 'panning'
   if (store.tool === 'place') return 'placing'
   if (store.tool === 'text') return 'texting'
-  return store.tool === 'wire' || drag.value?.kind === 'pin-wire' ? 'wiring' : ''
+  // Ctrl sur une broche saisissable : le curseur annonce le fil.
+  return store.tool === 'wire' || drag.value?.kind === 'pin-wire' || pinGrab.value ? 'wiring' : ''
 })
 </script>
 
@@ -1115,6 +1136,7 @@ const cursorClass = computed(() => {
         :class="cursorClass"
         :width="store.viewport.width"
         :height="store.viewport.height"
+        @pointerdown.capture="onGrabDown"
         @pointerdown="onPointerDown"
         @pointermove="onPointerMove"
         @pointerup="onPointerUp"
@@ -1393,9 +1415,6 @@ const cursorClass = computed(() => {
             :cy="pinGrab.point[1]"
             :r="pinGrabReach"
             vector-effect="non-scaling-stroke"
-            @pointerdown="onPinGrabDown"
-            @dblclick="onPinGrabDoubleClick"
-            @contextmenu="onPinGrabMenu"
           />
 
           <rect
@@ -1576,6 +1595,13 @@ const cursorClass = computed(() => {
   cursor: text;
 }
 
+/* Fil en cours ou broche saisissable (Ctrl) : la croix l'emporte sur le curseur des éléments. */
+.schematic.wiring .instance,
+.schematic.wiring .wire-hit,
+.schematic.wiring .text-label {
+  cursor: crosshair;
+}
+
 .schematic.panning {
   cursor: grab;
 }
@@ -1691,12 +1717,12 @@ const cursorClass = computed(() => {
   stroke-width: 1.5;
 }
 
-/* Broche sous le pointeur en mode sélection : tirer depuis elle trace un fil. */
+/* Broche qu'un Ctrl+glisser saisirait : un fil partira d'elle. */
 .pin-grab {
   fill: rgba(26, 127, 55, 0.25);
   stroke: #1a7f37;
   stroke-width: 1.5;
-  cursor: crosshair;
+  pointer-events: none;
 }
 
 .selection {

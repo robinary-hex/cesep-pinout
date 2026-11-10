@@ -160,7 +160,8 @@ function openMenu(request: DiagramMenuRequest): void {
     items.push(heading(multi ? `${count} éléments` : spec.label))
     if (!multi && spec.text) {
       items.push(
-        item('Modifier le texte…', () => canvas.value?.openEditor(node.id), { icon: 'edit' })
+        item('Modifier le texte…', () => canvas.value?.openEditor(node.id), { icon: 'edit' }),
+        item('Ajuster au texte', () => store.fitNodeToText(node.id), { icon: 'fit' })
       )
     }
     if (!multi && spec.line) {
@@ -291,6 +292,7 @@ function onKeyDown(event: KeyboardEvent): void {
   const editable = isEditable(event.target)
 
   if (key === 'shift') store.shiftHeld = true
+  if (key === 'control') store.ctrlHeld = true
   if (openModals.value > 0) return
 
   if (key === ' ' && !editable) {
@@ -434,11 +436,13 @@ function onKeyDown(event: KeyboardEvent): void {
 function onKeyUp(event: KeyboardEvent): void {
   if (event.key === ' ') store.panKeyHeld = false
   if (event.key === 'Shift') store.shiftHeld = false
+  if (event.key === 'Control') store.ctrlHeld = false
 }
 
 function onBlur(): void {
   store.panKeyHeld = false
   store.shiftHeld = false
+  store.ctrlHeld = false
 }
 
 onMounted(() => {
@@ -453,6 +457,7 @@ onUnmounted(() => {
   window.removeEventListener('blur', onBlur)
   store.panKeyHeld = false
   store.shiftHeld = false
+  store.ctrlHeld = false
 })
 
 // Actions de fichier appelées par le menu Fichier de la barre d'application.

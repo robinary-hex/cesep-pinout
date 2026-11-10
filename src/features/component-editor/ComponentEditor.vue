@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, useTemplateRef } from 'vue'
+import { QUARTERS_PER_CELL } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import { openModals } from '@/ui/modalState'
 import { saveComponentDoc } from './componentActions'
@@ -10,7 +11,8 @@ import { useComponentEditorStore } from './store'
 import { TOOL_BY_KEY } from './tools'
 
 // Éditeur de composants : barre d'outils, canevas, inspecteur, raccourcis clavier,
-// enregistrement dans la bibliothèque.
+// enregistrement dans la bibliothèque. Les touches communes aux trois éditeurs (flèches, Ctrl+A,
+// 0, Retour arrière pendant un tracé) font ici la même chose qu'ailleurs.
 
 const store = useComponentEditorStore()
 const library = useLibraryStore()
@@ -22,6 +24,13 @@ async function save(): Promise<void> {
 
 function createNew(): void {
   store.newComponent()
+}
+
+const ARROWS: Record<string, readonly [number, number]> = {
+  arrowleft: [-1, 0],
+  arrowright: [1, 0],
+  arrowup: [0, -1],
+  arrowdown: [0, 1]
 }
 
 function isEditable(target: EventTarget | null): boolean {
@@ -47,6 +56,7 @@ function onKeyDown(event: KeyboardEvent): void {
     if (key === 'z' && !event.shiftKey) store.undo()
     else if (key === 'y' || (key === 'z' && event.shiftKey)) store.redo()
     else if (key === 'n') createNew()
+    else if (key === 'a') store.selectAll()
     else if (key === 'c') store.copySelection()
     else if (key === 'v') store.pasteClipboard()
     else if (key === 'd') store.duplicateSelection()
@@ -57,12 +67,36 @@ function onKeyDown(event: KeyboardEvent): void {
     return
   }
 
+  // Le chiffre de la rangée du haut demande Maj sur un clavier belge : on lit la touche physique.
+  if (event.code === 'Digit0' || event.code === 'Numpad0') {
+    void canvas.value?.fitAndCenter()
+    event.preventDefault()
+    return
+  }
+  const arrow = ARROWS[key]
+  if (arrow) {
+    // D'un quart de cellule, le pas des formes ; d'une cellule dès qu'une broche est du voyage.
+    const step = store.selectedPinIds.length > 0 ? QUARTERS_PER_CELL : 1
+    store.moveSelection(
+      store.selectedIndexes,
+      store.selectedPinIds,
+      arrow[0] * step,
+      arrow[1] * step
+    )
+    event.preventDefault()
+    return
+  }
   const tool = TOOL_BY_KEY[key]
   if (tool) {
     store.tool = tool
     return
   }
-  if (key === 'delete' || key === 'backspace') {
+  if (key === 'backspace') {
+    // Pendant une polyligne : retire son dernier point, comme pour un fil ou un lien.
+    if (!canvas.value?.popPolylinePoint()) store.removeSelection()
+    return
+  }
+  if (key === 'delete') {
     store.removeSelection()
     return
   }

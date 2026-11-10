@@ -44,13 +44,17 @@ function at(
 async function fire(
   target: { element: Element },
   type: string,
-  position: { clientX: number; clientY: number }
+  position: { clientX: number; clientY: number },
+  extra: MouseEventInit = {}
 ): Promise<void> {
   target.element.dispatchEvent(
-    new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, ...position })
+    new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, ...position, ...extra })
   )
   await nextTick()
 }
+
+/** Ctrl enfoncée : les événements de souris la portent, comme dans la vraie fenêtre. */
+const CTRL = { ctrlKey: true }
 
 beforeEach(() => {
   setActivePinia(createPinia())
@@ -67,36 +71,58 @@ beforeEach(() => {
   Element.prototype.hasPointerCapture = vi.fn(() => false)
 })
 
-describe('canevas du montage : fil tiré d’une broche en mode sélection', () => {
-  it('montre l’anneau de saisie sur la broche survolée, pas ailleurs ni avec un autre outil', async () => {
+describe('canevas du montage : fil tiré d’une broche par Ctrl+glisser', () => {
+  it('sans Ctrl, rien ne s’annonce et glisser un composant le déplace', async () => {
     const store = withResistor()
     const wrapper = mount(SchematicCanvas)
     const svg = wrapper.get('svg.schematic')
-    expect(store.tool).toBe('select')
+    await fire(svg, 'pointermove', at(store, 6, 4))
     expect(wrapper.find('.pin-grab').exists()).toBe(false)
-    await fire(svg, 'pointermove', at(store, 6.1, 4.1))
+    // Appui tout près de la broche de droite, puis glisser : le composant suit, aucun fil.
+    await fire(wrapper.get('.instance .hit'), 'pointerdown', at(store, 5.8, 4))
+    await fire(svg, 'pointermove', at(store, 8.8, 6))
+    await fire(svg, 'pointerup', at(store, 8.8, 6))
+    expect(store.doc.wires).toHaveLength(0)
+    expect(store.doc.components[0]).toMatchObject({ x: 5, y: 5 })
+  })
+
+  it('Ctrl montre la broche la plus proche du composant survolé, pas avec un autre outil', async () => {
+    const store = withResistor()
+    const wrapper = mount(SchematicCanvas)
+    const svg = wrapper.get('svg.schematic')
+    // Au milieu du composant, côté droit : c'est la broche de droite (6, 4) qui serait saisie.
+    await fire(svg, 'pointermove', at(store, 5, 4.4), CTRL)
+    expect(store.ctrlHeld).toBe(true)
     const ring = wrapper.get('.pin-grab')
     expect([ring.attributes('cx'), ring.attributes('cy')]).toEqual(['6', '4'])
-    // Au milieu du composant : plus d'anneau, le corps reste à déplacer.
-    await fire(svg, 'pointermove', at(store, 4, 4))
+    await fire(svg, 'pointermove', at(store, 2.6, 4.4), CTRL)
+    expect(wrapper.get('.pin-grab').attributes('cx')).toBe('2')
+    // Loin de tout composant et de toute broche : rien.
+    await fire(svg, 'pointermove', at(store, 12, 12), CTRL)
     expect(wrapper.find('.pin-grab').exists()).toBe(false)
     store.tool = 'wire'
-    await fire(svg, 'pointermove', at(store, 6.1, 4.1))
+    await fire(svg, 'pointermove', at(store, 6, 4), CTRL)
+    expect(wrapper.find('.pin-grab').exists()).toBe(false)
+    // Ctrl relâchée : l'anneau disparaît.
+    store.tool = 'select'
+    await fire(svg, 'pointermove', at(store, 6, 4), CTRL)
+    expect(wrapper.find('.pin-grab').exists()).toBe(true)
+    await fire(svg, 'pointermove', at(store, 6, 4))
     expect(wrapper.find('.pin-grab').exists()).toBe(false)
   })
 
-  it('tire un fil de la broche jusqu’au point de relâchement, en une commande', async () => {
+  it('Ctrl+glisser sur un composant tire un fil de sa broche la plus proche, en une commande', async () => {
     const store = withResistor()
     const wrapper = mount(SchematicCanvas)
     const svg = wrapper.get('svg.schematic')
-    await fire(svg, 'pointermove', at(store, 6.1, 4.1))
-    await fire(wrapper.get('.pin-grab'), 'pointerdown', at(store, 6.1, 4.1))
+    await fire(svg, 'pointermove', at(store, 5, 4.4), CTRL)
+    await fire(wrapper.get('.instance .hit'), 'pointerdown', at(store, 5, 4.4), CTRL)
     // Rien tant que le pointeur n'a pas bougé ; puis l'aperçu du fil suit le pointeur.
     expect(wrapper.find('.drawing').exists()).toBe(false)
-    await fire(svg, 'pointermove', at(store, 9.2, 6.9))
+    await fire(svg, 'pointermove', at(store, 9.2, 6.9), CTRL)
     expect(wrapper.find('.drawing .pending').exists()).toBe(true)
     expect(wrapper.find('.pin-grab').exists()).toBe(false)
-    await fire(svg, 'pointerup', at(store, 9.2, 6.9))
+    await fire(svg, 'pointerup', at(store, 9.2, 6.9), CTRL)
     expect(store.doc.wires).toHaveLength(1)
     const points = store.doc.wires[0]?.points ?? []
     expect(points.at(0)).toEqual([6, 4])
@@ -118,11 +144,11 @@ describe('canevas du montage : fil tiré d’une broche en mode sélection', () 
     store.stopPlacing()
     const wrapper = mount(SchematicCanvas)
     const svg = wrapper.get('svg.schematic')
-    await fire(svg, 'pointermove', at(store, 6, 4))
-    await fire(wrapper.get('.pin-grab'), 'pointerdown', at(store, 6, 4))
+    await fire(svg, 'pointermove', at(store, 6, 4), CTRL)
+    await fire(svg, 'pointerdown', at(store, 6, 4), CTRL)
     // Relâché près de la broche (6, 9) de la seconde résistance, pas pile dessus.
-    await fire(svg, 'pointermove', at(store, 6.3, 8.8))
-    await fire(svg, 'pointerup', at(store, 6.3, 8.8))
+    await fire(svg, 'pointermove', at(store, 6.3, 8.8), CTRL)
+    await fire(svg, 'pointerup', at(store, 6.3, 8.8), CTRL)
     expect(store.doc.wires[0]?.points).toEqual([
       [6, 4],
       [6, 9]
@@ -130,15 +156,15 @@ describe('canevas du montage : fil tiré d’une broche en mode sélection', () 
     expect(store.connectivity.unconnectedPinKeys.size).toBe(2)
   })
 
-  it('un simple clic sur la broche sélectionne le composant, sans fil', async () => {
+  it('un simple Ctrl+clic sélectionne le composant, sans fil', async () => {
     const store = withResistor()
     const wrapper = mount(SchematicCanvas)
     const svg = wrapper.get('svg.schematic')
-    await fire(svg, 'pointermove', at(store, 2, 4))
-    await fire(wrapper.get('.pin-grab'), 'pointerdown', at(store, 2, 4))
-    // L'anneau reste sous le pointeur pendant le clic : le double-clic arrive bien sur lui.
+    await fire(svg, 'pointermove', at(store, 2, 4), CTRL)
+    await fire(svg, 'pointerdown', at(store, 2, 4), CTRL)
+    // L'anneau reste pendant le clic.
     expect(wrapper.find('.pin-grab').exists()).toBe(true)
-    await fire(svg, 'pointerup', at(store, 2, 4))
+    await fire(svg, 'pointerup', at(store, 2, 4), CTRL)
     expect(store.doc.wires).toHaveLength(0)
     expect(store.selection).toEqual([store.doc.components[0]?.id])
   })
@@ -147,11 +173,11 @@ describe('canevas du montage : fil tiré d’une broche en mode sélection', () 
     const store = withResistor()
     const wrapper = mount(SchematicCanvas)
     const svg = wrapper.get('svg.schematic')
-    await fire(svg, 'pointermove', at(store, 2, 4))
-    await fire(wrapper.get('.pin-grab'), 'pointerdown', at(store, 2, 4))
-    await fire(svg, 'pointermove', at(store, 0, 0))
-    await fire(svg, 'pointermove', at(store, 2.1, 4.1))
-    await fire(svg, 'pointerup', at(store, 2.1, 4.1))
+    await fire(svg, 'pointermove', at(store, 2, 4), CTRL)
+    await fire(svg, 'pointerdown', at(store, 2, 4), CTRL)
+    await fire(svg, 'pointermove', at(store, 0, 0), CTRL)
+    await fire(svg, 'pointermove', at(store, 2.1, 4.1), CTRL)
+    await fire(svg, 'pointerup', at(store, 2.1, 4.1), CTRL)
     expect(store.doc.wires).toHaveLength(0)
     expect(store.undoLabel).toBe('Poser Résistance')
   })

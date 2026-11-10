@@ -14,6 +14,7 @@ import {
   nextNumberedId,
   NODE_SPECS,
   nodeBounds,
+  nodeBoxForText,
   normalizePoints,
   pannedView,
   simplifyPoints,
@@ -42,6 +43,7 @@ import {
 import { useLibraryStore } from '@/features/library/store'
 import { readDiagram } from '@/io/diagramFiles'
 import { samePath } from '@/io/paths'
+import { nodeTextMeasurer } from '@/render/textMeasure'
 import { useDocumentTabs } from '@/state/tabs'
 
 export type DiagramTool = 'select' | 'place' | 'link' | 'text'
@@ -125,6 +127,8 @@ export const useDiagramStore = defineStore('diagram', () => {
   const inspectorOpen = ref(false)
   const panKeyHeld = ref(false)
   const shiftHeld = ref(false)
+  /** Ctrl enfoncée : en sélection, le canevas montre l'accroche qu'un Ctrl+glisser saisirait. */
+  const ctrlHeld = ref(false)
   const status = ref('')
 
   /** Rien à enregistrer si le diagramme est intact, ou jamais enregistré et vide. */
@@ -426,10 +430,36 @@ export const useDiagramStore = defineStore('diagram', () => {
     })
   }
 
+  /**
+   * Titre et sous-titre d'un nœud. Si le nouveau texte déborde, la boîte grandit pour le contenir,
+   * dans la même commande ; elle ne rétrécit jamais d'elle-même (`fitNodeToText` le fait).
+   */
   function setNodeText(id: string, patch: Partial<Pick<DiagramNode, 'title' | 'subtitle'>>): void {
-    apply('Modifier le texte du nœud', (draft) => {
-      const node = draft.nodes.find((candidate) => candidate.id === id)
-      if (node) Object.assign(node, patch)
+    const node = doc.value.nodes.find((candidate) => candidate.id === id)
+    if (!node) return
+    const box = nodeBoxForText(
+      { ...node, ...patch },
+      style.value,
+      nodeTextMeasurer(style.value),
+      true
+    )
+    applyWithElasticLinks('Modifier le texte du nœud', (draft) => {
+      const target = draft.nodes.find((candidate) => candidate.id === id)
+      if (!target) return
+      Object.assign(target, patch)
+      if (box) Object.assign(target, box)
+    })
+  }
+
+  /** Ajuste la boîte d'un nœud à son texte, au plus près, en gardant son centre. */
+  function fitNodeToText(id: string): void {
+    const node = doc.value.nodes.find((candidate) => candidate.id === id)
+    if (!node) return
+    const box = nodeBoxForText(node, style.value, nodeTextMeasurer(style.value), false)
+    if (!box) return
+    applyWithElasticLinks('Ajuster le nœud à son texte', (draft) => {
+      const target = draft.nodes.find((candidate) => candidate.id === id)
+      if (target) Object.assign(target, box)
     })
   }
 
@@ -944,6 +974,7 @@ export const useDiagramStore = defineStore('diagram', () => {
     inspectorOpen,
     panKeyHeld,
     shiftHeld,
+    ctrlHeld,
     status,
     undoLabel,
     redoLabel,
@@ -980,6 +1011,7 @@ export const useDiagramStore = defineStore('diagram', () => {
     placeAt,
     setNodeBox,
     setNodeText,
+    fitNodeToText,
     setNodeShape,
     turnBar,
     setNodesStyle,
