@@ -7,6 +7,7 @@ import {
   componentPrimitives,
   componentVariants,
   hasVariants,
+  movedVariantOrder,
   nextVariantId,
   nextVariantName,
   variantDefinition,
@@ -760,6 +761,13 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   // Variantes : le même composant dessiné autrement. Chacune est un dessin complet, née d'une
   // copie de celle qu'on regardait ; on en édite une à la fois.
 
+  /** Après une suppression : le rang de la variante d'origine ne dépasse pas la fin de la liste. */
+  function keepBaseRank(draft: Draft<ComponentDefinition>): void {
+    const rank = Math.min(draft.baseVariantRank ?? 0, draft.variants?.length ?? 0)
+    if (rank > 0) draft.baseVariantRank = rank
+    else delete draft.baseVariantRank
+  }
+
   /** Affiche une variante : c'est elle qu'on édite ensuite. */
   function showVariant(id: string): void {
     const next = doc.value.variants?.some((entry) => entry.id === id) ? id : null
@@ -806,6 +814,23 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   }
 
   /**
+   * Range une variante devant une autre (`beforeId`), ou à la fin de la liste (null) : le
+   * glisser-déposer du panneau. Seul l'ordre change ; les composants déjà posés gardent leur
+   * variante.
+   */
+  function moveVariant(id: string, beforeId: string | null): void {
+    const before = variants.value.map((variant) => variant.id)
+    const order = movedVariantOrder(doc.value, id, beforeId)
+    if (order.join(' ') === before.join(' ')) return
+    const rank = order.indexOf(BASE_VARIANT)
+    apply('Ordre des variantes', (draft) => {
+      draft.variants?.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id))
+      if (rank > 0) draft.baseVariantRank = rank
+      else delete draft.baseVariantRank
+    })
+  }
+
+  /**
    * Supprime une variante ; la dernière ne se supprime pas. Supprimer la première fait de la
    * suivante la première : c'est elle que montrent désormais les composants posés sans variante
    * choisie, et ceux qui la désignaient.
@@ -828,6 +853,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
           delete draft.variantName
           delete draft.variants
         }
+        keepBaseRank(draft)
       })
       if (activeVariant.value === promoted.id) activeVariant.value = null
     } else {
@@ -839,6 +865,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
           delete draft.variants
           delete draft.variantName
         }
+        keepBaseRank(draft)
       })
       if (activeVariant.value === id) activeVariant.value = null
     }
@@ -1065,6 +1092,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     showVariant,
     addVariant,
     renameVariant,
+    moveVariant,
     removeVariant,
     selectedIndexes,
     selectedPinIds,

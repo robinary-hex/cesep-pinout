@@ -191,7 +191,7 @@ describe('panneau de la bibliothèque : variantes', () => {
     await chips[1]?.trigger('click')
     expect(schematic.placement).toMatchObject({ variant: 'v1' })
     expect(wrapper.findAll('.variant-chip')[1]?.classes()).toContain('current')
-    // La ligne elle-même pose la première variante.
+    // La ligne elle-même pose la variante en tête de liste.
     await wrapper.get('.item .open').trigger('click')
     expect(schematic.placement?.variant).toBeNull()
     // Le clic droit les propose aussi.
@@ -215,6 +215,30 @@ describe('panneau de la bibliothèque : variantes', () => {
     const wrapper = mount(LibraryPanel, { props: { mode: 'edit' }, attachTo: document.body })
     await flushPromises()
     expect(wrapper.find('.variant-chip').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})
+
+describe('panneau de la bibliothèque : ordre des variantes', () => {
+  it('pose, d’un clic sur la ligne, la variante rangée en tête dans l’éditeur', async () => {
+    const library = useLibraryStore()
+    const schematic = useSchematicStore()
+    const led = createEmptyComponent('led', 'LED')
+    led.variantName = 'Rouge'
+    led.variants = [{ id: 'v1', name: 'Verte', size: led.size, visual: led.visual, pins: [] }]
+    led.baseVariantRank = 1
+    await saveComponent(library.libraryDir, led)
+    await library.refresh()
+    const wrapper = mount(LibraryPanel, { props: { mode: 'place' }, attachTo: document.body })
+    await flushPromises()
+    expect(wrapper.findAll('.variant-chip').map((chip) => chip.text())).toEqual(['Verte', 'Rouge'])
+    await wrapper.get('.item .open').trigger('click')
+    expect(schematic.placement?.variant).toBe('v1')
+    expect(schematic.status).toContain('LED (Verte)')
+    // La variante d'origine reste posable, par sa pastille.
+    await wrapper.findAll('.variant-chip')[1]?.trigger('click')
+    expect(schematic.placement?.variant).toBeNull()
+    expect(schematic.status).toContain('LED (Rouge)')
     wrapper.unmount()
   })
 })

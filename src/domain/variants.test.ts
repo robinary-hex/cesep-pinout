@@ -9,6 +9,7 @@ import {
   DEFAULT_SHAPE_STYLE,
   hasVariants,
   mapComponentPrimitives,
+  movedVariantOrder,
   nextVariantId,
   nextVariantName,
   variantDefinition,
@@ -136,5 +137,41 @@ describe('variantes d’un composant', () => {
     const svg = buildProjectSvg(project, DEFAULT_EXPORT)?.svg ?? ''
     expect(svg).toContain('x="1" y="0.5"')
     expect(svg).toContain('x="2" y="0.5"')
+  })
+})
+
+describe('ordre des variantes', () => {
+  /** La LED et une troisième variante. */
+  function three(): ComponentDefinition {
+    const def = led()
+    const first = def.variants?.[0]
+    if (first) def.variants?.push({ ...first, id: 'v2', name: 'Verte' })
+    return def
+  }
+  const ids = (def: ComponentDefinition): string[] =>
+    componentVariants(def).map((variant) => variant.id)
+
+  it('place la variante d’origine à son rang dans la liste, sans changer l’identité des autres', () => {
+    const def = three()
+    expect(ids(def)).toEqual(['base', 'v1', 'v2'])
+    def.baseVariantRank = 1
+    expect(ids(def)).toEqual(['v1', 'base', 'v2'])
+    // Quel que soit l'ordre, chaque identifiant désigne toujours le même dessin.
+    expect(variantDefinition(def, 'v1').size.widthCells).toBe(6)
+    expect(variantDefinition(def, null)).toBe(def)
+    expect(parseComponentDefinition(serializeComponentDefinition(def))).toEqual(def)
+    // Un rang trop grand (une variante supprimée depuis) : à la fin.
+    def.baseVariantRank = 9
+    expect(ids(def)).toEqual(['v1', 'v2', 'base'])
+  })
+
+  it('calcule l’ordre après avoir glissé une variante devant une autre, ou à la fin', () => {
+    const def = three()
+    expect(movedVariantOrder(def, 'v2', 'base')).toEqual(['v2', 'base', 'v1'])
+    expect(movedVariantOrder(def, 'base', null)).toEqual(['v1', 'v2', 'base'])
+    expect(movedVariantOrder(def, 'base', 'v2')).toEqual(['v1', 'base', 'v2'])
+    // Sur elle-même, ou une variante inconnue : rien ne bouge.
+    expect(movedVariantOrder(def, 'v1', 'v1')).toEqual(['base', 'v1', 'v2'])
+    expect(movedVariantOrder(def, 'disparue', null)).toEqual(['base', 'v1', 'v2'])
   })
 })

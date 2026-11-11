@@ -593,9 +593,9 @@ export const useSchematicStore = defineStore('schematic', () => {
     stopWireDrawing()
     tool.value = 'place'
     clearSelection()
-    const name = hasVariants(def)
-      ? `${def.name} (${chosen?.name ?? componentVariants(def)[0]?.name})`
-      : def.name
+    const shownId = chosen?.id ?? BASE_VARIANT
+    const variantName = componentVariants(def).find((variant) => variant.id === shownId)?.name
+    const name = hasVariants(def) ? `${def.name} (${variantName})` : def.name
     status.value = `Pose de ${name} : clic pour poser, R et T pour tourner et retourner, Échap pour arrêter.`
   }
 

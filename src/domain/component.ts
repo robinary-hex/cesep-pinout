@@ -305,30 +305,55 @@ const componentShape = z.object({
   description: z.string(),
   // Le dessin que le composant porte lui-même : celui de sa première variante.
   ...componentBodyShape,
-  /** Nom de la première variante, quand le composant en a d'autres. */
+  /** Nom de la variante d'origine (celle que le composant porte), quand il en a d'autres. */
   variantName: z.string().min(1).optional(),
   /** Les autres variantes, dans l'ordre ; absent pour un composant sans variantes. */
-  variants: z.array(componentVariantSchema).optional()
+  variants: z.array(componentVariantSchema).optional(),
+  /**
+   * Rang de la variante d'origine dans la liste des variantes ; absent : en tête. L'ordre de la
+   * liste ne change l'identité d'aucune variante : on peut les ranger sans toucher aux composants
+   * déjà posés.
+   */
+  baseVariantRank: z.number().int().nonnegative().optional()
 })
 export type ComponentDefinition = z.infer<typeof componentShape>
 
-/** Identifiant de la première variante d'un composant : celle qu'il porte lui-même. */
+/** Identifiant de la variante d'origine d'un composant : celle qu'il porte lui-même. */
 export const BASE_VARIANT = 'base'
-/** Nom de la première variante tant qu'on ne lui en a pas donné. */
+/** Nom de la variante d'origine tant qu'on ne lui en a pas donné. */
 export const DEFAULT_VARIANT_NAME = 'Standard'
 
-/** Une variante dans une liste : son identifiant (`BASE_VARIANT` pour la première) et son nom. */
+/** Une variante dans une liste : son identifiant (`BASE_VARIANT` pour celle d'origine) et son nom. */
 export interface VariantInfo {
   id: string
   name: string
 }
 
-/** Variantes d'un composant, dans l'ordre : la première, puis les autres. Jamais vide. */
+/**
+ * Variantes d'un composant, dans l'ordre de la liste : les autres variantes, et celle d'origine à
+ * son rang (`baseVariantRank`, en tête par défaut). Jamais vide.
+ */
 export function componentVariants(def: ComponentDefinition): VariantInfo[] {
-  return [
-    { id: BASE_VARIANT, name: def.variantName ?? DEFAULT_VARIANT_NAME },
-    ...(def.variants ?? []).map((variant) => ({ id: variant.id, name: variant.name }))
-  ]
+  const list = (def.variants ?? []).map((variant) => ({ id: variant.id, name: variant.name }))
+  const rank = Math.min(def.baseVariantRank ?? 0, list.length)
+  list.splice(rank, 0, { id: BASE_VARIANT, name: def.variantName ?? DEFAULT_VARIANT_NAME })
+  return list
+}
+
+/**
+ * Ordre des variantes après en avoir glissé une devant une autre (`beforeId`), ou à la fin de la
+ * liste (null). Les identifiants, celui de la variante d'origine compris.
+ */
+export function movedVariantOrder(
+  def: ComponentDefinition,
+  id: string,
+  beforeId: string | null
+): string[] {
+  const order = componentVariants(def).map((variant) => variant.id)
+  if (!order.includes(id) || beforeId === id) return order
+  const rest = order.filter((entry) => entry !== id)
+  const at = beforeId === null ? -1 : rest.indexOf(beforeId)
+  return at === -1 ? [...rest, id] : [...rest.slice(0, at), id, ...rest.slice(at)]
 }
 
 /** Le composant a-t-il plus d'une variante ? */
@@ -340,7 +365,7 @@ const resolvedVariants = new WeakMap<ComponentDefinition, Map<string, ComponentD
 
 /**
  * Le composant tel que le dessine une de ses variantes : même identité, mais la taille, les formes
- * et les broches de la variante. Pour la première variante, un identifiant absent ou inconnu,
+ * et les broches de la variante. Pour la variante d'origine, un identifiant absent ou inconnu,
  * c'est le composant lui-même. Le résultat est gardé : pour un même composant et une même
  * variante, toujours le même objet.
  */

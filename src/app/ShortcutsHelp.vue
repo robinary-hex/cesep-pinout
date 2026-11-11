@@ -174,7 +174,7 @@ const sections: { title: string; rows: Row[] }[] = [
       ['Ctrl (sans sélection)', 'Poignées de la boîte du composant : glisser un coin ou un côté'],
       [
         'Variantes',
-        'Le même composant dessiné autrement : le bouton de la barre en crée une par copie, la liste choisit celle qu’on modifie ; nom et suppression dans le panneau'
+        'Le même composant dessiné autrement : le bouton de la barre en crée une par copie, la liste choisit celle qu’on modifie ; dans le panneau, le point devant un nom la choisit aussi, glisser une ligne change l’ordre'
       ],
       [
         'Broches, dans le panneau',

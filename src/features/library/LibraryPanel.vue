@@ -71,7 +71,8 @@ function isPlacingVariant(entry: LibraryEntry, variantId: string): boolean {
 function pick(entry: LibraryEntry): void {
   if (!entry.def) return
   if (props.mode === 'place') {
-    schematic.startPlacing(entry.def)
+    // La variante en tête de la liste du composant.
+    schematic.startPlacing(entry.def, componentVariants(entry.def)[0]?.id ?? null)
     return
   }
   // Chaque composant a son onglet ; déjà ouvert, le sien revient devant.
@@ -89,7 +90,7 @@ function onDragStart(entry: LibraryEntry, event: DragEvent): void {
     event.preventDefault()
     return
   }
-  schematic.startPlacing(entry.def)
+  schematic.startPlacing(entry.def, componentVariants(entry.def)[0]?.id ?? null)
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'copy'
     event.dataTransfer.setData('text/plain', entry.def.id)

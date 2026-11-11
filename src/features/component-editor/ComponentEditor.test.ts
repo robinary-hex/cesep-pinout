@@ -426,7 +426,7 @@ describe('éditeur de composants : variantes', () => {
     // Un clic sur la ligne d'une variante l'affiche ; son nom se change sur place.
     await wrapper.findAll('.variant-row')[0]?.trigger('click')
     expect(store.variantId).toBe('base')
-    const name = wrapper.findAll('.variant-row input')[1]
+    const name = wrapper.findAll('.variant-row input[type="text"]')[1]
     await name?.setValue('Verte')
     await name?.trigger('change')
     expect(store.variants[1]?.name).toBe('Verte')
@@ -438,6 +438,51 @@ describe('éditeur de composants : variantes', () => {
     await wrapper.findAll('.variant-row button')[1]?.trigger('click')
     expect(store.variants).toHaveLength(1)
     expect(wrapper.find('.variant-select').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})
+
+describe('éditeur de composants : ordre et choix des variantes dans le panneau', () => {
+  it('montre un bouton radio par variante et les range par glisser-déposer', async () => {
+    const store = withRectangle()
+    const second = store.addVariant()
+    const third = store.addVariant()
+    store.inspectorOpen = true
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    const radios = (): boolean[] =>
+      wrapper
+        .findAll('.variant-row input[type="radio"]')
+        .map((radio) => (radio.element as HTMLInputElement).checked)
+    const order = (): string[] => store.variants.map((variant) => variant.id)
+    const rows = (): ReturnType<typeof wrapper.findAll> => wrapper.findAll('.variant-row')
+    const dragTo = async (from: number, onto: number, clientY = 0): Promise<void> => {
+      await rows()[from]?.trigger('dragstart')
+      rows()[onto]?.element.dispatchEvent(
+        new MouseEvent('dragover', { bubbles: true, cancelable: true, clientY })
+      )
+      await nextTick()
+      await rows()[onto]?.trigger('drop')
+    }
+
+    // Le point coché est la variante qu'on regarde ; cliquer un autre point l'affiche.
+    expect(radios()).toEqual([false, false, true])
+    await wrapper.findAll('.variant-row input[type="radio"]')[1]?.setValue(true)
+    expect(store.variantId).toBe(second)
+    expect(radios()).toEqual([false, true, false])
+
+    // La dernière ligne glissée sur le haut de la première : elle passe en tête.
+    await dragTo(2, 0)
+    expect(order()).toEqual([third, 'base', second])
+    // La première glissée sur le bas de la dernière : elle va à la fin.
+    await dragTo(0, 2, 50)
+    expect(order()).toEqual(['base', second, third])
+    // La variante d'origine glissée sur le bas de la deuxième : entre les deux autres.
+    await dragTo(0, 1, 50)
+    expect(order()).toEqual([second, 'base', third])
+    expect(store.doc.baseVariantRank).toBe(1)
+    // On regarde toujours la même variante : seul l'ordre a changé.
+    expect(store.variantId).toBe(second)
+    expect(radios()).toEqual([true, false, false])
     wrapper.unmount()
   })
 })

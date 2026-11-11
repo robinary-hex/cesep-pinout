@@ -627,3 +627,34 @@ describe('éditeur de composants : variantes', () => {
     expect(store.doc.visual.primitives).toHaveLength(2)
   })
 })
+
+describe('éditeur de composants : ordre des variantes', () => {
+  it('range les variantes sans changer celle qu’on regarde ni leur identité', () => {
+    const store = useComponentEditorStore()
+    store.addPin({ x: 0, y: 1 })
+    const second = store.addVariant()
+    const third = store.addVariant()
+    const order = (): string[] => store.variants.map((variant) => variant.id)
+    store.moveVariant(third, 'base')
+    expect(store.undoLabel).toBe('Ordre des variantes')
+    expect(order()).toEqual([third, 'base', second])
+    expect(store.doc.baseVariantRank).toBe(1)
+    expect(store.variantId).toBe(third)
+    // Déposée là où elle est déjà : rien à annuler de plus.
+    store.moveVariant(third, 'base')
+    store.undo()
+    expect(order()).toEqual(['base', second, third])
+    expect(store.doc.baseVariantRank).toBeUndefined()
+    store.redo()
+
+    // Une variante supprimée : le rang de la variante d'origine reste dans la liste.
+    store.moveVariant('base', null)
+    expect(order()).toEqual([third, second, 'base'])
+    store.removeVariant(second)
+    expect(order()).toEqual([third, 'base'])
+    expect(store.doc.baseVariantRank).toBe(1)
+    store.removeVariant(third)
+    expect(order()).toEqual(['base'])
+    expect(store.doc.baseVariantRank).toBeUndefined()
+  })
+})

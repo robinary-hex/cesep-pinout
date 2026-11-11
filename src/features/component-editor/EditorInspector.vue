@@ -75,6 +75,42 @@ function renameVariant(id: string, event: Event): void {
   store.renameVariant(id, inputValue(event))
 }
 
+// Une variante se glisse d'une ligne à l'autre pour changer de rang dans la liste.
+const draggedVariant = ref<string | null>(null)
+/** Devant quelle variante la ligne glissée tomberait ; `end` : après la dernière. */
+const variantDrop = ref<string | 'end' | null>(null)
+
+function onVariantDragStart(id: string, event: DragEvent): void {
+  draggedVariant.value = id
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', id)
+  }
+}
+
+/** Sur une ligne : moitié haute, devant cette variante ; moitié basse, devant la suivante. */
+function onVariantDragOver(id: string, event: DragEvent): void {
+  if (draggedVariant.value === null) return
+  event.preventDefault()
+  const row = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  const below = event.clientY > row.top + row.height / 2
+  const list = store.variants
+  const index = list.findIndex((variant) => variant.id === id)
+  variantDrop.value = below ? (list[index + 1]?.id ?? 'end') : id
+}
+
+function endVariantDrag(): void {
+  draggedVariant.value = null
+  variantDrop.value = null
+}
+
+function dropVariant(): void {
+  const id = draggedVariant.value
+  const target = variantDrop.value
+  endVariantDrag()
+  if (id !== null && target !== null) store.moveVariant(id, target === 'end' ? null : target)
+}
+
 function setPinKind(id: string, event: Event): void {
   store.updatePin(id, { kind: inputValue(event) as PinKind })
 }
@@ -709,15 +745,36 @@ function setClosed(event: Event): void {
         <p v-if="store.variants.length === 1" class="hint">
           Une seule : le composant tel qu’il est dessiné.
         </p>
-        <template v-else>
+        <div
+          v-else
+          class="variant-list"
+          :class="{ 'drop-end': variantDrop === 'end' }"
+          @dragover.prevent
+          @drop.prevent="dropVariant"
+        >
           <div
             v-for="variant in store.variants"
             :key="variant.id"
             class="variant-row"
-            :class="{ selected: variant.id === store.variantId }"
-            :title="`Afficher la variante « ${variant.name} »`"
+            :class="{
+              selected: variant.id === store.variantId,
+              dragging: draggedVariant === variant.id,
+              'drop-before': variantDrop === variant.id
+            }"
+            draggable="true"
+            @dragstart="onVariantDragStart(variant.id, $event)"
+            @dragover.stop="onVariantDragOver(variant.id, $event)"
+            @dragend="endVariantDrag"
             @click="store.showVariant(variant.id)"
           >
+            <input
+              type="radio"
+              name="shown-variant"
+              :checked="variant.id === store.variantId"
+              :title="`Afficher la variante « ${variant.name} » : c’est elle qu’on modifie`"
+              @click.stop
+              @change="store.showVariant(variant.id)"
+            />
             <input
               type="text"
               :value="variant.name"
@@ -725,6 +782,9 @@ function setClosed(event: Event): void {
               @click.stop="store.showVariant(variant.id)"
               @change="renameVariant(variant.id, $event)"
             />
+            <span class="grip" title="Glisser pour changer l’ordre des variantes">
+              <Icon name="grip" :size="14" />
+            </span>
             <button
               type="button"
               class="small icon-only"
@@ -734,7 +794,7 @@ function setClosed(event: Event): void {
               <Icon name="trash" :size="14" />
             </button>
           </div>
-        </template>
+        </div>
       </section>
 
       <section class="block">
@@ -984,9 +1044,13 @@ function setClosed(event: Event): void {
 }
 
 /* Variantes du composant : celle qu'on regarde est surlignée ; un clic sur une ligne l'affiche. */
+.variant-list.drop-end {
+  box-shadow: 0 2px 0 var(--accent);
+}
+
 .variant-row {
   display: grid;
-  grid-template-columns: 1fr 28px;
+  grid-template-columns: 16px 1fr 20px 28px;
   align-items: center;
   gap: 6px;
   padding: 3px 4px;
@@ -1003,7 +1067,27 @@ function setClosed(event: Event): void {
   background: var(--accent-soft);
 }
 
-.variant-row input {
+.variant-row.dragging {
+  opacity: 0.4;
+}
+
+.variant-row.drop-before {
+  box-shadow: 0 -2px 0 var(--accent);
+}
+
+.variant-row input[type='radio'] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.variant-row .grip {
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+  cursor: grab;
+}
+
+.variant-row input[type='text'] {
   font: inherit;
   font-size: 12px;
   min-width: 0;
