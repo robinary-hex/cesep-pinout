@@ -285,7 +285,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     `nodeSizeForText`) et sa vignette (`SAMPLE_SIZES`).
     Pas de bibliothèque à créer : `DiagramLibrary.vue` montre le catalogue. Le domaine
     décrit ce que chaque forme dessine (`nodeParts`, `layoutNodeText`) ; `DiagramNodeGraphic.vue`
-    à l'écran et `buildDiagramSvg` à l'export peignent la même chose. Losange, disques et les
+    à l'écran et `buildDiagramSvg` à l'export peignent la même chose. Les pointes d'un losange
+    sont ses accroches : leur arrondi ne les fait jamais reculer de plus d'un quart de trait
+    (`DIAMOND_TIP_RETREAT`, `maxRetreat` de `roundedPathData`), sinon le lien attaché à un
+    losange aplati semblait s'arrêter dans le vide ; un angle aigu s'arrondit donc moins.
+    Losange, disques et les
     formes à pointes ou à sommets centrés (début / fin, parallélogramme, hexagone, cylindre,
     nuage) ont des
     dimensions paires (pointes sur la grille), les disques sont carrés, une barre a une épaisseur
@@ -306,8 +310,14 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     maigre, en italique en chasse fixe ; police et taille valent pour les deux
     (`layoutNodeText`, `nodeLineAttrs`). Un nœud neuf a un titre gras en police normale, maigre
     en chasse fixe (`defaultNodeTextStyle`, `createNode`). Un
-    nœud grandit de lui-même quand le texte qu'on vient d'y écrire déborde (`setNodeText`, `setNodesTextStyle` quand c'est son style qui le grossit, même
-    commande, centre gardé) ; « Ajuster » (panneau, menu contextuel) le ramène au
+    nœud suit son texte (`setNodeText`, et `setNodesTextStyle` quand c'est son style qui
+    change ; même commande, centre gardé ; décision du 11 novembre 2026) : après une
+    modification il a la taille qu'il aurait eue si ce texte avait été le premier, donc il
+    rétrécit aussi (`nodeBoxFollowingText`). Chaque dimension qui avait sa taille automatique
+    (celle par défaut de la forme, agrandie quand le texte le demande) prend celle du nouveau
+    texte ; une dimension réglée à la main ne fait que grandir ; un nœud ajusté au plus près
+    le reste. Rien n'est enregistré : ces cas se reconnaissent à la taille que demandait
+    l'ancien texte. « Ajuster » (panneau, menu contextuel) ramène un nœud au
     plus près (`fitNodeToText`, `nodeBoxForText`). La largeur du texte se mesure sur un canevas
     hors écran (`src/render/textMeasure.ts`), estimée sans navigateur. Le style du diagramme
     (trait, coins, coudes, tailles de texte, police) se règle dans le panneau, sans sélection.

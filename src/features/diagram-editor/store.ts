@@ -15,6 +15,7 @@ import {
   nextNumberedId,
   NODE_SPECS,
   nodeBounds,
+  nodeBoxFollowingText,
   nodeBoxForText,
   normalizePoints,
   pannedView,
@@ -540,17 +541,18 @@ export const useDiagramStore = defineStore('diagram', () => {
   }
 
   /**
-   * Titre et sous-titre d'un nœud. Si le nouveau texte déborde, la boîte grandit pour le contenir,
-   * dans la même commande ; elle ne rétrécit jamais d'elle-même (`fitNodeToText` le fait).
+   * Titre et sous-titre d'un nœud. Sa boîte suit le nouveau texte, dans la même commande : elle
+   * grandit s'il déborde et rétrécit s'il raccourcit, comme si ce texte était le premier qu'on y
+   * écrit ; une taille réglée à la main ne fait que grandir (`nodeBoxFollowingText`).
    */
   function setNodeText(id: string, patch: Partial<Pick<DiagramNode, 'title' | 'subtitle'>>): void {
     const node = doc.value.nodes.find((candidate) => candidate.id === id)
     if (!node) return
-    const box = nodeBoxForText(
+    const box = nodeBoxFollowingText(
+      node,
       { ...node, ...patch },
       style.value,
-      nodeTextMeasurer(style.value.cellPx),
-      true
+      nodeTextMeasurer(style.value.cellPx)
     )
     applyWithElasticLinks('Modifier le texte du nœud', (draft) => {
       const target = draft.nodes.find((candidate) => candidate.id === id)
@@ -561,8 +563,8 @@ export const useDiagramStore = defineStore('diagram', () => {
   }
 
   /**
-   * Style du texte de nœuds : police, gras, italique, souligné, barré, taille. Une boîte dont le
-   * texte déborde alors grandit, dans la même commande.
+   * Style du texte de nœuds : police, gras, italique, souligné, barré, taille. Les boîtes suivent
+   * leur texte comme quand on le modifie, dans la même commande.
    */
   function setNodesTextStyle(
     ids: readonly string[],
@@ -574,7 +576,7 @@ export const useDiagramStore = defineStore('diagram', () => {
     const boxes = new Map<string, Box>()
     for (const node of doc.value.nodes) {
       if (!ids.includes(node.id)) continue
-      const box = nodeBoxForText({ ...node, ...patch }, style.value, measure, true)
+      const box = nodeBoxFollowingText(node, { ...node, ...patch }, style.value, measure)
       if (box) boxes.set(node.id, box)
     }
     applyWithElasticLinks(label, (draft) => {

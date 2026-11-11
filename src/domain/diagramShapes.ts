@@ -28,6 +28,13 @@ export const TINT_SHARE = { light: 0.2, dark: 0.4 } as const
  * couleur sombre, foncé sur une couleur claire. Part de la couleur gardée dans le contour.
  */
 export const SOLID_BORDER_SHARE = 0.62
+/**
+ * Recul maximal des pointes arrondies d'un losange, en parts de l'épaisseur du trait. Ses quatre
+ * pointes sont ses accroches : arrondie sans limite, celle d'un losange aplati reculerait de
+ * près d'une cellule, et le lien qui s'y attache semblerait s'arrêter dans le vide. À un quart
+ * de trait, le contour passe encore sur le bout du lien.
+ */
+export const DIAMOND_TIP_RETREAT = 0.25
 /** Le sous-titre s'efface un peu devant le titre. */
 export const SUBTITLE_OPACITY = 0.75
 
@@ -101,8 +108,8 @@ function circlePath(cx: number, cy: number, r: number): string {
   )
 }
 
-function polygonPath(points: readonly LocalPoint[], radius = 0): string {
-  return roundedPathData(points, radius, true)
+function polygonPath(points: readonly LocalPoint[], radius = 0, maxRetreat = Infinity): string {
+  return roundedPathData(points, radius, true, maxRetreat)
 }
 
 /** Un tracé d'un nœud et la façon de le peindre. */
@@ -135,7 +142,8 @@ export function nodeParts(node: DiagramNode, style: DiagramStyle): NodePart[] {
               { x: cx, y: y + h },
               { x, y: cy }
             ],
-            style.nodeRadius * 0.3
+            style.nodeRadius * 0.3,
+            style.lineWidth * DIAMOND_TIP_RETREAT
           ),
           fill: 'body',
           stroke: true
@@ -618,6 +626,50 @@ export function nodeBoxForText(
   }
   const w = even(needed.w, node.w)
   const h = even(needed.h, node.h)
+  if (w === node.w && h === node.h) return null
+  return { x: node.x - (w - node.w) / 2, y: node.y - (h - node.h) / 2, w, h }
+}
+
+/**
+ * Boîte d'un nœud dont le texte, ou le style de son texte, vient de changer (`edited` : le nœud
+ * tel qu'il devient), centre gardé ; null s'il n'y a rien à changer. Le nœud prend la taille
+ * qu'il aurait eue si ce texte avait été le premier qu'on y écrit, donc il rétrécit aussi
+ * (décision du 11 novembre 2026) :
+ *
+ * - un nœud ajusté au plus près (« Ajuster » : il épouse son texte, sous sa taille par défaut) le
+ *   reste ;
+ * - sinon chaque dimension qui avait sa taille automatique, celle par défaut de la forme,
+ *   agrandie quand le texte le demande, prend celle du nouveau texte ;
+ * - une dimension réglée à la main ne fait que grandir, là où le texte déborde.
+ *
+ * Rien n'est enregistré de ces trois cas : ils se reconnaissent à la taille que demandait
+ * l'ancien texte, à la cellule près qu'ajoute le centrage sur la grille.
+ */
+export function nodeBoxFollowingText(
+  node: DiagramNode,
+  edited: DiagramNode,
+  style: DiagramStyle,
+  measure: NodeTextMeasurer
+): Box | null {
+  if (!NODE_SPECS[edited.shape].text) return null
+  const before = nodeSizeForText(node, style, measure)
+  const needed = nodeSizeForText(edited, style, measure)
+  const preset = NODE_SPECS[edited.shape].defaultSize
+  const matches = (size: number, target: number): boolean => size === target || size === target + 1
+  const hugging =
+    before !== null &&
+    matches(node.w, before.w) &&
+    matches(node.h, before.h) &&
+    (node.w < preset.w || node.h < preset.h)
+  const follow = (size: number, usual: number, old: number, wanted: number | null): number => {
+    let target = Math.max(size, wanted ?? 0)
+    if (hugging) target = wanted ?? size
+    else if (matches(size, Math.max(usual, old))) target = Math.max(usual, wanted ?? 0)
+    // Écart pair : le centre reste sur la grille.
+    return (target - size) % 2 === 0 ? target : target + 1
+  }
+  const w = follow(node.w, preset.w, before?.w ?? 0, needed?.w ?? null)
+  const h = follow(node.h, preset.h, before?.h ?? 0, needed?.h ?? null)
   if (w === node.w && h === node.h) return null
   return { x: node.x - (w - node.w) / 2, y: node.y - (h - node.h) / 2, w, h }
 }

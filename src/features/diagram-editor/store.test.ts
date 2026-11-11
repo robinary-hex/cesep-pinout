@@ -98,6 +98,12 @@ describe('diagramme : nœuds', () => {
     expect((grown?.x ?? 0) + (grown?.w ?? 0) / 2).toBe(18)
     expect(store.doc.links[0]?.points.at(0)).toEqual([18, 16])
     expect(store.undoLabel).toBe('Modifier le texte du nœud')
+    // Texte raccourci : la boîte revient à sa taille par défaut, autour du même centre.
+    store.setNodeText(id, { title: 'Publier' })
+    expect(store.doc.nodes[0]).toMatchObject({ title: 'Publier', x: 10, y: 10, w: 16, h: 6 })
+    expect(store.doc.links[0]?.points.at(0)).toEqual([18, 16])
+    store.undo()
+    expect(store.doc.nodes[0]?.w).toBe(grown?.w)
     store.undo()
     expect(store.doc.nodes[0]).toMatchObject({ title: 'Arduino', w: 16 })
     // « Ajuster » resserre la boîte autour du texte ; le lien suit le bord qui remonte.
@@ -105,6 +111,15 @@ describe('diagramme : nœuds', () => {
     expect(store.doc.nodes[0]).toMatchObject({ w: 10, h: 4, x: 13, y: 11 })
     expect(store.doc.links[0]?.points.at(0)).toEqual([18, 15])
     expect(store.undoLabel).toBe('Ajuster le nœud à son texte')
+    // Ajusté, il épouse son texte : il grandit et rétrécit avec lui, sans revenir à 16 × 6.
+    store.setNodeText(id, { title: 'Arduino Uno' })
+    const hugging = store.doc.nodes[0]
+    expect(hugging?.w).toBeGreaterThan(10)
+    expect(hugging?.w).toBeLessThan(16)
+    expect(hugging?.h).toBe(4)
+    store.setNodeText(id, { title: 'Uno' })
+    expect(store.doc.nodes[0]?.w).toBeLessThan(10)
+    expect((store.doc.nodes[0]?.x ?? 0) + (store.doc.nodes[0]?.w ?? 0) / 2).toBe(18)
   })
 
   it('style le texte d’un nœud ; la boîte grandit si le texte grossit', () => {
@@ -122,6 +137,10 @@ describe('diagramme : nœuds', () => {
     expect(grown?.textScale).toBe(2)
     expect(grown?.w).toBeGreaterThan(16)
     expect((grown?.x ?? 0) + (grown?.w ?? 0) / 2).toBe(18)
+    // Retour à ×1 : la boîte revient à sa taille, elle aussi.
+    store.setNodesTextStyle([id], 'Taille du texte du nœud', { textScale: 1 })
+    expect(store.doc.nodes[0]).toMatchObject({ textScale: 1, w: 16, h: 6, x: 10 })
+    store.undo()
     store.undo()
     expect(store.doc.nodes[0]).toMatchObject({ textScale: 1, w: 16, x: 10 })
     // La police propre au nœud ; null revient à celle du diagramme.

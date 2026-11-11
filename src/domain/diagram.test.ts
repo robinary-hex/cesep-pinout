@@ -40,6 +40,7 @@ import {
   layoutNodeText,
   LIGHT_GROUND,
   mixColors,
+  nodeBoxFollowingText,
   nodeBoxForText,
   nodeLineAttrs,
   nodePaint,
@@ -403,6 +404,83 @@ describe('diagramme : formes', () => {
     // Le gras élargit un peu ; pas en chasse fixe.
     expect(estimatedNodeTextWidth({ ...line, bold: true })).toBeCloseTo(4 * 0.55 * 1.4 * 1.06)
     expect(estimatedNodeTextWidth({ ...line, bold: true, font: 'mono' })).toBeCloseTo(4 * 0.6 * 1.4)
+  })
+
+  it('garde les pointes d’un losange sur ses accroches, même aplati', () => {
+    // Rayons des arcs du contour, et recul de chaque pointe : rayon × (1 / sin(angle / 2) − 1).
+    const radii = (shape: DiagramNode): number[] =>
+      [...(nodeParts(shape, style)[0]?.d ?? '').matchAll(/A ([\d.]+) /g)].map((found) =>
+        Number(found[1])
+      )
+    const limit = style.lineWidth / 4
+    // Losange carré : quatre angles droits, qui reculeraient de 0,12 avec le rayon de 0,3.
+    const square = radii(node({ shape: 'diamond', w: 4, h: 4 }))
+    expect(square).toHaveLength(4)
+    for (const radius of square) expect(radius * (Math.SQRT2 - 1)).toBeCloseTo(limit, 3)
+    // Losange aplati (16 × 4) : pointes de gauche et de droite à 28°, haut et bas à 152°.
+    const flat = radii(node({ shape: 'diamond', w: 16, h: 4 }))
+    const sharp = Math.sin(Math.atan2(2, 8))
+    const blunt = Math.sin(Math.atan2(8, 2))
+    // Le tracé commence après sa première pointe : droite, bas, gauche, puis haut.
+    const [right, bottom, left, top] = flat
+    expect(flat).toHaveLength(4)
+    expect(left).toBeCloseTo(right ?? -1, 4)
+    expect((right ?? 9) * (1 / sharp - 1)).toBeCloseTo(limit, 3)
+    // Les angles obtus reculent à peine : ils gardent tout leur arrondi.
+    expect(top).toBeCloseTo(style.nodeRadius * 0.3, 4)
+    expect(bottom).toBeCloseTo(style.nodeRadius * 0.3, 4)
+    expect((top ?? 9) * (1 / blunt - 1)).toBeLessThan(limit)
+  })
+
+  it('fait suivre son texte à un nœud : il grandit, et rétrécit aussi', () => {
+    const measure = (line: { text: string }): number => line.text.length
+    const follow = (current: DiagramNode, title: string, subtitle = ''): DiagramNode => {
+      const edited = { ...current, title, subtitle }
+      return { ...edited, ...(nodeBoxFollowingText(current, edited, style, measure) ?? {}) }
+    }
+    const size = (shown: DiagramNode): number[] => [shown.w, shown.h]
+    // Taille par défaut (16 × 6), texte court : rien ne bouge.
+    const fresh = node({ title: '', w: 16, h: 6 })
+    const short = follow(fresh, 'Titre')
+    expect(size(short)).toEqual([16, 6])
+    // Texte long : 27 + 3 = 30 de large, autour du centre.
+    const long = follow(short, 'Un titre vraiment très long')
+    expect(long).toMatchObject({ x: -7, w: 30, h: 6 })
+    // Texte raccourci : la largeur redescend à ce qu'il demande, puis à la taille par défaut,
+    // pas en dessous ; le centre ne bouge pas.
+    expect(follow(long, 'Un titre vraiment long')).toMatchObject({ x: -5, w: 26, h: 6 })
+    expect(follow(long, 'Titre')).toMatchObject({ x: 0, w: 16, h: 6 })
+    // Un sous-titre de plus tient dans la hauteur par défaut ; le retirer n'y change rien.
+    const two = follow(short, 'Titre', '(sous-titre)')
+    expect(size(two)).toEqual([16, 6])
+    expect(size(follow(two, 'Titre'))).toEqual([16, 6])
+    // Texte effacé : retour à la taille par défaut.
+    expect(size(follow(long, ''))).toEqual([16, 6])
+    // Ajusté au plus près (8 × 4 pour « Titre ») : il épouse encore son texte après.
+    const hugging = node({ title: 'Titre', x: 4, y: 1, w: 8, h: 4 })
+    expect(follow(hugging, 'Un titre')).toMatchObject({ x: 2, w: 12, h: 4 })
+    expect(follow(hugging, 'Oui')).toMatchObject({ x: 5, w: 6, h: 4 })
+    // Réglé à la main, plus grand qu'il ne faut : il garde sa taille, et ne fait que grandir.
+    const manual = node({ title: 'Titre', w: 24, h: 10 })
+    expect(size(follow(manual, 'Oui'))).toEqual([24, 10])
+    expect(size(follow(manual, 'Un titre vraiment très long'))).toEqual([30, 10])
+    // Largeur réglée à la main, hauteur par défaut : chacune suit sa règle.
+    const wide = node({ title: 'Titre', w: 24, h: 6 })
+    expect(size(follow(wide, 'Titre', '(sous-titre)'))).toEqual([24, 6])
+    // Losange : sa taille par défaut est petite, il épouse toujours son texte.
+    const diamond = follow(node({ shape: 'diamond', title: '', w: 4, h: 4 }), 'Titre')
+    expect(size(diamond)).toEqual([16, 8])
+    expect(size(follow(diamond, 'Oui'))).toEqual([12, 8])
+    expect(size(follow(diamond, 'Un titre'))).toEqual([22, 8])
+    // Une forme sans texte ne change pas.
+    const start = node({ shape: 'start', title: '', w: 2, h: 2 })
+    expect(nodeBoxFollowingText(start, { ...start, title: 'x' }, style, measure)).toBeNull()
+    // Le style du texte compte comme le texte : ×3 grossit la boîte, ×1 la ramène.
+    const big = { ...short, textScale: 3 }
+    const grown = { ...big, ...(nodeBoxFollowingText(short, big, style, measure) ?? {}) }
+    expect(grown.h).toBeGreaterThan(6)
+    const back = { ...grown, textScale: 1 }
+    expect(nodeBoxFollowingText(grown, back, style, measure)).toMatchObject({ w: 16, h: 6 })
   })
 
   it('ajuste la boîte autour de son centre, ou la fait seulement grandir', () => {
