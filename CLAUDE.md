@@ -471,6 +471,14 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   valide d'abord (`commitFocusedField` dans `App.vue`, en phase de capture), pour que la saisie ne
   soit pas perdue quand le clic retire le champ. Hors des champs, le texte de l'interface ne se
   surligne pas (`user-select: none`).
+- Champs de couleur (décision du 11 novembre 2026) : partout où une couleur se règle, la pastille
+  qui ouvre le sélecteur est suivie de son code hexadécimal, qu'on peut lire, taper ou coller
+  (`src/ui/ColorField.vue` ; `parseHexColor` de `src/ui/hexColor.ts` accepte `#d62828`,
+  `d62828` et la forme courte `#d28`, et refuse le reste : le champ reprend alors la couleur).
+  Jamais un `<input type="color">` nu. Le « + » des palettes (barres d'outils du montage et du
+  diagramme, panneau d'un fil) est `src/ui/ColorAdder.vue` : il ouvre un petit volet avec ce même
+  champ, le curseur dans le code ; choisir une couleur l'ajoute et referme le volet, Échap ou un
+  clic ailleurs le referment.
 - Boîtes de dialogue : `src/ui/ModalDialog.vue` ; tant qu'une est ouverte (`openModals`), les
   éditeurs ignorent leurs raccourcis. `src/ui/PromptDialog.vue` (saisie d'une valeur) et
   `src/ui/ContextMenu.vue` (menu contextuel, entrées décrites dans `contextMenu.ts`, listes

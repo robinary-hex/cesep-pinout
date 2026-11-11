@@ -12,6 +12,7 @@ import { useDiagramStore } from '@/features/diagram-editor/store'
 import { useLibraryStore } from '@/features/library/store'
 import { useSchematicStore } from '@/features/schematic-editor/store'
 import { deleteProfile, listProfiles, saveProfile, type SavedProfile } from '@/io/profiles'
+import ColorField from '@/ui/ColorField.vue'
 import { confirmAction } from '@/ui/dialogs'
 import Icon from '@/ui/Icon.vue'
 import ModalDialog from '@/ui/ModalDialog.vue'
@@ -293,7 +294,7 @@ async function remove(entry: SavedProfile): Promise<void> {
         <div class="defaults">
           <label class="field">
             <span>Couleur des nœuds</span>
-            <input v-model="diagramDraft.nodeColor" type="color" />
+            <ColorField :value="diagramDraft.nodeColor" @change="diagramDraft.nodeColor = $event" />
           </label>
           <label class="field">
             <span>Fond des nœuds</span>
@@ -305,7 +306,7 @@ async function remove(entry: SavedProfile): Promise<void> {
           </label>
           <label class="field">
             <span>Couleur des liens</span>
-            <input v-model="diagramDraft.linkColor" type="color" />
+            <ColorField :value="diagramDraft.linkColor" @change="diagramDraft.linkColor = $event" />
           </label>
         </div>
       </section>
@@ -370,15 +371,6 @@ async function remove(entry: SavedProfile): Promise<void> {
   font-size: 13px;
   color: var(--text);
   padding: 4px 6px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--surface);
-}
-
-.defaults input[type='color'] {
-  width: 56px;
-  height: 28px;
-  padding: 0 2px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--surface);

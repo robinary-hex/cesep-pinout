@@ -97,29 +97,44 @@ describe('paramètres de l’application', () => {
       if (!found) throw new Error(`section « ${title} » introuvable`)
       return found
     }
+    // Dans une ligne de palette : la pastille et son code (un champ de couleur), puis le nom.
+    const NAME = '.palette-row > input[type="text"]'
     const names = (title: string): string[] =>
-      [...block(title).querySelectorAll<HTMLInputElement>('.palette-row input[type="text"]')].map(
-        (input) => input.value
-      )
+      [...block(title).querySelectorAll<HTMLInputElement>(NAME)].map((input) => input.value)
+    const codes = (title: string): HTMLInputElement[] => [
+      ...block(title).querySelectorAll<HTMLInputElement>('.palette-row input.hex')
+    ]
+    const swatches = (title: string): HTMLInputElement[] => [
+      ...block(title).querySelectorAll<HTMLInputElement>('.palette-row input[type="color"]')
+    ]
     const change = (input: HTMLInputElement | null | undefined, value: string): void => {
       if (!input) throw new Error('champ introuvable')
       input.value = value
       input.dispatchEvent(new Event('change', { bubbles: true }))
     }
-    // Deux palettes : les couleurs vives des fils, les tons pastel des diagrammes.
+    // Deux palettes : les couleurs vives des fils, les tons plus doux des diagrammes.
     expect(names('Palette des fils')).toEqual(DEFAULT_SETTINGS.palette.map((color) => color.name))
     expect(names('Palette des diagrammes')).toEqual(
       DEFAULT_SETTINGS.diagramPalette.map((color) => color.name)
     )
     const diagrams = block('Palette des diagrammes')
     // Renommer et reteinter une couleur, en retirer une, en ajouter une.
-    change(diagrams.querySelectorAll<HTMLInputElement>('input[type="text"]')[1], 'Corail')
+    change(diagrams.querySelectorAll<HTMLInputElement>(NAME)[1], 'Corail')
     await flushPromises()
-    change(
-      block('Palette des diagrammes').querySelectorAll<HTMLInputElement>('input[type="color"]')[1],
-      '#ffb4a2'
-    )
+    // La teinte se donne par son code hexadécimal, tapé sans le dièse, en majuscules…
+    const PALETTE = 'Palette des diagrammes'
+    expect(codes(PALETTE)[1]?.value).toBe(DEFAULT_SETTINGS.diagramPalette[1]?.hex)
+    change(codes(PALETTE)[1], 'FFB4A2')
     await flushPromises()
+    expect(codes(PALETTE)[1]?.value).toBe('#ffb4a2')
+    expect(swatches(PALETTE)[1]?.value).toBe('#ffb4a2')
+    // … ou au sélecteur, et le code suit. Un code qui n'en est pas un est refusé.
+    change(swatches(PALETTE)[3], '#123456')
+    await flushPromises()
+    expect(codes(PALETTE)[3]?.value).toBe('#123456')
+    change(codes(PALETTE)[3], 'bleu nuit')
+    await flushPromises()
+    expect(codes(PALETTE)[3]?.value).toBe('#123456')
     block('Palette des diagrammes').querySelectorAll<HTMLButtonElement>('button.danger')[2]?.click()
     await flushPromises()
     const add = [...block('Palette des diagrammes').querySelectorAll('button')].find(
@@ -130,7 +145,8 @@ describe('paramètres de l’application', () => {
     const expected = [
       DEFAULT_SETTINGS.diagramPalette[0],
       { name: 'Corail', hex: '#ffb4a2' },
-      ...DEFAULT_SETTINGS.diagramPalette.slice(3),
+      { name: DEFAULT_SETTINGS.diagramPalette[3]?.name, hex: '#123456' },
+      ...DEFAULT_SETTINGS.diagramPalette.slice(4),
       { name: 'Couleur 10', hex: '#808080' }
     ]
     expect(names('Palette des diagrammes')).toEqual(expected.map((color) => color?.name))

@@ -4,6 +4,7 @@ import { EXPORT_SCALES, type ExportScale, type ExportSettings, type SvgExport } 
 import { useLibraryStore } from '@/features/library/store'
 import { bridge } from '@/io/bridge'
 import { chooseExportPath } from '@/io/exportFiles'
+import ColorField from '@/ui/ColorField.vue'
 import ModalDialog from '@/ui/ModalDialog.vue'
 import { blobToBase64, svgToPngBlob } from './svgToPng'
 
@@ -183,10 +184,10 @@ function setMargin(event: Event): void {
           </label>
           <label class="radio">
             <input v-model="backgroundChoice" type="radio" value="custom" /> Couleur
-            <input
-              v-model="customBackground"
-              type="color"
+            <ColorField
+              :value="customBackground"
               :disabled="backgroundChoice !== 'custom'"
+              @change="customBackground = $event"
             />
           </label>
         </fieldset>

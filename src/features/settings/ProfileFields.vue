@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ColorField from '@/ui/ColorField.vue'
 import { JUNCTION_SCALES, type JunctionScale, type StyleProfile } from '@/domain'
 
 // Champs d'un profil de style, partagés par les paramètres (profil par défaut) et par le montage.
@@ -101,11 +102,7 @@ function number(event: Event, fallback: number): number {
       </label>
       <label v-if="profile.junctionColor !== 'wire'" class="field">
         <span>Couleur fixe</span>
-        <input
-          type="color"
-          :value="profile.junctionColor"
-          @change="patch({ junctionColor: text($event) })"
-        />
+        <ColorField :value="profile.junctionColor" @change="patch({ junctionColor: $event })" />
       </label>
     </div>
     <div class="row">
@@ -215,12 +212,6 @@ function number(event: Event, fallback: number): number {
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--surface);
-}
-
-.field input[type='color'] {
-  padding: 0 2px;
-  height: 28px;
-  width: 56px;
 }
 
 .check {

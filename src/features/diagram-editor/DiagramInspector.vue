@@ -14,6 +14,7 @@ import {
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import DiagramStyleFields from '@/features/settings/DiagramStyleFields.vue'
+import ColorField from '@/ui/ColorField.vue'
 import Icon from '@/ui/Icon.vue'
 import type { IconName } from '@/ui/icons'
 import { useDiagramStore } from './store'
@@ -258,9 +259,9 @@ function toggleTextStyle(option: (typeof TEXT_STYLE_OPTIONS)[number]): void {
   store.setTextStyle(text.id, `${option.label} ${on ? 'activé' : 'retiré'}`, { [option.key]: on })
 }
 
-function setTextColor(event: Event): void {
+function setTextColor(color: string): void {
   const text = singleText.value
-  if (text) store.setTextStyle(text.id, 'Couleur du texte', { color: inputValue(event) })
+  if (text) store.setTextStyle(text.id, 'Couleur du texte', { color })
 }
 
 function setTextBackground(event: Event): void {
@@ -609,7 +610,7 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
         <div class="row">
           <label class="field">
             <span>Couleur</span>
-            <input type="color" :value="singleText.color" @change="setTextColor" />
+            <ColorField :value="singleText.color" @change="setTextColor" />
           </label>
           <div class="field">
             <span>Style</span>
@@ -743,12 +744,6 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
 .field input[type='range'] {
   padding: 0;
   border: 0;
-}
-
-.field input[type='color'] {
-  padding: 0 2px;
-  height: 28px;
-  width: 56px;
 }
 
 .row {

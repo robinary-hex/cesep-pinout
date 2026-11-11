@@ -15,6 +15,7 @@ import {
   type PinKind,
   type PinSection
 } from '@/domain'
+import ColorField from '@/ui/ColorField.vue'
 import Icon from '@/ui/Icon.vue'
 import type { IconName } from '@/ui/icons'
 import { useComponentEditorStore } from './store'
@@ -211,8 +212,8 @@ const imageSize = computed(() => {
   }
 })
 
-function setStroke(event: Event): void {
-  store.updateStyle(primitiveIndex.value, { stroke: inputValue(event) })
+function setStroke(color: string): void {
+  store.updateStyle(primitiveIndex.value, { stroke: color })
 }
 
 function toggleStroke(event: Event): void {
@@ -223,8 +224,8 @@ function setWeight(event: Event): void {
   store.updateStyle(primitiveIndex.value, { weight: Math.max(0, numberValue(event)) })
 }
 
-function setFill(event: Event): void {
-  store.updateStyle(primitiveIndex.value, { fill: inputValue(event) })
+function setFill(color: string): void {
+  store.updateStyle(primitiveIndex.value, { fill: color })
 }
 
 function toggleFill(event: Event): void {
@@ -311,8 +312,7 @@ function setTextAnchor(event: Event): void {
   })
 }
 
-function setTextColor(event: Event): void {
-  const color = inputValue(event)
+function setTextColor(color: string): void {
   store.updatePrimitive(primitiveIndex.value, 'Couleur du texte', (p) => {
     if (p.kind === 'text') p.color = color
   })
@@ -367,8 +367,7 @@ function setDotScale(event: Event): void {
   })
 }
 
-function setDotColor(event: Event): void {
-  const color = inputValue(event)
+function setDotColor(color: string): void {
   store.updatePrimitive(primitiveIndex.value, 'Couleur du point', (p) => {
     if (p.kind === 'dot') p.color = color
   })
@@ -480,7 +479,7 @@ function setClosed(event: Event): void {
         <div class="row">
           <label class="field">
             <span>Couleur</span>
-            <input type="color" :value="primitive.color" @change="setTextColor" />
+            <ColorField :value="primitive.color" @change="setTextColor" />
           </label>
           <div class="field">
             <span>Style</span>
@@ -543,7 +542,7 @@ function setClosed(event: Event): void {
           </label>
           <label class="field">
             <span>Couleur</span>
-            <input type="color" :value="primitive.color" @change="setDotColor" />
+            <ColorField :value="primitive.color" @change="setDotColor" />
           </label>
         </div>
       </template>
@@ -552,8 +551,7 @@ function setClosed(event: Event): void {
         <div class="row">
           <label class="field">
             <span>Trait</span>
-            <input
-              type="color"
+            <ColorField
               :value="shapeStyle.stroke === 'none' ? '#000000' : shapeStyle.stroke"
               :disabled="shapeStyle.stroke === 'none'"
               @change="setStroke"
@@ -584,8 +582,7 @@ function setClosed(event: Event): void {
         <div class="row">
           <label class="field">
             <span>Remplissage</span>
-            <input
-              type="color"
+            <ColorField
               :value="shapeStyle.fill === 'none' ? '#ffffff' : shapeStyle.fill"
               :disabled="shapeStyle.fill === 'none'"
               @change="setFill"
@@ -933,12 +930,6 @@ function setClosed(event: Event): void {
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--surface);
-}
-
-.field input[type='color'] {
-  padding: 0 2px;
-  height: 28px;
-  width: 56px;
 }
 
 .row {

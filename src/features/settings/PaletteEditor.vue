@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import type { PaletteColor } from '@/domain'
+import ColorField from '@/ui/ColorField.vue'
 import Icon from '@/ui/Icon.vue'
 
-// Une palette des paramètres : une ligne par couleur (teinte, nom, bouton qui la retire), puis le
+// Une palette des paramètres : une ligne par couleur (teinte et son code, nom, bouton qui la
+// retire), puis le
 // bouton qui en ajoute une. La boîte des paramètres en montre deux, celle des fils et celle des
 // diagrammes. Ce qui accompagne le bouton (la couleur des nouveaux fils) passe par l'emplacement.
 
@@ -37,7 +39,7 @@ function add(): void {
 <template>
   <div class="palette-grid">
     <div v-for="(color, index) in colors" :key="index" class="palette-row">
-      <input type="color" :value="color.hex" @change="update(index, { hex: text($event) })" />
+      <ColorField :value="color.hex" @change="update(index, { hex: $event })" />
       <input
         type="text"
         :value="color.name"
@@ -72,14 +74,6 @@ function add(): void {
   min-width: 0;
   font: inherit;
   padding: 3px 6px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-}
-
-.palette-row input[type='color'] {
-  width: 32px;
-  height: 26px;
-  padding: 0 2px;
   border: 1px solid var(--border);
   border-radius: 4px;
 }

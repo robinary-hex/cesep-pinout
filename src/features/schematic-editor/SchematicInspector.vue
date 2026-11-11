@@ -15,6 +15,8 @@ import {
   type TextAnchor
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
+import ColorAdder from '@/ui/ColorAdder.vue'
+import ColorField from '@/ui/ColorField.vue'
 import Icon from '@/ui/Icon.vue'
 import type { IconName } from '@/ui/icons'
 import { useSchematicStore } from './store'
@@ -190,8 +192,7 @@ function recolor(hex: string): void {
   store.setCurrentColor(hex)
 }
 
-function recolorCustom(event: Event): void {
-  const hex = inputValue(event)
+function recolorCustom(hex: string): void {
   store.addCustomColor(hex)
   store.setCurrentColor(hex)
 }
@@ -270,9 +271,9 @@ function toggleLabelStyle(option: (typeof LABEL_STYLE_OPTIONS)[number]): void {
   })
 }
 
-function setLabelColor(event: Event): void {
+function setLabelColor(color: string): void {
   const label = singleLabel.value
-  if (label) store.setLabelStyle(label.id, 'Couleur de l’étiquette', { color: inputValue(event) })
+  if (label) store.setLabelStyle(label.id, 'Couleur de l’étiquette', { color })
 }
 
 function setLabelBackground(event: Event): void {
@@ -474,14 +475,11 @@ function setLabelVertical(event: Event): void {
             :title="swatch.name"
             @click="recolor(swatch.hex)"
           />
-          <label class="custom" title="Couleur personnalisée">
-            <input
-              type="color"
-              :value="singleWire?.color ?? store.currentColor"
-              @change="recolorCustom"
-            />
-            <span>+</span>
-          </label>
+          <ColorAdder
+            :value="singleWire?.color ?? store.currentColor"
+            title="Couleur personnalisée, gardée dans ce montage"
+            @pick="recolorCustom"
+          />
         </div>
       </div>
       <template v-if="singleWire">
@@ -544,7 +542,7 @@ function setLabelVertical(event: Event): void {
         <div class="row">
           <label class="field">
             <span>Couleur</span>
-            <input type="color" :value="singleLabel.color" @change="setLabelColor" />
+            <ColorField :value="singleLabel.color" @change="setLabelColor" />
           </label>
           <div class="field">
             <span>Style</span>
@@ -664,12 +662,6 @@ function setLabelVertical(event: Event): void {
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--surface);
-}
-
-.field input[type='color'] {
-  padding: 0 2px;
-  height: 28px;
-  width: 56px;
 }
 
 .row {
@@ -809,29 +801,8 @@ function setLabelVertical(event: Event): void {
   box-shadow: 0 0 0 2px var(--accent);
 }
 
-.custom {
-  position: relative;
-  width: 20px;
-  height: 20px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  border: 1px dashed var(--text-faint);
-  font-size: 12px;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-/* À la taille de la pastille, et plus précis que la règle des champs de couleur du panneau : à
-   leur largeur, celui-ci dépasserait du panneau et lui donnerait un ascenseur horizontal. */
-.field .custom input[type='color'] {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  border: 0;
-  opacity: 0;
-  cursor: pointer;
+/* Le « + » des couleurs personnalisées a la taille des pastilles du panneau. */
+.swatches {
+  --color-adder-size: 20px;
 }
 </style>

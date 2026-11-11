@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { baseName } from '@/io/paths'
+import ColorAdder from '@/ui/ColorAdder.vue'
 import Icon from '@/ui/Icon.vue'
 import ToolbarBasics from '@/ui/ToolbarBasics.vue'
 import { useSchematicStore } from './store'
@@ -23,8 +24,7 @@ function isCurrent(hex: string): boolean {
   return hex.toLowerCase() === store.currentColor.toLowerCase()
 }
 
-function pickCustom(event: Event): void {
-  const hex = (event.target as HTMLInputElement).value
+function pickCustom(hex: string): void {
   // La couleur choisie reste dans ce montage ; la palette générale se règle dans les Paramètres.
   store.addCustomColor(hex)
   store.setCurrentColor(hex)
@@ -92,10 +92,11 @@ function pickCustom(event: Event): void {
           :title="swatch.name"
           @click="store.setCurrentColor(swatch.hex)"
         />
-        <label class="custom" title="Couleur personnalisée, gardée dans ce montage">
-          <input type="color" :value="store.currentColor" @change="pickCustom" />
-          <span>+</span>
-        </label>
+        <ColorAdder
+          :value="store.currentColor"
+          title="Couleur personnalisée, gardée dans ce montage"
+          @pick="pickCustom"
+        />
       </div>
 
       <div class="group">
@@ -185,33 +186,6 @@ function pickCustom(event: Event): void {
 
 .swatch.current {
   box-shadow: 0 0 0 2px var(--accent);
-}
-
-.custom {
-  position: relative;
-  width: 18px;
-  height: 18px;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  border-radius: 50%;
-  border: 1px dashed var(--text-faint);
-  font-size: 12px;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-/* Le sélecteur de couleur natif a sa propre taille : on le force à celle de la pastille, sinon il
-   déborde, invisible, sur les boutons voisins. */
-.custom input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  border: 0;
-  opacity: 0;
-  cursor: pointer;
 }
 
 .doc-name {

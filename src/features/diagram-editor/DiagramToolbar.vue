@@ -10,6 +10,7 @@ import {
 } from '@/domain'
 import DiagramNodeGraphic from '@/render/DiagramNodeGraphic.vue'
 import { baseName } from '@/io/paths'
+import ColorAdder from '@/ui/ColorAdder.vue'
 import Icon from '@/ui/Icon.vue'
 import ToolbarBasics from '@/ui/ToolbarBasics.vue'
 import { useDiagramStore } from './store'
@@ -30,8 +31,7 @@ function isCurrent(hex: string): boolean {
   return hex.toLowerCase() === store.currentColor.toLowerCase()
 }
 
-function pickCustom(event: Event): void {
-  const hex = (event.target as HTMLInputElement).value
+function pickCustom(hex: string): void {
   // La couleur choisie reste dans ce diagramme ; la palette générale se règle dans les Paramètres.
   store.addCustomColor(hex)
   store.setCurrentColor(hex)
@@ -209,10 +209,11 @@ function toggleEndArrow(): void {
           :title="swatch.name"
           @click="store.setCurrentColor(swatch.hex)"
         />
-        <label class="custom" title="Couleur personnalisée, gardée dans ce diagramme">
-          <input type="color" :value="store.currentColor" @change="pickCustom" />
-          <span>+</span>
-        </label>
+        <ColorAdder
+          :value="store.currentColor"
+          title="Couleur personnalisée, gardée dans ce diagramme"
+          @pick="pickCustom"
+        />
       </div>
 
       <div v-if="store.hasGroups" class="group">
@@ -294,33 +295,6 @@ function toggleEndArrow(): void {
 
 .swatch.current {
   box-shadow: 0 0 0 2px var(--accent);
-}
-
-.custom {
-  position: relative;
-  width: 18px;
-  height: 18px;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  border-radius: 50%;
-  border: 1px dashed var(--text-faint);
-  font-size: 12px;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-/* Le sélecteur de couleur natif a sa propre taille : on le force à celle de la pastille, sinon il
-   déborde, invisible, sur les boutons voisins. */
-.custom input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  border: 0;
-  opacity: 0;
-  cursor: pointer;
 }
 
 /* Pastilles de fond : un petit nœud dessiné sur la couleur du papier, comme sur le diagramme. */
