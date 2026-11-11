@@ -50,6 +50,10 @@ const SCROLL_PADDING_PX = 24
 const PIN_SNAP_CELLS = 0.75
 const ZOOM_STEP = 1.1
 const BAND_MIN_CELLS = 0.05
+/** En deçà, à l'outil Broche, un appui relâché est un clic (une broche), pas une zone. */
+const PIN_ZONE_MIN_CELLS = 0.4
+/** Une intersection à moins de ça du bord de la zone tracée en fait partie. */
+const PIN_ZONE_REACH_CELLS = 0.3
 const PIN_COLORS: Record<PinKind, string> = {
   in: '#15803d',
   out: '#ea580c',
@@ -98,6 +102,8 @@ type Drag =
   | { kind: 'move-pin'; id: string; current: LocalPoint }
   | { kind: 'handle'; index: number; handleId: string; original: Primitive; preview: Primitive }
   | { kind: 'band'; start: LocalPoint; current: LocalPoint; base: number[]; basePins: string[] }
+  // Outil Broche : un simple clic pose une broche, un glisser trace la zone à en couvrir.
+  | { kind: 'pin-zone'; start: LocalPoint; current: LocalPoint }
   | { kind: 'pan'; lastX: number; lastY: number }
   | { kind: 'text-box'; start: QPoint; current: QPoint }
   | { kind: 'resize-box'; handleId: string; preview: Box }
@@ -474,9 +480,65 @@ const preview = computed<Preview | null>(() => {
 })
 
 /** Rectangle du lasso, en pixels du repère du composant. */
+/** Le glisser de l'outil Broche a-t-il assez bougé pour être une zone ? */
+function isPinZone(zone: { start: LocalPoint; current: LocalPoint }): boolean {
+  return (
+    Math.abs(zone.current.x - zone.start.x) > PIN_ZONE_MIN_CELLS ||
+    Math.abs(zone.current.y - zone.start.y) > PIN_ZONE_MIN_CELLS
+  )
+}
+
+/**
+ * Intersections de la boîte prises dans une zone tracée à l'outil Broche, ligne par ligne ;
+ * celles qui portent déjà une broche n'en font pas partie.
+ */
+function pinZonePoints(zone: { start: LocalPoint; current: LocalPoint }): LocalPoint[] {
+  const reach = PIN_ZONE_REACH_CELLS
+  const x1 = Math.max(0, Math.ceil(Math.min(zone.start.x, zone.current.x) - reach))
+  const x2 = Math.min(
+    size.value.widthCells,
+    Math.floor(Math.max(zone.start.x, zone.current.x) + reach)
+  )
+  const y1 = Math.max(0, Math.ceil(Math.min(zone.start.y, zone.current.y) - reach))
+  const y2 = Math.min(
+    size.value.heightCells,
+    Math.floor(Math.max(zone.start.y, zone.current.y) + reach)
+  )
+  const taken = new Set(store.shown.pins.map((pin) => `${pin.x},${pin.y}`))
+  const points: LocalPoint[] = []
+  for (let y = y1; y <= y2; y++) {
+    for (let x = x1; x <= x2; x++) if (!taken.has(`${x},${y}`)) points.push({ x, y })
+  }
+  return points
+}
+
+/** Broches qu'une zone en cours de tracé poserait. */
+const pinZoneTargets = computed<LocalPoint[]>(() => {
+  const current = drag.value
+  return current?.kind === 'pin-zone' && isPinZone(current) ? pinZonePoints(current) : []
+})
+
+/** Outil Broche, simple clic : une broche sur l'intersection la plus proche de la boîte. */
+function placePin(cells: LocalPoint): void {
+  const nearest = nearestInsidePoint(cells, size.value)
+  if (nearest.distance > PIN_SNAP_CELLS) {
+    store.status = 'Clique une intersection de la boîte du composant.'
+    return
+  }
+  const taken = store.shown.pins.some(
+    (pin) => pin.x === nearest.point.x && pin.y === nearest.point.y
+  )
+  if (taken) {
+    store.status = 'Il y a déjà une broche sur cette intersection.'
+    return
+  }
+  store.addPin(nearest.point)
+}
+
 const band = computed(() => {
   const current = drag.value
-  if (current?.kind !== 'band') return null
+  if (current?.kind === 'pin-zone' && !isPinZone(current)) return null
+  if (current?.kind !== 'band' && current?.kind !== 'pin-zone') return null
   const x1 = Math.min(current.start.x, current.current.x)
   const y1 = Math.min(current.start.y, current.current.y)
   const x2 = Math.max(current.start.x, current.current.x)
@@ -709,22 +771,12 @@ function onPointerDown(event: PointerEvent): void {
         'Ajouter un point'
       )
       break
-    case 'pin': {
-      const nearest = nearestInsidePoint(cells, size.value)
-      if (nearest.distance > PIN_SNAP_CELLS) {
-        store.status = 'Clique une intersection de la boîte du composant.'
-        break
-      }
-      const taken = store.shown.pins.some(
-        (pin) => pin.x === nearest.point.x && pin.y === nearest.point.y
-      )
-      if (taken) {
-        store.status = 'Il y a déjà une broche sur cette intersection.'
-        break
-      }
-      store.addPin(nearest.point)
+    case 'pin':
+      // La broche se pose au relâchement : sur place pour un clic, dans toute la zone pour un
+      // glisser.
+      drag.value = { kind: 'pin-zone', start: cells, current: cells }
+      capture(event)
       break
-    }
   }
 }
 
@@ -743,6 +795,7 @@ function onPointerMove(event: PointerEvent): void {
       break
     }
     case 'band':
+    case 'pin-zone':
       current.current = cells
       break
     case 'resize-box':
@@ -924,6 +977,12 @@ function onPointerUp(event: PointerEvent): void {
         store.setPrimitive(current.index, current.preview, 'Modifier la forme')
       }
       break
+    case 'pin-zone':
+      if (!isPinZone(current)) placePin(current.start)
+      else if (store.addPins(pinZonePoints(current)).length === 0) {
+        store.status = 'Aucune intersection libre dans cette zone.'
+      }
+      break
     case 'band': {
       const wide = Math.abs(current.current.x - current.start.x) > BAND_MIN_CELLS
       const tall = Math.abs(current.current.y - current.start.y) > BAND_MIN_CELLS
@@ -1103,7 +1162,15 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
               r="4"
             />
             <circle
-              v-if="pinTarget"
+              v-for="target in pinZoneTargets"
+              :key="`zone:${target.x},${target.y}`"
+              class="pin-target-active"
+              :cx="target.x * cell"
+              :cy="target.y * cell"
+              r="6"
+            />
+            <circle
+              v-if="pinTarget && pinZoneTargets.length === 0"
               class="pin-target-active"
               :cx="pinTarget.x * cell"
               :cy="pinTarget.y * cell"

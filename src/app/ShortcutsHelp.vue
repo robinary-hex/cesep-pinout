@@ -181,6 +181,10 @@ const sections: { title: string; rows: Row[] }[] = [
         'Le même composant dessiné autrement : le bouton de la barre en crée une par copie, la liste choisit celle qu’on modifie ; dans le panneau, le point devant un nom la choisit aussi, glisser une ligne change l’ordre'
       ],
       [
+        'B, puis glisser une zone',
+        'Une broche à chaque intersection libre de la zone, numérotées à la suite et rangées dans un groupe de broches à nommer'
+      ],
+      [
         'Broches, dans le panneau',
         '« + Groupe » crée un groupe nommé ; glisser une broche change son ordre ou son groupe, son numéro suit'
       ],

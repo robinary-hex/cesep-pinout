@@ -569,6 +569,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     Ctrl fait apparaître les poignées de la boîte du composant (`setBox` : le contenu suit
     l'origine, les broches qui sortent disparaissent). Redimensionner le composant supprime les broches qui sortent de la
     boîte ; les noms numériques des broches suivent toujours leur ordre (`renumberPins`).
+    Outil Broche (B) : un clic pose une broche, un glisser trace une zone et pose une broche à
+    chaque intersection libre de la boîte qu'elle couvre, ligne par ligne, en une commande
+    (`pin-zone` du canevas, `addPins` du store ; décision du 11 novembre 2026). Ces broches
+    sont numérotées à la suite et rangées dans un nouveau groupe de broches, dont le nom les
+    désigne toutes : rien à nommer une à une.
     Groupes de broches (décision du 11 novembre 2026 ; `src/domain/pinGroups.ts`) : dans le
     panneau du composant, « + Groupe » crée une section nommée (`pinGroups` du composant,
     `pinGroup` de la broche, optionnels, sans montée de version) ; une broche se glisse sur

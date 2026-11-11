@@ -658,3 +658,45 @@ describe('éditeur de composants : ordre des variantes', () => {
     expect(store.doc.baseVariantRank).toBeUndefined()
   })
 })
+
+describe('éditeur de composants : broches posées par zone', () => {
+  it('ajoute une broche à chaque point libre, dans un nouveau groupe, en une commande', () => {
+    const store = useComponentEditorStore()
+    const first = store.addPin({ x: 0, y: 0 })
+    // Une zone de deux lignes de trois points, dont un déjà pris et un hors de la boîte (4 × 2).
+    const ids = store.addPins([
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 2, y: 0 },
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+      { x: 9, y: 1 }
+    ])
+    expect(ids).toHaveLength(4)
+    expect(store.undoLabel).toBe('Ajouter 4 broches')
+    expect(store.doc.pinGroups).toEqual([{ id: 'pg1', name: 'Groupe 1' }])
+    // Les broches du groupe passent devant, numérotées à la suite ; la broche d'avant suit.
+    expect(store.doc.pins.map((pin) => [pin.name, pin.x, pin.y, pin.pinGroup])).toEqual([
+      ['1', 1, 0, 'pg1'],
+      ['2', 2, 0, 'pg1'],
+      ['3', 0, 1, 'pg1'],
+      ['4', 1, 1, 'pg1'],
+      ['5', 0, 0, undefined]
+    ])
+    expect(store.selectedPinIds).toEqual(ids)
+    expect(store.status).toContain('4 broches ajoutées dans « Groupe 1 »')
+    expect(store.issues.filter((issue) => issue.level === 'error')).toEqual([])
+    // Une seule commande à annuler.
+    store.undo()
+    expect(store.doc.pins.map((pin) => pin.id)).toEqual([first])
+    expect(store.doc.pinGroups).toBeUndefined()
+  })
+
+  it('une zone d’un seul point libre pose une broche ordinaire ; sans point libre, rien', () => {
+    const store = useComponentEditorStore()
+    expect(store.addPins([{ x: 2, y: 1 }])).toHaveLength(1)
+    expect(store.doc.pinGroups).toBeUndefined()
+    expect(store.addPins([{ x: 2, y: 1 }])).toEqual([])
+    expect(store.doc.pins).toHaveLength(1)
+  })
+})

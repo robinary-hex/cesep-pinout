@@ -486,3 +486,50 @@ describe('éditeur de composants : ordre et choix des variantes dans le panneau'
     wrapper.unmount()
   })
 })
+
+describe('éditeur de composants : outil Broche', () => {
+  it('un clic pose une broche ; glisser une zone en pose une à chaque intersection libre', async () => {
+    const store = useComponentEditorStore()
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    const svg = wrapper.get('svg.canvas')
+    /**
+     * Position à l'écran d'un point du composant, en cellules : l'origine du dessin dans le SVG
+     * (que jsdom place en (0, 0)) dépend de la marge laissée aux repères des broches.
+     */
+    const at = (x: number, y: number): MouseEventInit => {
+      const origin = /translate\(([-\d.]+) ([-\d.]+)\)/.exec(
+        svg.get('g[transform]').attributes('transform') ?? ''
+      )
+      return {
+        clientX: Number(origin?.[1] ?? 0) + x * store.cellPx,
+        clientY: Number(origin?.[2] ?? 0) + y * store.cellPx
+      }
+    }
+    const send = async (type: string, position: MouseEventInit): Promise<void> => {
+      svg.element.dispatchEvent(
+        new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, ...position })
+      )
+      await nextTick()
+    }
+    store.tool = 'pin'
+    await nextTick()
+    // Clic : une broche, posée au relâchement.
+    await send('pointerdown', at(0, 0))
+    expect(store.doc.pins).toHaveLength(0)
+    await send('pointerup', at(0, 0))
+    expect(store.doc.pins.map((pin) => [pin.x, pin.y])).toEqual([[0, 0]])
+
+    // Glisser de (1, 0) à (3, 1) : six intersections, toutes libres ; l'aperçu les montre.
+    await send('pointerdown', at(1, 0))
+    await send('pointermove', at(3, 1))
+    expect(wrapper.findAll('.pin-targets .pin-target-active')).toHaveLength(6)
+    expect(wrapper.find('.band').exists()).toBe(true)
+    await send('pointerup', at(3, 1))
+    expect(store.doc.pins).toHaveLength(7)
+    expect(store.undoLabel).toBe('Ajouter 6 broches')
+    expect(store.doc.pinGroups).toHaveLength(1)
+    // L'outil reste actif, pour une autre zone.
+    expect(store.tool).toBe('pin')
+    wrapper.unmount()
+  })
+})

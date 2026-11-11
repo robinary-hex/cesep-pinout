@@ -741,6 +741,52 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     return id
   }
 
+  /**
+   * Ajoute une broche à chaque point donné, en une commande : la zone tracée à l'outil Broche.
+   * Les points hors de la boîte ou déjà pris sont passés. Dès deux broches, elles vont dans un
+   * nouveau groupe de broches : son nom, à changer dans le panneau, les désigne toutes, et leurs
+   * numéros se suivent. Retourne les identifiants des broches ajoutées.
+   */
+  function addPins(points: readonly LocalPoint[]): string[] {
+    const current = shown.value
+    const taken = new Set(current.pins.map((pin) => `${pin.x},${pin.y}`))
+    const free = points.filter((point) => {
+      const key = `${point.x},${point.y}`
+      if (taken.has(key) || !isInsideBox(point, current.size)) return false
+      taken.add(key)
+      return true
+    })
+    const [only] = free
+    if (!only) return []
+    if (free.length === 1) return [addPin(only)]
+    const ids: string[] = []
+    const known: { id: string }[] = current.pins.map((pin) => ({ id: pin.id }))
+    for (let n = 0; n < free.length; n++) {
+      const id = nextPinId(known as Pin[])
+      ids.push(id)
+      known.push({ id })
+    }
+    const group = { id: nextPinGroupId(pinGroups.value), name: nextPinGroupName(pinGroups.value) }
+    const groups = [...pinGroups.value, group]
+    const added: Pin[] = free.map((point, index) => ({
+      id: ids[index] ?? '',
+      name: String(current.pins.length + index + 1),
+      kind: 'io',
+      x: point.x,
+      y: point.y,
+      pinGroup: group.id
+    }))
+    const pins = renumberPins(arrangedPins([...current.pins, ...added], groups))
+    apply(`Ajouter ${added.length} broches`, (draft) => {
+      const body = bodyOf(draft)
+      body.pinGroups = castDraft(groups)
+      body.pins = castDraft(pins)
+    })
+    select([], ids)
+    status.value = `${added.length} broches ajoutées dans « ${group.name} » : ce nom se change dans le panneau.`
+    return ids
+  }
+
   function updatePin(id: string, patch: Partial<Pick<Pin, 'name' | 'kind'>>): void {
     apply('Modifier la broche', (draft) => {
       const pin = bodyOf(draft).pins.find((candidate) => candidate.id === id)
@@ -1138,6 +1184,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     removePrimitives,
     reorderPrimitive,
     addPin,
+    addPins,
     updatePin,
     addPinGroup,
     renamePinGroup,

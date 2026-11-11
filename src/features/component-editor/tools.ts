@@ -31,7 +31,13 @@ export const TOOLS: readonly ToolInfo[] = [
     icon: 'polyline'
   },
   { id: 'text', label: 'Texte', key: 'e', hint: 'Cliquer pour poser un texte', icon: 'type' },
-  { id: 'pin', label: 'Broche', key: 'b', hint: 'Cliquer une intersection du bord', icon: 'pin' }
+  {
+    id: 'pin',
+    label: 'Broche',
+    key: 'b',
+    hint: 'Broche : cliquer une intersection, ou glisser une zone pour en poser à toutes',
+    icon: 'pin'
+  }
 ]
 
 export const TOOL_BY_KEY: Readonly<Record<string, ToolId>> = Object.fromEntries(
