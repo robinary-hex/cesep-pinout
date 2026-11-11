@@ -4,12 +4,15 @@ import { computed, ref, shallowRef } from 'vue'
 import {
   componentIssues,
   createEmptyComponent,
+  groupIds,
   importedImageSize,
   isInsideBox,
   naturalImageSize,
+  nextGroupId,
   pinsInside,
   primitiveBounds,
   QUARTERS_PER_CELL,
+  regroupedCopies,
   renumberPins,
   reorderItem,
   translatePrimitive,
@@ -32,6 +35,16 @@ import type { ToolId } from './tools'
 
 /** Sélection : des formes (indices, triés) et des broches (identifiants), ensemble. */
 export interface Selection {
+  indexes: number[]
+  pinIds: string[]
+}
+
+/** Ce qu'un clic peut viser dans l'éditeur : une forme (par son rang) ou une broche. */
+export type EditorElementRef = { kind: 'primitive'; index: number } | { kind: 'pin'; id: string }
+
+/** Groupe du composant en cours : ses formes (par leur rang dans le dessin) et ses broches. */
+export interface EditorGroup {
+  id: string
   indexes: number[]
   pinIds: string[]
 }
@@ -281,20 +294,134 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     select([], [id])
   }
 
+  // Groupes : formes et broches qu'on sélectionne et déplace d'un bloc (voir groups.ts du domaine).
+
+  const groups = computed<EditorGroup[]>(() => {
+    const primitives = doc.value.visual.primitives
+    const pins = doc.value.pins
+    return groupIds([...primitives, ...pins]).map((id) => ({
+      id,
+      indexes: primitives.flatMap((primitive, index) => (primitive.group === id ? [index] : [])),
+      pinIds: pins.filter((pin) => pin.group === id).map((pin) => pin.id)
+    }))
+  })
+  const hasGroups = computed(() => groups.value.length > 0)
+  /** Contour des groupes visible. Gardé dans les paramètres, d'un lancement à l'autre. */
+  const showGroups = computed({
+    get: () => library.showGroups,
+    set: (value: boolean) => library.setViewOption('showGroups', value)
+  })
+
+  /** Groupe d'une forme ou d'une broche, ou null. */
+  function groupOf(ref: EditorElementRef): EditorGroup | null {
+    const id =
+      ref.kind === 'primitive'
+        ? doc.value.visual.primitives[ref.index]?.group
+        : doc.value.pins.find((pin) => pin.id === ref.id)?.group
+    return id === undefined ? null : (groups.value.find((group) => group.id === id) ?? null)
+  }
+
+  /** L'élément visé et, s'il est groupé, tout son groupe. */
+  function withItsGroup(ref: EditorElementRef): { indexes: number[]; pinIds: string[] } {
+    const group = groupOf(ref)
+    if (group) return group
+    return ref.kind === 'primitive'
+      ? { indexes: [ref.index], pinIds: [] }
+      : { indexes: [], pinIds: [ref.id] }
+  }
+
+  function isSelected(ref: EditorElementRef): boolean {
+    return ref.kind === 'primitive'
+      ? selectedIndexes.value.includes(ref.index)
+      : selectedPinIds.value.includes(ref.id)
+  }
+
+  /** Clic sur une forme ou une broche : elle devient la sélection, avec son groupe. */
+  function selectElement(ref: EditorElementRef): void {
+    const target = withItsGroup(ref)
+    select(target.indexes, target.pinIds)
+  }
+
+  /** Maj+clic : ajoute l'élément (et son groupe) à la sélection, ou les en retire. */
+  function toggleElement(ref: EditorElementRef): void {
+    const target = withItsGroup(ref)
+    if (isSelected(ref)) {
+      select(
+        selectedIndexes.value.filter((index) => !target.indexes.includes(index)),
+        selectedPinIds.value.filter((id) => !target.pinIds.includes(id))
+      )
+    } else {
+      select(
+        [...selectedIndexes.value, ...target.indexes],
+        [...selectedPinIds.value, ...target.pinIds]
+      )
+    }
+  }
+
   function togglePrimitive(index: number): void {
-    const current = selectedIndexes.value
-    select(
-      current.includes(index) ? current.filter((other) => other !== index) : [...current, index],
-      selectedPinIds.value
-    )
+    toggleElement({ kind: 'primitive', index })
   }
 
   function togglePin(id: string): void {
-    const current = selectedPinIds.value
-    select(
-      selectedIndexes.value,
-      current.includes(id) ? current.filter((other) => other !== id) : [...current, id]
+    toggleElement({ kind: 'pin', id })
+  }
+
+  /** Groupes que la sélection touche. */
+  const selectedGroups = computed(() =>
+    groups.value.filter(
+      (group) =>
+        group.indexes.some((index) => selectedIndexes.value.includes(index)) ||
+        group.pinIds.some((id) => selectedPinIds.value.includes(id))
     )
+  )
+
+  /** Après un lasso : chaque groupe touché est pris en entier. */
+  function expandSelectionToGroups(): void {
+    const touched = selectedGroups.value
+    if (touched.length === 0) return
+    select(
+      [...selectedIndexes.value, ...touched.flatMap((group) => group.indexes)],
+      [...selectedPinIds.value, ...touched.flatMap((group) => group.pinIds)]
+    )
+  }
+
+  const canUngroup = computed(() => selectedGroups.value.length > 0)
+  /** Vrai dès deux éléments sélectionnés, sauf s'ils forment déjà exactement un groupe. */
+  const canGroup = computed(() => {
+    if (selectedIndexes.value.length + selectedPinIds.value.length < 2) return false
+    const only = selectedGroups.value.length === 1 ? selectedGroups.value[0] : undefined
+    if (!only) return true
+    return (
+      selectedIndexes.value.some((index) => !only.indexes.includes(index)) ||
+      selectedPinIds.value.some((id) => !only.pinIds.includes(id))
+    )
+  })
+
+  /** Ctrl+G : la sélection devient un groupe. */
+  function groupSelection(): void {
+    if (!canGroup.value) return
+    const id = nextGroupId([...doc.value.visual.primitives, ...doc.value.pins])
+    const indexes = new Set(selectedIndexes.value)
+    const pinIds = new Set(selectedPinIds.value)
+    apply('Grouper', (draft) => {
+      drawing(draft).forEach((primitive, index) => {
+        if (indexes.has(index)) primitive.group = id
+      })
+      for (const pin of draft.pins) if (pinIds.has(pin.id)) pin.group = id
+    })
+    status.value = 'Éléments groupés : ils se sélectionnent d’un bloc.'
+  }
+
+  /** Ctrl+Maj+G : les groupes que touche la sélection sont défaits. */
+  function ungroupSelection(): void {
+    const ids = new Set(selectedGroups.value.map((group) => group.id))
+    if (ids.size === 0) return
+    apply('Dégrouper', (draft) => {
+      for (const element of [...drawing(draft), ...draft.pins]) {
+        if (element.group !== undefined && ids.has(element.group)) delete element.group
+      }
+    })
+    status.value = 'Groupe défait.'
   }
 
   // Commandes du composant
@@ -632,7 +759,11 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     label: string
   ): void {
     if (source.length === 0) return
-    const copies = withFreeImageFiles(doc.value.visual.primitives, source)
+    // Un groupe copié devient un nouveau groupe : les copies ne rejoignent pas leurs originaux.
+    const copies = regroupedCopies(withFreeImageFiles(doc.value.visual.primitives, source), [
+      ...doc.value.visual.primitives,
+      ...doc.value.pins
+    ])
     let first = -1
     apply(label, (draft) => {
       const list = drawing(draft)
@@ -751,6 +882,15 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     closeFolderTabs,
     select,
     selectAll,
+    selectElement,
+    expandSelectionToGroups,
+    groups,
+    hasGroups,
+    showGroups,
+    canGroup,
+    canUngroup,
+    groupSelection,
+    ungroupSelection,
     selectPrimitives,
     selectPin,
     togglePrimitive,

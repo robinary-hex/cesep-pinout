@@ -12,6 +12,7 @@ import {
   type PaletteColor,
   type Settings,
   type LibraryView,
+  type ViewOption,
   type Theme,
   type StyleProfile
 } from '@/domain'
@@ -79,6 +80,10 @@ export const useLibraryStore = defineStore('library', () => {
   const theme = computed<Theme>(() => settings.value?.theme ?? 'light')
   const autoOpenInspector = computed(() => settings.value?.autoOpenInspector ?? true)
   const libraryView = computed<LibraryView>(() => settings.value?.libraryView ?? 'list')
+  // Cases d'affichage des barres d'outils, gardées d'un lancement à l'autre.
+  const showPins = computed(() => settings.value?.showPins ?? true)
+  const showUnconnected = computed(() => settings.value?.showUnconnected ?? true)
+  const showGroups = computed(() => settings.value?.showGroups ?? true)
 
   const filtered = computed(() => {
     const needle = search.value.trim().toLowerCase()
@@ -188,6 +193,38 @@ export const useLibraryStore = defineStore('library', () => {
     }
   }
 
+  /**
+   * Coche ou décoche une case d'affichage : tout de suite à l'écran, puis dans les paramètres en
+   * arrière-plan (les autres réglages du fichier partagé, changés ailleurs entre-temps, sont
+   * repris au passage sans toucher à ces cases).
+   */
+  function setViewOption(key: ViewOption, value: boolean): void {
+    const current = settings.value ?? structuredClone(DEFAULT_SETTINGS)
+    if (current[key] === value) return
+    settings.value = { ...current, [key]: value }
+    void saveViewOptions()
+  }
+
+  async function saveViewOptions(): Promise<void> {
+    const view = (from: Settings): Pick<Settings, ViewOption> => ({
+      showPins: from.showPins,
+      showUnconnected: from.showUnconnected,
+      showGroups: from.showGroups
+    })
+    try {
+      const mine = settings.value
+      if (!mine) return
+      const shared = await readSharedSettings(mine.settingsDir)
+      const latest = settings.value ?? mine
+      const next = { ...(shared ? withLocalPart(shared, latest) : latest), ...view(latest) }
+      await saveSettings(next)
+      // D'autres cases ont pu changer pendant l'écriture : elles gardent leur dernier état.
+      settings.value = { ...next, ...view(settings.value ?? next) }
+    } catch (error) {
+      problem.value = `Paramètres non enregistrés : ${describe(error)}`
+    }
+  }
+
   async function chooseDir(): Promise<void> {
     const dir = await bridge().showOpenDialog({
       title: 'Dossier de la bibliothèque de composants',
@@ -267,6 +304,10 @@ export const useLibraryStore = defineStore('library', () => {
     theme,
     autoOpenInspector,
     libraryView,
+    showPins,
+    showUnconnected,
+    showGroups,
+    setViewOption,
     loading,
     problem,
     search,

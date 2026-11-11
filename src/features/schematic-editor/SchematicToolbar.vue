@@ -7,7 +7,8 @@ import { useSchematicStore } from './store'
 
 // Barre d'outils du montage. D'abord le début commun aux trois éditeurs (`ToolbarBasics` : zoom,
 // annuler, rétablir, corbeille), puis les outils (pictogramme seul, raccourci dans l'infobulle),
-// la palette et l'affichage des broches ; à droite, le nom du document et le bouton du panneau.
+// la palette et les cases d'affichage (broches, broches reliées à rien, groupes s'il y en a),
+// gardées dans les paramètres ; à droite, le nom du document et le bouton du panneau.
 // Quand la place manque, la partie gauche passe à la ligne ; la droite reste sur la première.
 // Rotation, miroir, duplication, suppression et ordre des fils passent par le menu contextuel et
 // le clavier ; les actions de fichier par le menu Fichier.
@@ -105,6 +106,10 @@ function pickCustom(event: Event): void {
         <label class="check" title="Entourer les broches reliées à rien">
           <input v-model="store.showUnconnected" type="checkbox" />
           Non reliées
+        </label>
+        <label v-if="store.hasGroups" class="check" title="Entourer les groupes">
+          <input v-model="store.showGroups" type="checkbox" />
+          Groupes
         </label>
       </div>
     </div>
@@ -207,14 +212,6 @@ function pickCustom(event: Event): void {
   border: 0;
   opacity: 0;
   cursor: pointer;
-}
-
-.check {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--text-muted);
 }
 
 .doc-name {

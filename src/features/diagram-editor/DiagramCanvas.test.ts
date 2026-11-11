@@ -252,3 +252,51 @@ describe('canevas du diagramme : fond des étiquettes', () => {
     expect(wrapper.get('.text-label .label-back').classes()).toContain('filled')
   })
 })
+
+describe('canevas du diagramme : groupes', () => {
+  it('entoure le groupe, le prend d’un clic et le déplace d’un bloc ; Ctrl+clic prend le nœud seul', async () => {
+    const store = useDiagramStore()
+    const a = store.addNode('rounded', 0, 0)
+    const b = store.addNode('rounded', 0, 12)
+    store.addNode('rounded', 40, 0)
+    store.clearSelection()
+    store.selectedNodes = [a, b]
+    store.groupSelection()
+    store.clearSelection()
+    const wrapper = mount(DiagramCanvas)
+    const svg = wrapper.get('svg.diagram')
+    const outline = (): number[] =>
+      ['x', 'y', 'width', 'height'].map((name) =>
+        Number(wrapper.get('.group-outline').attributes(name))
+      )
+    // Deux nœuds de 16 × 6, l'un sous l'autre : le contour les entoure à 0,8 cellule.
+    const [x, y, width, height] = outline()
+    expect(x).toBeCloseTo(-0.8)
+    expect(y).toBeCloseTo(-0.8)
+    expect(width).toBeCloseTo(17.6)
+    expect(height).toBeCloseTo(19.6)
+
+    const hits = wrapper.findAll('.node .hit')
+    await fire(hits[1] ?? svg, 'pointerdown', at(store, 8, 15))
+    expect(store.selectedNodes).toEqual([b, a])
+    await fire(svg, 'pointermove', at(store, 12, 17))
+    expect(outline()[0]).toBeCloseTo(3.2)
+    await fire(svg, 'pointerup', at(store, 12, 17))
+    expect(store.doc.nodes.map((node) => [node.x, node.y])).toEqual([
+      [4, 2],
+      [4, 14],
+      [40, 0]
+    ])
+
+    // Ctrl+clic : le nœud seul, sans son groupe.
+    store.clearSelection()
+    await fire(svg, 'pointermove', at(store, 4, 5), CTRL)
+    await fire(svg, 'pointerdown', at(store, 4, 5), CTRL)
+    await fire(svg, 'pointerup', at(store, 4, 5), CTRL)
+    expect(store.selectedNodes).toEqual([a])
+
+    store.showGroups = false
+    await nextTick()
+    expect(wrapper.find('.group-outline').exists()).toBe(false)
+  })
+})

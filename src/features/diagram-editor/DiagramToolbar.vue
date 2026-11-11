@@ -16,7 +16,8 @@ import { useDiagramStore } from './store'
 
 // Barre d'outils du diagramme. D'abord le début commun aux trois éditeurs (`ToolbarBasics` :
 // zoom, annuler, rétablir, corbeille), puis les outils (pictogramme seul, raccourci dans
-// l'infobulle), le fond des nœuds, le style des liens et, tout à la fin, la palette ; à droite,
+// l'infobulle), le fond des nœuds, le style des liens, la palette et, s'il y a des groupes, la
+// case qui montre leur contour ; à droite,
 // le nom du document et le bouton du panneau de propriétés. La palette, le fond et le style des liens règlent ce que
 // seront les prochains éléments et changent aussi la sélection. Les formes se posent depuis la
 // bibliothèque, à gauche ; les actions de fichier passent par le menu Fichier.
@@ -211,6 +212,13 @@ function toggleEndArrow(): void {
         <label class="custom" title="Couleur personnalisée, gardée dans ce diagramme">
           <input type="color" :value="store.currentColor" @change="pickCustom" />
           <span>+</span>
+        </label>
+      </div>
+
+      <div v-if="store.hasGroups" class="group">
+        <label class="check" title="Entourer les groupes">
+          <input v-model="store.showGroups" type="checkbox" />
+          Groupes
         </label>
       </div>
     </div>

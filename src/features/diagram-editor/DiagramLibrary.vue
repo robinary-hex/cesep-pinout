@@ -93,7 +93,7 @@ function onDragEnd(): void {
 
 <style scoped>
 .library {
-  width: 200px;
+  width: var(--side-panel-width);
   flex: none;
   display: flex;
   flex-direction: column;
@@ -114,7 +114,7 @@ function onDragEnd(): void {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 4px;
   padding: 8px;
 }

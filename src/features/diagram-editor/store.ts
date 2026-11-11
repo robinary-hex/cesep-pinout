@@ -25,7 +25,9 @@ import {
   turnedTextBox,
   unionRects,
   wireBounds,
+  regroupedCopies,
   wireGeometryProblem,
+  withGroup,
   zoomedView,
   type Box,
   type Diagram,
@@ -48,6 +50,7 @@ import { useLibraryStore } from '@/features/library/store'
 import { readDiagram } from '@/io/diagramFiles'
 import { samePath } from '@/io/paths'
 import { nodeTextMeasurer } from '@/render/textMeasure'
+import { useGroups } from '@/state/groups'
 import { useInspectorPanel } from '@/state/inspector'
 import { useDocumentTabs } from '@/state/tabs'
 
@@ -210,6 +213,47 @@ export const useDiagramStore = defineStore('diagram', () => {
       selectedLinks.value.length > 0 ||
       selectedTexts.value.length > 0
   )
+  // Groupes : nœuds, liens et textes qu'on sélectionne et déplace d'un bloc.
+  const grouping = useGroups({
+    kinds: {
+      node: { elements: () => doc.value.nodes, selected: selectedNodes },
+      link: { elements: () => doc.value.links, selected: selectedLinks },
+      text: { elements: () => doc.value.texts, selected: selectedTexts }
+    },
+    write: (label, change) => {
+      apply(label, (draft) => {
+        const lists = { node: draft.nodes, link: draft.links, text: draft.texts }
+        for (const kind of ['node', 'link', 'text'] as const) {
+          for (const element of lists[kind]) {
+            const next = change(kind, element)
+            if (next === null) continue
+            if (next === undefined) delete element.group
+            else element.group = next
+          }
+        }
+      })
+    }
+  })
+  const { groups, hasGroups, canGroup, canUngroup, syncGroupSelection, expandSelectionToGroups } =
+    grouping
+
+  /** Ctrl+G : la sélection devient un groupe. */
+  function groupSelection(): void {
+    if (grouping.groupSelection())
+      status.value = 'Éléments groupés : ils se sélectionnent d’un bloc.'
+  }
+
+  /** Ctrl+Maj+G : les groupes que touche la sélection sont défaits. */
+  function ungroupSelection(): void {
+    if (grouping.ungroupSelection()) status.value = 'Groupe défait.'
+  }
+
+  /** Contour des groupes visible. Gardé dans les paramètres, d'un lancement à l'autre. */
+  const showGroups = computed({
+    get: () => library.showGroups,
+    set: (value: boolean) => library.setViewOption('showGroups', value)
+  })
+
   /** Panneau de propriétés à droite (`useInspectorPanel`) : replié par défaut, touche I. */
   const inspector = useInspectorPanel({
     hasSelection: () => hasSelection.value,
@@ -964,6 +1008,18 @@ export const useDiagramStore = defineStore('diagram', () => {
       const id = nextNumberedId('t', [...textIds, ...copies.texts.map((copy) => copy.id)])
       copies.texts.push({ ...text, id, x: text.x + dx, y: text.y + dy })
     }
+    // Un groupe copié devient un nouveau groupe : les copies ne rejoignent pas leurs originaux.
+    const regrouped = regroupedCopies(
+      [...copies.nodes, ...copies.links, ...copies.texts],
+      grouping.elements()
+    )
+    copies.nodes = copies.nodes.map((node, index) => withGroup(node, regrouped[index]?.group))
+    copies.links = copies.links.map((link, index) =>
+      withGroup(link, regrouped[copies.nodes.length + index]?.group)
+    )
+    copies.texts = copies.texts.map((text, index) =>
+      withGroup(text, regrouped[copies.nodes.length + copies.links.length + index]?.group)
+    )
     apply(label, (draft) => {
       for (const node of copies.nodes) draft.nodes.push(node)
       for (const link of copies.links) draft.links.push(castDraft(link))
@@ -1075,6 +1131,15 @@ export const useDiagramStore = defineStore('diagram', () => {
     anchors,
     colorChoices,
     hasSelection,
+    showGroups,
+    groups,
+    hasGroups,
+    canGroup,
+    canUngroup,
+    syncGroupSelection,
+    expandSelectionToGroups,
+    groupSelection,
+    ungroupSelection,
     paletteOnLinks,
     currentColor,
     clipboardEmpty,

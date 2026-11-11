@@ -15,13 +15,17 @@ export const PIN_KIND_LABELS: Readonly<Record<PinKind, string>> = {
   power: 'Alimentation'
 }
 
+/** Identifiant du groupe d'un élément (voir groups.ts) ; absent tant qu'il n'est pas groupé. */
+export const groupSchema = z.string().min(1).optional()
+
 /** Broche : intersection de grille sur le bord du composant, repère local non tourné. */
 export const pinSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   kind: pinKindSchema,
   x: z.number().int().nonnegative(),
-  y: z.number().int().nonnegative()
+  y: z.number().int().nonnegative(),
+  group: groupSchema
 })
 export type Pin = z.infer<typeof pinSchema>
 
@@ -76,6 +80,7 @@ export type TextAnchor = z.infer<typeof textAnchorSchema>
 export const primitiveSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('rect'),
+    group: groupSchema,
     x: quarterSchema,
     y: quarterSchema,
     w: z.number().int().positive(),
@@ -85,6 +90,7 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     kind: z.literal('ellipse'),
+    group: groupSchema,
     cx: quarterSchema,
     cy: quarterSchema,
     rx: z.number().int().positive(),
@@ -93,6 +99,7 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     kind: z.literal('line'),
+    group: groupSchema,
     x1: quarterSchema,
     y1: quarterSchema,
     x2: quarterSchema,
@@ -102,6 +109,7 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     kind: z.literal('polyline'),
+    group: groupSchema,
     points: z.array(quarterPointSchema).min(2),
     closed: z.boolean(),
     /** Rayon d'arrondi des angles, en quarts de cellule ; 0 = angles vifs. */
@@ -111,6 +119,7 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     kind: z.literal('text'),
+    group: groupSchema,
     /** Boîte du texte (coin supérieur gauche, taille) : lignes centrées verticalement, alignées selon `anchor`. */
     x: quarterSchema,
     y: quarterSchema,
@@ -139,6 +148,7 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     kind: z.literal('image'),
+    group: groupSchema,
     /** Boîte de l'image (coin supérieur gauche, taille) : l'image la remplit en entier. */
     x: quarterSchema,
     y: quarterSchema,
@@ -151,6 +161,7 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     kind: z.literal('dot'),
+    group: groupSchema,
     /** Centre du point. */
     x: quarterSchema,
     y: quarterSchema,

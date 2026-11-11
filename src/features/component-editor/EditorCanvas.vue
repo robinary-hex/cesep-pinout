@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   DEFAULT_SHAPE_STYLE,
   dragHandle,
+  groupOutline,
   nearestInsidePoint,
   nearestHandle,
   NO_ARROWS,
@@ -34,7 +35,8 @@ import {
 import type { EditorMenuRequest, EditorMenuTarget } from './menu'
 import { useComponentEditorStore } from './store'
 
-// Canevas SVG de l'éditeur de composants : grille, formes, broches, poignées, lasso, copies
+// Canevas SVG de l'éditeur de composants : grille, formes, broches, contours des groupes,
+// poignées, lasso, copies
 // fantômes (Alt+glisser), aperçus de tracé. Les coordonnées souris sont converties en cellules
 // puis en quarts de cellule ; le domaine ne reçoit que des entiers.
 
@@ -320,6 +322,39 @@ const selectionBoxes = computed(() => {
   })
 })
 
+/** Marge du contour d'un groupe autour de ses membres, en pixels. */
+const GROUP_MARGIN_PX = 9
+
+/** Contours des groupes : la boîte de leurs formes et de leurs broches, telles qu'affichées. */
+const groupOutlines = computed(() => {
+  if (!store.showGroups) return []
+  const offset = moving.value
+  return store.groups.flatMap((group) => {
+    const rects = group.indexes.flatMap((index) => {
+      const primitive = shownPrimitive(index)
+      if (!primitive) return []
+      const bounds = primitiveBounds(primitive)
+      const dx = offset && offset.indexes.includes(index) ? offset.dx : 0
+      const dy = offset && offset.indexes.includes(index) ? offset.dy : 0
+      return [
+        {
+          x: px(bounds.x1 + dx),
+          y: px(bounds.y1 + dy),
+          width: px(bounds.x2 - bounds.x1),
+          height: px(bounds.y2 - bounds.y1)
+        }
+      ]
+    })
+    for (const pin of store.doc.pins) {
+      if (!group.pinIds.includes(pin.id)) continue
+      const at = pinPosition(pin)
+      rects.push({ x: at.x * cell.value, y: at.y * cell.value, width: 0, height: 0 })
+    }
+    const outline = groupOutline(rects, GROUP_MARGIN_PX)
+    return outline ? [{ id: group.id, ...outline }] : []
+  })
+})
+
 /** Poignées : seulement pour une forme seule, hors déplacement. */
 const handles = computed(() => {
   const indexes = store.selectedIndexes
@@ -492,7 +527,10 @@ function onPrimitiveDown(index: number, event: PointerEvent): void {
     store.togglePrimitive(index)
     return
   }
-  if (!store.selectedIndexes.includes(index)) store.selectPrimitives([index])
+  // Une forme groupée emmène son groupe ; Ctrl, sans poignée à saisir, la laisse seule.
+  if (event.ctrlKey) store.selectPrimitives([index])
+  else if (!store.selectedIndexes.includes(index)) store.selectElement({ kind: 'primitive', index })
+  else store.expandSelectionToGroups()
   store.revealInspector()
   const start = toQuarters(pointerCells(event))
   drag.value = {
@@ -564,7 +602,13 @@ function onPinDown(id: string, event: PointerEvent): void {
     store.togglePin(id)
     return
   }
+  // Une broche groupée emmène son groupe ; Ctrl la laisse seule.
+  if (!event.ctrlKey) {
+    if (!store.selectedPinIds.includes(id)) store.selectElement({ kind: 'pin', id })
+    else store.expandSelectionToGroups()
+  }
   const grouped =
+    !event.ctrlKey &&
     store.selectedPinIds.includes(id) &&
     store.selectedPinIds.length + store.selectedIndexes.length > 1
   if (grouped) {
@@ -806,9 +850,9 @@ function onContextMenu(event: MouseEvent, target: EditorMenuTarget): void {
     return
   }
   if (target.kind === 'primitive' && !store.selectedIndexes.includes(target.index)) {
-    store.selectPrimitives([target.index])
+    store.selectElement({ kind: 'primitive', index: target.index })
   } else if (target.kind === 'pin' && !store.selectedPinIds.includes(target.id)) {
-    store.selectPin(target.id)
+    store.selectElement({ kind: 'pin', id: target.id })
   }
   emit('openMenu', {
     x: event.clientX,
@@ -888,6 +932,8 @@ function onPointerUp(event: PointerEvent): void {
           [...current.base, ...primitivesInBand(current)],
           [...current.basePins, ...pinsInBand(current)]
         )
+        // Un groupe touché par le lasso est pris en entier.
+        store.expandSelectionToGroups()
         if (store.selection) store.revealInspector()
       }
       break
@@ -1025,6 +1071,17 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
             :def="ghostDef"
             :cell-px="cell"
             :stroke-base="strokeBase"
+          />
+
+          <rect
+            v-for="outline in groupOutlines"
+            :key="`group:${outline.id}`"
+            class="group-outline"
+            :x="outline.x"
+            :y="outline.y"
+            :width="outline.width"
+            :height="outline.height"
+            :rx="6"
           />
 
           <rect

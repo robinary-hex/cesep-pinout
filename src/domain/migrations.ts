@@ -590,6 +590,8 @@ export const settingsMigrations: MigrationTable = {
     // v9 → v10 : style général des diagrammes, au style par défaut.
     9: (raw) => ({ ...raw, diagramDefaults: structuredClone(DEFAULT_DIAGRAM_DEFAULTS) }),
     // v10 → v11 : dossier du fichier de paramètres partagé, au choix ; vide = celui par défaut.
-    10: (raw) => ({ ...raw, settingsDir: '' })
+    10: (raw) => ({ ...raw, settingsDir: '' }),
+    // v11 → v12 : les cases d'affichage des barres d'outils sont gardées ; toutes cochées au départ.
+    11: (raw) => ({ ...raw, showPins: true, showUnconnected: true, showGroups: true })
   }
 }

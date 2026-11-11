@@ -4,16 +4,16 @@ Le domaine ne dépend de rien ; tout le reste dépend de lui.
 
 ## Couches
 
-| Couche             | Dossier         | Contenu                                                                                                                      | Peut importer                           |
-| ------------------ | --------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| Coque applicative  | `src/app/`      | Fenêtre Vue, bascule Composants / Montage / Diagramme                                                                        | features, state, io, render, ui, domain |
-| Fonctionnalités    | `src/features/` | `component-editor/`, `library/`, `schematic-editor/`, `diagram-editor/`, `export/`, `settings/` ; un store Pinia par éditeur | state, io, render, ui, domain           |
-| État               | `src/state/`    | `History` (commandes nommées, patches Immer, undo/redo) ; `useDocumentTabs` (documents ouverts par onglet)                   | domain                                  |
-| Entrées / sorties  | `src/io/`       | Pont IPC (`bridge.ts`), paramètres, bibliothèque, projets, exports, profils, copie de secours, chemins                       | domain                                  |
-| Rendu              | `src/render/`   | Composants Vue SVG sans état qui dessinent les objets du domaine (composants)                                                | domain                                  |
-| Interface partagée | `src/ui/`       | Boutons, panneaux, palette de couleurs (rien du métier)                                                                      | rien                                    |
-| Domaine            | `src/domain/`   | Types, grille, formes, placement, fils, connectivité (jonctions, nets), schémas Zod, migrations, PNG                         | zod seulement                           |
-| Coque Electron     | `electron/`     | `main.ts` (fenêtre, fichiers, dialogues : seul code Node), `preload.ts` (pont), `api.ts` (contrat)                           | Node, Electron                          |
+| Couche             | Dossier         | Contenu                                                                                                                                                                | Peut importer                           |
+| ------------------ | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| Coque applicative  | `src/app/`      | Fenêtre Vue, bascule Composants / Montage / Diagramme                                                                                                                  | features, state, io, render, ui, domain |
+| Fonctionnalités    | `src/features/` | `component-editor/`, `library/`, `schematic-editor/`, `diagram-editor/`, `export/`, `settings/` ; un store Pinia par éditeur                                           | state, io, render, ui, domain           |
+| État               | `src/state/`    | `History` (commandes nommées, patches Immer, undo/redo) ; `useDocumentTabs` (documents ouverts par onglet) ; `useInspectorPanel` ; `useGroups` (groupes d'un document) | domain                                  |
+| Entrées / sorties  | `src/io/`       | Pont IPC (`bridge.ts`), paramètres, bibliothèque, projets, exports, profils, copie de secours, chemins                                                                 | domain                                  |
+| Rendu              | `src/render/`   | Composants Vue SVG sans état qui dessinent les objets du domaine (composants)                                                                                          | domain                                  |
+| Interface partagée | `src/ui/`       | Boutons, panneaux, palette de couleurs (rien du métier)                                                                                                                | rien                                    |
+| Domaine            | `src/domain/`   | Types, grille, formes, placement, fils, connectivité (jonctions, nets), schémas Zod, migrations, PNG                                                                   | zod seulement                           |
+| Coque Electron     | `electron/`     | `main.ts` (fenêtre, fichiers, dialogues : seul code Node), `preload.ts` (pont), `api.ts` (contrat)                                                                     | Node, Electron                          |
 
 La règle ESLint `no-restricted-imports` sur `src/domain/**` rend la ligne du domaine vérifiable.
 
@@ -107,6 +107,14 @@ boîte de message du système.
 liste d'entrées (`contextMenu.ts` : action, titre, séparateur, pastilles, sous-menu) : chaque
 éditeur construit sa liste, le composant s'occupe de la placer, des sous-menus et de la
 fermeture.
+
+Groupes : l'appartenance est une propriété de l'élément (`group`), pas une liste à part, pour
+qu'elle le suive sans rien avoir à tenir à jour quand il change de rang, qu'on le copie ou qu'on
+annule sa suppression. `src/domain/groups.ts` en tire les groupes (au moins deux porteurs du même
+identifiant) ; `src/state/groups.ts` (`useGroups`) donne aux stores du montage et du diagramme la
+sélection par groupe et les commandes Grouper / Dégrouper ; l'éditeur de composants, dont les
+formes se désignent par leur rang, a sa propre version dans son store. Les canevas appellent le
+store après chaque clic ou lasso pour que le groupe suive, et dessinent le contour.
 
 `ToolbarBasics.vue` ouvre les trois barres d'outils par les mêmes boutons, dans le même ordre
 (zoom, puis annuler, rétablir et corbeille) : l'ordre est tenu par le composant, pas recopié

@@ -98,9 +98,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     Ctrl sans sélection montre les poignées de la boîte. Montage : Ctrl+glisser sur un composant
     tire un fil de sa broche la plus proche. Diagramme : Ctrl+glisser sur un nœud tire un lien de
     son point d'accroche le plus proche. Sans Ctrl, glisser un élément le déplace, toujours.
+    Dans le même esprit, Ctrl+clic sur un élément groupé le prend seul, au lieu de son groupe.
   - Molette = zoom autour du curseur ; Espace + glisser ou bouton du milieu = déplacer la vue ;
     double-clic du bouton du milieu ou 0 = ajuster la vue.
-  - Flèches = déplacer la sélection d'un pas de grille ; Ctrl+A / D / C / V / Z / Y ; Suppr ;
+  - Flèches = déplacer la sélection d'un pas de grille ; Ctrl+A / D / C / V / Z / Y ; Ctrl+G /
+    Ctrl+Maj+G = grouper / dégrouper ; Suppr ;
     Entrée termine un tracé, Retour arrière retire son dernier point ; Échap annule le geste, puis
     la sélection, puis revient à l'outil Sélection.
 - Raccourcis définis par la lettre (`KeyboardEvent.key`), clavier AZERTY belge, jamais de crochets
@@ -176,18 +178,28 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   (`askToSaveNatively`, puis `save-then-quit` ou `discard-then-quit`). L'enregistrement lui-même
   est dans `projectActions.ts` et `componentActions.ts`, partagé avec les éditeurs.
 - Modes (`src/app/App.vue`) : un bouton à pictogramme par mode (puce = Composants, résistance =
-  Montage, organigramme = Diagramme ; nom en infobulle), l'application démarre sur le montage. Ce que la coque demande à un
+  Montage, organigramme = Diagramme ; nom en infobulle), l'application démarre sur le montage.
+  Les trois forment un sélecteur segmenté, sans texte, le mode affiché plein dans la couleur
+  d'accent (décision du 11 novembre 2026). Avec le bouton du menu, ils occupent le bloc gauche de
+  la barre (`.topbar-side`), large comme le panneau latéral (`--side-panel-width`, 280 px : la
+  bibliothèque de composants et celle des formes du diagramme ont la même largeur) ; sa bordure
+  droite sépare les modes des onglets et tombe sur la bordure du panneau. Ce que la coque demande à un
   mode (onglets, fermeture, enregistrement avant de quitter, statut) passe par son `ModeAdapter`.
 - Barres d'outils des trois éditeurs : elles commencent toutes par `src/ui/ToolbarBasics.vue`,
   dans cet ordre (décision du 10 novembre 2026) : zoom arrière, valeur du zoom (un clic ou la
   touche 1 revient à 100 %), zoom avant, ajuster ; séparateur vertical ; annuler, rétablir,
   corbeille (grisée sans sélection) ; séparateur ; puis les outils propres à l'éditeur. Dans le
   diagramme, les fonds des nœuds et le style des liens viennent avant la palette, qui ferme la
-  barre. Supprimer ne se trouve pas dans les panneaux de propriétés : corbeille, touche Suppr
+  barre. Les cases d'affichage viennent en dernier (« Broches » et « Non reliées » dans le
+  montage, « Groupes » dans les trois éditeurs dès que le document a des groupes) ; leur état
+  est gardé dans les paramètres (`showPins`, `showUnconnected`, `showGroups`, `VIEW_OPTIONS`) :
+  les stores des éditeurs les lisent et les écrivent par `setViewOption` du store de la
+  bibliothèque, à l'écran tout de suite, dans le fichier en arrière-plan. Supprimer ne se trouve pas dans les panneaux de propriétés : corbeille, touche Suppr
   ou menu contextuel. Dans les panneaux, X, Y, largeur et hauteur ont leur propre section
   (« Position et taille », « Position et orientation » pour un composant posé, « Taille » pour
   un composant).
-- Barre d'application (`src/app/App.vue`) : menu Fichier (nouveau, ouvrir, récents, enregistrer,
+- Barre d'application (`src/app/App.vue`) : tout à gauche, un bouton à trois barres ouvre le menu
+  Fichier (nouveau, ouvrir, récents, enregistrer,
   exporter, paramètres, raccourcis, quitter) construit avec `ContextMenu` et appelant les actions
   que `SchematicEditor` / `ComponentEditor` exposent par `defineExpose` selon le mode. Enregistrer
   sous propose le dossier du projet, sinon celui du dernier projet enregistré ou ouvert
@@ -349,7 +361,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   paramètre `autoOpenInspector`, un clic sur un élément (ou un lasso qui en prend) le montre
   aussi, mais seulement le temps de la sélection : il se referme dès que plus rien n'est
   sélectionné. Montré ainsi (`inspectorFloating`), il flotte sur le bord droit de la zone de
-  dessin, au-dessus de la barre d'état (`.inspector.floating` de style.css, `--status-height`) :
+  dessin, au-dessus de la barre d'état (`.inspector.floating` de style.css, `--status-height`),
+  sans ombre portée :
   le canevas ne change pas de taille à chaque clic et la feuille centrée de l'éditeur de
   composants ne glisse pas sous le pointeur. Sans sélection, il montre le document (montage,
   diagramme, composant). Pas de croix à côté du nom d'un élément : la seule croix du panneau le
@@ -365,7 +378,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   dans `openModals`. Échap ne ferme que la boîte du dessus (`modalStack`).
 - Menus contextuels (décision du 11 novembre 2026) : un clic droit partout où il y a un élément.
   Même ordre dans tous : titre, actions propres à l'élément, style, ordre d'empilement, puis
-  Dupliquer / Copier / Propriétés, et Supprimer en dernier ; rien n'existe que dans un menu. Une
+  Grouper / Dégrouper quand la sélection s'y prête (`groupItems`), Dupliquer / Copier /
+  Propriétés, et Supprimer en dernier ; rien n'existe que dans un menu. Une
   famille de choix se range dans un sous-menu (`submenu` de `contextMenu.ts`, un seul niveau,
   ouvert au survol ou au clic) : Ordre, Style, Alignement, Forme, Texte, Fond, Type,
   Extrémités libres. Un texte se saisit dans `PromptDialog` avec `multiline` (Maj+Entrée va à
@@ -383,12 +397,30 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     sommet (`insertVertex`), supprimer ce sommet si ses voisins peuvent se rejoindre
     (`removeVertex`), couper le fil (`splitPoints`, `splitWire` : rien ne bouge, les deux
     morceaux se touchent), inverser l'ordre à un croisement proche ; sélectionner tout le net.
-    Sur un composant : modifier dans l'éditeur de composants (`editComponent`, traité par
+    Sur un composant : la valeur de son texte variable s'il n'en a qu'un (plusieurs : dans le
+    panneau, pas une entrée par champ ; décision du 11 novembre 2026), modifier dans l'éditeur
+    de composants (`editComponent`, traité par
     `App.vue`), sélectionner les fils reliés. Sur une étiquette : style, alignement.
   - Diagramme : nœud (forme, texte, fond, ordre), lien (étiquette : côté, fond, retrait ;
     sommets, sans diagonale), texte (style, alignement), vide (poser une des dix formes à
     l'endroit du clic).
     Dans les tests, `src/ui/testing/menus.ts` lit et actionne le menu ouvert.
+- Groupes (décision du 11 novembre 2026), dans les trois éditeurs : des éléments qu'on
+  sélectionne et déplace d'un bloc. Rien n'est rangé à part : chaque élément groupé porte
+  l'identifiant de son groupe (`group`, optionnel, sans montée de version des fichiers) et un
+  groupe existe dès que deux éléments portent le même (`src/domain/groups.ts` : `groupIds`,
+  `nextGroupId`, `regroupedCopies`, `groupOutline`). Pas de groupes imbriqués : grouper une
+  sélection qui contient des groupes les fond en un seul. Montage et diagramme partagent
+  `useGroups` (`src/state/groups.ts` : `groups`, `canGroup`, `canUngroup`,
+  `syncGroupSelection`, `expandSelectionToGroups`, commandes « Grouper » et « Dégrouper ») ;
+  l'éditeur de composants a les siennes (formes par rang, broches par identifiant :
+  `EditorGroup`, `selectElement`). Un clic, un Maj+clic, un lasso ou un clic droit sur un
+  membre prend tout le groupe ; Ctrl+clic prend l'élément seul, pour le retoucher sans défaire
+  le groupe. Grouper / Dégrouper : menu contextuel, Ctrl+G / Ctrl+Maj+G. Les copies d'un groupe
+  (coller, dupliquer, Alt+glisser) forment un nouveau groupe, une copie seule n'en a plus ; le
+  morceau d'un fil coupé reste dans le groupe du fil. À l'écran, un cadre violet à longs tirets
+  (`.group-outline` de style.css, `--group`) entoure chaque groupe, geste en cours compris,
+  tant que la case « Groupes » de la barre d'outils est cochée ; jamais à l'export.
 - Questions et alertes : jamais les boîtes de message de Windows ni `window.confirm` (décision du
   10 novembre 2026). `ask` de `src/ui/dialogs.ts` rend une promesse tenue par le bouton choisi
   (`askToSave`, `askToSaveBeforeQuit`, `confirmAction`) ; `src/ui/DialogHost.vue`, monté une
@@ -457,7 +489,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     composant posé s'appelle « libellé » dans l'interface.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 15, projet 21, paramètres 11,
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 15, projet 21, paramètres 12,
   diagramme 4
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé).

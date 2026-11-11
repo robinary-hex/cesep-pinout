@@ -47,6 +47,24 @@ describe('coque de l’application', () => {
     wrapper.unmount()
   })
 
+  it('ouvre le menu par le bouton à trois barres, à gauche des modes, avant le séparateur', async () => {
+    const wrapper = mount(App, { attachTo: document.body })
+    await flushPromises()
+    // Le bloc gauche (menu et modes) a la largeur du panneau latéral : sa bordure le prolonge.
+    const side = wrapper.get('.topbar .topbar-side')
+    expect(side.findAll('.modes button')).toHaveLength(3)
+    expect(side.find('.doc-tabs').exists()).toBe(false)
+    const burger = side.get('button.menu-button')
+    expect(burger.text()).toBe('')
+    expect(burger.attributes('aria-label')).toBe('Menu')
+    await burger.trigger('click')
+    await flushPromises()
+    expect(menuLabels()).toContain('Nouveau montage')
+    expect(menuLabels()).toContain('Quitter')
+    wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+
   it('montre l’éditeur de diagrammes, sa bibliothèque de formes et ses onglets', async () => {
     const wrapper = mount(App, { attachTo: document.body })
     await flushPromises()

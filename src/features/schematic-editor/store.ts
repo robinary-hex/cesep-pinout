@@ -21,6 +21,7 @@ import {
   profileDifferences,
   projectPins,
   pruneCrossingOverrides,
+  regroupedCopies,
   removeVertex,
   rotatedInstance,
   sameProfile,
@@ -33,6 +34,7 @@ import {
   unionRects,
   wireBounds,
   wireGeometryProblem,
+  withGroup,
   wiresFollowingJunctions,
   wiresFollowingPins,
   zoomedView,
@@ -55,6 +57,7 @@ import {
 import { useLibraryStore } from '@/features/library/store'
 import { samePath } from '@/io/paths'
 import { readProject } from '@/io/projectFiles'
+import { useGroups } from '@/state/groups'
 import { useInspectorPanel } from '@/state/inspector'
 import { useDocumentTabs } from '@/state/tabs'
 
@@ -151,8 +154,21 @@ export const useSchematicStore = defineStore('schematic', () => {
   const clipboard = shallowRef<ClipboardData>({ items: [], wires: [], labels: [] })
   const view = ref<ViewState>({ ...DEFAULT_VIEW })
   const viewport = ref({ width: 1200, height: 800 })
-  const showPins = ref(true)
-  const showUnconnected = ref(true)
+  /** Broches des composants visibles. Gardé dans les paramètres, d'un lancement à l'autre. */
+  const showPins = computed({
+    get: () => library.showPins,
+    set: (value: boolean) => library.setViewOption('showPins', value)
+  })
+  /** Broches reliées à rien entourées. Gardé dans les paramètres, d'un lancement à l'autre. */
+  const showUnconnected = computed({
+    get: () => library.showUnconnected,
+    set: (value: boolean) => library.setViewOption('showUnconnected', value)
+  })
+  /** Contour des groupes visible. Gardé dans les paramètres, d'un lancement à l'autre. */
+  const showGroups = computed({
+    get: () => library.showGroups,
+    set: (value: boolean) => library.setViewOption('showGroups', value)
+  })
   /** Profil en cours d'édition dans la boîte de dialogue : affiché à la place de celui du projet. */
   const profilePreview = shallowRef<StyleProfile | null>(null)
   const panKeyHeld = ref(false)
@@ -254,6 +270,41 @@ export const useSchematicStore = defineStore('schematic', () => {
       selectedWires.value.length > 0 ||
       selectedLabels.value.length > 0
   )
+
+  // Groupes : composants, fils et étiquettes qu'on sélectionne et déplace d'un bloc.
+  const grouping = useGroups({
+    kinds: {
+      instance: { elements: () => doc.value.components, selected: selection },
+      wire: { elements: () => doc.value.wires, selected: selectedWires },
+      label: { elements: () => doc.value.labels, selected: selectedLabels }
+    },
+    write: (label, change) => {
+      apply(label, (draft) => {
+        const lists = { instance: draft.components, wire: draft.wires, label: draft.labels }
+        for (const kind of ['instance', 'wire', 'label'] as const) {
+          for (const element of lists[kind]) {
+            const next = change(kind, element)
+            if (next === null) continue
+            if (next === undefined) delete element.group
+            else element.group = next
+          }
+        }
+      })
+    }
+  })
+  const { groups, hasGroups, canGroup, canUngroup, syncGroupSelection, expandSelectionToGroups } =
+    grouping
+
+  /** Ctrl+G : la sélection devient un groupe. */
+  function groupSelection(): void {
+    if (grouping.groupSelection())
+      status.value = 'Éléments groupés : ils se sélectionnent d’un bloc.'
+  }
+
+  /** Ctrl+Maj+G : les groupes que touche la sélection sont défaits. */
+  function ungroupSelection(): void {
+    if (grouping.ungroupSelection()) status.value = 'Groupe défait.'
+  }
 
   /** Panneau de propriétés à droite (`useInspectorPanel`) : replié par défaut, touche I. */
   const inspector = useInspectorPanel({
@@ -820,7 +871,9 @@ export const useSchematicStore = defineStore('schematic', () => {
         points: castDraft(tail),
         stack: wire.stack + 1,
         freeEnds: wire.freeEnds,
-        endLabels: { start: '', end: wire.endLabels.end }
+        endLabels: { start: '', end: wire.endLabels.end },
+        // Le second morceau reste dans le groupe du fil coupé.
+        ...(wire.group === undefined ? {} : { group: wire.group })
       })
       for (const override of draft.crossingOverrides) {
         if (override.topWireId !== id) continue
@@ -1149,6 +1202,23 @@ export const useSchematicStore = defineStore('schematic', () => {
       const id = nextNumberedId('t', [...labelIds, ...labelCopies.map((copy) => copy.id)])
       labelCopies.push({ ...entry, id, x: entry.x + dx, y: entry.y + dy })
     }
+    // Un groupe copié devient un nouveau groupe : les copies ne rejoignent pas leurs originaux.
+    const regrouped = regroupedCopies(
+      [...copies.map((copy) => copy.instance), ...wireCopies, ...labelCopies],
+      grouping.elements()
+    )
+    copies.forEach((copy, index) => {
+      copy.instance = withGroup(copy.instance, regrouped[index]?.group)
+    })
+    wireCopies.forEach((wire, index) => {
+      wireCopies[index] = withGroup(wire, regrouped[copies.length + index]?.group)
+    })
+    labelCopies.forEach((entry, index) => {
+      labelCopies[index] = withGroup(
+        entry,
+        regrouped[copies.length + wireCopies.length + index]?.group
+      )
+    })
     apply(label, (draft) => {
       for (const copy of copies) {
         if (!Object.hasOwn(draft.embeddedDefs, copy.def.id)) {
@@ -1315,6 +1385,15 @@ export const useSchematicStore = defineStore('schematic', () => {
     viewport,
     showPins,
     showUnconnected,
+    showGroups,
+    groups,
+    hasGroups,
+    canGroup,
+    canUngroup,
+    syncGroupSelection,
+    expandSelectionToGroups,
+    groupSelection,
+    ungroupSelection,
     inspectorOpen,
     inspectorFloating,
     profilePreview,

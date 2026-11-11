@@ -6,6 +6,7 @@ import {
   DIAGRAM_FONT_FAMILIES,
   dragVertex,
   gridLines,
+  groupOutline,
   layoutLabel,
   layoutLinkLabel,
   linkDashArray,
@@ -27,6 +28,7 @@ import {
   textEmphasisAttrs,
   textLabelBounds,
   textTransform,
+  wireBounds,
   wireIntersectsRect,
   wirePathData,
   type Box,
@@ -47,7 +49,8 @@ import { useDiagramStore } from './store'
 // Canevas infini du diagramme. Tout le contenu est dessiné en cellules dans un groupe mis à
 // l'échelle (zoom) et translaté (pan) ; seule la grille est calculée en pixels d'écran. Ordre
 // d'empilement : grille, liens, nœuds, étiquettes de lien, textes libres, anneau de saisie du
-// point d'accroche survolé, surcouches de sélection et poignées, copies fantômes (Alt+glisser),
+// point d'accroche survolé, contours des groupes, surcouches de sélection et poignées, copies
+// fantômes (Alt+glisser),
 // fantôme de pose, tracé en cours, rectangle de sélection. Les gestes sont un état local (`drag`)
 // qui ne touche le document qu'au relâchement, par une commande du store. Le texte d'un nœud se
 // tape sur place, dans un petit éditeur HTML posé par-dessus lui.
@@ -371,6 +374,33 @@ const textHandles = computed(() => {
   return text ? boxHandles(text).map((handle) => ({ ...handle, textId: text.id })) : []
 })
 
+// Groupes
+
+/** Marge du contour d'un groupe autour de ses membres, en cellules (fines : 10 px). */
+const GROUP_MARGIN_CELLS = 0.8
+
+/** Contours des groupes, autour de leurs membres tels qu'affichés (geste en cours compris). */
+const groupOutlines = computed(() => {
+  if (!store.showGroups) return []
+  const { nodes, links, texts } = shown.value
+  return store.groups.flatMap((group) => {
+    const rects: GridRect[] = []
+    for (const node of nodes) {
+      if (group.members.node.includes(node.id)) rects.push(nodeBounds(node))
+    }
+    for (const link of links) {
+      if (!group.members.link.includes(link.id)) continue
+      const bounds = wireBounds(link.points)
+      if (bounds) rects.push(bounds)
+    }
+    for (const text of texts) {
+      if (group.members.text.includes(text.id)) rects.push(textLabelBounds(text))
+    }
+    const outline = groupOutline(rects, GROUP_MARGIN_CELLS)
+    return outline ? [{ id: group.id, ...outline }] : []
+  })
+})
+
 // Copies fantômes d'un Alt+glisser
 
 const ghostCopies = computed(() => {
@@ -625,17 +655,27 @@ function toggle(list: string[], id: string): string[] {
   return list.includes(id) ? list.filter((other) => other !== id) : [...list, id]
 }
 
+/**
+ * Après un clic sur un élément : son groupe le suit dans la sélection. Ctrl le laisse seul, pour
+ * retoucher un élément sans défaire son groupe.
+ */
+function followGroup(kind: 'node' | 'link' | 'text', id: string, event: MouseEvent): void {
+  if (!event.ctrlKey) store.syncGroupSelection(kind, id)
+}
+
 function onNodeDown(id: string, event: PointerEvent): void {
   if (!selectTool(event)) return
   event.stopPropagation()
   if (event.shiftKey) {
     store.selectedNodes = toggle(store.selectedNodes, id)
+    store.syncGroupSelection('node', id)
     return
   }
   if (!selectedNodeSet.value.has(id)) {
     store.clearSelection()
     store.selectedNodes = [id]
   }
+  followGroup('node', id, event)
   store.revealInspector()
   startMove(event)
 }
@@ -645,12 +685,14 @@ function onTextDown(id: string, event: PointerEvent): void {
   event.stopPropagation()
   if (event.shiftKey) {
     store.selectedTexts = toggle(store.selectedTexts, id)
+    store.syncGroupSelection('text', id)
     return
   }
   if (!selectedTextSet.value.has(id)) {
     store.clearSelection()
     store.selectedTexts = [id]
   }
+  followGroup('text', id, event)
   store.revealInspector()
   startMove(event)
 }
@@ -659,12 +701,14 @@ function onTextDown(id: string, event: PointerEvent): void {
 function selectLink(id: string, event: PointerEvent): boolean {
   if (event.shiftKey) {
     store.selectedLinks = toggle(store.selectedLinks, id)
+    store.syncGroupSelection('link', id)
     return false
   }
   if (!selectedLinkSet.value.has(id)) {
     store.clearSelection()
     store.selectedLinks = [id]
   }
+  followGroup('link', id, event)
   store.revealInspector()
   return true
 }
@@ -951,6 +995,8 @@ function onPointerUp(event: PointerEvent): void {
       store.selectedNodes = merge(store.selectedNodes, nodes)
       store.selectedLinks = merge(store.selectedLinks, links)
       store.selectedTexts = merge(store.selectedTexts, found)
+      // Un groupe touché par le lasso est pris en entier.
+      store.expandSelectionToGroups()
       if (store.hasSelection) store.revealInspector()
       break
     }
@@ -1057,12 +1103,15 @@ function onContextMenu(event: MouseEvent, target: DiagramMenuTarget): void {
   if (target.kind === 'node' && !selectedNodeSet.value.has(target.id)) {
     store.clearSelection()
     store.selectedNodes = [target.id]
+    store.syncGroupSelection('node', target.id)
   } else if (target.kind === 'link' && !selectedLinkSet.value.has(target.id)) {
     store.clearSelection()
     store.selectedLinks = [target.id]
+    store.syncGroupSelection('link', target.id)
   } else if (target.kind === 'text' && !selectedTextSet.value.has(target.id)) {
     store.clearSelection()
     store.selectedTexts = [target.id]
+    store.syncGroupSelection('text', target.id)
   }
   const world = toWorld(screenPoint(event))
   emit('openMenu', {
@@ -1289,6 +1338,18 @@ const cursorClass = computed(() => {
             :cx="anchorGrab.point[0]"
             :cy="anchorGrab.point[1]"
             :r="anchorReach"
+            vector-effect="non-scaling-stroke"
+          />
+
+          <rect
+            v-for="outline in groupOutlines"
+            :key="`group:${outline.id}`"
+            class="group-outline"
+            :x="outline.x"
+            :y="outline.y"
+            :width="outline.width"
+            :height="outline.height"
+            :rx="GROUP_MARGIN_CELLS"
             vector-effect="non-scaling-stroke"
           />
 

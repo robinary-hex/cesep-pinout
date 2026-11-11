@@ -90,6 +90,17 @@ export const ICONS = {
     'M21 16l-5-5-9 9'
   ],
   duplicate: ['M8 8h12v12H8z', 'M16 8V4H4v12h4', 'M14 11v6', 'M11 14h6'],
+  // Menu de l'application (trois barres), grouper (deux formes dans un cadre), dégrouper.
+  menu: ['M4 6h16', 'M4 12h16', 'M4 18h16'],
+  group: [
+    'M3 7V5a2 2 0 0 1 2-2h2',
+    'M17 3h2a2 2 0 0 1 2 2v2',
+    'M21 17v2a2 2 0 0 1-2 2h-2',
+    'M7 21H5a2 2 0 0 1-2-2v-2',
+    'M7 7h7v5H7z',
+    'M10 12h7v5h-7z'
+  ],
+  ungroup: ['M4 4h9v7H4z', 'M11 13h9v7h-9z'],
   tag: [
     'M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z',
     'M7 7h.01'

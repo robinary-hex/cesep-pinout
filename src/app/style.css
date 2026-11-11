@@ -1,6 +1,9 @@
 :root {
   /* Hauteur de la barre d'état sous chaque canevas. */
   --status-height: 26px;
+  /* Largeur du panneau latéral gauche (composants, formes). Le bloc gauche de la barre
+     d'application a la même : son séparateur tombe sur la bordure du panneau. */
+  --side-panel-width: 280px;
   color-scheme: light;
   font-family: 'Segoe UI', system-ui, sans-serif;
   font-size: 13px;
@@ -31,6 +34,7 @@
   --warning-text: #9a6700;
   --topbar: #24292f;
   --topbar-text: #ffffff;
+  --topbar-separator: #57606a;
   --shadow: rgba(31, 35, 40, 0.15);
   --shadow-strong: rgba(31, 35, 40, 0.35);
   --backdrop: rgba(31, 35, 40, 0.45);
@@ -51,6 +55,8 @@
   /* Aperçu d'export transparent : fond et points de la grille. */
   --transparent-bg: #ffffff;
   --transparent-dot: #b9c0c9;
+  /* Contour des groupes sur les canevas : violet, à part du bleu de la sélection. */
+  --group: #8250df;
   /* Traits d'un composant dont la bibliothèque a une version plus récente : rouge en clair. */
   --stale: #d1242f;
   /* Entourage de l'aperçu d'export : gris, pour que la zone exportée se détache. */
@@ -85,6 +91,7 @@
   --warning-text: #d29922;
   --topbar: #010409;
   --topbar-text: #e6edf3;
+  --topbar-separator: #30363d;
   --shadow: rgba(0, 0, 0, 0.45);
   --shadow-strong: rgba(0, 0, 0, 0.65);
   --backdrop: rgba(0, 0, 0, 0.6);
@@ -106,6 +113,7 @@
   --alert: #d29922;
   --transparent-bg: #2a2f36;
   --transparent-dot: #566070;
+  --group: #d2a8ff;
   /* Jaune en sombre : le rouge se perdrait sur le papier gris-bleu. */
   --stale: #e3b341;
   --preview-bg: #262c35;
@@ -159,46 +167,81 @@ body,
   gap: 4px;
 }
 
-.modes {
+/* Bloc gauche de la barre d'application : le menu et les trois modes, au-dessus du panneau
+   latéral et de la même largeur. Sa bordure droite prolonge celle du panneau jusqu'en haut de
+   la fenêtre et sépare les modes des onglets. */
+.topbar-side {
+  flex: none;
+  align-self: stretch;
+  width: var(--side-panel-width);
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 10px;
+  margin: -6px 0 -6px -16px;
+  padding: 6px 12px;
+  border-right: 1px solid var(--topbar-separator);
 }
 
-/* Un pictogramme par mode ; le point « modifié » d'un mode qu'on ne regarde pas se met dans le
-   coin du bouton, comme l'exposant d'un onglet. */
-.modes button {
+.topbar .menu-button {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
+/* Les trois modes : un sélecteur segmenté qui occupe le reste du bloc, un pictogramme par
+   mode ; celui qu'on regarde est plein, dans la couleur d'accent. */
+.modes {
+  flex: 1;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9px;
+  background: rgba(128, 128, 128, 0.25);
+}
+
+/* Le point « modifié » d'un mode qu'on ne regarde pas se met dans le coin du bouton, comme
+   l'exposant d'un onglet. */
+.topbar .modes button {
   position: relative;
+  flex: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 9px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
   color: var(--topbar-text);
   background: transparent;
-  border-color: transparent;
+  opacity: 0.7;
+}
+
+.topbar .modes button:hover:not(.active) {
+  background: rgba(128, 128, 128, 0.35);
+  opacity: 1;
+}
+
+.topbar .modes button.active {
+  background: var(--accent);
+  color: #ffffff;
+  opacity: 1;
 }
 
 .modes .doc-tab-dot {
   position: absolute;
-  top: 3px;
-  right: 3px;
+  top: 4px;
+  right: 6px;
 }
 
-.modes button.active {
-  background: var(--topbar-text);
-  color: var(--topbar);
-}
-
-.modes button:disabled {
-  opacity: 0.5;
-}
-
-/* Onglets des montages ouverts, collés au bouton Montage ; la rangée défile si elle déborde. */
+/* Onglets des documents ouverts, après le séparateur, à l'aplomb des barres d'outils ; la rangée
+   défile si elle déborde. */
 .doc-tabs {
   display: flex;
   align-items: center;
   gap: 4px;
   min-width: 0;
-  margin-left: -16px;
+  margin-left: -12px;
   overflow-x: auto;
 }
 
@@ -413,12 +456,32 @@ input[type='radio'] {
 
 /* Panneau de propriétés des trois éditeurs. Ouvert à la main, il prend sa place à droite du
    canevas. Montré par une sélection (`floating`), il flotte sur le bord droit de la zone de dessin,
-   au-dessus de la barre d'état : rien ne bouge dessous, et il repart avec la sélection. */
+   au-dessus de la barre d'état : rien ne bouge dessous, et il repart avec la sélection. Pas
+   d'ombre portée : sa bordure suffit. */
 .inspector.floating {
   position: absolute;
   top: 0;
   right: 0;
   bottom: var(--status-height);
   z-index: 5;
-  box-shadow: -8px 0 20px var(--shadow);
+}
+
+/* Cases à cocher des barres d'outils (broches, non reliées, groupes). */
+.toolbar .check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Contour d'un groupe sur les trois canevas : cadre violet à longs tirets et voile léger, à part
+   du cadre bleu à tirets courts de la sélection. Il ne prend pas les clics. */
+.group-outline {
+  fill: var(--group);
+  fill-opacity: 0.06;
+  stroke: var(--group);
+  stroke-width: 1.5;
+  stroke-dasharray: 10 5;
+  pointer-events: none;
 }

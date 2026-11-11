@@ -1044,3 +1044,117 @@ describe('montage : sommets, coupe et net d’un fil', () => {
     expect(store.crossingNear(8, 5)).toBe(false)
   })
 })
+
+describe('montage : groupes', () => {
+  it('groupe composant, fil et étiquette ; le groupe se prend d’un bloc et s’annule', () => {
+    const store = useSchematicStore()
+    store.startPlacing(resistor())
+    const a = store.placeAt(0, 0)
+    const b = store.placeAt(10, 0)
+    store.stopPlacing()
+    const wire = store.addWire([
+      [4, 1],
+      [10, 1]
+    ])
+    const label = store.addLabelBox({ x: 0, y: 4, w: 4, h: 1 })
+    if (!a || !b || !wire) throw new Error('montage incomplet')
+    store.clearSelection()
+    expect(store.hasGroups).toBe(false)
+    store.selection = [a]
+    store.selectedWires = [wire]
+    store.selectedLabels = [label]
+    expect(store.canGroup).toBe(true)
+    store.groupSelection()
+    expect(store.undoLabel).toBe('Grouper')
+    expect(store.groups).toEqual([
+      { id: 'g1', members: { instance: [a], wire: [wire], label: [label] } }
+    ])
+    expect(store.canGroup).toBe(false)
+
+    // Un clic sur un membre : tout le groupe.
+    store.clearSelection()
+    store.selection = [a]
+    store.syncGroupSelection('instance', a)
+    expect([store.selection, store.selectedWires, store.selectedLabels]).toEqual([
+      [a],
+      [wire],
+      [label]
+    ])
+
+    // Un lasso sur l'autre résistance et le fil : le groupe vient en entier ; grouper fond le tout.
+    store.clearSelection()
+    store.selection = [b]
+    store.selectedWires = [wire]
+    store.expandSelectionToGroups()
+    expect(store.selection).toEqual([b, a])
+    expect(store.selectedLabels).toEqual([label])
+    store.groupSelection()
+    expect(store.groups).toEqual([
+      { id: 'g2', members: { instance: [a, b], wire: [wire], label: [label] } }
+    ])
+
+    store.ungroupSelection()
+    expect(store.undoLabel).toBe('Dégrouper')
+    expect(store.hasGroups).toBe(false)
+    store.undo()
+    expect(store.groups.map((group) => group.id)).toEqual(['g2'])
+    store.undo()
+    expect(store.groups.map((group) => group.id)).toEqual(['g1'])
+    // Le fichier garde les groupes.
+    const reread = parseProject(serializeProject(store.doc))
+    expect(reread.components.map((instance) => instance.group)).toEqual(['g1', undefined])
+    expect(reread.wires[0]?.group).toBe('g1')
+    store.undo()
+    expect(store.hasGroups).toBe(false)
+  })
+
+  it('la copie d’un groupe forme un nouveau groupe ; un morceau de fil coupé reste dans le sien', () => {
+    const store = useSchematicStore()
+    store.startPlacing(resistor())
+    const a = store.placeAt(0, 0)
+    store.stopPlacing()
+    const wire = store.addWire([
+      [4, 1],
+      [10, 1]
+    ])
+    if (!a || !wire) throw new Error('montage incomplet')
+    store.clearSelection()
+    store.selection = [a]
+    store.selectedWires = [wire]
+    store.groupSelection()
+
+    store.duplicateSelection()
+    expect(store.groups.map((group) => group.id)).toEqual(['g1', 'g2'])
+    // Les copies sont sélectionnées : c'est le nouveau groupe, pas celui des originaux.
+    expect(store.groups[1]?.members.instance).toEqual(store.selection)
+    expect(store.groups[1]?.members.wire).toEqual(store.selectedWires)
+    expect(store.groups[0]?.members).toEqual({ instance: [a], wire: [wire], label: [] })
+
+    // Un seul membre copié : sa copie n'est d'aucun groupe.
+    store.clearSelection()
+    store.selection = [a]
+    store.duplicateSelection()
+    expect(store.doc.components.at(-1)?.group).toBeUndefined()
+
+    const second = store.splitWire(wire, [7, 1])
+    expect(store.doc.wires.find((candidate) => candidate.id === second)?.group).toBe('g1')
+    expect(store.groups[0]?.members.wire).toHaveLength(2)
+  })
+})
+
+describe('montage : cases d’affichage', () => {
+  it('lit et écrit broches, non reliées et groupes dans les paramètres de l’application', () => {
+    const store = useSchematicStore()
+    const library = useLibraryStore()
+    expect([store.showPins, store.showUnconnected, store.showGroups]).toEqual([true, true, true])
+    store.showPins = false
+    store.showGroups = false
+    expect([library.showPins, library.showUnconnected, library.showGroups]).toEqual([
+      false,
+      true,
+      false
+    ])
+    library.setViewOption('showUnconnected', false)
+    expect(store.showUnconnected).toBe(false)
+  })
+})

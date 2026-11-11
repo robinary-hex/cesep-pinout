@@ -25,6 +25,7 @@ import componentPngV14 from './fixtures/v14/component-png.json?raw'
 import projectV19 from './fixtures/v19/project.json?raw'
 import projectV20 from './fixtures/v20/project.json?raw'
 import settingsV10 from './fixtures/v10/settings.json?raw'
+import settingsV11 from './fixtures/v11/settings.json?raw'
 import projectV17 from './fixtures/v17/project.json?raw'
 import projectV18 from './fixtures/v18/project.json?raw'
 import projectV15 from './fixtures/v15/project.json?raw'
@@ -552,10 +553,23 @@ describe('projet v20 → v21', () => {
   })
 })
 
+describe('paramètres v11 → v12', () => {
+  it('coche au départ les cases d’affichage et garde le dossier des paramètres', () => {
+    const settings = parseSettings(settingsV11)
+    expect(settings.schemaVersion).toBe(12)
+    expect(settings).toMatchObject({
+      showPins: true,
+      showUnconnected: true,
+      showGroups: true,
+      settingsDir: 'F:/partage'
+    })
+  })
+})
+
 describe('paramètres v10 → v11', () => {
   it('garde le fichier partagé dans le dossier par défaut, et tous les réglages', () => {
     const settings = parseSettings(settingsV10)
-    expect(settings.schemaVersion).toBe(11)
+    expect(settings.schemaVersion).toBe(12)
     expect(settings.settingsDir).toBe('')
     expect(settings.libraryDir).toBe('${OneDrive}/Pinout/lib')
     expect(settings.diagramDefaults).toMatchObject({ nodeColor: '#1d4ed8', nodeFill: 'none' })
@@ -566,7 +580,7 @@ describe('paramètres v10 → v11', () => {
 describe('paramètres v9 → v10', () => {
   it('reçoit le style général des diagrammes par défaut et garde le reste', () => {
     const settings = parseSettings(settingsV9)
-    expect(settings.schemaVersion).toBe(11)
+    expect(settings.schemaVersion).toBe(12)
     expect(settings.diagramDefaults).toEqual({
       style: DEFAULT_DIAGRAM_STYLE,
       nodeColor: '#000000',
@@ -581,7 +595,7 @@ describe('paramètres v9 → v10', () => {
 describe('paramètres v8 → v9', () => {
   it('range les couleurs personnalisées dans la palette, sans doublon', () => {
     const settings = parseSettings(settingsV8)
-    expect(settings.schemaVersion).toBe(11)
+    expect(settings.schemaVersion).toBe(12)
     expect('customColors' in settings).toBe(false)
     // #D62828 est déjà le rouge de la palette ; #ff00aa s'y ajoute sous son code.
     expect(settings.palette.map((color) => color.hex.toLowerCase())).toEqual([
@@ -597,7 +611,7 @@ describe('paramètres v8 → v9', () => {
 describe('paramètres v7 → v8', () => {
   it('affiche la bibliothèque en liste par défaut et garde le reste', () => {
     const settings = parseSettings(settingsV7)
-    expect(settings.schemaVersion).toBe(11)
+    expect(settings.schemaVersion).toBe(12)
     expect(settings.libraryView).toBe('list')
     expect(settings.theme).toBe('dark')
   })
@@ -606,7 +620,7 @@ describe('paramètres v7 → v8', () => {
 describe('paramètres v6 → v8', () => {
   it('passe au thème sombre et garde le reste', () => {
     const settings = parseSettings(settingsV6)
-    expect(settings.schemaVersion).toBe(11)
+    expect(settings.schemaVersion).toBe(12)
     expect(settings.theme).toBe('dark')
     expect(settings.autoOpenInspector).toBe(true)
     expect(settings.autosaveSeconds).toBe(120)
@@ -616,7 +630,7 @@ describe('paramètres v6 → v8', () => {
 describe('paramètres v5 → v8', () => {
   it('ouvre le panneau de propriétés à la sélection par défaut', () => {
     const settings = parseSettings(settingsV5)
-    expect(settings.schemaVersion).toBe(11)
+    expect(settings.schemaVersion).toBe(12)
     expect(settings.autoOpenInspector).toBe(true)
   })
 })
@@ -624,7 +638,7 @@ describe('paramètres v5 → v8', () => {
 describe('paramètres v4 → v8', () => {
   it('complète le profil par défaut et garde le thème', () => {
     const settings = parseSettings(settingsV4)
-    expect(settings.schemaVersion).toBe(11)
+    expect(settings.schemaVersion).toBe(12)
     expect(settings.theme).toBe('dark')
     expect(settings.defaultProfile.endLabelFont).toEqual({ family: 'Segoe UI', size: 14 })
   })
@@ -633,7 +647,7 @@ describe('paramètres v4 → v8', () => {
 describe('paramètres v1 → v8', () => {
   it('ajoute export, copie de secours, trait des composants et thème', () => {
     const settings = parseSettings(settingsV1)
-    expect(settings.schemaVersion).toBe(11)
+    expect(settings.schemaVersion).toBe(12)
     expect(settings.defaultProfile.componentStroke).toBe(0.1)
     expect(settings.export.scale).toBe(2)
     expect(settings.theme).toBe('dark')
@@ -643,7 +657,7 @@ describe('paramètres v1 → v8', () => {
 describe('paramètres v3 → v8', () => {
   it('ajoute le thème, sombre désormais, et garde le reste', () => {
     const settings = parseSettings(settingsV3)
-    expect(settings.schemaVersion).toBe(11)
+    expect(settings.schemaVersion).toBe(12)
     expect(settings.theme).toBe('dark')
     expect(settings.recentFiles).toEqual(['D:/Documents/diviseur.pinout.json'])
     expect(settings.autosaveSeconds).toBe(60)

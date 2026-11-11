@@ -3,7 +3,7 @@ import { hexColorSchema } from './color'
 import { DEFAULT_DIAGRAM_STYLE, diagramStyleSchema, nodeFillSchema } from './diagram'
 import { DEFAULT_PROFILE, styleProfileSchema } from './profile'
 
-export const SETTINGS_SCHEMA_VERSION = 11
+export const SETTINGS_SCHEMA_VERSION = 12
 
 export const paletteColorSchema = z.object({
   name: z.string().min(1),
@@ -102,7 +102,14 @@ export const settingsSchema = z.object({
   theme: themeSchema,
   /** Le panneau de propriétés du montage s'ouvre quand on sélectionne un élément. */
   autoOpenInspector: z.boolean(),
-  libraryView: libraryViewSchema
+  libraryView: libraryViewSchema,
+  /**
+   * Cases à cocher des barres d'outils, retrouvées d'un lancement à l'autre : broches des
+   * composants, broches reliées à rien, contour des groupes.
+   */
+  showPins: z.boolean(),
+  showUnconnected: z.boolean(),
+  showGroups: z.boolean()
 })
 export type Settings = z.infer<typeof settingsSchema>
 
@@ -119,5 +126,12 @@ export const DEFAULT_SETTINGS: Settings = {
   autosaveSeconds: DEFAULT_AUTOSAVE_SECONDS,
   theme: 'dark',
   autoOpenInspector: true,
-  libraryView: 'list'
+  libraryView: 'list',
+  showPins: true,
+  showUnconnected: true,
+  showGroups: true
 }
+
+/** Les options d'affichage que les barres d'outils cochent ou décochent. */
+export const VIEW_OPTIONS = ['showPins', 'showUnconnected', 'showGroups'] as const
+export type ViewOption = (typeof VIEW_OPTIONS)[number]

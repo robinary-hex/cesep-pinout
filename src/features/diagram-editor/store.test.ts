@@ -428,3 +428,49 @@ describe('diagramme : textes, copies, onglets', () => {
     expect(store.doc.nodes).toHaveLength(0)
   })
 })
+
+describe('diagramme : groupes', () => {
+  it('groupe nœuds et lien ; un membre emmène le groupe, coller un groupe en fait un nouveau', () => {
+    const store = useDiagramStore()
+    const a = store.addNode('rounded', 0, 0)
+    const b = store.addNode('rounded', 30, 0)
+    const link = store.addLink([
+      [16, 3],
+      [30, 3]
+    ])
+    if (!link) throw new Error('lien refusé')
+    store.clearSelection()
+    store.selectedNodes = [a, b]
+    store.selectedLinks = [link]
+    expect(store.canGroup).toBe(true)
+    store.groupSelection()
+    expect(store.undoLabel).toBe('Grouper')
+    expect(store.groups).toEqual([{ id: 'g1', members: { node: [a, b], link: [link], text: [] } }])
+
+    store.clearSelection()
+    store.selectedLinks = [link]
+    store.syncGroupSelection('link', link)
+    expect(store.selectedNodes).toEqual([a, b])
+
+    store.copySelection()
+    store.pasteClipboard()
+    expect(store.groups.map((group) => group.id)).toEqual(['g1', 'g2'])
+    expect(store.groups[1]?.members.node).toHaveLength(2)
+    const reread = parseDiagram(serializeDiagram(store.doc))
+    expect(reread.nodes.map((node) => node.group)).toEqual(['g1', 'g1', 'g2', 'g2'])
+    expect(reread.links.map((candidate) => candidate.group)).toEqual(['g1', 'g2'])
+
+    // Les copies sont sélectionnées : dégrouper ne défait que leur groupe.
+    store.ungroupSelection()
+    expect(store.groups.map((group) => group.id)).toEqual(['g1'])
+    store.undo()
+    expect(store.groups).toHaveLength(2)
+  })
+
+  it('garde la case « Groupes » dans les paramètres de l’application', () => {
+    const store = useDiagramStore()
+    expect(store.showGroups).toBe(true)
+    store.showGroups = false
+    expect(useLibraryStore().showGroups).toBe(false)
+  })
+})

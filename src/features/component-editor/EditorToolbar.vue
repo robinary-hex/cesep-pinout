@@ -10,7 +10,8 @@ import { TOOLS } from './tools'
 
 // Barre d'outils de l'éditeur de composants. D'abord le début commun aux trois éditeurs
 // (`ToolbarBasics` : zoom, annuler, rétablir, corbeille), puis les outils de dessin (pictogramme
-// seul, raccourci dans l'infobulle) et l'import d'une image, posée comme une forme ; à droite, le
+// seul, raccourci dans l'infobulle), l'import d'une image, posée comme une forme, et la case
+// « Groupes » quand le composant en a ; à droite, le
 // nom du composant avec son fichier, le bouton du panneau de propriétés tout au bout, et
 // Enregistrer (aussi dans le menu Fichier). Quand la place manque, la partie gauche passe à la
 // ligne ; la droite reste sur la première.
@@ -63,6 +64,13 @@ const fileLabel = computed(() =>
         >
           <Icon name="image" :size="18" />
         </button>
+      </div>
+
+      <div v-if="store.hasGroups" class="group">
+        <label class="check" title="Entourer les groupes">
+          <input v-model="store.showGroups" type="checkbox" />
+          Groupes
+        </label>
       </div>
     </div>
 

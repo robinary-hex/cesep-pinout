@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS, parseSettings, serializeSettings } from '@/domain'
 import { setBridge } from '@/io/bridge'
 import { FakeFs } from '@/io/testing/fakeFs'
@@ -97,5 +97,37 @@ describe('paramètres partagés entre machines', () => {
     expect(library.problem).toContain('illisible')
     expect(library.sharedSettingsPath).toBe(SHARED)
     expect(library.settingsDir).toBe('')
+  })
+})
+
+describe('cases d’affichage des barres d’outils', () => {
+  it('les garde d’un lancement à l’autre, sans écraser un réglage changé ailleurs', async () => {
+    const library = useLibraryStore()
+    await library.init()
+    expect([library.showPins, library.showUnconnected, library.showGroups]).toEqual([
+      true,
+      true,
+      true
+    ])
+    // Une autre machine change un réglage entre-temps.
+    await fs.writeTextFile(SHARED, serializeSettings({ ...DEFAULT_SETTINGS, autosaveSeconds: 300 }))
+    library.setViewOption('showPins', false)
+    library.setViewOption('showGroups', false)
+    // À l'écran tout de suite, sans attendre le fichier.
+    expect([library.showPins, library.showGroups]).toEqual([false, false])
+    await vi.waitFor(async () => {
+      expect(parseSettings(await fs.readTextFile(SHARED))).toMatchObject({
+        showPins: false,
+        showUnconnected: true,
+        showGroups: false,
+        autosaveSeconds: 300
+      })
+    })
+
+    // Au lancement suivant, les cases reviennent comme on les a laissées.
+    setActivePinia(createPinia())
+    const next = useLibraryStore()
+    await next.init()
+    expect([next.showPins, next.showUnconnected, next.showGroups]).toEqual([false, true, false])
   })
 })

@@ -415,3 +415,73 @@ describe('éditeur de composants : coller à un endroit', () => {
     expect(store.undoLabel).toBe('Coller')
   })
 })
+
+describe('éditeur de composants : groupes', () => {
+  const rect: Primitive = {
+    kind: 'rect',
+    x: 0,
+    y: 0,
+    w: 4,
+    h: 4,
+    rx: 0,
+    style: DEFAULT_SHAPE_STYLE
+  }
+
+  it('groupe formes et broche ; un clic emmène le groupe, Maj+clic l’ajoute ou le retire', () => {
+    const store = useComponentEditorStore()
+    store.addPrimitive(rect, 'Ajouter un rectangle')
+    store.addPrimitive({ ...rect, x: 8 }, 'Ajouter un rectangle')
+    store.addPrimitive({ ...rect, x: 12, y: 4 }, 'Ajouter un rectangle')
+    const pin = store.addPin({ x: 0, y: 1 })
+    expect(store.hasGroups).toBe(false)
+    store.select([0, 1], [pin])
+    expect(store.canGroup).toBe(true)
+    store.groupSelection()
+    expect(store.undoLabel).toBe('Grouper')
+    expect(store.groups).toEqual([{ id: 'g1', indexes: [0, 1], pinIds: [pin] }])
+    expect([store.canGroup, store.canUngroup]).toEqual([false, true])
+
+    // Clic sur une forme du groupe : tout le groupe ; sur la forme libre : elle seule.
+    store.selectElement({ kind: 'primitive', index: 1 })
+    expect([store.selectedIndexes, store.selectedPinIds]).toEqual([[0, 1], [pin]])
+    store.selectElement({ kind: 'primitive', index: 2 })
+    expect([store.selectedIndexes, store.selectedPinIds]).toEqual([[2], []])
+    // Maj+clic sur la broche : son groupe s'ajoute ; sur une de ses formes : il se retire en entier.
+    store.togglePin(pin)
+    expect([store.selectedIndexes, store.selectedPinIds]).toEqual([[0, 1, 2], [pin]])
+    store.togglePrimitive(0)
+    expect([store.selectedIndexes, store.selectedPinIds]).toEqual([[2], []])
+    // Un lasso qui touche la broche prend son groupe.
+    store.select([2], [pin])
+    store.expandSelectionToGroups()
+    expect(store.selectedIndexes).toEqual([0, 1, 2])
+
+    // L'appartenance suit la forme quand son rang change.
+    store.selectPrimitives([0])
+    store.reorderPrimitive('top')
+    expect(store.groups).toEqual([{ id: 'g1', indexes: [0, 2], pinIds: [pin] }])
+
+    store.selectElement({ kind: 'pin', id: pin })
+    store.ungroupSelection()
+    expect(store.hasGroups).toBe(false)
+    store.undo()
+    expect(store.groups).toHaveLength(1)
+  })
+
+  it('dupliquer un groupe en forme un nouveau ; une forme copiée seule n’en a pas', () => {
+    const store = useComponentEditorStore()
+    store.addPrimitive(rect, 'Ajouter un rectangle')
+    store.addPrimitive({ ...rect, x: 8 }, 'Ajouter un rectangle')
+    store.select([0, 1])
+    store.groupSelection()
+    store.duplicateSelection()
+    expect(store.groups).toEqual([
+      { id: 'g1', indexes: [0, 1], pinIds: [] },
+      { id: 'g2', indexes: [2, 3], pinIds: [] }
+    ])
+    expect(store.selectedIndexes).toEqual([2, 3])
+    store.selectPrimitives([0])
+    store.duplicateSelection()
+    expect(store.doc.visual.primitives.at(-1)?.group).toBeUndefined()
+  })
+})

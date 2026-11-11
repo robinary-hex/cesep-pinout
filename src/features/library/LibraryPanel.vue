@@ -405,7 +405,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
 
 <style scoped>
 .library {
-  width: 280px;
+  width: var(--side-panel-width);
   flex: none;
   display: flex;
   flex-direction: column;

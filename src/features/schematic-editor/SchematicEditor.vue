@@ -186,8 +186,24 @@ function swatchItem(current: string | null): MenuItem {
   }
 }
 
+/** Grouper et Dégrouper, quand la sélection s'y prête. */
+function groupItems(): MenuItem[] {
+  const items: MenuItem[] = []
+  if (store.canGroup) {
+    items.push(item('Grouper', () => store.groupSelection(), { hint: 'Ctrl+G', icon: 'group' }))
+  }
+  if (store.canUngroup) {
+    items.push(
+      item('Dégrouper', () => store.ungroupSelection(), { hint: 'Ctrl+Maj+G', icon: 'ungroup' })
+    )
+  }
+  if (items.length > 0) items.push(SEPARATOR)
+  return items
+}
+
 function commonItems(): MenuItem[] {
   return [
+    ...groupItems(),
     item('Dupliquer', () => store.duplicateSelection(), { hint: 'Ctrl+D', icon: 'duplicate' }),
     item('Copier', () => store.copySelection(), { hint: 'Ctrl+C', icon: 'copy' }),
     item(
@@ -266,7 +282,10 @@ function openMenu(request: MenuRequest): void {
     const { instance, def } = found
     items.push(heading(multi ? `${count} éléments` : instanceTitle(instance, def)))
     if (!multi) {
-      for (const field of componentFields(def)) {
+      // Un seul texte variable : sa valeur se change d'ici. Plusieurs : dans le panneau (ou
+      // par un double-clic), pour ne pas allonger le menu d'une entrée par champ.
+      const fields = componentFields(def)
+      for (const field of fields.length === 1 ? fields : []) {
         const shown = instance.fields[field.name] ?? field.defaultValue
         const text = shown.length > 0 ? withUnit(shown, field.unit) : '(vide)'
         items.push(
@@ -523,6 +542,10 @@ function onKeyDown(event: KeyboardEvent): void {
         break
       case 'd':
         store.duplicateSelection()
+        break
+      case 'g':
+        if (event.shiftKey) store.ungroupSelection()
+        else store.groupSelection()
         break
       case 'c':
         store.copySelection()

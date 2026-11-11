@@ -124,8 +124,24 @@ function swatchItem(current: string | null): MenuItem {
   }
 }
 
+/** Grouper et Dégrouper, quand la sélection s'y prête. */
+function groupItems(): MenuItem[] {
+  const items: MenuItem[] = []
+  if (store.canGroup) {
+    items.push(item('Grouper', () => store.groupSelection(), { hint: 'Ctrl+G', icon: 'group' }))
+  }
+  if (store.canUngroup) {
+    items.push(
+      item('Dégrouper', () => store.ungroupSelection(), { hint: 'Ctrl+Maj+G', icon: 'ungroup' })
+    )
+  }
+  if (items.length > 0) items.push(SEPARATOR)
+  return items
+}
+
 function commonItems(): MenuItem[] {
   return [
+    ...groupItems(),
     item('Dupliquer', () => store.duplicateSelection(), { hint: 'Ctrl+D', icon: 'duplicate' }),
     item('Copier', () => store.copySelection(), { hint: 'Ctrl+C', icon: 'copy' }),
     item(
@@ -517,6 +533,10 @@ function onKeyDown(event: KeyboardEvent): void {
         break
       case 'd':
         store.duplicateSelection()
+        break
+      case 'g':
+        if (event.shiftKey) store.ungroupSelection()
+        else store.groupSelection()
         break
       case 'c':
         store.copySelection()

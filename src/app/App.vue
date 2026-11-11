@@ -742,34 +742,37 @@ onUnmounted(() => {
 <template>
   <div class="shell">
     <header class="topbar">
-      <button
-        ref="fileButton"
-        type="button"
-        class="ghost with-icon"
-        :class="{ open: fileMenu !== null }"
-        title="Nouveau, ouvrir, enregistrer, exporter, paramètres, quitter"
-        @click="openFileMenu"
-      >
-        Fichier <Icon name="chevron-down" :size="14" />
-      </button>
-      <nav class="modes">
+      <div class="topbar-side">
         <button
-          v-for="key in MODE_ORDER"
-          :key="key"
+          ref="fileButton"
           type="button"
-          :class="{ active: mode === key }"
-          :title="modes[key].label"
-          :aria-label="modes[key].label"
-          @click="mode = key"
+          class="ghost icon-only menu-button"
+          :class="{ open: fileMenu !== null }"
+          title="Menu : nouveau, ouvrir, enregistrer, exporter, paramètres, quitter"
+          aria-label="Menu"
+          @click="openFileMenu"
         >
-          <Icon :name="modes[key].icon" :size="20" />
-          <span
-            v-if="mode !== key && modes[key].anyDirty()"
-            class="doc-tab-dot"
-            :title="modes[key].dirtyTitle"
-          />
+          <Icon name="menu" :size="20" />
         </button>
-      </nav>
+        <nav class="modes">
+          <button
+            v-for="key in MODE_ORDER"
+            :key="key"
+            type="button"
+            :class="{ active: mode === key }"
+            :title="modes[key].label"
+            :aria-label="modes[key].label"
+            @click="mode = key"
+          >
+            <Icon :name="modes[key].icon" :size="22" />
+            <span
+              v-if="mode !== key && modes[key].anyDirty()"
+              class="doc-tab-dot"
+              :title="modes[key].dirtyTitle"
+            />
+          </button>
+        </nav>
+      </div>
       <div class="doc-tabs" @wheel.prevent="onTabsWheel">
         <div
           v-for="tab in strip.tabs"

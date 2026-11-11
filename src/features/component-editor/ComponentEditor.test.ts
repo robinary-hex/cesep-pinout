@@ -264,3 +264,65 @@ describe('éditeur de composants : menu contextuel', () => {
     wrapper.unmount()
   })
 })
+
+describe('éditeur de composants : groupes', () => {
+  it('clic droit sur plusieurs formes : Grouper ; un clic prend le groupe, la case le montre ou le cache', async () => {
+    const store = withRectangle()
+    store.addPrimitive(
+      { kind: 'rect', x: 14, y: 2, w: 4, h: 4, rx: 0, style: DEFAULT_SHAPE_STYLE },
+      'Ajouter un rectangle'
+    )
+    store.selection = null
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    const shape = (index: number): { element: Element } =>
+      wrapper.findAll('.component-graphic .interactive')[index] ?? wrapper.get('svg.canvas')
+    expect(wrapper.find('.toolbar .check').exists()).toBe(false)
+    store.selectAll()
+    await nextTick()
+    rightClick(shape(0).element)
+    await flushPromises()
+    expect(menuLabels()).toContain('Grouper')
+    expect(menuLabels()).not.toContain('Dégrouper')
+    menuEntry('Grouper').click()
+    await flushPromises()
+    expect(store.groups).toEqual([{ id: 'g1', indexes: [0, 1], pinIds: [] }])
+    expect(wrapper.find('.group-outline').exists()).toBe(true)
+
+    // La case « Groupes » arrive avec le premier groupe ; décochée, le contour disparaît.
+    expect(wrapper.get('.toolbar .check').text()).toBe('Groupes')
+    await wrapper.get('.toolbar .check input').setValue(false)
+    expect(store.showGroups).toBe(false)
+    expect(wrapper.find('.group-outline').exists()).toBe(false)
+
+    // Un clic sur une forme prend tout le groupe ; Ctrl+clic, elle seule.
+    const release = async (): Promise<void> => {
+      wrapper
+        .get('svg.canvas')
+        .element.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, cancelable: true }))
+      await nextTick()
+    }
+    store.selection = null
+    await press(shape(1))
+    expect(store.selectedIndexes).toEqual([0, 1])
+    await release()
+    store.selection = null
+    await press(shape(1), { ctrlKey: true })
+    expect(store.selectedIndexes).toEqual([1])
+    await release()
+
+    // Clic droit sur une forme du groupe : Dégrouper ; Ctrl+G regroupe la sélection.
+    store.selection = null
+    rightClick(shape(0).element)
+    await flushPromises()
+    expect(store.selectedIndexes).toEqual([0, 1])
+    menuEntry('Dégrouper').click()
+    await flushPromises()
+    expect(store.hasGroups).toBe(false)
+    expect(wrapper.find('.toolbar .check').exists()).toBe(false)
+    await key('g')
+    expect(store.hasGroups).toBe(false)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', ctrlKey: true, bubbles: true }))
+    expect(store.groups).toHaveLength(1)
+    wrapper.unmount()
+  })
+})

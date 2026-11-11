@@ -7,6 +7,7 @@ import {
   crossingPieceEnds,
   dragVertex,
   gridLines,
+  groupOutline,
   instanceBounds,
   instanceMatrix,
   instanceTextPlacements,
@@ -29,6 +30,7 @@ import {
   textStyleAttrs,
   textTransform,
   textLabelBounds,
+  wireBounds,
   wireEndLabelPlacement,
   wireIntersectsRect,
   wirePathData,
@@ -58,7 +60,8 @@ import { useSchematicStore, type PlacedInstance } from './store'
 // Ordre d'empilement : grille, composants mis derrière les fils, fils (corps, queues
 // pointillées, pointes), croisements (fil du dessus avec liseré), points de jonction, les
 // autres composants, repères, étiquettes, étiquettes
-// d'extrémité, broches (et anneau de saisie de la broche survolée), surcouches de sélection et
+// d'extrémité, broches (et anneau de saisie de la broche survolée), contours des groupes,
+// surcouches de sélection et
 // d'édition, copies fantômes (Alt+glisser),
 // fantôme de pose, tracé en cours, rectangle de sélection.
 
@@ -447,6 +450,30 @@ function wirePoints(wire: Wire): readonly GridPoint[] {
   return previewWires.value?.get(wire.id) ?? wire.points
 }
 
+/** Marge du contour d'un groupe autour de ses membres, en cellules. */
+const GROUP_MARGIN_CELLS = 0.4
+
+/** Contours des groupes, autour de leurs membres tels qu'affichés (déplacement en cours compris). */
+const groupOutlines = computed(() => {
+  if (!store.showGroups) return []
+  return store.groups.flatMap((group) => {
+    const rects: GridRect[] = []
+    for (const item of store.placed) {
+      if (group.members.instance.includes(item.instance.id)) rects.push(boundsOf(item))
+    }
+    for (const wire of store.doc.wires) {
+      if (!group.members.wire.includes(wire.id)) continue
+      const bounds = wireBounds(wirePoints(wire))
+      if (bounds) rects.push(bounds)
+    }
+    for (const label of store.doc.labels) {
+      if (group.members.label.includes(label.id)) rects.push(textLabelBounds(labelBox(label)))
+    }
+    const outline = groupOutline(rects, GROUP_MARGIN_CELLS)
+    return outline ? [{ id: group.id, ...outline }] : []
+  })
+})
+
 /** Extrémités libres par fil (début, fin), d'après la connectivité du document. */
 const freeEndFlags = computed(() => {
   const flags = new Map<string, WireEndFlags>()
@@ -730,6 +757,14 @@ function startMove(event: PointerEvent): void {
   capture(event)
 }
 
+/**
+ * Après un clic sur un élément : son groupe le suit dans la sélection. Ctrl le laisse seul, pour
+ * retoucher un élément sans défaire son groupe.
+ */
+function followGroup(kind: 'instance' | 'wire' | 'label', id: string, event: MouseEvent): void {
+  if (!event.ctrlKey) store.syncGroupSelection(kind, id)
+}
+
 function onInstanceDown(id: string, event: PointerEvent): void {
   if (event.button !== 0 || store.panKeyHeld || store.tool !== 'select') return
   event.stopPropagation()
@@ -737,12 +772,14 @@ function onInstanceDown(id: string, event: PointerEvent): void {
     store.selection = selectedSet.value.has(id)
       ? store.selection.filter((selected) => selected !== id)
       : [...store.selection, id]
+    store.syncGroupSelection('instance', id)
     return
   }
   if (!selectedSet.value.has(id)) {
     store.clearSelection()
     store.selection = [id]
   }
+  followGroup('instance', id, event)
   store.revealInspector()
   startMove(event)
 }
@@ -776,12 +813,14 @@ function onLabelDown(label: TextLabel, event: PointerEvent): void {
     store.selectedLabels = selectedLabelSet.value.has(label.id)
       ? store.selectedLabels.filter((selected) => selected !== label.id)
       : [...store.selectedLabels, label.id]
+    store.syncGroupSelection('label', label.id)
     return
   }
   if (!selectedLabelSet.value.has(label.id)) {
     store.clearSelection()
     store.selectedLabels = [label.id]
   }
+  followGroup('label', label.id, event)
   store.revealInspector()
   startMove(event)
 }
@@ -796,12 +835,14 @@ function onWireDown(wireId: string, event: PointerEvent): void {
     store.selectedWires = selectedWireSet.value.has(wireId)
       ? store.selectedWires.filter((selected) => selected !== wireId)
       : [...store.selectedWires, wireId]
+    store.syncGroupSelection('wire', wireId)
     return
   }
   if (!selectedWireSet.value.has(wireId)) {
     store.clearSelection()
     store.selectedWires = [wireId]
   }
+  followGroup('wire', wireId, event)
   store.revealInspector()
   // Plusieurs éléments sélectionnés, ou copie : le glisser déplace tout ; un fil seul : son segment.
   if (
@@ -1012,6 +1053,8 @@ function onPointerUp(event: PointerEvent): void {
       store.selectedLabels = current.additive
         ? [...new Set([...store.selectedLabels, ...texts])]
         : texts
+      // Un groupe touché par le lasso est pris en entier.
+      store.expandSelectionToGroups()
       if (store.hasSelection) store.revealInspector()
     }
   } else if (current.kind === 'wire-segment' || current.kind === 'wire-vertex') {
@@ -1117,12 +1160,15 @@ function onContextMenu(event: MouseEvent, target: MenuTarget): void {
   if (target.kind === 'instance' && !selectedSet.value.has(target.id)) {
     store.clearSelection()
     store.selection = [target.id]
+    store.syncGroupSelection('instance', target.id)
   } else if (target.kind === 'wire' && !selectedWireSet.value.has(target.id)) {
     store.clearSelection()
     store.selectedWires = [target.id]
+    store.syncGroupSelection('wire', target.id)
   } else if (target.kind === 'label' && !selectedLabelSet.value.has(target.id)) {
     store.clearSelection()
     store.selectedLabels = [target.id]
+    store.syncGroupSelection('label', target.id)
   }
   const world = toWorld(screenPoint(event))
   emit('openMenu', {
@@ -1462,6 +1508,18 @@ const cursorClass = computed(() => {
             :cx="pinGrab.point[0]"
             :cy="pinGrab.point[1]"
             :r="pinGrabReach"
+            vector-effect="non-scaling-stroke"
+          />
+
+          <rect
+            v-for="outline in groupOutlines"
+            :key="`group:${outline.id}`"
+            class="group-outline"
+            :x="outline.x"
+            :y="outline.y"
+            :width="outline.width"
+            :height="outline.height"
+            :rx="GROUP_MARGIN_CELLS"
             vector-effect="non-scaling-stroke"
           />
 

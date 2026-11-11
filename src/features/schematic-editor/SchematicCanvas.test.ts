@@ -317,3 +317,80 @@ describe('canevas du montage : composants derrière les fils', () => {
     expect(store.selection).toEqual([id])
   })
 })
+
+describe('canevas du montage : groupes', () => {
+  /** La résistance (de (2, 3) à (6, 5)) groupée avec un fil de (10, 8) à (14, 8). */
+  function withGroup(): {
+    store: ReturnType<typeof useSchematicStore>
+    instance: string
+    wire: string
+  } {
+    const store = withResistor()
+    const instance = store.doc.components[0]?.id
+    const wire = store.addWire([
+      [10, 8],
+      [14, 8]
+    ])
+    if (!instance || !wire) throw new Error('montage incomplet')
+    store.clearSelection()
+    store.selection = [instance]
+    store.selectedWires = [wire]
+    store.groupSelection()
+    store.clearSelection()
+    return { store, instance, wire }
+  }
+
+  it('entoure le groupe, le prend d’un clic sur un membre et le déplace d’un bloc', async () => {
+    const { store, instance, wire } = withGroup()
+    const wrapper = mount(SchematicCanvas)
+    const svg = wrapper.get('svg.schematic')
+    const outline = (): number[] =>
+      ['x', 'y', 'width', 'height'].map((name) =>
+        Number(wrapper.get('.group-outline').attributes(name))
+      )
+    // Le contour entoure la résistance et le fil, à 0,4 cellule.
+    const [x, y, width, height] = outline()
+    expect(x).toBeCloseTo(1.6)
+    expect(y).toBeCloseTo(2.6)
+    expect(width).toBeCloseTo(12.8)
+    expect(height).toBeCloseTo(5.8)
+
+    // Clic sur le fil : tout le groupe est sélectionné, et le glisser l'emmène, contour compris.
+    await fire(wrapper.get('.wire-hit'), 'pointerdown', at(store, 12, 8))
+    expect([store.selection, store.selectedWires]).toEqual([[instance], [wire]])
+    await fire(svg, 'pointermove', at(store, 14, 9))
+    expect(outline()[0]).toBeCloseTo(3.6)
+    expect(outline()[1]).toBeCloseTo(3.6)
+    await fire(svg, 'pointerup', at(store, 14, 9))
+    expect(store.doc.components[0]).toMatchObject({ x: 4, y: 4 })
+    expect(store.doc.wires[0]?.points).toEqual([
+      [12, 9],
+      [16, 9]
+    ])
+
+    // Maj+clic sur le composant : tout le groupe quitte la sélection.
+    await fire(wrapper.get('.instance .hit'), 'pointerdown', at(store, 6, 5), { shiftKey: true })
+    expect(store.hasSelection).toBe(false)
+
+    // Case « Groupes » décochée : plus de contour.
+    store.showGroups = false
+    await nextTick()
+    expect(wrapper.find('.group-outline').exists()).toBe(false)
+  })
+
+  it('un lasso qui touche un membre prend tout le groupe ; Ctrl+clic prend l’élément seul', async () => {
+    const { store, instance, wire } = withGroup()
+    const wrapper = mount(SchematicCanvas)
+    const svg = wrapper.get('svg.schematic')
+    await fire(svg, 'pointerdown', at(store, 9, 7))
+    await fire(svg, 'pointermove', at(store, 11, 9))
+    await fire(svg, 'pointerup', at(store, 11, 9))
+    expect([store.selection, store.selectedWires]).toEqual([[instance], [wire]])
+
+    // Ctrl+clic sur le fil : lui seul, pour le retoucher sans défaire le groupe.
+    store.clearSelection()
+    await fire(wrapper.get('.wire-hit'), 'pointerdown', at(store, 12, 8), CTRL)
+    await fire(svg, 'pointerup', at(store, 12, 8), CTRL)
+    expect([store.selection, store.selectedWires]).toEqual([[], [wire]])
+  })
+})

@@ -1,3 +1,4 @@
+import { groupSchema } from './component'
 import { z } from 'zod'
 import { hexColorSchema } from './color'
 import { gridCoordSchema, gridPointSchema } from './grid'
@@ -149,6 +150,7 @@ export const NODE_TEXT_SCALES = [1, 1.5, 2, 2.5, 3] as const
 /** Nœud : une boîte en cellules, (x, y) = coin supérieur gauche. */
 export const diagramNodeSchema = z.object({
   id: z.string().min(1),
+  group: groupSchema,
   shape: nodeShapeSchema,
   x: gridCoordSchema,
   y: gridCoordSchema,
@@ -186,6 +188,7 @@ export type LinkDash = z.infer<typeof linkDashSchema>
 export const diagramLinkSchema = z
   .object({
     id: z.string().min(1),
+    group: groupSchema,
     points: z.array(gridPointSchema).min(2),
     color: hexColorSchema,
     dash: linkDashSchema,

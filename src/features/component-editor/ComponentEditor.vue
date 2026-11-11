@@ -169,10 +169,26 @@ function orderMenu(): MenuItem {
   )
 }
 
+/** Grouper et Dégrouper, quand la sélection s'y prête. */
+function groupItems(): MenuItem[] {
+  const items: MenuItem[] = []
+  if (store.canGroup) {
+    items.push(item('Grouper', () => store.groupSelection(), { hint: 'Ctrl+G', icon: 'group' }))
+  }
+  if (store.canUngroup) {
+    items.push(
+      item('Dégrouper', () => store.ungroupSelection(), { hint: 'Ctrl+Maj+G', icon: 'ungroup' })
+    )
+  }
+  if (items.length > 0) items.push(SEPARATOR)
+  return items
+}
+
 /** Fin de tout menu d'élément, dans le même ordre que dans les autres éditeurs. */
 function commonItems(): MenuItem[] {
   const noShape = store.selectedIndexes.length === 0
   return [
+    ...groupItems(),
     item('Dupliquer', () => store.duplicateSelection(), {
       hint: 'Ctrl+D',
       icon: 'duplicate',
@@ -299,6 +315,8 @@ function onKeyDown(event: KeyboardEvent): void {
     else if (key === 'c') store.copySelection()
     else if (key === 'v') store.pasteClipboard()
     else if (key === 'd') store.duplicateSelection()
+    else if (key === 'g' && event.shiftKey) store.ungroupSelection()
+    else if (key === 'g') store.groupSelection()
     else if (key === 'pageup') store.reorderPrimitive(event.shiftKey ? 'top' : 'up')
     else if (key === 'pagedown') store.reorderPrimitive(event.shiftKey ? 'bottom' : 'down')
     else return

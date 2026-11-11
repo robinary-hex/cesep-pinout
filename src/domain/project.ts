@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { hexColorSchema } from './color'
 import {
   componentDefinitionSchema,
+  groupSchema,
   textAnchorSchema,
   type ComponentDefinition,
   type Pin
@@ -22,6 +23,7 @@ export const PROJECT_SCHEMA_VERSION = 21
 /** Composant posé sur le montage ; (x, y) = coin supérieur gauche de sa boîte, en grille. */
 export const componentInstanceSchema = z.object({
   id: z.string().min(1),
+  group: groupSchema,
   defId: z.string().min(1),
   x: gridCoordSchema,
   y: gridCoordSchema,
@@ -77,6 +79,7 @@ export function wireGeometryProblem(
 export const wireSchema = z
   .object({
     id: z.string().min(1),
+    group: groupSchema,
     color: hexColorSchema,
     points: z.array(gridPointSchema).min(2),
     /** Rang d'empilement : un fil de rang supérieur passe au-dessus aux croisements. */
@@ -108,6 +111,7 @@ export type CrossingOverride = z.infer<typeof crossingOverrideSchema>
  */
 export const textLabelSchema = z.object({
   id: z.string().min(1),
+  group: groupSchema,
   x: gridCoordSchema,
   y: gridCoordSchema,
   w: z.number().int().positive(),

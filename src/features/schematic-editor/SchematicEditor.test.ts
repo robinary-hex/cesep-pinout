@@ -2,7 +2,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createEmptyComponent } from '@/domain'
+import { createEmptyComponent, type Primitive } from '@/domain'
 import { setBridge } from '@/io/bridge'
 import { FakeFs } from '@/io/testing/fakeFs'
 import { menuEntry, menuLabels, rightClick, subMenuLabels } from '@/ui/testing/menus'
@@ -138,6 +138,105 @@ describe('menu contextuel du montage', () => {
     await flushPromises()
     expect(store.selection).toEqual([instance])
     expect(store.selectedWires).toEqual([lead])
+    wrapper.unmount()
+  })
+})
+
+describe('montage : grouper par le menu et au clavier', () => {
+  it('clic droit sur plusieurs éléments : Grouper, puis Dégrouper ; Ctrl+G et Ctrl+Maj+G aussi', async () => {
+    const store = useSchematicStore()
+    const a = store.addWire([
+      [0, 0],
+      [6, 0]
+    ])
+    const b = store.addWire([
+      [0, 4],
+      [6, 4]
+    ])
+    if (!a || !b) throw new Error('fils refusés')
+    const wrapper = mount(SchematicEditor, { attachTo: document.body })
+    const checks = (): string[] => wrapper.findAll('.toolbar .check').map((label) => label.text())
+    const wireHit = (index: number): Element =>
+      wrapper.findAll('.wire-hit')[index]?.element ?? document.body
+    expect(checks()).toEqual(['Broches', 'Non reliées'])
+    store.clearSelection()
+    store.selectedWires = [a, b]
+    await flushPromises()
+    rightClick(wireHit(0), ...at(store, 3, 0))
+    await flushPromises()
+    expect(menuLabels()).toContain('Grouper')
+    expect(menuLabels()).not.toContain('Dégrouper')
+    menuEntry('Grouper').click()
+    await flushPromises()
+    expect(store.groups).toHaveLength(1)
+    // La case « Groupes » n'est dans la barre que si le montage a des groupes.
+    expect(checks()).toEqual(['Broches', 'Non reliées', 'Groupes'])
+    expect(wrapper.find('.group-outline').exists()).toBe(true)
+
+    // Clic droit sur un seul membre : le groupe entier est pris, et il se défait d'ici.
+    store.clearSelection()
+    rightClick(wireHit(1), ...at(store, 3, 4))
+    await flushPromises()
+    expect([...store.selectedWires].sort()).toEqual([a, b].sort())
+    expect(menuLabels()).toContain('Dégrouper')
+    expect(menuLabels()).not.toContain('Grouper')
+    menuEntry('Dégrouper').click()
+    await flushPromises()
+    expect(store.hasGroups).toBe(false)
+    expect(checks()).toEqual(['Broches', 'Non reliées'])
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', ctrlKey: true }))
+    expect(store.groups).toHaveLength(1)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'G', ctrlKey: true, shiftKey: true }))
+    expect(store.hasGroups).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('ne propose la valeur d’un texte variable que si le composant n’en a qu’un', async () => {
+    const store = useSchematicStore()
+    const variable = (name: string, y: number): Primitive => ({
+      kind: 'text',
+      x: 0,
+      y,
+      w: 8,
+      h: 2,
+      text: name,
+      size: 0.5,
+      anchor: 'middle',
+      color: '#000000',
+      variable: true,
+      defaultValue: '',
+      unit: '',
+      bold: false,
+      followsRotation: false,
+      italic: false,
+      underline: false,
+      strike: false,
+      vertical: false
+    })
+    const one = createEmptyComponent('resistor', 'Résistance')
+    one.visual = { kind: 'drawing', primitives: [variable('valeur', 0)] }
+    const two = createEmptyComponent('chip', 'Circuit')
+    two.visual = { kind: 'drawing', primitives: [variable('nom', 0), variable('ref', 4)] }
+    store.startPlacing(one)
+    store.placeAt(0, 0)
+    store.startPlacing(two)
+    store.placeAt(10, 0)
+    store.stopPlacing()
+    store.clearSelection()
+    const wrapper = mount(SchematicEditor, { attachTo: document.body })
+    const hit = (index: number): Element =>
+      wrapper.findAll('.instance .hit')[index]?.element ?? document.body
+    rightClick(hit(0), ...at(store, 2, 1))
+    await flushPromises()
+    expect(menuLabels().slice(0, 2)).toEqual(['valeur : (vide)…', 'Libellé…'])
+    menuEntry('Copier').click()
+    await flushPromises()
+    // Deux textes variables : leurs valeurs se changent dans le panneau, pas dans le menu.
+    rightClick(hit(1), ...at(store, 12, 1))
+    await flushPromises()
+    expect(menuLabels()[0]).toBe('Libellé…')
+    expect(menuLabels().some((label) => label.includes('nom') || label.includes('ref'))).toBe(false)
     wrapper.unmount()
   })
 })

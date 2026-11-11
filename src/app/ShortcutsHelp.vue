@@ -25,6 +25,11 @@ const SELECTION: Row[] = [
   ['Flèches', 'Déplacer la sélection d’un pas de grille'],
   ['Suppr', 'Supprimer la sélection'],
   ['Ctrl+A / D', 'Tout sélectionner / dupliquer'],
+  [
+    'Ctrl+G / Ctrl+Maj+G',
+    'Grouper la sélection / défaire ses groupes (aussi par le clic droit) ; un groupe se sélectionne et se déplace d’un bloc'
+  ],
+  ['Ctrl+clic sur un élément groupé', 'Le sélectionner seul, sans son groupe'],
   ['Ctrl+C / V', 'Copier / coller, aussi d’un onglet à l’autre'],
   ['Ctrl+Z / Y', 'Annuler / rétablir'],
   ['Échap', 'Annuler le geste en cours, puis la sélection, puis revenir à l’outil Sélection']
