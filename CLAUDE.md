@@ -731,9 +731,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
   par version dans `src/domain/fixtures/`. Versions courantes : composant 15, projet 21, paramètres 15,
-  diagramme 5 (depuis la 1.5.0 : palette des diagrammes et dossier de Pinout dans les
-  paramètres, couleur du texte d'un nœud dans le diagramme ; un fichier enregistré ne s'ouvre
-  plus dans une version antérieure)
+  diagramme 5 (paramètres 15 et diagramme 5 sont ceux de la 1.6.0, publiée le 11 novembre
+  2026 : palette des diagrammes et dossier de Pinout dans les paramètres, couleur du texte
+  d'un nœud dans le diagramme ; un diagramme enregistré par la 1.6.0 ne s'ouvre plus dans une
+  version antérieure)
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé). Composant 15 et projet 21 sont ceux de la 1.4.0, publiée le 11 novembre 2026 : depuis, tout
   nouveau champ d'un fichier, même optionnel, demande une montée de version et une migration
