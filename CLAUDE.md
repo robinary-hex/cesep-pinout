@@ -196,6 +196,15 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   Sans accusé de réception (rendu bloqué), le dialogue de Windows prend le relais
   (`askToSaveNatively`, puis `save-then-quit` ou `discard-then-quit`). L'enregistrement lui-même
   est dans `projectActions.ts` et `componentActions.ts`, partagé avec les éditeurs.
+- Session (décision du 11 novembre 2026 ; `src/app/session.ts`) : ce qui était ouvert revient au
+  lancement suivant, avec l'onglet et le mode qu'on regardait. Seuls comptent les documents qui
+  ont un fichier (montages, diagrammes, composants de la bibliothèque) : un document jamais
+  enregistré n'est pas retenu. La liste est réécrite à chaque changement d'onglet
+  (`currentSession`, `saveSession`), donc elle survit à un arrêt brutal ; elle vit dans la
+  mémoire de l'interface (`localMemory.ts`), propre à la machine. Au lancement
+  (`reopenLastSession` d'`App.vue`) : d'abord les copies de secours, puis la session (un
+  fichier disparu est passé sans rien dire ; après une récupération, les documents récupérés
+  restent devant), enfin le fichier passé en argument.
 - Modes (`src/app/App.vue`) : un bouton à pictogramme par mode (puce = Composants, résistance =
   Montage, organigramme = Diagramme ; nom en infobulle), l'application démarre sur le montage.
   Les trois forment un sélecteur segmenté, sans texte, le mode affiché plein dans la couleur
@@ -375,6 +384,15 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   « Modifier le style… » du panneau) modifie le style du montage affiché, en une commande. Le
   panneau surligne en `--alert` les réglages où le montage s'écarte du profil général
   (`profileDifferences`) et propose de l'y aligner (`adoptGeneralProfile`).
+  Profils enregistrés (`src/io/profiles.ts`, un fichier par profil dans `userData/profiles`) :
+  ils sont en tête de l'onglet Montages, un bouton radio devant chacun (décision du 11 novembre
+  2026). En choisir un le met dans les champs et à l'aperçu, « Appliquer » le confirme. La
+  ligne cochée est celle dont les champs portent le nom (« modifié » s'ils s'en écartent) ; une
+  pastille « en usage » marque le profil général (ou le style du montage), qui a sa propre
+  ligne quand il n'est pas enregistré. Le bouton du pied enregistre les champs comme profil,
+  ou met à jour celui du même nom. Piège : `structuredClone` refuse les objets que Vue a
+  rendus réactifs ; ce qu'on copie tel quel se garde en `shallowRef` (les profils enregistrés
+  étaient dans un `ref`, et « Charger » ne faisait rien).
 - Paramètres en deux fichiers (`src/io/settings.ts`) : un fichier partagé `settings.json`, commun
   aux machines (tout sauf ce qui est propre à chacune ; profil général compris), et le fichier
   local `userData/settings.json`, copie complète avec les fichiers récents et `settingsDir`. Le
@@ -622,6 +640,9 @@ release/latest.yml release/pinout-X.Y.Z-portable.exe --latest` avec des notes qu
   l'application y est recréé à chaque fois et les variables OneDrive sont retirées : ni la
   bibliothèque ni les paramètres de Robin ne sont lus. Le scénario exporte une fonction qui
   reçoit `click`, `rightClick`, `drag`, `key`, `js`, `fill`, `theme`, `shot`, `wait` ; la
-  fenêtre n'a pas le focus du système, donc le texte d'un champ se pose avec `fill`. À faire
+  fenêtre n'a pas le focus du système, donc le texte d'un champ se pose avec `fill`. Un fichier
+  `.pinout` ou `.pinuml` ajouté à la fin de la commande est ouvert au lancement, et
+  `APPSHOT_KEEP_PROFILE=1` garde le profil d'un lancement au suivant (pour voir ce que
+  l'application retrouve). À faire
   pour tout changement visible avant de le dire terminé. L'essai à la main (`pnpm dev`) et le
   jugement sur l'ergonomie restent à Robin ; les tests et `pnpm build`, la preuve automatisée.

@@ -38,6 +38,7 @@ import { openModals } from '@/ui/modalState'
 import { applyTheme } from '@/ui/theme'
 import type { UpdateStatus } from '../../electron/api'
 import { openExternalFile } from './externalFiles'
+import { currentSession, restoreSession, savedSession, saveSession } from './session'
 import ShortcutsHelp from './ShortcutsHelp.vue'
 import { updateButtonLabel, updateButtonTitle } from './update'
 
@@ -522,11 +523,12 @@ function scheduleAutosave(seconds: number): void {
 watch(() => library.autosaveSeconds, scheduleAutosave, { immediate: true })
 
 /** Au lancement : chaque copie de secours trouvée retrouve son onglet, si Robin le veut. */
-async function proposeRecovery(): Promise<void> {
+/** Propose les copies de secours d'un arrêt brutal ; vrai si des documents ont été récupérés. */
+async function proposeRecovery(): Promise<boolean> {
   const projects = await readAutosaves()
   const diagrams = await readDiagramAutosaves()
   const count = projects.length + diagrams.length
-  if (count === 0) return
+  if (count === 0) return false
   const describe = (meta: { name: string; savedAt: string; originalPath: string | null }): string =>
     `« ${meta.name} » (${new Date(meta.savedAt).toLocaleString('fr-BE')}, ${meta.originalPath ?? 'jamais enregistré'})`
   const lines = [
@@ -553,6 +555,37 @@ async function proposeRecovery(): Promise<void> {
     mode.value = projects.length > 0 ? 'schematic' : 'diagram'
   } else {
     await clearAutosave()
+  }
+  return recover
+}
+
+// Session : les documents ouverts qui ont un fichier sont retenus à chaque changement d'onglet
+// et rouverts au lancement suivant (`session.ts`). Rien n'est retenu avant que la session
+// précédente ait été relue : le montage vierge du démarrage l'effacerait.
+let sessionReady = false
+const session = computed(() => currentSession(mode.value, { schematic, diagram, editor }))
+watch(
+  () => JSON.stringify(session.value),
+  () => {
+    if (sessionReady) saveSession(session.value)
+  }
+)
+
+/**
+ * Au lancement : rouvre ce qui était ouvert la dernière fois. Après une récupération de copies de
+ * secours, les documents récupérés restent devant ; les autres reviennent derrière eux.
+ */
+async function reopenLastSession(recovered: boolean): Promise<void> {
+  const previous = savedSession()
+  try {
+    if (previous) {
+      const stores = { schematic, diagram, editor, library }
+      const shown = await restoreSession(previous, stores, !recovered)
+      if (shown !== null && !recovered) mode.value = shown
+    }
+  } finally {
+    sessionReady = true
+    saveSession(session.value)
   }
 }
 
@@ -685,7 +718,8 @@ onMounted(async () => {
   schematic.syncCurrentColor()
   if (diagram.pristine) diagram.newDiagram()
   diagram.syncDefaults()
-  await proposeRecovery()
+  const recovered = await proposeRecovery()
+  await reopenLastSession(recovered)
   const launch = await bridge().getLaunchFile()
   if (launch) await openExternal(launch)
 })

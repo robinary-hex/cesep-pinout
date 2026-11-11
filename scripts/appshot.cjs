@@ -9,6 +9,8 @@
 // (`profile/`) et les variables OneDrive sont retirées, donc ni la bibliothèque ni les paramètres
 // de l'utilisateur ne sont touchés. La fenêtre hors écran n'a pas le focus du système : le texte
 // d'un champ se pose avec `fill`, pas au clavier ; les raccourcis de l'application, eux, passent.
+// Un chemin de fichier `.pinout` ou `.pinuml` ajouté à la fin est ouvert au lancement, comme un
+// fichier double-cliqué.
 const fs = require('node:fs')
 const path = require('node:path')
 const electron = require('electron')
@@ -45,7 +47,11 @@ for (const name of Object.keys(process.env)) {
   if (/^onedrive/i.test(name)) delete process.env[name]
 }
 fs.mkdirSync(outDir, { recursive: true })
-fs.rmSync(path.join(outDir, 'profile'), { recursive: true, force: true })
+// Le profil repart de zéro à chaque lancement, sauf si APPSHOT_KEEP_PROFILE=1 : pour voir ce que
+// l'application retrouve d'un lancement à l'autre.
+if (process.env.APPSHOT_KEEP_PROFILE !== '1') {
+  fs.rmSync(path.join(outDir, 'profile'), { recursive: true, force: true })
+}
 app.setPath('userData', path.join(outDir, 'profile'))
 
 // La fenêtre de l'application devient une fenêtre hors écran : elle ne s'affiche jamais, mais la

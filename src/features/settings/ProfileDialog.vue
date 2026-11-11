@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import {
   diagramDefaultsSchema,
+  sameProfile,
   styleProfileSchema,
   type DiagramDefaults,
   type NodeFill,
@@ -12,6 +13,7 @@ import { useLibraryStore } from '@/features/library/store'
 import { useSchematicStore } from '@/features/schematic-editor/store'
 import { deleteProfile, listProfiles, saveProfile, type SavedProfile } from '@/io/profiles'
 import { confirmAction } from '@/ui/dialogs'
+import Icon from '@/ui/Icon.vue'
 import ModalDialog from '@/ui/ModalDialog.vue'
 import DiagramStyleFields from './DiagramStyleFields.vue'
 import ProfileFields from './ProfileFields.vue'
@@ -20,8 +22,10 @@ import ProfileFields from './ProfileFields.vue'
 // deux onglets, Montages et Diagrammes ; l'aperçu se voit sur le document affiché s'il suit le
 // style général, et « Appliquer » enregistre les deux dans les paramètres puis les donne aux
 // documents ouverts qui suivaient l'ancien. `montage` : le style propre au montage affiché ;
-// l'aperçu est immédiat et « Appliquer » en fait une commande du montage. Les profils nommés
-// (montages) se chargent dans les deux cas ; « Annuler » ou Échap ne change rien. Il n'y a pas
+// l'aperçu est immédiat et « Appliquer » en fait une commande du montage. Les profils enregistrés
+// (montages) sont en tête de la boîte, un bouton radio devant chacun : en choisir un le met dans
+// les champs et à l'aperçu, « Appliquer » le confirme ; une pastille dit lequel est en usage.
+// « Annuler » ou Échap ne change rien. Il n'y a pas
 // d'onglet pour les composants : un composant n'a pas de style à lui, il se dessine avec celui
 // du montage où il est posé.
 
@@ -53,7 +57,36 @@ const draft = ref<StyleProfile>(
 /** Le profil général ne s'aperçoit que sur un montage qui le suit ; un style propre, toujours. */
 const previewable = !general || schematic.followsGeneralProfile
 const title = general ? 'Profil de style général' : `Style du montage « ${schematic.doc.name} »`
-const saved = ref<SavedProfile[]>([])
+// Hors de la réactivité profonde : un profil enregistré se copie tel quel dans les champs, et
+// `structuredClone` refuse les objets que Vue a rendus réactifs (rien ne se chargeait).
+const saved = shallowRef<SavedProfile[]>([])
+/** Le profil en usage : le profil général, ou le style du montage affiché. */
+const applied = computed(() => (general ? library.defaultProfile : schematic.doc.profile))
+/** Profil enregistré que les champs montrent : celui qui porte leur nom. */
+const shownEntry = computed(
+  () => saved.value.find((entry) => entry.profile.name === draft.value.name) ?? null
+)
+/** Les champs s'écartent-ils du profil enregistré sous ce nom ? */
+const modified = computed(
+  () => shownEntry.value !== null && !sameProfile(draft.value, shownEntry.value.profile)
+)
+/** Le profil en usage n'est aucun des profils enregistrés : il a alors sa propre ligne. */
+const appliedUnsaved = computed(
+  () => !saved.value.some((entry) => sameProfile(entry.profile, applied.value))
+)
+/** Les champs montrent le profil en usage, sans porter le nom d'un profil enregistré. */
+const showsApplied = computed(
+  () => shownEntry.value === null && sameProfile(draft.value, applied.value)
+)
+const appliedLabel = general ? 'profil général' : 'style de ce montage'
+
+function isApplied(profile: StyleProfile): boolean {
+  return sameProfile(profile, applied.value)
+}
+
+function summary(profile: StyleProfile): string {
+  return `${profile.cellPx} px · fils ${profile.wireWidth} · trait ${profile.componentStroke} · rayon ${profile.cornerRadius}`
+}
 const message = ref('')
 const failed = ref(false)
 
@@ -142,19 +175,26 @@ async function saveNamed(): Promise<void> {
   try {
     const path = await saveProfile(profile)
     await refresh()
-    report(`Profil enregistré : ${path}`)
+    report(`Profil « ${profile.name} » enregistré : ${path}`)
   } catch (error) {
     report(error instanceof Error ? error.message : String(error), true)
   }
 }
 
+/** Choisit un profil enregistré : il passe dans les champs et à l'aperçu ; Appliquer le confirme. */
 function load(entry: SavedProfile): void {
   draft.value = structuredClone(entry.profile)
   report(
     general
-      ? `Profil « ${entry.profile.name} » chargé : Appliquer en fait le profil général.`
-      : `Profil « ${entry.profile.name} » chargé : Appliquer le donne à ce montage.`
+      ? `Profil « ${entry.profile.name} » choisi : Appliquer en fait le profil général.`
+      : `Profil « ${entry.profile.name} » choisi : Appliquer le donne à ce montage.`
   )
+}
+
+/** Revient au profil en usage, tel qu'il est. */
+function loadApplied(): void {
+  draft.value = structuredClone(applied.value)
+  report('')
 }
 
 async function remove(entry: SavedProfile): Promise<void> {
@@ -182,27 +222,68 @@ async function remove(entry: SavedProfile): Promise<void> {
     </nav>
 
     <template v-if="tab === 'montage'">
+      <section class="profiles">
+        <h3>Profils</h3>
+        <div class="profile-list" role="radiogroup" aria-label="Profils de style">
+          <label
+            v-for="entry in saved"
+            :key="entry.path"
+            class="profile-row"
+            :class="{ selected: entry === shownEntry }"
+          >
+            <input
+              type="radio"
+              name="style-profile"
+              :checked="entry === shownEntry"
+              :title="`Choisir le profil « ${entry.profile.name} »`"
+              @change="load(entry)"
+            />
+            <span class="name">{{ entry.profile.name }}</span>
+            <span class="meta">{{ summary(entry.profile) }}</span>
+            <span
+              v-if="entry === shownEntry && modified"
+              class="badge changed"
+              title="Les réglages ci-dessous ne sont plus ceux du profil enregistré"
+            >
+              modifié
+            </span>
+            <span v-if="isApplied(entry.profile)" class="badge" :title="`C’est le ${appliedLabel}`">
+              en usage
+            </span>
+            <button
+              type="button"
+              class="small icon-only"
+              title="Supprimer ce profil enregistré"
+              @click.prevent="remove(entry)"
+            >
+              <Icon name="trash" :size="14" />
+            </button>
+          </label>
+          <label v-if="appliedUnsaved" class="profile-row" :class="{ selected: showsApplied }">
+            <input
+              type="radio"
+              name="style-profile"
+              :checked="showsApplied"
+              :title="`Revenir au ${appliedLabel}`"
+              @change="loadApplied"
+            />
+            <span class="name">{{ applied.name }}</span>
+            <span class="meta">{{ summary(applied) }} · pas enregistré comme profil</span>
+            <span class="badge" :title="`C’est le ${appliedLabel}`">en usage</span>
+          </label>
+          <label v-if="!shownEntry && !showsApplied" class="profile-row selected">
+            <input type="radio" name="style-profile" checked />
+            <span class="name">{{ draft.name }}</span>
+            <span class="meta">réglages ci-dessous, pas encore enregistrés comme profil</span>
+          </label>
+        </div>
+      </section>
+
       <ProfileFields v-model="draft" />
       <p v-if="!previewable" class="hint">
         Le montage affiché a son propre style : il ne montre pas l’aperçu et ne suivra pas ces
         réglages.
       </p>
-
-      <section class="saved">
-        <h3>Profils enregistrés</h3>
-        <p v-if="saved.length === 0" class="hint">Aucun pour l'instant.</p>
-        <ul v-else>
-          <li v-for="entry in saved" :key="entry.path">
-            <span class="name">{{ entry.profile.name }}</span>
-            <span class="meta"
-              >{{ entry.profile.cellPx }} px · fils {{ entry.profile.wireWidth }} · trait
-              {{ entry.profile.componentStroke }} · rayon {{ entry.profile.cornerRadius }}</span
-            >
-            <button type="button" class="small" @click="load(entry)">Charger</button>
-            <button type="button" class="small danger" @click="remove(entry)">✕</button>
-          </li>
-        </ul>
-      </section>
     </template>
 
     <template v-else>
@@ -237,8 +318,18 @@ async function remove(entry: SavedProfile): Promise<void> {
     <p v-if="message" class="message" :class="{ failed }">{{ message }}</p>
 
     <template #footer>
-      <button v-if="tab === 'montage'" type="button" @click="saveNamed">
-        Enregistrer sous ce nom
+      <button
+        v-if="tab === 'montage'"
+        type="button"
+        :disabled="shownEntry !== null && !modified"
+        :title="
+          shownEntry
+            ? 'Remplace le profil enregistré de ce nom par les réglages ci-dessus'
+            : 'Garde ces réglages comme un profil à part, sous le nom du champ « Nom du profil »'
+        "
+        @click="saveNamed"
+      >
+        {{ shownEntry ? 'Mettre à jour le profil' : 'Enregistrer comme profil' }}
       </button>
       <button type="button" @click="emit('close')">Annuler</button>
       <button type="button" class="primary" @click="apply">Appliquer</button>
@@ -307,18 +398,62 @@ async function remove(entry: SavedProfile): Promise<void> {
   color: var(--text-muted);
 }
 
-.saved ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
+/* Profils enregistrés, en tête : un bouton radio devant chacun, celui des champs surligné. */
+.profiles h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
 }
 
-.saved li {
+.profile-list {
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.profile-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 0;
+  min-height: 34px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.profile-row + .profile-row {
   border-top: 1px solid var(--border-soft);
+}
+
+.profile-row:hover {
+  background: var(--surface-3);
+}
+
+.profile-row.selected {
+  background: var(--accent-soft);
+}
+
+.profile-row input[type='radio'] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.badge {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--accent);
+}
+
+.badge.changed {
+  color: var(--warning-text);
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
 }
 
 .name {

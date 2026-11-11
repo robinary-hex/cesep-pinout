@@ -2,7 +2,14 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { dataUrlToBase64 } from '@/domain'
+import {
+  createEmptyDiagram,
+  createEmptyProject,
+  dataUrlToBase64,
+  DEFAULT_PROFILE,
+  serializeDiagram,
+  serializeProject
+} from '@/domain'
 import { pngHeaderDataUrl } from '@/domain/testing/pngHeader'
 import { useComponentEditorStore } from '@/features/component-editor/store'
 import { useDiagramStore } from '@/features/diagram-editor/store'
@@ -21,6 +28,8 @@ beforeEach(() => {
   fs = new FakeFs()
   setBridge(fs)
   setActivePinia(createPinia())
+  // Chaque test part d'une machine neuve : pas de session d'un test précédent à rouvrir.
+  localStorage.clear()
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -201,6 +210,67 @@ describe('image déposée dans la fenêtre', () => {
     await flushPromises()
     expect(editor.doc.visual.primitives[0]).toMatchObject({ kind: 'image', w: 8, h: 12 })
     expect(editor.status).toContain('160 × 240 px')
+    wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+})
+
+describe('session : ce qui était ouvert revient au lancement suivant', () => {
+  const A = 'C:/Docs/a.pinout'
+  const B = 'C:/Docs/b.pinout'
+  const D = 'C:/Docs/d.pinuml'
+
+  it('rouvre les documents qui ont un fichier, l’onglet et le mode qu’on regardait', async () => {
+    await fs.writeTextFile(A, serializeProject(createEmptyProject('A', DEFAULT_PROFILE)))
+    await fs.writeTextFile(B, serializeProject(createEmptyProject('B', DEFAULT_PROFILE)))
+    await fs.writeTextFile(D, serializeDiagram(createEmptyDiagram('D')))
+
+    // Première fois : deux montages, un montage jamais enregistré, un diagramme ; on regarde A.
+    const first = mount(App, { attachTo: document.body })
+    await flushPromises()
+    const schematic = useSchematicStore()
+    await schematic.openPath(A)
+    await schematic.openPath(B)
+    schematic.newProject()
+    const tabA = schematic.tabs.find((tab) => tab.filePath === A)
+    if (tabA) schematic.activateTab(tabA.id)
+    await useDiagramStore().openPath(D)
+    await first.findAll('.modes button')[2]?.trigger('click')
+    await flushPromises()
+    expect(JSON.parse(localStorage.getItem('pinout.session') ?? 'null')).toEqual({
+      mode: 'diagram',
+      schematic: { paths: [A, B], active: A },
+      diagram: { paths: [D], active: D },
+      components: { paths: [], active: null }
+    })
+    first.unmount()
+    document.body.innerHTML = ''
+
+    // Entre-temps, B a été supprimé du disque. Lancement suivant : tout repart de zéro.
+    fs.texts.delete(B)
+    setActivePinia(createPinia())
+    const second = mount(App, { attachTo: document.body })
+    await flushPromises()
+    const reopened = useSchematicStore()
+    // A revient ; B, disparu, est passé sans histoire ; le montage jamais enregistré ne revient pas.
+    expect(reopened.tabs.map((tab) => tab.filePath)).toEqual([A])
+    expect(reopened.status).not.toContain('impossible')
+    expect(useDiagramStore().tabs.map((tab) => tab.filePath)).toEqual([D])
+    expect(second.find('.diagram-wrap').exists()).toBe(true)
+    // La session retenue est maintenant celle-là.
+    expect(JSON.parse(localStorage.getItem('pinout.session') ?? 'null')).toMatchObject({
+      schematic: { paths: [A], active: A }
+    })
+    second.unmount()
+    document.body.innerHTML = ''
+  })
+
+  it('démarre comme avant quand rien n’était ouvert, ou sans session gardée', async () => {
+    localStorage.setItem('pinout.session', 'pas du JSON')
+    const wrapper = mount(App, { attachTo: document.body })
+    await flushPromises()
+    expect(wrapper.findAll('.doc-tab').map((tab) => tab.text())).toEqual(['Nouveau montage ✕'])
+    expect(wrapper.find('.schematic-wrap').exists()).toBe(true)
     wrapper.unmount()
     document.body.innerHTML = ''
   })
