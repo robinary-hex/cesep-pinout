@@ -441,6 +441,37 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     sommets, sans diagonale), texte (style, alignement), vide (poser une forme du catalogue à
     l'endroit du clic).
     Dans les tests, `src/ui/testing/menus.ts` lit et actionne le menu ouvert.
+- Variantes d'un composant (décision du 11 novembre 2026) : le même composant dessiné autrement
+  (LED rouge ou verte, pattes longues ou courtes). Une seule liste par composant, pas de
+  critères croisés : six combinaisons font six variantes, nommées à la main. Chaque variante
+  est un dessin complet (`size`, `visual`, `pins`, `pinGroups` : `ComponentBody`), née d'une
+  copie de celle qu'on regardait puis retouchée ; rien n'est hérité, ce qui permet de changer
+  aussi la taille et les broches, et une retouche commune se refait dans chaque variante (les
+  formes se copient de l'une à l'autre). Deux variantes nées l'une de l'autre gardent les mêmes
+  identifiants de broche.
+  - Fichier : le composant porte lui-même le dessin de sa première variante (`BASE_VARIANT`,
+    nommée par `variantName`, « Standard » par défaut) ; les autres sont dans `variants`
+    (`id`, `name`, et leur dessin). Champs optionnels, sans montée de version. Les contrôles
+    (`componentIssues`) et les images (`componentImages`, `mapComponentPrimitives` : un PNG par
+    nom dans le dossier, toutes variantes confondues) couvrent toutes les variantes.
+  - Domaine : `componentVariants`, `hasVariants`, `variantDefinition(def, id)` rend le composant
+    tel que le dessine une variante (même identité, toujours le même objet pour un même couple) ;
+    `instanceDefinition(project, instance)` fait de même pour un exemplaire posé
+    (`instance.variant`, absent pour la première). Tout ce qui dessine ou relie un exemplaire
+    passe par là (`placed` du store, `projectPins`, `projectBounds`, export), jamais par
+    `embeddedDefs[defId]` directement ; les définitions embarquées et le presse-papiers, eux,
+    gardent le composant entier.
+  - Éditeur de composants : on édite une variante à la fois (`activeVariant` du store, gardée
+    par onglet). Le store lit le dessin par `shown` et l'écrit par `bodyOf(draft)` : jamais
+    `doc.value.pins` ni `draft.pins`, qui ne seraient que la première variante ; le canevas et le
+    panneau lisent `store.shown`. Barre d'outils : la liste des variantes (dès deux) et le
+    bouton qui en crée une ; panneau du composant : section « Variantes » (un clic affiche,
+    le nom se change sur place, corbeille). `addVariant`, `showVariant`, `renameVariant`,
+    `removeVariant` : supprimer la première promeut la suivante ; la dernière ne se supprime pas.
+  - Montage : sous un composant de la bibliothèque, une pastille par variante la pose
+    (`startPlacing(def, variante)`), le clic sur la ligne pose la première ; un composant posé
+    change de variante par le clic droit (« Variante ») ou la liste du panneau
+    (`setInstancesVariant`, par `applyWithElasticWires` : les fils posés sur ses broches suivent).
 - Groupes (décision du 11 novembre 2026), dans les trois éditeurs : des éléments qu'on
   sélectionne et déplace d'un bloc. Rien n'est rangé à part : chaque élément groupé porte
   l'identifiant de son groupe (`group`, optionnel, sans montée de version des fichiers) et un

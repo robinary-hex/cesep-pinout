@@ -62,6 +62,10 @@ const sections: { title: string; rows: Row[] }[] = [
       ...SELECTION,
       ['Alt+clic sur un croisement', 'Inverser l’ordre des deux fils à cet endroit seulement'],
       [
+        'Variante d’un composant',
+        'Dans la bibliothèque, une pastille par variante la pose ; une fois posé, clic droit ou panneau pour en changer, ses fils suivent'
+      ],
+      [
         'Ctrl+clic sur un fil',
         'Ajouter un sommet sur une partie droite, ou retirer le coin visé (un fil groupé est d’abord pris seul)'
       ],
@@ -168,6 +172,10 @@ const sections: { title: string; rows: Row[] }[] = [
       ],
       ['Ctrl+glisser sur une forme', 'Saisir sa poignée la plus proche'],
       ['Ctrl (sans sélection)', 'Poignées de la boîte du composant : glisser un coin ou un côté'],
+      [
+        'Variantes',
+        'Le même composant dessiné autrement : le bouton de la barre en crée une par copie, la liste choisit celle qu’on modifie ; nom et suppression dans le panneau'
+      ],
       [
         'Broches, dans le panneau',
         '« + Groupe » crée un groupe nommé ; glisser une broche change son ordre ou son groupe, son numéro suit'

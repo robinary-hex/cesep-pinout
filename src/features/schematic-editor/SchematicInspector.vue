@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import {
+  BASE_VARIANT,
+  componentVariants,
+  hasVariants,
+  instanceDefinition,
   componentFields,
   ROTATIONS,
   TEXT_SCALES,
@@ -67,9 +71,20 @@ const single = computed(() => {
   if (store.selection.length !== 1 || !onlyInstances.value) return null
   const id = store.selection[0]
   const instance = doc.value.components.find((candidate) => candidate.id === id)
-  const def = instance ? doc.value.embeddedDefs[instance.defId] : undefined
+  // Dans la variante que l'exemplaire montre : ses champs sont ceux de ce dessin-là.
+  const def = instance ? instanceDefinition(doc.value, instance) : undefined
   return instance && def ? { instance, def } : null
 })
+
+/** Variantes du composant sélectionné, s'il en a plusieurs. */
+const variants = computed(() =>
+  single.value && hasVariants(single.value.def) ? componentVariants(single.value.def) : []
+)
+
+function setVariant(event: Event): void {
+  if (!single.value) return
+  store.setInstancesVariant([single.value.instance.id], (event.target as HTMLSelectElement).value)
+}
 
 const fields = computed(() => (single.value ? componentFields(single.value.def) : []))
 
@@ -355,6 +370,14 @@ function setLabelVertical(event: Event): void {
     <template v-else-if="single">
       <section class="block">
         <h3>{{ single.def.name }}</h3>
+        <label v-if="variants.length > 0" class="field">
+          <span>Variante</span>
+          <select :value="single.instance.variant ?? BASE_VARIANT" @change="setVariant">
+            <option v-for="variant in variants" :key="variant.id" :value="variant.id">
+              {{ variant.name }}
+            </option>
+          </select>
+        </label>
         <div v-if="libraryUpdate" class="notice">
           <Icon name="refresh" :size="16" class="notice-icon" />
           <div class="notice-body">

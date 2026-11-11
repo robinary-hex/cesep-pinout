@@ -55,7 +55,7 @@ const menu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
 const prompt = ref<PromptState | null>(null)
 
 function editText(index: number): void {
-  const primitive = store.doc.visual.primitives[index]
+  const primitive = store.shown.visual.primitives[index]
   if (primitive?.kind !== 'text') return
   prompt.value = {
     title: 'Texte',
@@ -70,7 +70,7 @@ function editText(index: number): void {
 }
 
 function renamePin(id: string): void {
-  const pin = store.doc.pins.find((candidate) => candidate.id === id)
+  const pin = store.shown.pins.find((candidate) => candidate.id === id)
   if (!pin) return
   prompt.value = {
     title: 'Broche',
@@ -222,7 +222,7 @@ function openMenu(request: EditorMenuRequest): void {
   const target = request.target
 
   if (target.kind === 'primitive') {
-    const primitive = store.doc.visual.primitives[target.index]
+    const primitive = store.shown.visual.primitives[target.index]
     if (!primitive) return
     items.push(heading(multi ? `${count} éléments` : PRIMITIVE_KIND_LABELS[primitive.kind]))
     if (!multi) {
@@ -232,7 +232,7 @@ function openMenu(request: EditorMenuRequest): void {
     }
     items.push(...commonItems())
   } else if (target.kind === 'pin') {
-    const pin = store.doc.pins.find((candidate) => candidate.id === target.id)
+    const pin = store.shown.pins.find((candidate) => candidate.id === target.id)
     if (!pin) return
     items.push(heading(multi ? `${count} éléments` : `Broche ${pin.name}`))
     if (!multi) {

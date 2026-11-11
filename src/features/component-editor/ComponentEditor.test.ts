@@ -355,7 +355,10 @@ describe('éditeur de composants : groupes de broches dans le panneau', () => {
 
     // Sans groupe : la liste de toujours, sans titre de section.
     expect(wrapper.find('.pin-group-head').exists()).toBe(false)
-    await wrapper.get('.block-title button').trigger('click')
+    const addGroup = wrapper
+      .findAll('.block-title button')
+      .find((button) => button.text() === 'Groupe')
+    await addGroup?.trigger('click')
     const name = wrapper.get('.pin-group-head input')
     await name.setValue('Alimentation')
     await name.trigger('change')
@@ -399,6 +402,42 @@ describe('éditeur de composants : groupes de broches dans le panneau', () => {
     expect(store.doc.pinGroups).toBeUndefined()
     expect(store.doc.pins).toHaveLength(3)
     expect(wrapper.find('.pin-group-head').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})
+
+describe('éditeur de composants : variantes', () => {
+  it('se créent par la barre ou le panneau, se choisissent, se nomment et se suppriment', async () => {
+    const store = withRectangle()
+    store.inspectorOpen = true
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    // Une seule variante : pas de liste dans la barre, une phrase dans le panneau.
+    expect(wrapper.find('.variant-select').exists()).toBe(false)
+    expect(wrapper.find('.variant-row').exists()).toBe(false)
+    await wrapper.get('.toolbar button[title^="Nouvelle variante"]').trigger('click')
+    expect(store.variants).toHaveLength(2)
+    expect(store.variantId).toBe('v1')
+    const select = wrapper.get('.variant-select')
+    expect((select.element as HTMLSelectElement).value).toBe('v1')
+    expect(
+      wrapper.findAll('.variant-row').map((row) => row.classes().includes('selected'))
+    ).toEqual([false, true])
+
+    // Un clic sur la ligne d'une variante l'affiche ; son nom se change sur place.
+    await wrapper.findAll('.variant-row')[0]?.trigger('click')
+    expect(store.variantId).toBe('base')
+    const name = wrapper.findAll('.variant-row input')[1]
+    await name?.setValue('Verte')
+    await name?.trigger('change')
+    expect(store.variants[1]?.name).toBe('Verte')
+    // La liste de la barre change aussi la variante affichée.
+    await select.setValue('v1')
+    expect(store.variantId).toBe('v1')
+
+    // La corbeille d'une ligne supprime la variante ; il n'en reste qu'une, la liste disparaît.
+    await wrapper.findAll('.variant-row button')[1]?.trigger('click')
+    expect(store.variants).toHaveLength(1)
+    expect(wrapper.find('.variant-select').exists()).toBe(false)
     wrapper.unmount()
   })
 })

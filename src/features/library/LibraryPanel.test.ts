@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createEmptyComponent } from '@/domain'
 import { useComponentEditorStore } from '@/features/component-editor/store'
+import { useSchematicStore } from '@/features/schematic-editor/store'
 import { setBridge } from '@/io/bridge'
 import { saveComponent } from '@/io/library'
 import { FakeFs } from '@/io/testing/fakeFs'
@@ -170,6 +171,50 @@ describe('panneau de la bibliothèque', () => {
     await flushPromises()
     expect(editor.tabs).toHaveLength(2)
     expect(wrapper.emitted('edit')).toHaveLength(1)
+    wrapper.unmount()
+  })
+})
+
+describe('panneau de la bibliothèque : variantes', () => {
+  it('dans le montage, propose les variantes d’un composant sous sa ligne et dans son menu', async () => {
+    const library = useLibraryStore()
+    const schematic = useSchematicStore()
+    const led = createEmptyComponent('led', 'LED')
+    led.variantName = 'Rouge'
+    led.variants = [{ id: 'v1', name: 'Verte', size: led.size, visual: led.visual, pins: [] }]
+    await saveComponent(library.libraryDir, led)
+    await library.refresh()
+    const wrapper = mount(LibraryPanel, { props: { mode: 'place' }, attachTo: document.body })
+    await flushPromises()
+    const chips = wrapper.findAll('.variant-chip')
+    expect(chips.map((chip) => chip.text())).toEqual(['Rouge', 'Verte'])
+    await chips[1]?.trigger('click')
+    expect(schematic.placement).toMatchObject({ variant: 'v1' })
+    expect(wrapper.findAll('.variant-chip')[1]?.classes()).toContain('current')
+    // La ligne elle-même pose la première variante.
+    await wrapper.get('.item .open').trigger('click')
+    expect(schematic.placement?.variant).toBeNull()
+    // Le clic droit les propose aussi.
+    rightClick(wrapper.get('.item').element, 40, 60)
+    await flushPromises()
+    expect(menuLabels()).toContain('Poser une variante')
+    menuEntry('Poser une variante').click()
+    await flushPromises()
+    menuEntry('Verte').click()
+    await flushPromises()
+    expect(schematic.placement?.variant).toBe('v1')
+    wrapper.unmount()
+  })
+
+  it('dans l’éditeur de composants, ne montre pas ces raccourcis de pose', async () => {
+    const library = useLibraryStore()
+    const led = createEmptyComponent('led', 'LED')
+    led.variants = [{ id: 'v1', name: 'Verte', size: led.size, visual: led.visual, pins: [] }]
+    await saveComponent(library.libraryDir, led)
+    await library.refresh()
+    const wrapper = mount(LibraryPanel, { props: { mode: 'edit' }, attachTo: document.body })
+    await flushPromises()
+    expect(wrapper.find('.variant-chip').exists()).toBe(false)
     wrapper.unmount()
   })
 })

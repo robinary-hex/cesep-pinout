@@ -15,7 +15,7 @@ import {
   type Rotation,
   QUARTERS_PER_CELL
 } from './grid'
-import type { ComponentInstance, Project, TextLabel } from './project'
+import { instanceDefinition, type ComponentInstance, type Project, type TextLabel } from './project'
 import { wireEndLabelBounds, wireEndLabelPlacement } from './wireEnds'
 
 /** Rectangle en cellules, coin supérieur gauche + taille. */
@@ -79,7 +79,7 @@ export function projectBounds(project: Project): GridRect | null {
     result = result ? unionRects(result, bounds) : { ...bounds }
   }
   for (const instance of project.components) {
-    const def = project.embeddedDefs[instance.defId]
+    const def = instanceDefinition(project, instance)
     if (def) include(instanceBounds(instance, def))
   }
   const fontCells = project.profile.endLabelFont.size / project.profile.cellPx

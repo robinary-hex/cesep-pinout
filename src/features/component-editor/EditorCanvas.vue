@@ -60,10 +60,10 @@ const PIN_COLORS: Record<PinKind, string> = {
 const cell = computed(() => store.cellPx)
 const quarter = computed(() => cell.value / QUARTERS_PER_CELL)
 /** Marges autour de la boîte du composant : une cellule, ou la place des repères de broche. */
-const margins = computed(() => canvasMargins(store.doc, cell.value))
+const margins = computed(() => canvasMargins(store.shown, cell.value))
 const originX = computed(() => margins.value.x)
 const originY = computed(() => margins.value.y)
-const size = computed(() => store.doc.size)
+const size = computed(() => store.shown.size)
 const boxWidth = computed(() => size.value.widthCells * cell.value)
 const boxHeight = computed(() => size.value.heightCells * cell.value)
 const svgWidth = computed(() => boxWidth.value + 2 * originX.value)
@@ -249,10 +249,10 @@ function pinPosition(pin: Pin): LocalPoint {
 // (mise en page dans pinLabelLayout.ts, partagée avec l'ajustement à la fenêtre).
 
 function pinLabel(pin: Pin, index: number): LabelOffset {
-  return PIN_LABEL_OFFSETS[pinLabelSideAt(store.doc, pin, index, pinPosition(pin), cell.value)]
+  return PIN_LABEL_OFFSETS[pinLabelSideAt(store.shown, pin, index, pinPosition(pin), cell.value)]
 }
 
-const pinLabels = computed(() => store.doc.pins.map((pin, index) => pinLabel(pin, index)))
+const pinLabels = computed(() => store.shown.pins.map((pin, index) => pinLabel(pin, index)))
 
 function labelOf(index: number): LabelOffset {
   return pinLabels.value[index] ?? PIN_LABEL_OFFSETS.bottom
@@ -277,12 +277,12 @@ const ghostDef = computed<ComponentDefinition | null>(() => {
   const dx = current.current.x - current.start.x
   const dy = current.current.y - current.start.y
   if (dx === 0 && dy === 0) return null
-  const list = store.doc.visual.primitives
+  const list = store.shown.visual.primitives
   const copies = current.indexes.flatMap((index) => {
     const primitive = list[index]
     return primitive ? [translatePrimitive(primitive, dx, dy)] : []
   })
-  return { ...store.doc, visual: { kind: 'drawing', primitives: copies } }
+  return { ...store.shown, visual: { kind: 'drawing', primitives: copies } }
 })
 
 const handlePreview = computed(() => {
@@ -291,7 +291,7 @@ const handlePreview = computed(() => {
 })
 
 function primitiveAt(index: number): Primitive | null {
-  return store.doc.visual.primitives[index] ?? null
+  return store.shown.visual.primitives[index] ?? null
 }
 
 /** Une forme telle qu'affichée (aperçu de poignée compris). */
@@ -345,7 +345,7 @@ const groupOutlines = computed(() => {
         }
       ]
     })
-    for (const pin of store.doc.pins) {
+    for (const pin of store.shown.pins) {
       if (!group.pinIds.includes(pin.id)) continue
       const at = pinPosition(pin)
       rects.push({ x: at.x * cell.value, y: at.y * cell.value, width: 0, height: 0 })
@@ -596,7 +596,7 @@ function onHandleDown(handleId: string, event: PointerEvent): void {
 function onPinDown(id: string, event: PointerEvent): void {
   if (store.tool !== 'select' || event.button !== 0) return
   event.stopPropagation()
-  const pin = store.doc.pins.find((candidate) => candidate.id === id)
+  const pin = store.shown.pins.find((candidate) => candidate.id === id)
   if (!pin) return
   if (event.shiftKey) {
     store.togglePin(id)
@@ -715,7 +715,7 @@ function onPointerDown(event: PointerEvent): void {
         store.status = 'Clique une intersection de la boîte du composant.'
         break
       }
-      const taken = store.doc.pins.some(
+      const taken = store.shown.pins.some(
         (pin) => pin.x === nearest.point.x && pin.y === nearest.point.y
       )
       if (taken) {
@@ -819,7 +819,7 @@ function primitivesInBand(bandDrag: Extract<Drag, { kind: 'band' }>): number[] {
   const y1 = Math.min(bandDrag.start.y, bandDrag.current.y) * QUARTERS_PER_CELL
   const x2 = Math.max(bandDrag.start.x, bandDrag.current.x) * QUARTERS_PER_CELL
   const y2 = Math.max(bandDrag.start.y, bandDrag.current.y) * QUARTERS_PER_CELL
-  return store.doc.visual.primitives.flatMap((primitive, index) => {
+  return store.shown.visual.primitives.flatMap((primitive, index) => {
     const b = primitiveBounds(primitive)
     return b.x1 <= x2 && x1 <= b.x2 && b.y1 <= y2 && y1 <= b.y2 ? [index] : []
   })
@@ -831,7 +831,7 @@ function pinsInBand(bandDrag: Extract<Drag, { kind: 'band' }>): string[] {
   const y1 = Math.min(bandDrag.start.y, bandDrag.current.y)
   const x2 = Math.max(bandDrag.start.x, bandDrag.current.x)
   const y2 = Math.max(bandDrag.start.y, bandDrag.current.y)
-  return store.doc.pins
+  return store.shown.pins
     .filter((pin) => pin.x >= x1 && pin.x <= x2 && pin.y >= y1 && pin.y <= y2)
     .map((pin) => pin.id)
 }
@@ -1055,7 +1055,7 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
           />
 
           <ComponentGraphic
-            :def="store.doc"
+            :def="store.shown"
             :cell-px="cell"
             :stroke-base="strokeBase"
             interactive
@@ -1112,7 +1112,7 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
           </g>
 
           <g
-            v-for="(pin, index) in store.doc.pins"
+            v-for="(pin, index) in store.shown.pins"
             :key="pin.id"
             class="pin"
             :class="{ selected: isSelectedPin(pin.id), hovered: store.hoverPinId === pin.id }"

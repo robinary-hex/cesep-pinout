@@ -4,6 +4,7 @@ import {
   componentDefinitionSchema,
   groupSchema,
   textAnchorSchema,
+  variantDefinition,
   type ComponentDefinition,
   type Pin
 } from './component'
@@ -24,6 +25,8 @@ export const PROJECT_SCHEMA_VERSION = 21
 export const componentInstanceSchema = z.object({
   id: z.string().min(1),
   group: groupSchema,
+  /** Variante du composant que cet exemplaire montre ; absent : la première. */
+  variant: z.string().min(1).optional(),
   defId: z.string().min(1),
   x: gridCoordSchema,
   y: gridCoordSchema,
@@ -233,4 +236,16 @@ export function absolutePinPosition(
     instance.mirror
   )
   return { x: instance.x + local.x, y: instance.y + local.y }
+}
+
+/**
+ * Le composant qu'un exemplaire posé dessine : sa définition embarquée, dans la variante que
+ * l'exemplaire a choisie. Indéfini si le montage n'a pas cette définition.
+ */
+export function instanceDefinition(
+  project: Pick<Project, 'embeddedDefs'>,
+  instance: Pick<ComponentInstance, 'defId' | 'variant'>
+): ComponentDefinition | undefined {
+  const def = project.embeddedDefs[instance.defId]
+  return def ? variantDefinition(def, instance.variant) : undefined
 }

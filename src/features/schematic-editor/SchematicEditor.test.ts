@@ -240,3 +240,34 @@ describe('montage : grouper par le menu et au clavier', () => {
     wrapper.unmount()
   })
 })
+
+describe('montage : variante d’un composant posé', () => {
+  it('se change par le clic droit ou dans le panneau', async () => {
+    const store = useSchematicStore()
+    const def = createEmptyComponent('led', 'LED')
+    def.variantName = 'Rouge'
+    def.variants = [{ id: 'v1', name: 'Verte', size: def.size, visual: def.visual, pins: [] }]
+    store.startPlacing(def)
+    const id = store.placeAt(2, 3)
+    store.stopPlacing()
+    store.clearSelection()
+    const wrapper = mount(SchematicEditor, { attachTo: document.body })
+    rightClick(wrapper.get('.instance .hit').element, ...at(store, 4, 3.5))
+    await flushPromises()
+    expect(menuLabels()).toContain('Variante')
+    menuEntry('Variante').click()
+    await flushPromises()
+    expect(subMenuLabels()).toEqual(['Rouge', 'Verte'])
+    menuEntry('Verte').click()
+    await flushPromises()
+    expect(store.doc.components[0]).toMatchObject({ id, variant: 'v1' })
+    // Dans le panneau : une liste, sur la variante en cours.
+    store.inspectorOpen = true
+    await flushPromises()
+    const select = wrapper.get('.inspector select')
+    expect((select.element as HTMLSelectElement).value).toBe('v1')
+    await select.setValue('base')
+    expect(store.doc.components[0]?.variant).toBeUndefined()
+    wrapper.unmount()
+  })
+})

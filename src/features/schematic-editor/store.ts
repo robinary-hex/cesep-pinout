@@ -10,7 +10,11 @@ import {
   fittingView,
   flippedInstance,
   isEmptyProject,
+  BASE_VARIANT,
+  componentVariants,
+  hasVariants,
   insertVertex,
+  instanceDefinition,
   nearestWirePoint,
   instanceBounds,
   locateOnWire,
@@ -68,6 +72,8 @@ export type StackMove = 'up' | 'down' | 'top' | 'bottom'
 
 export interface Placement {
   def: ComponentDefinition
+  /** Variante qu'on pose ; null : la première. */
+  variant: string | null
   rotation: Rotation
   mirror: boolean
 }
@@ -246,7 +252,8 @@ export const useSchematicStore = defineStore('schematic', () => {
   const followsGeneralProfile = computed(() => profileDiffs.value.length === 0)
   const placed = computed<PlacedInstance[]>(() =>
     doc.value.components.flatMap((instance) => {
-      const def = doc.value.embeddedDefs[instance.defId]
+      // La définition telle que la dessine la variante choisie par l'exemplaire.
+      const def = instanceDefinition(doc.value, instance)
       return def ? [{ instance, def }] : []
     })
   )
@@ -545,6 +552,25 @@ export const useSchematicStore = defineStore('schematic', () => {
     }
   }
 
+  /**
+   * Change la variante de composants posés ; les fils posés sur leurs broches suivent, les broches
+   * gardant leur identifiant d'une variante à l'autre.
+   */
+  function setInstancesVariant(ids: readonly string[], variantId: string): void {
+    const targets = doc.value.components.filter(
+      (instance) => ids.includes(instance.id) && (instance.variant ?? BASE_VARIANT) !== variantId
+    )
+    if (targets.length === 0) return
+    const changed = new Set(targets.map((instance) => instance.id))
+    applyWithElasticWires('Changer de variante', (draft) => {
+      for (const instance of draft.components) {
+        if (!changed.has(instance.id)) continue
+        if (variantId === BASE_VARIANT) delete instance.variant
+        else instance.variant = variantId
+      }
+    })
+  }
+
   /** Remplace la définition embarquée par celle de la bibliothèque (même identifiant). */
   function updateDefinition(def: ComponentDefinition): void {
     applyWithElasticWires(`Mettre à jour ${def.name}`, (draft) => {
@@ -560,12 +586,17 @@ export const useSchematicStore = defineStore('schematic', () => {
     stopWireDrawing()
   }
 
-  function startPlacing(def: ComponentDefinition): void {
-    placement.value = { def, rotation: 0, mirror: false }
+  /** Démarre la pose d'un composant, dans une de ses variantes (la première par défaut). */
+  function startPlacing(def: ComponentDefinition, variantId: string | null = null): void {
+    const chosen = def.variants?.find((candidate) => candidate.id === variantId)
+    placement.value = { def, variant: chosen?.id ?? null, rotation: 0, mirror: false }
     stopWireDrawing()
     tool.value = 'place'
     clearSelection()
-    status.value = `Pose de ${def.name} : clic pour poser, R et T pour tourner et retourner, Échap pour arrêter.`
+    const name = hasVariants(def)
+      ? `${def.name} (${chosen?.name ?? componentVariants(def)[0]?.name})`
+      : def.name
+    status.value = `Pose de ${name} : clic pour poser, R et T pour tourner et retourner, Échap pour arrêter.`
   }
 
   function stopPlacing(): void {
@@ -643,10 +674,13 @@ export const useSchematicStore = defineStore('schematic', () => {
         mirror: current.mirror,
         label: '',
         fields: {},
-        behindWires: false
+        behindWires: false,
+        ...(current.variant === null ? {} : { variant: current.variant })
       })
     })
-    status.value = `${def.name} posé.`
+    status.value = hasVariants(def)
+      ? `${def.name} posé : sa variante se change par le clic droit ou dans le panneau.`
+      : `${def.name} posé.`
     return id
   }
 
@@ -1142,7 +1176,7 @@ export const useSchematicStore = defineStore('schematic', () => {
   ): void {
     const updates = new Map<string, ComponentInstance>()
     for (const instance of selectedInstances.value) {
-      const def = doc.value.embeddedDefs[instance.defId]
+      const def = instanceDefinition(doc.value, instance)
       if (def) updates.set(instance.id, transform(instance, def))
     }
     if (updates.size === 0) return
@@ -1469,6 +1503,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     profileDiffs,
     followsGeneralProfile,
     updateDefinition,
+    setInstancesVariant,
     selectTool,
     startPlacing,
     stopPlacing,

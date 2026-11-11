@@ -10,7 +10,8 @@ import { TOOLS } from './tools'
 
 // Barre d'outils de l'éditeur de composants. D'abord le début commun aux trois éditeurs
 // (`ToolbarBasics` : zoom, annuler, rétablir, corbeille), puis les outils de dessin (pictogramme
-// seul, raccourci dans l'infobulle), l'import d'une image, posée comme une forme, et la case
+// seul, raccourci dans l'infobulle), l'import d'une image, posée comme une forme, les variantes
+// (celle qu'on regarde, et le bouton qui en crée une), et la case
 // « Groupes » quand le composant en a ; à droite, le
 // nom du composant avec son fichier, le bouton du panneau de propriétés tout au bout, et
 // Enregistrer (aussi dans le menu Fichier). Quand la place manque, la partie gauche passe à la
@@ -63,6 +64,28 @@ const fileLabel = computed(() =>
           @click="importImage(store)"
         >
           <Icon name="image" :size="18" />
+        </button>
+      </div>
+
+      <div class="group">
+        <select
+          v-if="store.variants.length > 1"
+          class="variant-select"
+          :value="store.variantId"
+          title="Variante affichée : c’est elle qu’on modifie"
+          @change="store.showVariant(($event.target as HTMLSelectElement).value)"
+        >
+          <option v-for="variant in store.variants" :key="variant.id" :value="variant.id">
+            {{ variant.name }}
+          </option>
+        </select>
+        <button
+          type="button"
+          class="icon-only"
+          title="Nouvelle variante : une copie de celle qu’on regarde, à retoucher"
+          @click="store.addVariant()"
+        >
+          <Icon name="layers" :size="18" />
         </button>
       </div>
 
@@ -139,6 +162,14 @@ const fileLabel = computed(() =>
 .tool.active {
   background: var(--accent-soft);
   border-color: var(--accent-border);
+}
+
+.variant-select {
+  max-width: 160px;
+  padding: 4px 6px;
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: 6px;
 }
 
 .zoom {

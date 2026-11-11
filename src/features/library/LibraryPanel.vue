@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { BASE_VARIANT, componentVariants, hasVariants } from '@/domain'
 import { useComponentEditorStore } from '@/features/component-editor/store'
 import { useSchematicStore } from '@/features/schematic-editor/store'
 import { bridge } from '@/io/bridge'
@@ -7,7 +8,7 @@ import { deleteComponent, saveComponent, type LibraryEntry } from '@/io/library'
 import { baseName, samePath } from '@/io/paths'
 import ComponentThumbnail from '@/render/ComponentThumbnail.vue'
 import ContextMenu from '@/ui/ContextMenu.vue'
-import { heading, item, SEPARATOR, type MenuItem } from '@/ui/contextMenu'
+import { heading, item, SEPARATOR, submenu, type MenuItem } from '@/ui/contextMenu'
 import { confirmAction } from '@/ui/dialogs'
 import Icon from '@/ui/Icon.vue'
 import PromptDialog from '@/ui/PromptDialog.vue'
@@ -56,6 +57,15 @@ function isCurrent(entry: LibraryEntry): boolean {
 
 function isPlacing(entry: LibraryEntry): boolean {
   return props.mode === 'place' && schematic.placement?.def.id === entry.def?.id
+}
+
+/** Pose une variante précise d'un composant de la bibliothèque. */
+function placeVariant(entry: LibraryEntry, variantId: string): void {
+  if (entry.def) schematic.startPlacing(entry.def, variantId === BASE_VARIANT ? null : variantId)
+}
+
+function isPlacingVariant(entry: LibraryEntry, variantId: string): boolean {
+  return isPlacing(entry) && (schematic.placement?.variant ?? BASE_VARIANT) === variantId
 }
 
 function pick(entry: LibraryEntry): void {
@@ -193,6 +203,17 @@ function openMenu(entry: LibraryEntry, event: MouseEvent): void {
     if (def) {
       items.push(
         item('Poser sur le montage', () => pick(entry), { icon: 'plus' }),
+        ...(hasVariants(def)
+          ? [
+              submenu(
+                'Poser une variante',
+                componentVariants(def).map((variant) =>
+                  item(variant.name, () => placeVariant(entry, variant.id))
+                ),
+                { icon: 'plus' }
+              )
+            ]
+          : []),
         item('Modifier dans l’éditeur de composants', () => editInEditor(entry), { icon: 'edit' })
       )
     }
@@ -386,6 +407,19 @@ async function remove(entry: LibraryEntry): Promise<void> {
                 <span v-else class="meta">Fichier illisible</span>
               </span>
             </button>
+            <div v-if="mode === 'place' && entry.def && hasVariants(entry.def)" class="variants">
+              <button
+                v-for="variant in componentVariants(entry.def)"
+                :key="variant.id"
+                type="button"
+                class="variant-chip"
+                :class="{ current: isPlacingVariant(entry, variant.id) }"
+                :title="`Poser ${entry.def.name}, variante « ${variant.name} »`"
+                @click="placeVariant(entry, variant.id)"
+              >
+                {{ variant.name }}
+              </button>
+            </div>
           </div>
         </template>
       </section>
@@ -516,8 +550,32 @@ async function remove(entry: LibraryEntry): Promise<void> {
 
 .item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   padding: 2px 6px 2px 8px;
+}
+
+/* Variantes d'un composant, sous sa ligne : un clic pose celle-là. */
+.variants {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 4px 6px 68px;
+}
+
+.variant-chip {
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface);
+}
+
+.variant-chip.current {
+  color: var(--text);
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
 }
 
 .item.current {

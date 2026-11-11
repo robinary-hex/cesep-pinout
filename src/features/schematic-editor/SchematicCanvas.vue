@@ -32,6 +32,7 @@ import {
   textStyleAttrs,
   textTransform,
   textLabelBounds,
+  variantDefinition,
   wireBounds,
   wireEndLabelPlacement,
   wireIntersectsRect,
@@ -684,7 +685,8 @@ const ghost = computed(() => {
   const current = store.placement
   const point = hover.value
   if (!current || !point || store.tool !== 'place') return null
-  const size = rotatedSize(current.def.size, current.rotation)
+  const def = variantDefinition(current.def, current.variant)
+  const size = rotatedSize(def.size, current.rotation)
   const instance: ComponentInstance = {
     id: 'ghost',
     defId: current.def.id,
@@ -698,8 +700,8 @@ const ghost = computed(() => {
   }
   return {
     instance,
-    def: current.def,
-    transform: matrixToSvg(instanceMatrix(instance, current.def))
+    def,
+    transform: matrixToSvg(instanceMatrix(instance, def))
   }
 })
 

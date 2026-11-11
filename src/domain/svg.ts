@@ -27,7 +27,7 @@ import {
   instanceTextPlacements,
   textPlacementTransform
 } from './placement'
-import type { Project } from './project'
+import { instanceDefinition, type Project } from './project'
 import { roundedPathData } from './roundedPath'
 import type { ExportSettings } from './settings'
 import { wirePathData } from './wires'
@@ -229,7 +229,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
   if (options.labels) {
     // Les repères s'écrivent juste au-dessus des boîtes : on leur réserve une cellule.
     for (const instance of project.components) {
-      const def = project.embeddedDefs[instance.defId]
+      const def = instanceDefinition(project, instance)
       if (!def || instance.label.length === 0) continue
       const box = instanceBounds(instance, def)
       bounds = unionRects(bounds, { x: box.x, y: box.y - 1, width: 1, height: 1 })
@@ -269,7 +269,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
     const instanceParts: string[] = []
     const componentTextParts: string[] = []
     for (const instance of project.components) {
-      const def = project.embeddedDefs[instance.defId]
+      const def = instanceDefinition(project, instance)
       if (!def || instance.behindWires !== behind) continue
       instanceParts.push(
         `<g ${attrs({ transform: matrixToSvg(instanceMatrix(instance, def)) })}>${componentSvg(def, profile.componentStroke, instance.fields, { skipTexts: true })}</g>`

@@ -1,5 +1,6 @@
 import {
   componentImages,
+  mapComponentPrimitives,
   dataUrlToBase64,
   parseComponentDefinition,
   pngDataUrl,
@@ -39,11 +40,11 @@ export async function loadComponentFile(path: string): Promise<ComponentDefiniti
     if (!(await bridge().pathExists(imagePath))) continue
     dataUrls.set(file, pngDataUrl(await bridge().readBinaryFile(imagePath)))
   }
-  const primitives = def.visual.primitives.map((primitive) => {
+  // Dans toutes les variantes du composant.
+  return mapComponentPrimitives(def, (primitive) => {
     const dataUrl = primitive.kind === 'image' ? dataUrls.get(primitive.file) : undefined
     return dataUrl === undefined ? primitive : { ...primitive, dataUrl }
   })
-  return { ...def, visual: { ...def.visual, primitives } }
 }
 
 /** Tous les sous-dossiers de la bibliothèque, triés par nom ; les illisibles restent listés. */
@@ -75,24 +76,20 @@ const OWN_IMAGE_FILE = /^image(-\d+)?\.png$/
  */
 export async function saveComponent(libraryDir: string, def: ComponentDefinition): Promise<string> {
   const folder = joinPath(libraryDir, def.id)
+  // Les images de toutes les variantes : un fichier par nom, et le JSON sans image embarquée.
   const written = new Set<string>()
-  const primitives: ComponentDefinition['visual']['primitives'] = []
-  for (const primitive of def.visual.primitives) {
-    if (primitive.kind !== 'image') {
-      primitives.push(primitive)
-      continue
-    }
-    const { dataUrl, ...image } = primitive
-    if (dataUrl !== undefined && !written.has(image.file)) {
-      await bridge().writeBinaryFile(joinPath(folder, image.file), dataUrlToBase64(dataUrl))
-      written.add(image.file)
-    }
-    primitives.push(image)
+  for (const image of componentImages(def)) {
+    if (image.dataUrl === undefined || written.has(image.file)) continue
+    await bridge().writeBinaryFile(joinPath(folder, image.file), dataUrlToBase64(image.dataUrl))
+    written.add(image.file)
   }
-  await bridge().writeTextFile(
-    joinPath(folder, COMPONENT_FILE),
-    serializeComponentDefinition({ ...def, visual: { ...def.visual, primitives } })
-  )
+  const bare = mapComponentPrimitives(def, (primitive) => {
+    if (primitive.kind !== 'image') return primitive
+    const image = { ...primitive }
+    delete image.dataUrl
+    return image
+  })
+  await bridge().writeTextFile(joinPath(folder, COMPONENT_FILE), serializeComponentDefinition(bare))
   const used = new Set(componentImages(def).map((image) => image.file))
   for (const entry of await bridge().readDir(folder)) {
     if (entry.isDirectory || used.has(entry.name) || !OWN_IMAGE_FILE.test(entry.name)) continue

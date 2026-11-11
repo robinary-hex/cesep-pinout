@@ -1200,3 +1200,69 @@ describe('montage : sommets au Ctrl+clic, fil raccordé', () => {
     expect(store.connectivity.junctions.map((junction) => junction.point)).toEqual([[3, 0]])
   })
 })
+
+describe('montage : variantes d’un composant', () => {
+  /** Résistance (broches en (0, 1) et (4, 1)) avec une variante longue (broche 2 en (6, 1)). */
+  function withVariant(): ComponentDefinition {
+    const def = resistor()
+    def.variants = [
+      {
+        id: 'v1',
+        name: 'Longue',
+        size: { widthCells: 6, heightCells: 2 },
+        visual: { kind: 'drawing', primitives: [] },
+        pins: [
+          { id: 'a', name: '1', kind: 'io', x: 0, y: 1 },
+          { id: 'b', name: '2', kind: 'io', x: 6, y: 1 }
+        ]
+      }
+    ]
+    return def
+  }
+
+  it('pose un composant dans la variante choisie', () => {
+    const store = useSchematicStore()
+    store.startPlacing(withVariant(), 'v1')
+    expect(store.status).toContain('Résistance (Longue)')
+    const long = store.placeAt(0, 0)
+    store.startPlacing(withVariant())
+    const standard = store.placeAt(0, 10)
+    store.stopPlacing()
+    expect(store.doc.components.map((instance) => [instance.id, instance.variant])).toEqual([
+      [long, 'v1'],
+      [standard, undefined]
+    ])
+    expect(store.placed.map((item) => item.def.size.widthCells)).toEqual([6, 4])
+    // Une seule définition embarquée, variantes comprises ; le fichier garde le choix.
+    expect(Object.keys(store.doc.embeddedDefs)).toEqual(['resistor'])
+    const reread = parseProject(serializeProject(store.doc))
+    expect(reread.components[0]?.variant).toBe('v1')
+  })
+
+  it('change la variante d’un composant posé : le fil posé sur sa broche suit', () => {
+    const store = useSchematicStore()
+    store.startPlacing(withVariant())
+    const id = store.placeAt(0, 0)
+    store.stopPlacing()
+    if (!id) throw new Error('pose refusée')
+    // Un fil part de la broche 2, en (4, 1).
+    store.addWire([
+      [4, 1],
+      [10, 1]
+    ])
+    store.setInstancesVariant([id], 'v1')
+    expect(store.undoLabel).toBe('Changer de variante')
+    expect(store.doc.components[0]?.variant).toBe('v1')
+    expect(store.doc.wires[0]?.points[0]).toEqual([6, 1])
+    expect(store.connectivity.unconnectedPinKeys.has(`${id}:b`)).toBe(false)
+    // Retour à la première : la propriété disparaît, le fil revient.
+    store.setInstancesVariant([id], 'base')
+    expect('variant' in (store.doc.components[0] ?? {})).toBe(false)
+    expect(store.doc.wires[0]?.points[0]).toEqual([4, 1])
+    // Déjà dans cette variante : rien à annuler de plus.
+    store.setInstancesVariant([id], 'base')
+    expect(store.undoLabel).toBe('Changer de variante')
+    store.undo()
+    expect(store.doc.components[0]?.variant).toBe('v1')
+  })
+})

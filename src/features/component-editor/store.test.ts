@@ -544,3 +544,86 @@ describe('éditeur de composants : groupes de broches', () => {
     expect(state().at(-1)).toEqual([d, '4', undefined])
   })
 })
+
+describe('éditeur de composants : variantes', () => {
+  const rect: Primitive = {
+    kind: 'rect',
+    x: 0,
+    y: 0,
+    w: 4,
+    h: 4,
+    rx: 0,
+    style: DEFAULT_SHAPE_STYLE
+  }
+
+  it('crée une variante par copie, l’affiche, et n’édite que celle qu’on regarde', () => {
+    const store = useComponentEditorStore()
+    store.addPrimitive(rect, 'Ajouter un rectangle')
+    const pin = store.addPin({ x: 0, y: 1 })
+    expect(store.variants).toEqual([{ id: 'base', name: 'Standard' }])
+    expect(store.dirty).toBe(true)
+
+    const id = store.addVariant()
+    expect(store.undoLabel).toBe('Ajouter une variante')
+    expect(store.variants).toEqual([
+      { id: 'base', name: 'Standard' },
+      { id, name: 'Variante 2' }
+    ])
+    expect(store.variantId).toBe(id)
+    // La copie reprend le dessin et les broches, avec les mêmes identifiants.
+    expect(store.shown.visual.primitives).toEqual([rect])
+    expect(store.shown.pins.map((entry) => entry.id)).toEqual([pin])
+
+    // Ce qu'on fait ici ne touche que cette variante : une forme, une broche, la taille.
+    store.addPrimitive({ ...rect, x: 8 }, 'Ajouter un rectangle')
+    store.addPin({ x: 4, y: 1 })
+    store.setSize({ widthCells: 6, heightCells: 2 })
+    expect(store.shown.visual.primitives).toHaveLength(2)
+    expect(store.doc.visual.primitives).toHaveLength(1)
+    expect(store.doc.pins).toHaveLength(1)
+    expect(store.doc.size.widthCells).toBe(4)
+    expect(store.doc.variants?.[0]).toMatchObject({ size: { widthCells: 6 } })
+    expect(store.selectedPin?.name).toBe('2')
+
+    // Retour à la première : on y retrouve son dessin, la sélection ne suit pas.
+    store.showVariant('base')
+    expect(store.variantId).toBe('base')
+    expect(store.selection).toBeNull()
+    expect(store.shown.visual.primitives).toHaveLength(1)
+    store.addPrimitive({ ...rect, y: 4 }, 'Ajouter un rectangle')
+    expect(store.doc.variants?.[0]?.visual.primitives).toHaveLength(2)
+    expect(store.doc.visual.primitives).toHaveLength(2)
+  })
+
+  it('renomme et supprime une variante ; supprimer la première promeut la suivante', () => {
+    const store = useComponentEditorStore()
+    store.addPrimitive(rect, 'Ajouter un rectangle')
+    const second = store.addVariant()
+    store.addPrimitive({ ...rect, x: 8 }, 'Ajouter un rectangle')
+    const third = store.addVariant()
+    store.renameVariant('base', 'Rouge')
+    store.renameVariant(second, ' Verte ')
+    store.renameVariant(third, '  ')
+    expect(store.variants.map((variant) => variant.name)).toEqual(['Rouge', 'Verte', 'Variante 3'])
+
+    // On regarde la troisième, on la supprime : retour à la première.
+    expect(store.variantId).toBe(third)
+    store.removeVariant(third)
+    expect(store.variantId).toBe('base')
+    expect(store.variants).toHaveLength(2)
+    // Annuler la remet ; la rétablir alors qu'on la regarde ramène à la première.
+    store.undo()
+    store.showVariant(third)
+    store.redo()
+    expect(store.variantId).toBe('base')
+
+    // La première supprimée : la suivante prend sa place, avec son dessin et son nom.
+    store.removeVariant('base')
+    expect(store.variants).toEqual([{ id: 'base', name: 'Standard' }])
+    expect(store.doc.variants).toBeUndefined()
+    expect(store.doc.visual.primitives).toHaveLength(2)
+    // La dernière variante ne se supprime pas.
+    store.removeVariant('base')
+    expect(store.doc.visual.primitives).toHaveLength(2)
+  })
+})

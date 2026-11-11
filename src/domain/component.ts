@@ -269,19 +269,145 @@ export const visualSchema = z.object({
 })
 export type Visual = z.infer<typeof visualSchema>
 
+/**
+ * Ce qu'une variante d'un composant dessine : sa taille, ses formes, ses broches. Un composant en
+ * porte un directement (sa première variante) ; chaque variante de plus a le sien, complet.
+ */
+const componentBodyShape = {
+  size: sizeSchema,
+  visual: visualSchema,
+  pins: z.array(pinSchema),
+  /** Groupes de broches, dans l'ordre du panneau ; absent tant qu'il n'y en a pas. */
+  pinGroups: z.array(pinGroupSchema).optional()
+}
+export const componentBodySchema = z.object(componentBodyShape)
+export type ComponentBody = z.infer<typeof componentBodySchema>
+
+/**
+ * Variante supplémentaire d'un composant (décision du 11 novembre 2026) : le même composant
+ * dessiné autrement (LED rouge ou verte, pattes longues ou courtes). Un dessin complet, né d'une
+ * copie puis retouché : rien n'est hérité, ce qui permet de tout changer, taille et broches
+ * comprises. Deux variantes nées l'une de l'autre gardent les mêmes identifiants de broche : un
+ * composant posé qui change de variante garde ses fils.
+ */
+export const componentVariantSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  ...componentBodyShape
+})
+export type ComponentVariant = z.infer<typeof componentVariantSchema>
+
 const componentShape = z.object({
   schemaVersion: z.literal(COMPONENT_SCHEMA_VERSION),
   id: z.string().min(1),
   name: z.string().min(1),
   category: z.string(),
   description: z.string(),
-  size: sizeSchema,
-  visual: visualSchema,
-  pins: z.array(pinSchema),
-  /** Groupes de broches, dans l'ordre du panneau ; absent tant qu'il n'y en a pas. */
-  pinGroups: z.array(pinGroupSchema).optional()
+  // Le dessin que le composant porte lui-même : celui de sa première variante.
+  ...componentBodyShape,
+  /** Nom de la première variante, quand le composant en a d'autres. */
+  variantName: z.string().min(1).optional(),
+  /** Les autres variantes, dans l'ordre ; absent pour un composant sans variantes. */
+  variants: z.array(componentVariantSchema).optional()
 })
 export type ComponentDefinition = z.infer<typeof componentShape>
+
+/** Identifiant de la première variante d'un composant : celle qu'il porte lui-même. */
+export const BASE_VARIANT = 'base'
+/** Nom de la première variante tant qu'on ne lui en a pas donné. */
+export const DEFAULT_VARIANT_NAME = 'Standard'
+
+/** Une variante dans une liste : son identifiant (`BASE_VARIANT` pour la première) et son nom. */
+export interface VariantInfo {
+  id: string
+  name: string
+}
+
+/** Variantes d'un composant, dans l'ordre : la première, puis les autres. Jamais vide. */
+export function componentVariants(def: ComponentDefinition): VariantInfo[] {
+  return [
+    { id: BASE_VARIANT, name: def.variantName ?? DEFAULT_VARIANT_NAME },
+    ...(def.variants ?? []).map((variant) => ({ id: variant.id, name: variant.name }))
+  ]
+}
+
+/** Le composant a-t-il plus d'une variante ? */
+export function hasVariants(def: ComponentDefinition): boolean {
+  return (def.variants?.length ?? 0) > 0
+}
+
+const resolvedVariants = new WeakMap<ComponentDefinition, Map<string, ComponentDefinition>>()
+
+/**
+ * Le composant tel que le dessine une de ses variantes : même identité, mais la taille, les formes
+ * et les broches de la variante. Pour la première variante, un identifiant absent ou inconnu,
+ * c'est le composant lui-même. Le résultat est gardé : pour un même composant et une même
+ * variante, toujours le même objet.
+ */
+export function variantDefinition(
+  def: ComponentDefinition,
+  variantId: string | null | undefined
+): ComponentDefinition {
+  const variant = def.variants?.find((candidate) => candidate.id === variantId)
+  if (!variant) return def
+  let cache = resolvedVariants.get(def)
+  if (!cache) {
+    cache = new Map()
+    resolvedVariants.set(def, cache)
+  }
+  let resolved = cache.get(variant.id)
+  if (!resolved) {
+    resolved = { ...def, size: variant.size, visual: variant.visual, pins: variant.pins }
+    if (variant.pinGroups) resolved.pinGroups = variant.pinGroups
+    else delete resolved.pinGroups
+    cache.set(variant.id, resolved)
+  }
+  return resolved
+}
+
+/** Formes de toutes les variantes d'un composant, la première d'abord. */
+export function componentPrimitives(def: ComponentDefinition): Primitive[] {
+  return [
+    ...def.visual.primitives,
+    ...(def.variants ?? []).flatMap((variant) => variant.visual.primitives)
+  ]
+}
+
+/** Le même composant, chaque forme de chaque variante passée par `change`. */
+export function mapComponentPrimitives(
+  def: ComponentDefinition,
+  change: (primitive: Primitive) => Primitive
+): ComponentDefinition {
+  const next: ComponentDefinition = {
+    ...def,
+    visual: { ...def.visual, primitives: def.visual.primitives.map(change) }
+  }
+  if (def.variants) {
+    next.variants = def.variants.map((variant) => ({
+      ...variant,
+      visual: { ...variant.visual, primitives: variant.visual.primitives.map(change) }
+    }))
+  }
+  return next
+}
+
+/** Identifiant libre pour une nouvelle variante : v1, v2… */
+export function nextVariantId(def: ComponentDefinition): string {
+  const taken = new Set((def.variants ?? []).map((variant) => variant.id))
+  for (let n = 1; ; n++) {
+    const candidate = `v${n}`
+    if (!taken.has(candidate)) return candidate
+  }
+}
+
+/** Nom proposé pour une nouvelle variante : « Variante 2 », « Variante 3 »…, le premier libre. */
+export function nextVariantName(def: ComponentDefinition): string {
+  const taken = new Set(componentVariants(def).map((variant) => variant.name))
+  for (let n = taken.size + 1; ; n++) {
+    const candidate = `Variante ${n}`
+    if (!taken.has(candidate)) return candidate
+  }
+}
 
 export const DEFAULT_CATEGORY = 'Divers'
 
@@ -557,7 +683,29 @@ function primitiveWithin(primitive: Primitive, maxX: number, maxY: number): bool
  * Contrôles de cohérence d'un composant. Les erreurs rendent le fichier invalide ;
  * les avertissements sont affichés par l'éditeur sans bloquer.
  */
+/**
+ * Ce qui cloche dans un composant. Chaque variante est contrôlée comme un composant à part ; dès
+ * qu'il y en a plusieurs, le message dit de laquelle il s'agit.
+ */
 export function componentIssues(def: ComponentDefinition): ComponentIssue[] {
+  const variants = def.variants ?? []
+  if (variants.length === 0) return bodyIssues(def)
+  const issues: ComponentIssue[] = []
+  const seen = new Set<string>([BASE_VARIANT])
+  for (const variant of componentVariants(def)) {
+    if (variant.id !== BASE_VARIANT && seen.has(variant.id)) {
+      issues.push({ level: 'error', message: `Identifiant de variante en double : ${variant.id}` })
+    }
+    seen.add(variant.id)
+    for (const issue of bodyIssues(variantDefinition(def, variant.id))) {
+      issues.push({ ...issue, message: `Variante « ${variant.name} » : ${issue.message}` })
+    }
+  }
+  return issues
+}
+
+/** Contrôles du dessin et des broches que porte un composant (ou une de ses variantes). */
+function bodyIssues(def: ComponentDefinition): ComponentIssue[] {
   const issues: ComponentIssue[] = []
   const seenIds = new Set<string>()
   const seenPositions = new Map<string, string>()
@@ -623,7 +771,11 @@ export function componentIssues(def: ComponentDefinition): ComponentIssue[] {
   if (emptyField) {
     issues.push({ level: 'error', message: 'Un texte variable doit avoir un nom de champ' })
   }
-  if (componentImages(def).some((image) => image.dataUrl === undefined)) {
+  if (
+    def.visual.primitives.some(
+      (primitive) => primitive.kind === 'image' && primitive.dataUrl === undefined
+    )
+  ) {
     issues.push({ level: 'warning', message: 'Une image a perdu son fichier' })
   }
 
@@ -638,9 +790,9 @@ export const componentDefinitionSchema = componentShape.superRefine((def, ctx) =
   }
 })
 
-/** Images d'un composant, dans l'ordre du dessin. */
+/** Images d'un composant, toutes variantes comprises, dans l'ordre du dessin. */
 export function componentImages(def: ComponentDefinition): ImagePrimitive[] {
-  return def.visual.primitives.filter(
+  return componentPrimitives(def).filter(
     (primitive): primitive is ImagePrimitive => primitive.kind === 'image'
   )
 }

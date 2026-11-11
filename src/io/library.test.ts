@@ -140,3 +140,38 @@ describe('bibliothèque sur disque', () => {
     expect(newComponentId('Résistance', ['resistance', 'resistance-2'])).toBe('resistance-3')
   })
 })
+
+describe('bibliothèque sur disque : variantes', () => {
+  let fs: FakeFs
+
+  beforeEach(() => {
+    fs = new FakeFs()
+    setBridge(fs)
+  })
+
+  afterEach(() => {
+    setBridge(null)
+  })
+
+  it('range aussi les images des variantes, et les leur rend à la relecture', async () => {
+    const dataUrl = `data:image/png;base64,${ONE_PIXEL}`
+    const def = resistor()
+    def.variants = [
+      {
+        id: 'v1',
+        name: 'Photo',
+        size: def.size,
+        visual: {
+          kind: 'drawing',
+          primitives: [{ kind: 'image', x: 0, y: 0, w: 4, h: 4, file: 'image.png', dataUrl }]
+        },
+        pins: def.pins
+      }
+    ]
+    const folder = await saveComponent(LIB, def)
+    expect(fs.binaries.get(`${folder}/image.png`)).toBe(ONE_PIXEL)
+    expect(await fs.readTextFile(`${folder}/component.json`)).not.toContain('dataUrl')
+    const loaded = await loadComponent(folder)
+    expect(loaded).toEqual(def)
+  })
+})

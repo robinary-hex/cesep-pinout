@@ -1,5 +1,5 @@
 import type { GridPoint } from './grid'
-import { absolutePinPosition, type Project, type Wire } from './project'
+import { absolutePinPosition, instanceDefinition, type Project, type Wire } from './project'
 import { locateOnWire } from './wires'
 
 /**
@@ -46,7 +46,7 @@ export interface Connectivity {
 export function projectPins(project: Project): PinRef[] {
   const refs: PinRef[] = []
   for (const instance of project.components) {
-    const def = project.embeddedDefs[instance.defId]
+    const def = instanceDefinition(project, instance)
     if (!def) continue
     for (const pin of def.pins) {
       const position = absolutePinPosition(instance, def, pin)

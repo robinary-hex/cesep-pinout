@@ -101,6 +101,8 @@ export const ICONS = {
     'M10 12h7v5h-7z'
   ],
   ungroup: ['M4 4h9v7H4z', 'M11 13h9v7h-9z'],
+  // Variantes d'un composant : des feuilles empilées.
+  layers: ['M12 3 3 8l9 5 9-5z', 'M3 12l9 5 9-5', 'M3 16l9 5 9-5'],
   // Poignée de glisser-déposer : six points.
   grip: ['M9 6h.01', 'M9 12h.01', 'M9 18h.01', 'M15 6h.01', 'M15 12h.01', 'M15 18h.01'],
   tag: [

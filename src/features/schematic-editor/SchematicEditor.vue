@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
 import {
+  BASE_VARIANT,
+  componentVariants,
+  hasVariants,
+  instanceDefinition,
   buildProjectSvg,
   componentFields,
   nearestWirePoint,
@@ -91,7 +95,8 @@ function openExport(): void {
 
 function instanceOf(id: string): { instance: ComponentInstance; def: ComponentDefinition } | null {
   const instance = store.doc.components.find((candidate) => candidate.id === id)
-  const def = instance ? store.doc.embeddedDefs[instance.defId] : undefined
+  // Dans la variante que l'exemplaire montre : ses champs sont ceux de ce dessin-là.
+  const def = instance ? instanceDefinition(store.doc, instance) : undefined
   return instance && def ? { instance, def } : null
 }
 
@@ -293,6 +298,20 @@ function openMenu(request: MenuRequest): void {
         )
       }
       items.push(item('Libellé…', () => editInstanceLabel(instance.id), { icon: 'tag' }))
+      if (hasVariants(def)) {
+        const current = instance.variant ?? BASE_VARIANT
+        items.push(
+          submenu(
+            'Variante',
+            componentVariants(def).map((variant) =>
+              item(variant.name, () => store.setInstancesVariant([instance.id], variant.id), {
+                checked: variant.id === current
+              })
+            ),
+            { icon: 'swap' }
+          )
+        )
+      }
       const newer = store.newerLibraryDefinition(def.id)
       if (newer) {
         items.push(

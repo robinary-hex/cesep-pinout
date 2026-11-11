@@ -51,7 +51,7 @@ function setName(event: Event): void {
 
 function setSize(axis: 'widthCells' | 'heightCells', event: Event): void {
   const value = Math.max(1, Math.round(numberValue(event)))
-  store.setSize({ ...doc.value.size, [axis]: value })
+  store.setSize({ ...store.shown.size, [axis]: value })
 }
 
 // Broches
@@ -69,6 +69,12 @@ function setPinName(id: string, event: Event): void {
   store.updatePin(id, { name })
 }
 
+// Variantes : le même composant dessiné autrement ; on en édite une à la fois.
+
+function renameVariant(id: string, event: Event): void {
+  store.renameVariant(id, inputValue(event))
+}
+
 function setPinKind(id: string, event: Event): void {
   store.updatePin(id, { kind: inputValue(event) as PinKind })
 }
@@ -76,10 +82,10 @@ function setPinKind(id: string, event: Event): void {
 // Groupes de broches : des sections nommées où ranger les broches. Une broche se glisse d'une
 // ligne à l'autre pour changer d'ordre, ou d'un groupe à l'autre ; son numéro suit.
 
-const pinGroups = computed(() => doc.value.pinGroups ?? [])
-const sections = computed(() => pinSections(doc.value.pins, pinGroups.value))
+const pinGroups = computed(() => store.shown.pinGroups ?? [])
+const sections = computed(() => pinSections(store.shown.pins, pinGroups.value))
 /** Rang de chaque broche dans le composant : l'ordre du panneau est celui des broches. */
-const ordinals = computed(() => new Map(doc.value.pins.map((pin, index) => [pin.id, index + 1])))
+const ordinals = computed(() => new Map(store.shown.pins.map((pin, index) => [pin.id, index + 1])))
 
 const draggedPin = ref<string | null>(null)
 /** Où la broche glissée tomberait : dans ce groupe (null : aucun), devant cette broche (null : à la fin). */
@@ -140,7 +146,7 @@ function isDropEnd(section: PinSection): boolean {
 
 const primitive = computed(() => store.selectedPrimitive)
 const primitiveIndex = computed(() => store.selectedIndexes[0] ?? -1)
-const primitiveCount = computed(() => doc.value.visual.primitives.length)
+const primitiveCount = computed(() => store.shown.visual.primitives.length)
 /** Formes et broches sélectionnées, ensemble. */
 const multiCount = computed(() => store.selectedIndexes.length + store.selectedPinIds.length)
 const shapeStyle = computed(() =>
@@ -689,6 +695,49 @@ function setClosed(event: Event): void {
       </section>
 
       <section class="block">
+        <div class="block-title">
+          <h3>Variantes</h3>
+          <button
+            type="button"
+            class="small with-icon"
+            title="Nouvelle variante : une copie de celle qu’on regarde, à retoucher"
+            @click="store.addVariant()"
+          >
+            <Icon name="plus" :size="13" /> Variante
+          </button>
+        </div>
+        <p v-if="store.variants.length === 1" class="hint">
+          Une seule : le composant tel qu’il est dessiné.
+        </p>
+        <template v-else>
+          <div
+            v-for="variant in store.variants"
+            :key="variant.id"
+            class="variant-row"
+            :class="{ selected: variant.id === store.variantId }"
+            :title="`Afficher la variante « ${variant.name} »`"
+            @click="store.showVariant(variant.id)"
+          >
+            <input
+              type="text"
+              :value="variant.name"
+              title="Nom de la variante"
+              @click.stop="store.showVariant(variant.id)"
+              @change="renameVariant(variant.id, $event)"
+            />
+            <button
+              type="button"
+              class="small icon-only"
+              title="Supprimer cette variante"
+              @click.stop="store.removeVariant(variant.id)"
+            >
+              <Icon name="trash" :size="14" />
+            </button>
+          </div>
+        </template>
+      </section>
+
+      <section class="block">
         <h3>Taille</h3>
         <div class="row">
           <label class="field">
@@ -697,7 +746,7 @@ function setClosed(event: Event): void {
               type="number"
               min="1"
               step="1"
-              :value="doc.size.widthCells"
+              :value="store.shown.size.widthCells"
               @change="setSize('widthCells', $event)"
             />
           </label>
@@ -707,7 +756,7 @@ function setClosed(event: Event): void {
               type="number"
               min="1"
               step="1"
-              :value="doc.size.heightCells"
+              :value="store.shown.size.heightCells"
               @change="setSize('heightCells', $event)"
             />
           </label>
@@ -726,7 +775,9 @@ function setClosed(event: Event): void {
             <Icon name="plus" :size="13" /> Groupe
           </button>
         </div>
-        <p v-if="doc.pins.length === 0 && pinGroups.length === 0" class="hint">Aucune broche.</p>
+        <p v-if="store.shown.pins.length === 0 && pinGroups.length === 0" class="hint">
+          Aucune broche.
+        </p>
         <div
           v-for="section in sections"
           :key="section.group?.id ?? 'loose'"
@@ -930,6 +981,37 @@ function setClosed(event: Event): void {
   border: 0;
   background: transparent;
   accent-color: var(--accent);
+}
+
+/* Variantes du composant : celle qu'on regarde est surlignée ; un clic sur une ligne l'affiche. */
+.variant-row {
+  display: grid;
+  grid-template-columns: 1fr 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  margin: 0 -4px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.variant-row:hover {
+  background: var(--surface-3);
+}
+
+.variant-row.selected {
+  background: var(--accent-soft);
+}
+
+.variant-row input {
+  font: inherit;
+  font-size: 12px;
+  min-width: 0;
+  padding: 3px 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
 }
 
 /* Titre d'un bloc avec un bouton à droite. */

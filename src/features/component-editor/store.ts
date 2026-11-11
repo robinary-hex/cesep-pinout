@@ -2,7 +2,14 @@ import { castDraft, type Draft } from 'immer'
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 import {
+  BASE_VARIANT,
   componentIssues,
+  componentPrimitives,
+  componentVariants,
+  hasVariants,
+  nextVariantId,
+  nextVariantName,
+  variantDefinition,
   arrangedPins,
   createEmptyComponent,
   groupIds,
@@ -22,7 +29,9 @@ import {
   translatePrimitive,
   withFreeImageFiles,
   type Box,
+  type ComponentBody,
   type ComponentDefinition,
+  type ComponentVariant,
   type LocalPoint,
   type Pin,
   type Primitive,
@@ -61,10 +70,14 @@ export interface ComponentTabInfo {
   dirty: boolean
 }
 
-/** État d'édition qu'un onglet garde quand il n'est pas affiché : sa sélection et son zoom. */
+/**
+ * État d'édition qu'un onglet garde quand il n'est pas affiché : sa sélection, son zoom, et la
+ * variante qu'on y regardait.
+ */
 interface TabEditing {
   selection: Selection | null
   cellPx: number
+  variant: string | null
 }
 
 const MIN_CELL_PX = 8
@@ -81,9 +94,14 @@ function nextPinId(pins: ReadonlyArray<Pin>): string {
   }
 }
 
-/** Composant vierge : rien de dessiné, aucune broche. */
+/** Dessin vierge : aucune forme, aucune broche. */
+function isBlankBody(body: ComponentBody): boolean {
+  return body.visual.primitives.length === 0 && body.pins.length === 0
+}
+
+/** Composant vierge : rien de dessiné, aucune broche, pas de variante. */
 function isBlank(def: ComponentDefinition): boolean {
-  return def.visual.primitives.length === 0 && def.pins.length === 0
+  return isBlankBody(def) && !hasVariants(def)
 }
 
 /**
@@ -111,6 +129,11 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
 
   const library = useLibraryStore()
   const selection = ref<Selection | null>(null)
+  /**
+   * Variante en cours d'édition : null pour la première (celle que le composant porte lui-même),
+   * sinon son identifiant. Toute l'édition porte sur elle : `shown` pour lire, `bodyOf` pour écrire.
+   */
+  const activeVariant = ref<string | null>(null)
   const tool = ref<ToolId>('select')
   /** Panneau de propriétés à droite (`useInspectorPanel`) : replié par défaut, touche I. */
   const inspector = useInspectorPanel({
@@ -137,11 +160,16 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   const base = useDocumentTabs<ComponentDefinition, TabEditing>({
     blank: blankComponent,
     needsSaving,
-    freshEditing: () => ({ selection: null, cellPx: DEFAULT_CELL_PX }),
-    capture: () => ({ selection: selection.value, cellPx: cellPx.value }),
+    freshEditing: () => ({ selection: null, cellPx: DEFAULT_CELL_PX, variant: null }),
+    capture: () => ({
+      selection: selection.value,
+      cellPx: cellPx.value,
+      variant: activeVariant.value
+    }),
     restore: (editing) => {
       selection.value = editing.selection
       cellPx.value = editing.cellPx
+      activeVariant.value = editing.variant
       tool.value = 'select'
       hoverPinId.value = null
       status.value = ''
@@ -161,6 +189,20 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
       dirty: tab.dirty
     }))
   )
+  /** Le composant tel que le dessine la variante affichée : ce que l'éditeur montre et modifie. */
+  const shown = computed(() => variantDefinition(doc.value, activeVariant.value))
+  /** Variantes du composant, la première d'abord ; une seule entrée s'il n'en a pas d'autre. */
+  const variants = computed(() => componentVariants(doc.value))
+  /** Identifiant de la variante affichée (`BASE_VARIANT` pour la première). */
+  const variantId = computed(() => activeVariant.value ?? BASE_VARIANT)
+
+  /** Dans un brouillon du composant, le dessin de la variante affichée : là où l'on écrit. */
+  function bodyOf(draft: Draft<ComponentDefinition>): Draft<ComponentBody> {
+    const id = activeVariant.value
+    const variant = id === null ? undefined : draft.variants?.find((entry) => entry.id === id)
+    return variant ?? draft
+  }
+
   const issues = computed(() => componentIssues(doc.value))
   const hasErrors = computed(() => issues.value.some((issue) => issue.level === 'error'))
   const selectedIndexes = computed<readonly number[]>(() => selection.value?.indexes ?? [])
@@ -172,23 +214,29 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     if (indexes.length !== 1 || index === undefined || selectedPinIds.value.length > 0) {
       return null
     }
-    return doc.value.visual.primitives[index] ?? null
+    return shown.value.visual.primitives[index] ?? null
   })
   /** La broche sélectionnée quand la sélection se réduit à elle. */
   const selectedPin = computed<Pin | null>(() => {
     const ids = selectedPinIds.value
     const id = ids[0]
     if (ids.length !== 1 || id === undefined || selectedIndexes.value.length > 0) return null
-    return doc.value.pins.find((pin) => pin.id === id) ?? null
+    return shown.value.pins.find((pin) => pin.id === id) ?? null
   })
 
   /** Après chaque changement du composant : la sélection ne garde que ce qui existe encore. */
   function pruneSelection(): void {
+    // Annuler a pu retirer la variante qu'on regardait : on revient à la première.
+    const variant = activeVariant.value
+    if (variant !== null && !doc.value.variants?.some((entry) => entry.id === variant)) {
+      activeVariant.value = null
+      selection.value = null
+    }
     const current = selection.value
     if (!current) return
-    const count = doc.value.visual.primitives.length
+    const count = shown.value.visual.primitives.length
     const indexes = current.indexes.filter((index) => index < count)
-    const pinIds = current.pinIds.filter((id) => doc.value.pins.some((pin) => pin.id === id))
+    const pinIds = current.pinIds.filter((id) => shown.value.pins.some((pin) => pin.id === id))
     if (indexes.length !== current.indexes.length || pinIds.length !== current.pinIds.length) {
       select(indexes, pinIds)
     }
@@ -266,7 +314,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   }
 
   function drawing(draft: Draft<ComponentDefinition>): Draft<Primitive>[] {
-    return draft.visual.primitives
+    return bodyOf(draft).visual.primitives
   }
 
   // Sélection
@@ -283,10 +331,10 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
 
   /** Sélectionne toutes les formes et toutes les broches. */
   function selectAll(): void {
-    const count = doc.value.visual.primitives.length
+    const count = shown.value.visual.primitives.length
     select(
       Array.from({ length: count }, (_, index) => index),
-      doc.value.pins.map((pin) => pin.id)
+      shown.value.pins.map((pin) => pin.id)
     )
   }
 
@@ -301,8 +349,8 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   // Groupes : formes et broches qu'on sélectionne et déplace d'un bloc (voir groups.ts du domaine).
 
   const groups = computed<EditorGroup[]>(() => {
-    const primitives = doc.value.visual.primitives
-    const pins = doc.value.pins
+    const primitives = shown.value.visual.primitives
+    const pins = shown.value.pins
     return groupIds([...primitives, ...pins]).map((id) => ({
       id,
       indexes: primitives.flatMap((primitive, index) => (primitive.group === id ? [index] : [])),
@@ -320,8 +368,8 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   function groupOf(ref: EditorElementRef): EditorGroup | null {
     const id =
       ref.kind === 'primitive'
-        ? doc.value.visual.primitives[ref.index]?.group
-        : doc.value.pins.find((pin) => pin.id === ref.id)?.group
+        ? shown.value.visual.primitives[ref.index]?.group
+        : shown.value.pins.find((pin) => pin.id === ref.id)?.group
     return id === undefined ? null : (groups.value.find((group) => group.id === id) ?? null)
   }
 
@@ -404,14 +452,14 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   /** Ctrl+G : la sélection devient un groupe. */
   function groupSelection(): void {
     if (!canGroup.value) return
-    const id = nextGroupId([...doc.value.visual.primitives, ...doc.value.pins])
+    const id = nextGroupId([...shown.value.visual.primitives, ...shown.value.pins])
     const indexes = new Set(selectedIndexes.value)
     const pinIds = new Set(selectedPinIds.value)
     apply('Grouper', (draft) => {
       drawing(draft).forEach((primitive, index) => {
         if (indexes.has(index)) primitive.group = id
       })
-      for (const pin of draft.pins) if (pinIds.has(pin.id)) pin.group = id
+      for (const pin of bodyOf(draft).pins) if (pinIds.has(pin.id)) pin.group = id
     })
     status.value = 'Éléments groupés : ils se sélectionnent d’un bloc.'
   }
@@ -421,7 +469,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     const ids = new Set(selectedGroups.value.map((group) => group.id))
     if (ids.size === 0) return
     apply('Dégrouper', (draft) => {
-      for (const element of [...drawing(draft), ...draft.pins]) {
+      for (const element of [...drawing(draft), ...bodyOf(draft).pins]) {
         if (element.group !== undefined && ids.has(element.group)) delete element.group
       }
     })
@@ -446,11 +494,11 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
 
   /** Redimensionne ; les broches qui sortent de la boîte disparaissent, les autres sont renumérotées. */
   function setSize(size: Size): void {
-    const kept = pinsInside(doc.value.pins, size)
-    const removed = doc.value.pins.length - kept.length
+    const kept = pinsInside(shown.value.pins, size)
+    const removed = shown.value.pins.length - kept.length
     apply('Redimensionner', (draft) => {
-      draft.size = { widthCells: size.widthCells, heightCells: size.heightCells }
-      if (removed > 0) draft.pins = castDraft(renumberPins(kept))
+      bodyOf(draft).size = { widthCells: size.widthCells, heightCells: size.heightCells }
+      if (removed > 0) bodyOf(draft).pins = castDraft(renumberPins(kept))
     })
     if (removed > 0) {
       status.value = `${removed} broche(s) hors de la nouvelle boîte supprimée(s).`
@@ -462,7 +510,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
    * le dessin et les broches suivent l'origine, les broches qui sortent disparaissent.
    */
   function setBox(box: Box): void {
-    const before = doc.value
+    const before = shown.value
     const size = {
       widthCells: Math.max(1, Math.round(box.w)),
       heightCells: Math.max(1, Math.round(box.h))
@@ -480,7 +528,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     const moved = before.pins.map((pin) => ({ ...pin, x: pin.x + dx, y: pin.y + dy }))
     const kept = pinsInside(moved, size)
     apply('Redimensionner', (draft) => {
-      draft.size = size
+      bodyOf(draft).size = size
       const list = drawing(draft)
       if (dx !== 0 || dy !== 0) {
         for (let i = 0; i < list.length; i++) {
@@ -492,7 +540,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
           }
         }
       }
-      draft.pins = castDraft(kept.length !== before.pins.length ? renumberPins(kept) : kept)
+      bodyOf(draft).pins = castDraft(kept.length !== before.pins.length ? renumberPins(kept) : kept)
     })
     const removed = before.pins.length - kept.length
     if (removed > 0) status.value = `${removed} broche(s) hors de la nouvelle boîte supprimée(s).`
@@ -505,16 +553,16 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
    */
   function importImage(dataUrl: string, widthPx: number, heightPx: number): void {
     const { w, h } = importedImageSize(widthPx, heightPx)
-    const blank = isBlank(doc.value)
+    const blank = isBlankBody(shown.value)
     const size: Size = blank
       ? {
           widthCells: Math.ceil(w / QUARTERS_PER_CELL),
           heightCells: Math.ceil(h / QUARTERS_PER_CELL)
         }
-      : doc.value.size
+      : shown.value.size
     const centered = (cells: number, quarters: number): number =>
       Math.max(0, Math.round((cells - quarters / QUARTERS_PER_CELL) / 2)) * QUARTERS_PER_CELL
-    const [image] = withFreeImageFiles(doc.value.visual.primitives, [
+    const [image] = withFreeImageFiles(componentPrimitives(doc.value), [
       {
         kind: 'image',
         x: centered(size.widthCells, w),
@@ -528,7 +576,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     if (!image) return
     let index = -1
     apply('Importer une image', (draft) => {
-      if (blank) draft.size = size
+      if (blank) bodyOf(draft).size = size
       const list = drawing(draft)
       list.push(castDraft(image))
       index = list.length - 1
@@ -540,7 +588,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
 
   /** Rend à une image sa taille naturelle (80 px par cellule), son coin supérieur gauche en place. */
   function resetImageSize(index: number): void {
-    const primitive = doc.value.visual.primitives[index]
+    const primitive = shown.value.visual.primitives[index]
     if (primitive?.kind !== 'image') return
     const natural = naturalImageSize(primitive)
     if (!natural || (natural.w === primitive.w && natural.h === primitive.h)) return
@@ -607,10 +655,10 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     if (moving.size > 0) {
       if (!Number.isInteger(cellsX) || !Number.isInteger(cellsY)) return false
       const taken = new Set<string>()
-      for (const pin of doc.value.pins) {
+      for (const pin of shown.value.pins) {
         const point = moving.has(pin.id) ? { x: pin.x + cellsX, y: pin.y + cellsY } : pin
         const key = `${point.x},${point.y}`
-        if (!isInsideBox(point, doc.value.size) || taken.has(key)) {
+        if (!isInsideBox(point, shown.value.size) || taken.has(key)) {
           status.value =
             'Déplacement refusé : une broche sortirait du composant ou en rejoindrait une autre.'
           return false
@@ -633,7 +681,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
         const primitive = list[index]
         if (primitive) list[index] = castDraft(translatePrimitive(primitive, dx, dy))
       }
-      for (const pin of draft.pins) {
+      for (const pin of bodyOf(draft).pins) {
         if (!moving.has(pin.id)) continue
         pin.x += cellsX
         pin.y += cellsY
@@ -651,7 +699,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     const indexes = selectedIndexes.value
     const index = indexes[0]
     if (indexes.length !== 1 || index === undefined || selectedPinIds.value.length > 0) return
-    const result = reorderItem(doc.value.visual.primitives, index, move)
+    const result = reorderItem(shown.value.visual.primitives, index, move)
     if (result.index === index) return
     const labels: Record<StackMove, string> = {
       up: 'Avancer la forme',
@@ -678,11 +726,11 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   // Commandes des broches
 
   function addPin(point: LocalPoint): string {
-    const id = nextPinId(doc.value.pins)
+    const id = nextPinId(shown.value.pins)
     apply('Ajouter une broche', (draft) => {
-      draft.pins.push({
+      bodyOf(draft).pins.push({
         id,
-        name: String(draft.pins.length + 1),
+        name: String(bodyOf(draft).pins.length + 1),
         kind: 'io',
         x: point.x,
         y: point.y
@@ -694,14 +742,14 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
 
   function updatePin(id: string, patch: Partial<Pick<Pin, 'name' | 'kind'>>): void {
     apply('Modifier la broche', (draft) => {
-      const pin = draft.pins.find((candidate) => candidate.id === id)
+      const pin = bodyOf(draft).pins.find((candidate) => candidate.id === id)
       if (pin) Object.assign(pin, patch)
     })
   }
 
   function movePin(id: string, point: LocalPoint): void {
     apply('Déplacer la broche', (draft) => {
-      const pin = draft.pins.find((candidate) => candidate.id === id)
+      const pin = bodyOf(draft).pins.find((candidate) => candidate.id === id)
       if (pin && (pin.x !== point.x || pin.y !== point.y)) {
         pin.x = point.x
         pin.y = point.y
@@ -709,17 +757,106 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     })
   }
 
+  // Variantes : le même composant dessiné autrement. Chacune est un dessin complet, née d'une
+  // copie de celle qu'on regardait ; on en édite une à la fois.
+
+  /** Affiche une variante : c'est elle qu'on édite ensuite. */
+  function showVariant(id: string): void {
+    const next = doc.value.variants?.some((entry) => entry.id === id) ? id : null
+    if (next === activeVariant.value) return
+    activeVariant.value = next
+    selection.value = null
+    hoverPinId.value = null
+    fitToViewport()
+  }
+
+  /** Nouvelle variante : une copie de celle qu'on regarde, affichée aussitôt pour la retoucher. */
+  function addVariant(): string {
+    const id = nextVariantId(doc.value)
+    const source = shown.value
+    const copy: ComponentVariant = structuredClone({
+      id,
+      name: nextVariantName(doc.value),
+      size: source.size,
+      visual: source.visual,
+      pins: source.pins,
+      ...(source.pinGroups ? { pinGroups: source.pinGroups } : {})
+    })
+    apply('Ajouter une variante', (draft) => {
+      draft.variants = [...(draft.variants ?? []), castDraft(copy)]
+    })
+    showVariant(id)
+    status.value = `Variante « ${copy.name} » : une copie à retoucher. Ses broches gardent leurs identifiants.`
+    return id
+  }
+
+  function renameVariant(id: string, name: string): void {
+    const clean = name.trim()
+    if (clean.length === 0) {
+      status.value = 'Le nom de la variante ne peut pas être vide.'
+      return
+    }
+    apply('Renommer la variante', (draft) => {
+      if (id === BASE_VARIANT) draft.variantName = clean
+      else {
+        const variant = draft.variants?.find((entry) => entry.id === id)
+        if (variant) variant.name = clean
+      }
+    })
+  }
+
+  /**
+   * Supprime une variante ; la dernière ne se supprime pas. Supprimer la première fait de la
+   * suivante la première : c'est elle que montrent désormais les composants posés sans variante
+   * choisie, et ceux qui la désignaient.
+   */
+  function removeVariant(id: string): void {
+    const others = doc.value.variants ?? []
+    const [promoted, ...rest] = others
+    if (!promoted) return
+    if (id === BASE_VARIANT) {
+      apply('Supprimer la variante', (draft) => {
+        draft.size = promoted.size
+        draft.visual = castDraft(promoted.visual)
+        draft.pins = castDraft(promoted.pins)
+        if (promoted.pinGroups) draft.pinGroups = castDraft(promoted.pinGroups)
+        else delete draft.pinGroups
+        if (rest.length > 0) {
+          draft.variantName = promoted.name
+          draft.variants = castDraft(rest)
+        } else {
+          delete draft.variantName
+          delete draft.variants
+        }
+      })
+      if (activeVariant.value === promoted.id) activeVariant.value = null
+    } else {
+      const kept = others.filter((entry) => entry.id !== id)
+      if (kept.length === others.length) return
+      apply('Supprimer la variante', (draft) => {
+        if (kept.length > 0) draft.variants = castDraft(kept)
+        else {
+          delete draft.variants
+          delete draft.variantName
+        }
+      })
+      if (activeVariant.value === id) activeVariant.value = null
+    }
+    selection.value = null
+    fitToViewport()
+  }
+
   // Groupes de broches : des sections nommées du panneau de propriétés où ranger les broches
   // (pinGroups.ts). L'ordre des broches suit toujours celui du panneau, donc leur numérotation.
 
-  const pinGroups = computed(() => doc.value.pinGroups ?? [])
+  const pinGroups = computed(() => shown.value.pinGroups ?? [])
 
   /** Ajoute un groupe de broches, vide, après les autres ; retourne son identifiant. */
   function addPinGroup(): string {
     const id = nextPinGroupId(pinGroups.value)
     const name = nextPinGroupName(pinGroups.value)
     apply('Ajouter un groupe de broches', (draft) => {
-      draft.pinGroups = [...(draft.pinGroups ?? []), { id, name }]
+      bodyOf(draft).pinGroups = [...(bodyOf(draft).pinGroups ?? []), { id, name }]
     })
     return id
   }
@@ -731,7 +868,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
       return
     }
     apply('Renommer le groupe de broches', (draft) => {
-      const group = draft.pinGroups?.find((candidate) => candidate.id === id)
+      const group = bodyOf(draft).pinGroups?.find((candidate) => candidate.id === id)
       if (group) group.name = clean
     })
   }
@@ -739,11 +876,11 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   /** Défait un groupe de broches : ses broches restent, sans groupe, après les autres. */
   function removePinGroup(id: string): void {
     const groups = pinGroups.value.filter((group) => group.id !== id)
-    const pins = renumberPins(arrangedPins(doc.value.pins, groups))
+    const pins = renumberPins(arrangedPins(shown.value.pins, groups))
     apply('Défaire le groupe de broches', (draft) => {
-      if (groups.length > 0) draft.pinGroups = castDraft(groups)
-      else delete draft.pinGroups
-      draft.pins = castDraft(pins)
+      if (groups.length > 0) bodyOf(draft).pinGroups = castDraft(groups)
+      else delete bodyOf(draft).pinGroups
+      bodyOf(draft).pins = castDraft(pins)
     })
   }
 
@@ -752,18 +889,20 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
    * groupe : le glisser-déposer du panneau. Les noms numériques suivent le nouvel ordre.
    */
   function placePin(pinId: string, groupId: string | null, beforeId: string | null): void {
-    const pins = renumberPins(placedPin(doc.value.pins, pinGroups.value, pinId, groupId, beforeId))
-    if (JSON.stringify(pins) === JSON.stringify(doc.value.pins)) return
+    const pins = renumberPins(
+      placedPin(shown.value.pins, pinGroups.value, pinId, groupId, beforeId)
+    )
+    if (JSON.stringify(pins) === JSON.stringify(shown.value.pins)) return
     apply('Ranger la broche', (draft) => {
-      draft.pins = castDraft(pins)
+      bodyOf(draft).pins = castDraft(pins)
     })
   }
 
   /** Supprime une broche ; les noms numériques des autres suivent leur nouvel ordre. */
   function removePin(id: string): void {
-    const remaining = doc.value.pins.filter((pin) => pin.id !== id)
+    const remaining = shown.value.pins.filter((pin) => pin.id !== id)
     apply('Supprimer la broche', (draft) => {
-      draft.pins = castDraft(renumberPins(remaining))
+      bodyOf(draft).pins = castDraft(renumberPins(remaining))
     })
     selection.value = null
   }
@@ -779,11 +918,11 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     } else if (indexes.length === 0 && pinIds.length === 1 && onlyPin !== undefined) {
       removePin(onlyPin)
     } else {
-      const remaining = doc.value.pins.filter((pin) => !pinIds.includes(pin.id))
+      const remaining = shown.value.pins.filter((pin) => !pinIds.includes(pin.id))
       apply('Supprimer la sélection', (draft) => {
         const list = drawing(draft)
         for (const index of [...indexes].sort((a, b) => b - a)) list.splice(index, 1)
-        draft.pins = castDraft(renumberPins(remaining))
+        bodyOf(draft).pins = castDraft(renumberPins(remaining))
       })
       selection.value = null
     }
@@ -795,7 +934,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   const clipboardEmpty = computed(() => clipboard.value.length === 0)
 
   function primitivesAt(indexes: readonly number[]): Primitive[] {
-    const list = doc.value.visual.primitives
+    const list = shown.value.visual.primitives
     return indexes.flatMap((index) => {
       const primitive = list[index]
       return primitive ? [primitive] : []
@@ -814,9 +953,9 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   ): void {
     if (source.length === 0) return
     // Un groupe copié devient un nouveau groupe : les copies ne rejoignent pas leurs originaux.
-    const copies = regroupedCopies(withFreeImageFiles(doc.value.visual.primitives, source), [
-      ...doc.value.visual.primitives,
-      ...doc.value.pins
+    const copies = regroupedCopies(withFreeImageFiles(componentPrimitives(doc.value), source), [
+      ...shown.value.visual.primitives,
+      ...shown.value.pins
     ])
     let first = -1
     apply(label, (draft) => {
@@ -891,7 +1030,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   function fitToViewport(): void {
     setCellPx(
       fittingCellPx(
-        doc.value,
+        shown.value,
         viewport.value.width - FIT_PADDING_PX - FIT_SAFETY_PX,
         viewport.value.height - FIT_PADDING_PX - FIT_SAFETY_PX,
         cellPx.value
@@ -920,6 +1059,13 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     dirty,
     issues,
     hasErrors,
+    shown,
+    variants,
+    variantId,
+    showVariant,
+    addVariant,
+    renameVariant,
+    removeVariant,
     selectedIndexes,
     selectedPinIds,
     selectedPrimitive,

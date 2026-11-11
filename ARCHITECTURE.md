@@ -109,6 +109,13 @@ liste d'entrées (`contextMenu.ts` : action, titre, séparateur, pastilles, sous
 éditeur construit sa liste, le composant s'occupe de la placer, des sous-menus et de la
 fermeture.
 
+Variantes d'un composant : chaque variante est un dessin complet rangé dans le composant, qui
+porte lui-même celui de la première. Plutôt que d'apprendre les variantes à tout le code, une
+seule fonction (`variantDefinition`, et `instanceDefinition` pour un exemplaire posé) rend un
+composant ordinaire pour la variante voulue : le rendu, la connectivité et l'export ne voient
+que lui. Dans l'éditeur de composants, `shown` et `bodyOf` jouent ce rôle pour la variante en
+cours d'édition.
+
 Groupes : l'appartenance est une propriété de l'élément (`group`), pas une liste à part, pour
 qu'elle le suive sans rien avoir à tenir à jour quand il change de rang, qu'on le copie ou qu'on
 annule sa suppression. `src/domain/groups.ts` en tire les groupes (au moins deux porteurs du même
