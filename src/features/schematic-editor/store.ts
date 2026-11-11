@@ -11,6 +11,7 @@ import {
   flippedInstance,
   isEmptyProject,
   insertVertex,
+  nearestWirePoint,
   instanceBounds,
   locateOnWire,
   nearestCrossing,
@@ -43,6 +44,7 @@ import {
   type FlipAxis,
   type FreeEndStyle,
   type GridPoint,
+  type LocalPoint,
   type GridRect,
   type Project,
   type RotateDirection,
@@ -846,6 +848,35 @@ export const useSchematicStore = defineStore('schematic', () => {
   }
 
   /**
+   * Ctrl+clic sur un fil : un sommet de plus sur la partie droite visée, ou le coin visé en moins
+   * s'il laisse un fil valide. Vrai si le fil a changé.
+   */
+  function toggleWireVertex(id: string, point: LocalPoint): boolean {
+    const wire = doc.value.wires.find((candidate) => candidate.id === id)
+    const spot = wire ? nearestWirePoint(wire.points, point) : null
+    if (!wire || !spot || spot.location.kind === 'end') return false
+    const before = wire.points
+    if (spot.location.kind === 'segment') addWireVertex(id, spot.point)
+    else removeWireVertex(id, spot.location.index)
+    const changed = doc.value.wires.find((candidate) => candidate.id === id)?.points !== before
+    if (!changed)
+      status.value = 'Ce coin ne se retire pas : ses deux voisins ne peuvent pas se rejoindre.'
+    return changed
+  }
+
+  /**
+   * Double-clic sur un fil : l'outil Fil démarre un nouveau fil à ce point, qui sera raccordé au
+   * premier par une jonction (une extrémité posée sur un fil).
+   */
+  function startWireFrom(point: GridPoint): void {
+    clearSelection()
+    startWireTool()
+    beginWire(point)
+    status.value =
+      'Nouveau fil raccordé : clic pour chaque coude, double-clic ou Entrée pour finir.'
+  }
+
+  /**
    * Coupe un fil en deux à un point qui lui appartient. Rien ne change à l'œil : les deux morceaux
    * se touchent, donc restent reliés, mais chacun se sélectionne, se déplace ou se supprime seul.
    * Le second morceau passe juste au-dessus du premier et garde l'étiquette de l'arrivée ; les
@@ -1463,6 +1494,8 @@ export const useSchematicStore = defineStore('schematic', () => {
     stopWireDrawing,
     setWirePoints,
     addWireVertex,
+    toggleWireVertex,
+    startWireFrom,
     removeWireVertex,
     splitWire,
     selectNet,

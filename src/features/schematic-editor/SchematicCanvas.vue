@@ -5,6 +5,7 @@ import {
   boxHandles,
   componentImages,
   crossingPieceEnds,
+  distanceToSegment,
   dragVertex,
   gridLines,
   groupOutline,
@@ -18,6 +19,7 @@ import {
   matrixToSvg,
   moveSegment,
   nearestSegmentIndex,
+  nearestWirePoint,
   pointsAttribute,
   rectsIntersect,
   resizeBox,
@@ -747,8 +749,26 @@ const textBox = computed(() => {
 
 // Interactions
 
+/** Déplacement, en pixels, à partir duquel un appui devient un geste qui garde le pointeur. */
+const CAPTURE_PX = 3
+/** Appui en attente de capture : le pointeur n'est gardé qu'une fois qu'il a vraiment bougé. */
+let pendingCapture: { id: number; x: number; y: number } | null = null
+
+/**
+ * Le canevas garde le pointeur pendant un geste, même quand il sort de la zone de dessin. La
+ * capture attend le premier vrai mouvement : un pointeur capturé dès l'appui ferait arriver le
+ * clic et le double-clic au canevas, pas à l'élément visé, et son double-clic ne ferait rien.
+ */
 function capture(event: PointerEvent): void {
-  svg.value?.setPointerCapture(event.pointerId)
+  pendingCapture = { id: event.pointerId, x: event.clientX, y: event.clientY }
+}
+
+function captureOnceMoved(event: PointerEvent): void {
+  const pending = pendingCapture
+  if (!pending || pending.id !== event.pointerId) return
+  if (Math.hypot(event.clientX - pending.x, event.clientY - pending.y) < CAPTURE_PX) return
+  pendingCapture = null
+  if (drag.value) svg.value?.setPointerCapture(event.pointerId)
 }
 
 function startMove(event: PointerEvent): void {
@@ -833,12 +853,33 @@ function onLabelDown(label: TextLabel, event: PointerEvent): void {
   startMove(event)
 }
 
+/**
+ * Ctrl+clic sur un fil : un sommet de plus sur la partie droite visée, ou le coin visé en moins.
+ * Le fil devient la sélection ; un fil groupé est d'abord pris seul, sans rien changer.
+ */
+function toggleVertexAt(wireId: string, point: LocalPoint): void {
+  const alone =
+    store.selectedWires.length === 1 &&
+    store.selectedWires[0] === wireId &&
+    store.selection.length === 0 &&
+    store.selectedLabels.length === 0
+  const grouped = store.groups.some((group) => group.members.wire.includes(wireId))
+  store.clearSelection()
+  store.selectedWires = [wireId]
+  if (!grouped || alone) store.toggleWireVertex(wireId, point)
+  store.revealInspector()
+}
+
 function onWireDown(wireId: string, event: PointerEvent): void {
   if (event.button !== 0 || store.panKeyHeld || store.tool !== 'select') return
   event.stopPropagation()
   const world = toWorld(screenPoint(event))
   // Alt+clic sur un croisement : l'autre fil passe au-dessus ; ailleurs, Alt+glisser copie.
   if (event.altKey && store.toggleCrossing(world.x, world.y)) return
+  if (event.ctrlKey) {
+    toggleVertexAt(wireId, world)
+    return
+  }
   if (event.shiftKey) {
     store.selectedWires = selectedWireSet.value.has(wireId)
       ? store.selectedWires.filter((selected) => selected !== wireId)
@@ -889,6 +930,12 @@ function onVertexDown(wireId: string, index: number, event: PointerEvent): void 
   event.stopPropagation()
   const wire = store.doc.wires.find((candidate) => candidate.id === wireId)
   if (!wire) return
+  const vertex = wire.points[index]
+  if (event.ctrlKey && vertex) {
+    // Ctrl+clic sur la poignée d'un coin : il s'en va.
+    toggleVertexAt(wireId, { x: vertex[0], y: vertex[1] })
+    return
+  }
   drag.value = {
     kind: 'wire-vertex',
     wireId,
@@ -959,6 +1006,7 @@ function onPointerDown(event: PointerEvent): void {
 }
 
 function onPointerMove(event: PointerEvent): void {
+  captureOnceMoved(event)
   const world = toWorld(screenPoint(event))
   hover.value = world
   // Ctrl a pu être enfoncée ou relâchée hors de la fenêtre : l'événement fait foi.
@@ -1027,6 +1075,7 @@ function commitTextBox(start: GridPoint, end: GridPoint): void {
 }
 
 function onPointerUp(event: PointerEvent): void {
+  pendingCapture = null
   const current = drag.value
   if (!current) return
   if (current.kind === 'text-box') {
@@ -1114,7 +1163,10 @@ function onDrop(event: DragEvent): void {
   placeGhost()
 }
 
-/** Double-clic : termine le fil en cours ; en sélection, sur une extrémité libre, son étiquette. */
+/**
+ * Double-clic : termine le fil en cours ; en sélection, sur une extrémité libre, son étiquette ;
+ * ailleurs sur un fil, un nouveau fil qui part de là.
+ */
 function onDoubleClick(event: MouseEvent): void {
   if (store.tool === 'wire') {
     store.finishWire()
@@ -1125,7 +1177,37 @@ function onDoubleClick(event: MouseEvent): void {
   const hit = store.connectivity.freeEnds.find(
     (end) => Math.hypot(end.point[0] - world.x, end.point[1] - world.y) <= END_PICK_CELLS
   )
-  if (hit) emit('editWireEnd', hit.wireId, hit.endIndex)
+  if (hit) {
+    emit('editWireEnd', hit.wireId, hit.endIndex)
+    return
+  }
+  // Sur un fil, hors de ses extrémités : un nouveau fil part de ce point, raccordé au premier.
+  if (event.ctrlKey || event.shiftKey || event.altKey) return
+  const start = wireSpotAt(world)
+  if (start) {
+    drag.value = null
+    store.startWireFrom(start)
+  }
+}
+
+/**
+ * Point de la grille du fil qui passe sous le pointeur (celui du dessus s'il y en a plusieurs),
+ * hors de ses extrémités ; null loin de tout fil. Cherché par la géométrie : après un appui qui
+ * a capturé le pointeur, le double-clic arrive au canevas, pas au fil.
+ */
+function wireSpotAt(point: LocalPoint): GridPoint | null {
+  const reach = hitWidth.value / 2
+  for (let index = store.sortedWires.length - 1; index >= 0; index--) {
+    const wire = store.sortedWires[index]
+    if (!wire) continue
+    const at = nearestSegmentIndex(wire.points, point)
+    const a = wire.points[at]
+    const b = wire.points[at + 1]
+    if (!a || !b || distanceToSegment(point, a, b) > reach) continue
+    const spot = nearestWirePoint(wire.points, point)
+    if (spot && spot.location.kind !== 'end') return spot.point
+  }
+  return null
 }
 
 function onInstanceDoubleClick(id: string, event: MouseEvent): void {

@@ -97,8 +97,12 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     entier. Éditeur de composants : Ctrl+glisser sur une forme saisit sa poignée la plus proche,
     Ctrl sans sélection montre les poignées de la boîte. Montage : Ctrl+glisser sur un composant
     tire un fil de sa broche la plus proche. Diagramme : Ctrl+glisser sur un nœud tire un lien de
-    son point d'accroche le plus proche. Sans Ctrl, glisser un élément le déplace, toujours.
-    Dans le même esprit, Ctrl+clic sur un élément groupé le prend seul, au lieu de son groupe.
+    son point d'accroche le plus proche. Sur un fil ou un lien, le point d'attache est un
+    sommet : Ctrl+clic en ajoute un sur une partie droite, ou retire le coin visé (à même le
+    trait ou sur sa poignée ; `toggleWireVertex`, `toggleLinkVertex` ; décision du 11 novembre
+    2026). Sans Ctrl, glisser un élément le déplace, toujours.
+    Dans le même esprit, Ctrl+clic sur un élément groupé le prend seul, au lieu de son groupe ;
+    un fil ou un lien groupé est d'abord pris seul, le Ctrl+clic suivant touche à ses sommets.
   - Molette = zoom autour du curseur ; Espace + glisser ou bouton du milieu = déplacer la vue ;
     double-clic du bouton du milieu ou 0 = ajuster la vue.
   - Flèches = déplacer la sélection d'un pas de grille ; Ctrl+A / D / C / V / Z / Y ; Ctrl+G /
@@ -127,7 +131,13 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     Poser un composant remplace la copie embarquée de sa définition par celle de la bibliothèque
     si elle a changé, pour tout le montage (fils élastiques compris). Alt+glisser dépose une copie
     de la sélection (Alt+clic sur un croisement garde son rôle) ; double-clic sur l'extrémité
-    libre d'un fil saisit son étiquette d'extrémité. En sélection, Ctrl enfoncée (`ctrlHeld`),
+    libre d'un fil saisit son étiquette d'extrémité ; double-clic ailleurs sur un fil (sans
+    touche) démarre un nouveau fil à cet endroit, raccordé au premier par une jonction
+    (`wireSpotAt`, `startWireFrom` ; décision du 11 novembre 2026). Les canevas du montage et
+    du diagramme ne capturent le pointeur qu'une fois le geste commencé (`captureOnceMoved`,
+    3 px) : capturé dès l'appui, il ferait arriver le clic et le double-clic au canevas au lieu
+    de l'élément visé, et les double-clics des composants, étiquettes et nœuds ne feraient
+    rien. En sélection, Ctrl enfoncée (`ctrlHeld`),
     un anneau montre la broche qui serait saisie (`pinGrab` : la plus proche du pointeur parmi
     celles du composant survolé, sinon une broche à portée) : Ctrl+glisser tire un fil de cette
     broche jusqu'au point de relâchement (L selon l'axe dominant, Maj l'inverse, arrivée accrochée
@@ -286,8 +296,18 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     propose d'y revenir (`adoptGeneralStyle`) ; changer le style général le donne aux
     diagrammes ouverts qui le suivaient (`followGeneralStyle`), avec aperçu sur le diagramme
     affiché (`stylePreview`).
-  - Liens : la géométrie des fils (`wires.ts`), coudes posés à la main, pas de routage
-    automatique. Pointe pleine et effilée (deux ailes, un creux : `linkArrowHead`) au départ
+  - Liens : la géométrie des fils (`wires.ts`), coudes posés à la main. Pas de routage
+    automatique en continu, mais un tracé de départ soigné (décision du 11 novembre 2026) :
+    un lien quitte une forme à angle droit et y arrive de face, jamais le long de son bord
+    (`routeLink`, d'après `anchorNormals` : un L quand il suffit, sinon un Z par le milieu, un U
+    ou une sortie droite de `LINK_STUB` cellules ; le plus simple des trajets possibles, Maj
+    donne le suivant ; `routeTo` du canevas pour l'outil Lien et le Ctrl+glisser). Glisser de
+    côté le segment qui sort d'une forme (ou y arrive) emmène son point d'attache d'une accroche
+    à l'autre du même côté, jusqu'au bout du côté, au lieu de laisser un coude qui longe la
+    forme (`moveLinkSegment` ; une accroche déjà prise par un autre lien reste permise). Un
+    lien dont un bout est sur une note se trace en pointillés, sans changer le style des
+    prochains liens (`touchesNote`, dans `addLink`). Pointe pleine et plutôt trapue (deux
+    ailes, un creux, presque aussi large que longue : `linkArrowHead`) au départ
     et/ou à l'arrivée, trait plein ou pointillé, couleur. Au dessin seulement (`linkShape`,
     écran et export), une extrémité qui porte une pointe s'arrête un peu avant son point
     d'arrivée (`linkArrowGap`, 0,4 cellule) : la pointe ne touche pas la forme, et le trait
@@ -483,7 +503,16 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     coin ou le côté) ; Ctrl+glisser sur une forme saisit la poignée la plus proche ; sans sélection,
     Ctrl fait apparaître les poignées de la boîte du composant (`setBox` : le contenu suit
     l'origine, les broches qui sortent disparaissent). Redimensionner le composant supprime les broches qui sortent de la
-    boîte ; les noms numériques des broches suivent toujours leur ordre (`renumberPins`). Le repère
+    boîte ; les noms numériques des broches suivent toujours leur ordre (`renumberPins`).
+    Groupes de broches (décision du 11 novembre 2026 ; `src/domain/pinGroups.ts`) : dans le
+    panneau du composant, « + Groupe » crée une section nommée (`pinGroups` du composant,
+    `pinGroup` de la broche, optionnels, sans montée de version) ; une broche se glisse sur
+    une autre ligne pour changer d'ordre, ou sur un groupe pour y entrer (`placePin`,
+    `placedPin`). Les broches du composant restent rangées groupe par groupe, les sans-groupe
+    à la fin (`arrangedPins`) : l'ordre du panneau est celui des broches, donc de leurs
+    numéros. Défaire un groupe (sa corbeille) garde ses broches. Ce n'est qu'un rangement du
+    panneau, rien n'est dessiné ; à ne pas confondre avec `group`, le groupe de sélection des
+    formes et des broches sur le dessin. Le repère
     d'une broche se met du côté libre le plus proche du bord (`pinLabelSide`, contours et traits
     évités), sinon du côté du bord le plus proche ; son numéro (et le point médian qui le sépare
     du nom) est plus petit et grisé, le nom garde sa taille (`pinNumberText`). Tout l'espace de travail a la couleur du

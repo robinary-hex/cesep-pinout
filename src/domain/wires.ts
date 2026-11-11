@@ -62,7 +62,7 @@ export function locateOnWire(points: readonly GridPoint[], p: GridPoint): WireLo
   return null
 }
 
-function dedupeConsecutive(points: readonly GridPoint[]): GridPoint[] {
+export function dedupeConsecutive(points: readonly GridPoint[]): GridPoint[] {
   const result: GridPoint[] = []
   for (const point of points) {
     const previous = result.at(-1)

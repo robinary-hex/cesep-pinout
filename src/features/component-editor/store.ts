@@ -3,13 +3,17 @@ import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 import {
   componentIssues,
+  arrangedPins,
   createEmptyComponent,
   groupIds,
   importedImageSize,
   isInsideBox,
   naturalImageSize,
   nextGroupId,
+  nextPinGroupId,
+  nextPinGroupName,
   pinsInside,
+  placedPin,
   primitiveBounds,
   QUARTERS_PER_CELL,
   regroupedCopies,
@@ -705,6 +709,56 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     })
   }
 
+  // Groupes de broches : des sections nommées du panneau de propriétés où ranger les broches
+  // (pinGroups.ts). L'ordre des broches suit toujours celui du panneau, donc leur numérotation.
+
+  const pinGroups = computed(() => doc.value.pinGroups ?? [])
+
+  /** Ajoute un groupe de broches, vide, après les autres ; retourne son identifiant. */
+  function addPinGroup(): string {
+    const id = nextPinGroupId(pinGroups.value)
+    const name = nextPinGroupName(pinGroups.value)
+    apply('Ajouter un groupe de broches', (draft) => {
+      draft.pinGroups = [...(draft.pinGroups ?? []), { id, name }]
+    })
+    return id
+  }
+
+  function renamePinGroup(id: string, name: string): void {
+    const clean = name.trim()
+    if (clean.length === 0) {
+      status.value = 'Le nom du groupe ne peut pas être vide.'
+      return
+    }
+    apply('Renommer le groupe de broches', (draft) => {
+      const group = draft.pinGroups?.find((candidate) => candidate.id === id)
+      if (group) group.name = clean
+    })
+  }
+
+  /** Défait un groupe de broches : ses broches restent, sans groupe, après les autres. */
+  function removePinGroup(id: string): void {
+    const groups = pinGroups.value.filter((group) => group.id !== id)
+    const pins = renumberPins(arrangedPins(doc.value.pins, groups))
+    apply('Défaire le groupe de broches', (draft) => {
+      if (groups.length > 0) draft.pinGroups = castDraft(groups)
+      else delete draft.pinGroups
+      draft.pins = castDraft(pins)
+    })
+  }
+
+  /**
+   * Range une broche dans un groupe (null : aucun), devant la broche `beforeId` ou à la fin du
+   * groupe : le glisser-déposer du panneau. Les noms numériques suivent le nouvel ordre.
+   */
+  function placePin(pinId: string, groupId: string | null, beforeId: string | null): void {
+    const pins = renumberPins(placedPin(doc.value.pins, pinGroups.value, pinId, groupId, beforeId))
+    if (JSON.stringify(pins) === JSON.stringify(doc.value.pins)) return
+    apply('Ranger la broche', (draft) => {
+      draft.pins = castDraft(pins)
+    })
+  }
+
   /** Supprime une broche ; les noms numériques des autres suivent leur nouvel ordre. */
   function removePin(id: string): void {
     const remaining = doc.value.pins.filter((pin) => pin.id !== id)
@@ -911,6 +965,10 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     reorderPrimitive,
     addPin,
     updatePin,
+    addPinGroup,
+    renamePinGroup,
+    removePinGroup,
+    placePin,
     movePin,
     removePin,
     removeSelection,

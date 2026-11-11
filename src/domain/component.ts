@@ -25,9 +25,22 @@ export const pinSchema = z.object({
   kind: pinKindSchema,
   x: z.number().int().nonnegative(),
   y: z.number().int().nonnegative(),
-  group: groupSchema
+  group: groupSchema,
+  /** Groupe de broches où elle est rangée dans le panneau (voir pinGroups.ts) ; absent : aucun. */
+  pinGroup: z.string().min(1).optional()
 })
 export type Pin = z.infer<typeof pinSchema>
+
+/**
+ * Groupe de broches nommé (« Alimentation », « Port B »…) : un rangement du panneau de propriétés,
+ * rien de dessiné. À ne pas confondre avec `group`, le groupe de sélection d'une forme ou d'une
+ * broche sur le dessin.
+ */
+export const pinGroupSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1)
+})
+export type PinGroup = z.infer<typeof pinGroupSchema>
 
 /** Nom d'un fichier d'image d'un composant : lettres, chiffres, tirets, points, et `.png` au bout. */
 export const IMAGE_FILE_PATTERN = /^[A-Za-z0-9_-][A-Za-z0-9_.-]*\.png$/
@@ -264,7 +277,9 @@ const componentShape = z.object({
   description: z.string(),
   size: sizeSchema,
   visual: visualSchema,
-  pins: z.array(pinSchema)
+  pins: z.array(pinSchema),
+  /** Groupes de broches, dans l'ordre du panneau ; absent tant qu'il n'y en a pas. */
+  pinGroups: z.array(pinGroupSchema).optional()
 })
 export type ComponentDefinition = z.infer<typeof componentShape>
 

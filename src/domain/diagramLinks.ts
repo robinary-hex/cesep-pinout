@@ -21,7 +21,18 @@ import { wiresFollowingPins } from './elastic'
 import type { GridPoint, LocalPoint } from './grid'
 import type { Box } from './handles'
 import { textLabelBounds, unionRects, type GridRect } from './placement'
-import { wireBounds } from './wires'
+import {
+  dedupeConsecutive,
+  horizontalFirstFor,
+  isUTurn,
+  moveSegment,
+  pointsEqual,
+  routeL,
+  routeLAuto,
+  segmentStep,
+  simplifyPoints,
+  wireBounds
+} from './wires'
 
 // Liens d'un diagramme : où ils s'accrochent aux nœuds, comment ils les suivent, leurs pointes de
 // flèche et leur étiquette. Un lien a la géométrie d'un fil du montage (`wires.ts`) ; l'accroche
@@ -218,15 +229,250 @@ export function linksFollowingNodes(
   return wiresFollowingPins(links, pinsBefore, pinsAfter, translated)
 }
 
+// Départ et arrivée d'un lien qu'on trace
+
+/**
+ * Directions par lesquelles un lien quitte un point d'accroche : vers l'extérieur du nœud, à
+ * angle droit du côté qui porte l'accroche. Un coin de boîte en offre deux ; une barre, ses deux
+ * faces.
+ */
+export function anchorNormals(node: DiagramNode, point: GridPoint): GridPoint[] {
+  const { x, y, w, h } = node
+  if (NODE_SPECS[node.shape].line) {
+    return h === 0
+      ? [
+          [0, -1],
+          [0, 1]
+        ]
+      : [
+          [-1, 0],
+          [1, 0]
+        ]
+  }
+  const normals: GridPoint[] = []
+  if (point[1] <= y) normals.push([0, -1])
+  if (point[1] >= y + h) normals.push([0, 1])
+  if (point[0] <= x) normals.push([-1, 0])
+  if (point[0] >= x + w) normals.push([1, 0])
+  // Accroche en retrait de la boîte (encoche d'une réception, côté penché d'un parallélogramme) :
+  // elle regarde le bord le plus proche.
+  if (normals.length === 0) normals.push(point[0] - x <= x + w - point[0] ? [-1, 0] : [1, 0])
+  return normals
+}
+
+/** Bout d'un lien qu'on trace : son point, et par où il peut le quitter (rien pour un point libre). */
+export interface LinkEnd {
+  point: GridPoint
+  normals: readonly GridPoint[]
+}
+
+/** Nœud qui a une accroche en ce point : le dernier dessiné s'il y en a plusieurs, sinon null. */
+export function anchoredNode(nodes: readonly DiagramNode[], point: GridPoint): DiagramNode | null {
+  for (let index = nodes.length - 1; index >= 0; index--) {
+    const node = nodes[index]
+    if (node && nodeAnchors(node).some((anchor) => pointsEqual(anchor, point))) return node
+  }
+  return null
+}
+
+/** Bout d'un lien posé en `point` : attaché au nœud qui a là une accroche, sinon libre. */
+export function linkEndAt(nodes: readonly DiagramNode[], point: GridPoint): LinkEnd {
+  const node = anchoredNode(nodes, point)
+  return { point, normals: node ? anchorNormals(node, point) : [] }
+}
+
+/** Un lien dont un bout est posé sur une note : il se trace en pointillés. */
+export function touchesNote(nodes: readonly DiagramNode[], points: readonly GridPoint[]): boolean {
+  const first = points[0]
+  const last = points[points.length - 1]
+  return [first, last].some(
+    (end) => end !== undefined && anchoredNode(nodes, end)?.shape === 'note'
+  )
+}
+
+/** Longueur du bout de lien qui sort tout droit d'une accroche avant de tourner, en cellules. */
+export const LINK_STUB = 2
+
+/** Façons de relier deux points : les deux L (l'axe dominant d'abord), puis les deux Z par le milieu. */
+function connections(a: GridPoint, b: GridPoint): GridPoint[][] {
+  const horizontalFirst = horizontalFirstFor(a, b)
+  const midX = Math.round((a[0] + b[0]) / 2)
+  const midY = Math.round((a[1] + b[1]) / 2)
+  const acrossX: GridPoint[] = [a, [midX, a[1]], [midX, b[1]], b]
+  const acrossY: GridPoint[] = [a, [a[0], midY], [b[0], midY], b]
+  return [
+    routeL(a, b, horizontalFirst),
+    routeL(a, b, !horizontalFirst),
+    ...(horizontalFirst ? [acrossX, acrossY] : [acrossY, acrossX])
+  ]
+}
+
+function direction(from: GridPoint, to: GridPoint): GridPoint {
+  return [Math.sign(to[0] - from[0]), Math.sign(to[1] - from[1])]
+}
+
+/**
+ * Trajet d'un lien qu'on trace, de `from` à `to`. Un bout attaché à une forme la quitte à angle
+ * droit, et y arrive de face : jamais le long de son bord, où le trait se confondrait avec le
+ * contour (décision du 11 novembre 2026). Le plus souvent c'est un L ; quand un L ne peut pas
+ * respecter les deux bouts, le trajet prend un ou deux coudes de plus : un Z par le milieu, un U,
+ * ou une sortie droite de `LINK_STUB` cellules avant de tourner. Parmi les trajets possibles, le
+ * plus simple (moins de sommets, puis le plus court) ; `invert` (Maj) donne le suivant. Entre deux
+ * points libres, c'est le L de `routeLAuto`. Ce n'est qu'un tracé de départ : les coudes se
+ * reprennent ensuite à la main.
+ */
+export function routeLink(from: LinkEnd, to: LinkEnd, invert = false): GridPoint[] {
+  if (pointsEqual(from.point, to.point)) return [from.point]
+  const out = (point: GridPoint, normal: GridPoint): GridPoint => [
+    point[0] + normal[0] * LINK_STUB,
+    point[1] + normal[1] * LINK_STUB
+  ]
+  const heads: GridPoint[][] = [
+    [from.point],
+    ...from.normals.map((normal) => [from.point, out(from.point, normal)])
+  ]
+  const tails: GridPoint[][] = [
+    [to.point],
+    ...to.normals.map((normal) => [out(to.point, normal), to.point])
+  ]
+  const leaves = (a: GridPoint, b: GridPoint, normals: readonly GridPoint[]): boolean => {
+    const [dx, dy] = direction(a, b)
+    return normals.length === 0 || normals.some((normal) => normal[0] === dx && normal[1] === dy)
+  }
+  const found: { points: GridPoint[]; length: number }[] = []
+  const seen = new Set<string>()
+  for (const head of heads) {
+    for (const tail of tails) {
+      const a = head[head.length - 1]
+      const b = tail[0]
+      if (!a || !b) continue
+      for (const middle of connections(a, b)) {
+        const raw = dedupeConsecutive([...head, ...middle, ...tail])
+        const first = raw[0]
+        const second = raw[1]
+        const last = raw[raw.length - 1]
+        const beforeLast = raw[raw.length - 2]
+        if (!first || !second || !last || !beforeLast) continue
+        // Pas de demi-tour, et chaque bout attaché part ou arrive de face.
+        const turnsBack = raw.some((point, index) => {
+          const previous = raw[index - 1]
+          const next = raw[index + 1]
+          return previous !== undefined && next !== undefined && isUTurn(previous, point, next)
+        })
+        if (turnsBack) continue
+        if (!leaves(first, second, from.normals) || !leaves(last, beforeLast, to.normals)) continue
+        const points = simplifyPoints(raw)
+        const key = points.map((point) => point.join(',')).join(' ')
+        if (seen.has(key)) continue
+        seen.add(key)
+        const length = points.reduce((sum, point, index) => {
+          const previous = points[index - 1]
+          return previous
+            ? sum + Math.abs(point[0] - previous[0]) + Math.abs(point[1] - previous[1])
+            : sum
+        }, 0)
+        found.push({ points, length })
+      }
+    }
+  }
+  // Tri stable : à égalité, l'ordre d'essai (sans sortie droite d'abord, axe dominant d'abord).
+  found.sort((a, b) => a.points.length - b.points.length || a.length - b.length)
+  const chosen = (invert ? found[1] : undefined) ?? found[0]
+  return chosen ? chosen.points : routeLAuto(from.point, to.point, invert)
+}
+
+/**
+ * Abscisses (ou ordonnées) où le bout attaché d'un segment peut glisser : celles des accroches du
+ * même côté de sa forme. Null si le bout n'est pas attaché, ou s'il ne quitte pas sa forme de face.
+ */
+function slideSlots(
+  nodes: readonly DiagramNode[],
+  end: GridPoint,
+  neighbour: GridPoint
+): number[] | null {
+  const node = anchoredNode(nodes, end)
+  if (!node) return null
+  const [dx, dy] = direction(end, neighbour)
+  const lateral = dx === 0 ? 0 : 1
+  const along = 1 - lateral
+  const leaves = (point: GridPoint): boolean =>
+    anchorNormals(node, point).some((normal) => normal[0] === dx && normal[1] === dy)
+  if (!leaves(end)) return null
+  return nodeAnchors(node)
+    .filter((anchor) => anchor[along] === end[along] && leaves(anchor))
+    .map((anchor) => anchor[lateral] ?? 0)
+}
+
+/**
+ * Déplace un segment de lien parallèlement à lui-même, comme `moveSegment`, à une différence
+ * près : le segment qui sort d'une forme (ou y arrive) de face emmène son point d'attache, qui
+ * glisse le long du côté d'une accroche à l'autre, au lieu de rester sur place avec un coude qui
+ * longerait la forme (décision du 11 novembre 2026). Au bout du côté, il s'arrête. Un bout libre,
+ * ou attaché là où la forme n'a pas d'autre accroche, garde le comportement de `moveSegment`.
+ */
+export function moveLinkSegment(
+  points: readonly GridPoint[],
+  index: number,
+  coordinate: number,
+  nodes: readonly DiagramNode[]
+): GridPoint[] {
+  const a = points[index]
+  const b = points[index + 1]
+  const step = a && b ? segmentStep(a, b) : null
+  if (!a || !b || !step) return [...points]
+  const lateral = step[0] === 0 ? 0 : 1
+  const current = a[lateral] ?? 0
+  const startSlots = index === 0 ? slideSlots(nodes, a, b) : null
+  const endSlots = index === points.length - 2 ? slideSlots(nodes, b, a) : null
+  const slots = startSlots ?? endSlots
+  const target = slots
+    ? slots.reduce(
+        (best, value) =>
+          Math.abs(value - coordinate) < Math.abs(best - coordinate) ? value : best,
+        current
+      )
+    : coordinate
+  let moved = moveSegment(points, index, target)
+  if (target === current) return moved
+  const shifted = (point: GridPoint): GridPoint =>
+    lateral === 0 ? [target, point[1]] : [point[0], target]
+  // `moveSegment` laisse chaque bout du lien en place, relié au segment par un coude : le bout qui
+  // peut glisser perd ce coude et se pose sur l'accroche d'en face.
+  const head = moved[0]
+  const afterHead = moved[1]
+  if (
+    startSlots?.includes(target) &&
+    head &&
+    afterHead &&
+    pointsEqual(head, a) &&
+    pointsEqual(afterHead, shifted(a))
+  ) {
+    moved = moved.slice(1)
+  }
+  const tail = moved[moved.length - 1]
+  const beforeTail = moved[moved.length - 2]
+  if (
+    endSlots?.includes(target) &&
+    tail &&
+    beforeTail &&
+    pointsEqual(tail, b) &&
+    pointsEqual(beforeTail, shifted(b))
+  ) {
+    moved = moved.slice(0, -1)
+  }
+  return moved
+}
+
 // Dessin
 
 /** Longueur d'une pointe de flèche, en cellules. */
 export function linkArrowSize(lineWidth: number): number {
-  return Math.max(1.1, lineWidth * 7)
+  return Math.max(0.9, lineWidth * 6)
 }
 
 /**
- * Pointe de flèche pleine et effilée : la pointe en `tip`, deux ailes en arrière, et un creux
+ * Pointe de flèche pleine, plutôt trapue (presque aussi large que longue, décision du 11
+ * novembre 2026) : la pointe en `tip`, deux ailes en arrière, et un creux
  * entre elles. Polygone aile, pointe, aile, creux, dans la direction `from` → `tip` ; null si les
  * deux points sont confondus.
  */
@@ -242,8 +488,8 @@ export function linkArrowHead(
   const ux = dx / length
   const uy = dy / length
   const size = linkArrowSize(lineWidth)
-  const half = size * 0.36
-  const notch = size * 0.72
+  const half = size * 0.44
+  const notch = size * 0.76
   const baseX = tip.x - ux * size
   const baseY = tip.y - uy * size
   return [

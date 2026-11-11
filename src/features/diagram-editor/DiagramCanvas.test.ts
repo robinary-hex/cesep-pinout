@@ -332,3 +332,47 @@ describe('canevas du diagramme : groupes', () => {
     expect(wrapper.find('.group-outline').exists()).toBe(false)
   })
 })
+
+describe('canevas du diagramme : liens de face', () => {
+  it('tire un lien en Z d’un côté à l’autre, fait glisser son attache, lui ajoute un sommet', async () => {
+    const store = useDiagramStore()
+    store.addNode('rounded', 0, 0)
+    store.addNode('rounded', 30, 10)
+    store.clearSelection()
+    const wrapper = mount(DiagramCanvas)
+    const svg = wrapper.get('svg.diagram')
+    // Du côté droit du premier nœud au côté gauche du second : sortie et arrivée de face.
+    await fire(svg, 'pointermove', at(store, 15, 3), CTRL)
+    await fire(svg, 'pointerdown', at(store, 15, 3), CTRL)
+    await fire(svg, 'pointermove', at(store, 25, 10), CTRL)
+    await fire(svg, 'pointerup', at(store, 30.2, 13), CTRL)
+    expect(store.doc.links[0]?.points).toEqual([
+      [16, 3],
+      [23, 3],
+      [23, 13],
+      [30, 13]
+    ])
+
+    // Le segment qui sort du nœud, glissé de deux cellules vers le bas : son attache suit.
+    await fire(wrapper.get('.link-hit'), 'pointerdown', at(store, 19, 3))
+    await fire(svg, 'pointermove', at(store, 19, 5))
+    await fire(svg, 'pointerup', at(store, 19, 5))
+    expect(store.doc.links[0]?.points).toEqual([
+      [16, 5],
+      [23, 5],
+      [23, 13],
+      [30, 13]
+    ])
+
+    // Ctrl+clic sur la partie verticale : un sommet de plus.
+    await fire(wrapper.get('.link-hit'), 'pointerdown', at(store, 23, 8), CTRL)
+    await fire(svg, 'pointerup', at(store, 23, 8), CTRL)
+    expect(store.doc.links[0]?.points).toEqual([
+      [16, 5],
+      [23, 5],
+      [23, 8],
+      [23, 13],
+      [30, 13]
+    ])
+  })
+})

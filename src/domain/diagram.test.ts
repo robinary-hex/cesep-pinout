@@ -21,12 +21,17 @@ import {
   linkLabelPlacement,
   linkRenderPoints,
   linkShape,
+  anchorNormals,
+  linkEndAt,
   linksFollowingNodes,
   movedAnchor,
+  moveLinkSegment,
   nearestOnPath,
   nodeAnchors,
   pathMidpoint,
-  pathPointAt
+  pathPointAt,
+  routeLink,
+  touchesNote
 } from './diagramLinks'
 import {
   DARK_GROUND,
@@ -551,16 +556,16 @@ describe('diagramme : accroche des liens', () => {
 })
 
 describe('diagramme : dessin des liens', () => {
-  it('dessine une pointe pleine et effilée vers l’arrivée', () => {
+  it('dessine une pointe pleine et trapue vers l’arrivée', () => {
     const head = linkArrowHead({ x: 0, y: 0 }, { x: 0, y: 5 }, 0.15)
-    // Aile, pointe, aile, creux : 1,1 de long, 0,79 de large, creux à 0,79 de la pointe.
+    // Aile, pointe, aile, creux : 0,9 de long, 0,79 de large, creux à 0,68 de la pointe.
     expect(head).toHaveLength(4)
     expect(head?.[1]).toEqual({ x: 0, y: 5 })
-    expect(head?.[0]?.y).toBeCloseTo(3.9)
+    expect(head?.[0]?.y).toBeCloseTo(4.1)
     expect(head?.[0]?.x).toBeCloseTo(-0.396)
     expect(head?.[2]?.x).toBeCloseTo(0.396)
     expect(head?.[3]?.x).toBeCloseTo(0)
-    expect(head?.[3]?.y).toBeCloseTo(4.208)
+    expect(head?.[3]?.y).toBeCloseTo(4.316)
     expect(linkArrowHead({ x: 1, y: 1 }, { x: 1, y: 1 }, 0.15)).toBeNull()
   })
 
@@ -570,9 +575,9 @@ describe('diagramme : dessin des liens', () => {
       [4, 10]
     ])
     const shape = linkShape(arriving, [], 0.15)
-    // La pointe finit 0,4 avant le sommet ; le trait s'arrête 0,66 plus tôt, dans la pointe.
+    // La pointe finit 0,4 avant le sommet ; le trait s'arrête 0,54 plus tôt, dans la pointe.
     expect(shape.points.at(-1)).toEqual([4, 9.6])
-    expect(shape.stroke.at(-1)?.[1]).toBeCloseTo(8.94)
+    expect(shape.stroke.at(-1)?.[1]).toBeCloseTo(9.06)
     expect(shape.stroke[0]).toEqual([4, 4])
     expect(shape.heads).toHaveLength(1)
     expect(shape.heads[0]?.[1]).toEqual({ x: 4, y: 9.6 })
@@ -714,5 +719,171 @@ describe('diagramme : dessin des liens', () => {
     expect(bounds.y).toBe(0)
     expect(bounds.y + bounds.height).toBeCloseTo(30.3)
     expect(diagramBounds(createEmptyDiagram('Vide'))).toBeNull()
+  })
+})
+
+describe('diagramme : départ et arrivée de face', () => {
+  const box = node({ id: 'a', w: 16, h: 6 })
+  const right = { point: [16, 3] as [number, number], normals: anchorNormals(box, [16, 3]) }
+  const free = (x: number, y: number): { point: [number, number]; normals: never[] } => ({
+    point: [x, y],
+    normals: []
+  })
+
+  it('dit par où un lien quitte une accroche : le côté, les deux d’un coin, les faces d’une barre', () => {
+    expect(anchorNormals(box, [16, 3])).toEqual([[1, 0]])
+    expect(anchorNormals(box, [5, 0])).toEqual([[0, -1]])
+    expect(anchorNormals(box, [0, 6])).toEqual([
+      [0, 1],
+      [-1, 0]
+    ])
+    expect(anchorNormals(node({ shape: 'bar', w: 8, h: 0 }), [3, 0])).toEqual([
+      [0, -1],
+      [0, 1]
+    ])
+    // Accroche en retrait de la boîte : l'encoche d'une réception regarde à gauche.
+    expect(anchorNormals(node({ shape: 'receive' }), [3, 3])).toEqual([[-1, 0]])
+    expect(linkEndAt([box], [16, 3])).toEqual(right)
+    expect(linkEndAt([box], [20, 3]).normals).toEqual([])
+  })
+
+  it('entre deux points libres, trace le L de toujours ; Maj donne l’autre', () => {
+    expect(routeLink(free(0, 0), free(8, 3))).toEqual([
+      [0, 0],
+      [8, 0],
+      [8, 3]
+    ])
+    expect(routeLink(free(0, 0), free(8, 3), true)).toEqual([
+      [0, 0],
+      [0, 3],
+      [8, 3]
+    ])
+    expect(routeLink(free(0, 0), free(8, 0))).toEqual([
+      [0, 0],
+      [8, 0]
+    ])
+  })
+
+  it('quitte une forme à angle droit, même quand la cible est surtout plus bas', () => {
+    // À droite de la boîte, cible loin en dessous : le lien sort quand même vers la droite.
+    expect(routeLink(right, free(20, 30))).toEqual([
+      [16, 3],
+      [20, 3],
+      [20, 30]
+    ])
+    // Maj : sortie droite de deux cellules, puis l'autre coude.
+    expect(routeLink(right, free(20, 30), true)).toEqual([
+      [16, 3],
+      [18, 3],
+      [18, 30],
+      [20, 30]
+    ])
+    // Cible derrière la forme : le lien sort, puis revient, sans jamais longer le bord.
+    expect(routeLink(right, free(0, 20))).toEqual([
+      [16, 3],
+      [18, 3],
+      [18, 20],
+      [0, 20]
+    ])
+  })
+
+  it('arrive de face : un Z entre deux côtés qui se regardent, un L vers un côté d’équerre, un U', () => {
+    const other = node({ id: 'b', x: 30, y: 10, w: 16, h: 6 })
+    const left = linkEndAt([other], [30, 13])
+    expect(routeLink(right, left)).toEqual([
+      [16, 3],
+      [23, 3],
+      [23, 13],
+      [30, 13]
+    ])
+    const top = linkEndAt([other], [40, 10])
+    expect(routeLink(right, top)).toEqual([
+      [16, 3],
+      [40, 3],
+      [40, 10]
+    ])
+    // Du côté droit d'une forme au côté droit d'une autre, juste en dessous.
+    const below = node({ id: 'c', x: 0, y: 10, w: 16, h: 6 })
+    expect(routeLink(right, linkEndAt([below], [16, 13]))).toEqual([
+      [16, 3],
+      [18, 3],
+      [18, 13],
+      [16, 13]
+    ])
+    // D'un point libre vers le dessus d'une forme, en venant de côté : un coude de plus.
+    expect(routeLink(free(20, 13), linkEndAt([other], [40, 10]))).toEqual([
+      [20, 13],
+      [20, 8],
+      [40, 8],
+      [40, 10]
+    ])
+  })
+
+  it('fait glisser l’attache d’un segment le long du côté de sa forme, jusqu’au bout du côté', () => {
+    const points: [number, number][] = [
+      [16, 3],
+      [30, 3],
+      [30, 20]
+    ]
+    // Le segment qui sort à droite, glissé vers le bas : son départ suit, sans coude le long du bord.
+    expect(moveLinkSegment(points, 0, 5, [box])).toEqual([
+      [16, 5],
+      [30, 5],
+      [30, 20]
+    ])
+    // Plus bas que la forme : il s'arrête au coin.
+    expect(moveLinkSegment(points, 0, 40, [box])).toEqual([
+      [16, 6],
+      [30, 6],
+      [30, 20]
+    ])
+    // Sans forme sous le départ : le bout reste en place, un coude le relie.
+    expect(moveLinkSegment(points, 0, 5, [])).toEqual([
+      [16, 3],
+      [16, 5],
+      [30, 5],
+      [30, 20]
+    ])
+    // Un losange n'a qu'une accroche par côté : rien ne bouge.
+    const diamond = node({ shape: 'diamond', w: 8, h: 6, x: 8, y: 0 })
+    expect(moveLinkSegment(points, 0, 5, [diamond])).toEqual(points)
+    // L'arrivée glisse de même, le long du dessus de la forme d'arrivée.
+    const target = node({ id: 't', x: 24, y: 20, w: 16, h: 6 })
+    expect(moveLinkSegment(points, 1, 33, [box, target])).toEqual([
+      [16, 3],
+      [33, 3],
+      [33, 20]
+    ])
+  })
+
+  it('reconnaît un lien attaché à une note', () => {
+    const note = node({ shape: 'note', id: 'n', x: 0, y: 10 })
+    expect(
+      touchesNote(
+        [box, note],
+        [
+          [8, 16],
+          [8, 22]
+        ]
+      )
+    ).toBe(true)
+    expect(
+      touchesNote(
+        [box, note],
+        [
+          [24, 13],
+          [16, 13]
+        ]
+      )
+    ).toBe(true)
+    expect(
+      touchesNote(
+        [box, note],
+        [
+          [16, 3],
+          [24, 3]
+        ]
+      )
+    ).toBe(false)
   })
 })

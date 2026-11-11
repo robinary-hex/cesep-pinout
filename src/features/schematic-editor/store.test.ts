@@ -1158,3 +1158,45 @@ describe('montage : cases d’affichage', () => {
     expect(store.showUnconnected).toBe(false)
   })
 })
+
+describe('montage : sommets au Ctrl+clic, fil raccordé', () => {
+  it('ajoute un sommet sur une partie droite, retire un coin quand ses voisins se rejoignent', () => {
+    const store = useSchematicStore()
+    const id = store.addWire([
+      [0, 0],
+      [6, 0],
+      [6, 4]
+    ])
+    if (!id) throw new Error('fil refusé')
+    expect(store.toggleWireVertex(id, { x: 3.2, y: 0.2 })).toBe(true)
+    expect(store.doc.wires[0]?.points).toEqual([
+      [0, 0],
+      [3, 0],
+      [6, 0],
+      [6, 4]
+    ])
+    expect(store.toggleWireVertex(id, { x: 3, y: 0 })).toBe(true)
+    expect(store.doc.wires[0]?.points).toHaveLength(3)
+    // Le coude : ses voisins ne s'alignent ni tout droit ni à 45°.
+    expect(store.toggleWireVertex(id, { x: 6, y: 0 })).toBe(false)
+    expect(store.status).toContain('ne se retire pas')
+    expect(store.toggleWireVertex(id, { x: 0, y: 0 })).toBe(false)
+  })
+
+  it('démarre un fil sur un autre : l’outil Fil prend la main au point donné', () => {
+    const store = useSchematicStore()
+    const id = store.addWire([
+      [0, 0],
+      [6, 0]
+    ])
+    store.selectedWires = id ? [id] : []
+    store.startWireFrom([3, 0])
+    expect(store.tool).toBe('wire')
+    expect(store.hasSelection).toBe(false)
+    expect(store.drawing?.points).toEqual([[3, 0]])
+    store.appendWirePoints([[3, 5]])
+    store.finishWire()
+    expect(store.doc.wires).toHaveLength(2)
+    expect(store.connectivity.junctions.map((junction) => junction.point)).toEqual([[3, 0]])
+  })
+})

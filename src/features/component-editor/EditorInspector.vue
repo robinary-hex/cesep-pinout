@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import {
   DOT_SCALES,
   naturalImageSize,
   PIN_KIND_LABELS,
   PIN_KINDS,
+  pinSections,
   PRIMITIVE_KIND_LABELS,
   STROKE_WEIGHTS,
   TEXT_BASE_SIZE_CELLS,
   TEXT_SCALES,
   turnedTextBox,
   type Arrows,
-  type PinKind
+  type PinKind,
+  type PinSection
 } from '@/domain'
 import Icon from '@/ui/Icon.vue'
 import type { IconName } from '@/ui/icons'
@@ -69,6 +71,69 @@ function setPinName(id: string, event: Event): void {
 
 function setPinKind(id: string, event: Event): void {
   store.updatePin(id, { kind: inputValue(event) as PinKind })
+}
+
+// Groupes de broches : des sections nommées où ranger les broches. Une broche se glisse d'une
+// ligne à l'autre pour changer d'ordre, ou d'un groupe à l'autre ; son numéro suit.
+
+const pinGroups = computed(() => doc.value.pinGroups ?? [])
+const sections = computed(() => pinSections(doc.value.pins, pinGroups.value))
+/** Rang de chaque broche dans le composant : l'ordre du panneau est celui des broches. */
+const ordinals = computed(() => new Map(doc.value.pins.map((pin, index) => [pin.id, index + 1])))
+
+const draggedPin = ref<string | null>(null)
+/** Où la broche glissée tomberait : dans ce groupe (null : aucun), devant cette broche (null : à la fin). */
+const dropAt = ref<{ groupId: string | null; beforeId: string | null } | null>(null)
+
+function renamePinGroup(id: string, event: Event): void {
+  store.renamePinGroup(id, inputValue(event))
+}
+
+function onPinDragStart(id: string, event: DragEvent): void {
+  draggedPin.value = id
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', id)
+  }
+}
+
+/** Sur une ligne : moitié haute, devant cette broche ; moitié basse, devant la suivante. */
+function onPinDragOver(section: PinSection, pinId: string, event: DragEvent): void {
+  if (draggedPin.value === null) return
+  event.preventDefault()
+  const row = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  const below = event.clientY > row.top + row.height / 2
+  const index = section.pins.findIndex((pin) => pin.id === pinId)
+  dropAt.value = {
+    groupId: section.group?.id ?? null,
+    beforeId: below ? (section.pins[index + 1]?.id ?? null) : pinId
+  }
+}
+
+/** Sur le titre d'un groupe ou sa zone vide : à la fin du groupe. */
+function onSectionDragOver(section: PinSection, event: DragEvent): void {
+  if (draggedPin.value === null) return
+  event.preventDefault()
+  dropAt.value = { groupId: section.group?.id ?? null, beforeId: null }
+}
+
+function endPinDrag(): void {
+  draggedPin.value = null
+  dropAt.value = null
+}
+
+function dropPin(): void {
+  const id = draggedPin.value
+  const target = dropAt.value
+  endPinDrag()
+  if (id !== null && target) store.placePin(id, target.groupId, target.beforeId)
+}
+
+function isDropEnd(section: PinSection): boolean {
+  const target = dropAt.value
+  return (
+    target !== null && target.beforeId === null && target.groupId === (section.group?.id ?? null)
+  )
 }
 
 // Forme(s) sélectionnée(s)
@@ -650,30 +715,80 @@ function setClosed(event: Event): void {
       </section>
 
       <section class="block">
-        <h3>Broches</h3>
-        <p v-if="doc.pins.length === 0" class="hint">Aucune broche.</p>
+        <div class="block-title">
+          <h3>Broches</h3>
+          <button
+            type="button"
+            class="small with-icon"
+            title="Ajouter un groupe où ranger des broches"
+            @click="store.addPinGroup()"
+          >
+            <Icon name="plus" :size="13" /> Groupe
+          </button>
+        </div>
+        <p v-if="doc.pins.length === 0 && pinGroups.length === 0" class="hint">Aucune broche.</p>
         <div
-          v-for="(pin, index) in doc.pins"
-          :key="pin.id"
-          class="pin-row"
-          :class="{ selected: store.selectedPinIds.includes(pin.id) }"
-          @pointerenter="store.hoverPinId = pin.id"
-          @pointerleave="store.hoverPinId = null"
-          @click="selectPin(pin.id)"
+          v-for="section in sections"
+          :key="section.group?.id ?? 'loose'"
+          class="pin-group"
+          :class="{ 'drop-end': isDropEnd(section) }"
+          @dragover="onSectionDragOver(section, $event)"
+          @drop.prevent="dropPin"
         >
-          <span class="ordinal">{{ index + 1 }}</span>
-          <input
-            type="text"
-            :value="pin.name"
-            title="Nom de la broche"
-            @click.stop
-            @change="setPinName(pin.id, $event)"
-          />
-          <select :value="pin.kind" title="Type" @click.stop @change="setPinKind(pin.id, $event)">
-            <option v-for="kind in PIN_KINDS" :key="kind" :value="kind">
-              {{ PIN_KIND_LABELS[kind] }}
-            </option>
-          </select>
+          <div v-if="section.group" class="pin-group-head">
+            <input
+              type="text"
+              :value="section.group.name"
+              title="Nom du groupe de broches"
+              @change="renamePinGroup(section.group.id, $event)"
+            />
+            <button
+              type="button"
+              class="small icon-only"
+              title="Défaire ce groupe : ses broches restent, sans groupe"
+              @click="store.removePinGroup(section.group.id)"
+            >
+              <Icon name="trash" :size="14" />
+            </button>
+          </div>
+          <div v-else-if="pinGroups.length > 0" class="pin-group-head loose">Sans groupe</div>
+          <p v-if="section.group && section.pins.length === 0" class="hint drop-hint">
+            Glisser une broche ici.
+          </p>
+          <div
+            v-for="pin in section.pins"
+            :key="pin.id"
+            class="pin-row"
+            :class="{
+              selected: store.selectedPinIds.includes(pin.id),
+              dragging: draggedPin === pin.id,
+              'drop-before': dropAt?.beforeId === pin.id
+            }"
+            draggable="true"
+            @dragstart="onPinDragStart(pin.id, $event)"
+            @dragover.stop="onPinDragOver(section, pin.id, $event)"
+            @dragend="endPinDrag"
+            @pointerenter="store.hoverPinId = pin.id"
+            @pointerleave="store.hoverPinId = null"
+            @click="selectPin(pin.id)"
+          >
+            <span class="ordinal">{{ ordinals.get(pin.id) }}</span>
+            <input
+              type="text"
+              :value="pin.name"
+              title="Nom de la broche"
+              @click.stop
+              @change="setPinName(pin.id, $event)"
+            />
+            <select :value="pin.kind" title="Type" @click.stop @change="setPinKind(pin.id, $event)">
+              <option v-for="kind in PIN_KINDS" :key="kind" :value="kind">
+                {{ PIN_KIND_LABELS[kind] }}
+              </option>
+            </select>
+            <span class="grip" title="Glisser pour changer l’ordre ou le groupe">
+              <Icon name="grip" :size="14" />
+            </span>
+          </div>
         </div>
       </section>
 
@@ -815,6 +930,83 @@ function setClosed(event: Event): void {
   border: 0;
   background: transparent;
   accent-color: var(--accent);
+}
+
+/* Titre d'un bloc avec un bouton à droite. */
+.block-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.block-title h3 {
+  margin: 0;
+}
+
+/* Groupe de broches : son nom (un champ discret) et ses broches ; un trait d'accent montre où
+   la broche glissée tomberait, devant une ligne ou à la fin du groupe. */
+.pin-group {
+  margin-bottom: 6px;
+  border-radius: 4px;
+}
+
+.pin-group.drop-end {
+  box-shadow: 0 2px 0 var(--accent);
+}
+
+.pin-group-head {
+  display: grid;
+  grid-template-columns: 1fr 28px;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 2px;
+}
+
+.pin-group-head input {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 0;
+  padding: 3px 5px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+}
+
+.pin-group-head input:hover,
+.pin-group-head input:focus {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+.pin-group-head.loose {
+  display: block;
+  padding: 4px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.drop-hint {
+  margin: 2px 6px 4px;
+  font-style: italic;
+}
+
+.pin-row.dragging {
+  opacity: 0.4;
+}
+
+.pin-row.drop-before {
+  box-shadow: 0 -2px 0 var(--accent);
+}
+
+.pin-row .grip {
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+  cursor: grab;
 }
 
 .pin-row {

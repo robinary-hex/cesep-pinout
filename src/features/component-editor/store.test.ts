@@ -485,3 +485,62 @@ describe('éditeur de composants : groupes', () => {
     expect(store.doc.visual.primitives.at(-1)?.group).toBeUndefined()
   })
 })
+
+describe('éditeur de composants : groupes de broches', () => {
+  it('crée, renomme et défait des groupes ; ranger une broche change son ordre et son numéro', () => {
+    const store = useComponentEditorStore()
+    const a = store.addPin({ x: 0, y: 0 })
+    const b = store.addPin({ x: 0, y: 1 })
+    const c = store.addPin({ x: 0, y: 2 })
+    const power = store.addPinGroup()
+    const signals = store.addPinGroup()
+    expect(store.doc.pinGroups).toEqual([
+      { id: 'pg1', name: 'Groupe 1' },
+      { id: 'pg2', name: 'Groupe 2' }
+    ])
+    store.renamePinGroup(power, '  Alimentation ')
+    expect(store.doc.pinGroups?.[0]?.name).toBe('Alimentation')
+    store.renamePinGroup(power, '   ')
+    expect(store.doc.pinGroups?.[0]?.name).toBe('Alimentation')
+
+    const state = (): [string, string, string | undefined][] =>
+      store.doc.pins.map((pin) => [pin.id, pin.name, pin.pinGroup])
+    // La dernière broche dans le premier groupe : elle passe en tête et devient la 1.
+    store.placePin(c, power, null)
+    expect(store.undoLabel).toBe('Ranger la broche')
+    expect(state()).toEqual([
+      [c, '1', power],
+      [a, '2', undefined],
+      [b, '3', undefined]
+    ])
+    // Devant elle, dans le même groupe ; puis une autre dans le second groupe.
+    store.placePin(b, power, c)
+    store.placePin(a, signals, null)
+    expect(state()).toEqual([
+      [b, '1', power],
+      [c, '2', power],
+      [a, '3', signals]
+    ])
+    // Reposée là où elle est : rien à annuler de plus.
+    store.placePin(a, signals, null)
+    expect(store.undoLabel).toBe('Ranger la broche')
+    store.undo()
+    expect(state()[2]).toEqual([a, '3', undefined])
+    store.redo()
+
+    // Défaire le premier groupe : ses broches restent, sans groupe, après les autres.
+    store.removePinGroup(power)
+    expect(store.doc.pinGroups).toEqual([{ id: 'pg2', name: 'Groupe 2' }])
+    expect(state()).toEqual([
+      [a, '1', signals],
+      [b, '2', undefined],
+      [c, '3', undefined]
+    ])
+    store.removePinGroup(signals)
+    expect(store.doc.pinGroups).toBeUndefined()
+    // Une nouvelle broche arrive toujours à la fin, sans groupe.
+    store.undo()
+    const d = store.addPin({ x: 1, y: 0 })
+    expect(state().at(-1)).toEqual([d, '4', undefined])
+  })
+})

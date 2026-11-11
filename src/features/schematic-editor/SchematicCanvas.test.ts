@@ -430,3 +430,80 @@ describe('canevas du montage : groupes', () => {
     expect([store.selection, store.selectedWires]).toEqual([[], [wire]])
   })
 })
+
+describe('canevas du montage : sommets au Ctrl+clic, double-clic sur un fil', () => {
+  it('Ctrl+clic ajoute un sommet sur une partie droite, et retire le coin dont on vise la poignée', async () => {
+    const store = useSchematicStore()
+    const id = store.addWire([
+      [2, 2],
+      [8, 2],
+      [8, 6]
+    ])
+    store.clearSelection()
+    const wrapper = mount(SchematicCanvas)
+    const svg = wrapper.get('svg.schematic')
+    await fire(wrapper.get('.wire-hit'), 'pointerdown', at(store, 5, 2), CTRL)
+    await fire(svg, 'pointerup', at(store, 5, 2), CTRL)
+    expect(store.doc.wires[0]?.points).toEqual([
+      [2, 2],
+      [5, 2],
+      [8, 2],
+      [8, 6]
+    ])
+    // Le fil est sélectionné, seul : ses sommets montrent leurs poignées.
+    expect(store.selectedWires).toEqual([id])
+    const handle = wrapper.findAll('.vertex-handle')[1]
+    await fire(handle ?? svg, 'pointerdown', at(store, 5, 2), CTRL)
+    await fire(svg, 'pointerup', at(store, 5, 2), CTRL)
+    expect(store.doc.wires[0]?.points).toEqual([
+      [2, 2],
+      [8, 2],
+      [8, 6]
+    ])
+    // Ctrl+clic sur le coude, à même le fil : ses voisins ne se rejoignent pas, il reste.
+    await fire(wrapper.get('.wire-hit'), 'pointerdown', at(store, 8, 2), CTRL)
+    await fire(svg, 'pointerup', at(store, 8, 2), CTRL)
+    expect(store.doc.wires[0]?.points).toHaveLength(3)
+  })
+
+  it('double-clic sur un fil : un nouveau fil part de là, raccordé par une jonction', async () => {
+    const store = useSchematicStore()
+    store.addWire([
+      [2, 2],
+      [8, 2],
+      [8, 6]
+    ])
+    store.clearSelection()
+    const wrapper = mount(SchematicCanvas)
+    const svg = wrapper.get('svg.schematic')
+    await fire(svg, 'dblclick', at(store, 8.1, 4.2))
+    expect(store.tool).toBe('wire')
+    expect(store.drawing?.points).toEqual([[8, 4]])
+    await fire(svg, 'pointerdown', at(store, 12, 4))
+    store.finishWire()
+    expect(store.doc.wires[1]?.points).toEqual([
+      [8, 4],
+      [12, 4]
+    ])
+    expect(store.connectivity.junctions.map((junction) => junction.point)).toEqual([[8, 4]])
+    // Loin de tout fil, ou sur une extrémité : pas de nouveau fil.
+    store.selectTool()
+    await fire(svg, 'dblclick', at(store, 20, 20))
+    expect(store.tool).toBe('select')
+  })
+
+  it('ne garde le pointeur qu’une fois le geste commencé, pour laisser le double-clic à l’élément', async () => {
+    const store = withResistor()
+    const wrapper = mount(SchematicCanvas)
+    const svg = wrapper.get('svg.schematic')
+    const capture = vi.mocked(Element.prototype.setPointerCapture)
+    const down = at(store, 4, 4)
+    await fire(wrapper.get('.instance .hit'), 'pointerdown', down)
+    await fire(svg, 'pointermove', { clientX: down.clientX + 1, clientY: down.clientY })
+    expect(capture).not.toHaveBeenCalled()
+    await fire(svg, 'pointermove', at(store, 6, 4))
+    expect(capture).toHaveBeenCalledTimes(1)
+    await fire(svg, 'pointerup', at(store, 6, 4))
+    expect(store.doc.components[0]).toMatchObject({ x: 4, y: 3 })
+  })
+})

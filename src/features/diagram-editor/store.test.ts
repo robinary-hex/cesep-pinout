@@ -474,3 +474,50 @@ describe('diagramme : groupes', () => {
     expect(useLibraryStore().showGroups).toBe(false)
   })
 })
+
+describe('diagramme : lien d’une note, sommets au Ctrl+clic', () => {
+  it('trace en pointillés un lien attaché à une note, sans changer le style des autres', () => {
+    const store = useDiagramStore()
+    store.addNode('note', 0, 0)
+    store.addNode('rounded', 30, 0)
+    // Départ sur le bas de la note ; arrivée sur son côté droit ; puis un lien entre autres choses.
+    store.addLink([
+      [8, 6],
+      [8, 12]
+    ])
+    store.addLink([
+      [24, 3],
+      [16, 3]
+    ])
+    store.addLink([
+      [46, 3],
+      [52, 3]
+    ])
+    expect(store.doc.links.map((link) => link.dash)).toEqual(['dashed', 'dashed', 'solid'])
+  })
+
+  it('ajoute un sommet sur une partie droite, retire un coin dont les voisins sont alignés', () => {
+    const store = useDiagramStore()
+    const id = store.addLink([
+      [0, 20],
+      [10, 20],
+      [10, 30]
+    ])
+    if (!id) throw new Error('lien refusé')
+    expect(store.toggleLinkVertex(id, { x: 5.2, y: 20.3 })).toBe(true)
+    expect(store.undoLabel).toBe('Ajouter un sommet')
+    expect(store.doc.links[0]?.points).toHaveLength(4)
+    expect(store.toggleLinkVertex(id, { x: 5, y: 20 })).toBe(true)
+    expect(store.undoLabel).toBe('Supprimer un sommet')
+    expect(store.doc.links[0]?.points).toEqual([
+      [0, 20],
+      [10, 20],
+      [10, 30]
+    ])
+    // Le coude : sans lui le lien serait en diagonale, ce qu'un diagramme refuse.
+    expect(store.toggleLinkVertex(id, { x: 10, y: 20 })).toBe(false)
+    expect(store.status).toContain('ne se retire pas')
+    // Une extrémité ne se retire pas.
+    expect(store.toggleLinkVertex(id, { x: 0, y: 20 })).toBe(false)
+  })
+})

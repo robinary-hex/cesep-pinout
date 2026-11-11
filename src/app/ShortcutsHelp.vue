@@ -62,6 +62,14 @@ const sections: { title: string; rows: Row[] }[] = [
       ...SELECTION,
       ['Alt+clic sur un croisement', 'Inverser l’ordre des deux fils à cet endroit seulement'],
       [
+        'Ctrl+clic sur un fil',
+        'Ajouter un sommet sur une partie droite, ou retirer le coin visé (un fil groupé est d’abord pris seul)'
+      ],
+      [
+        'Double-clic sur un fil',
+        'Démarrer à cet endroit un nouveau fil, raccordé par une jonction'
+      ],
+      [
         'Ctrl+Page haut / bas',
         'Avancer / reculer les fils (Maj : premier / arrière-plan) ; un composant passe devant / derrière les fils'
       ],
@@ -107,6 +115,15 @@ const sections: { title: string; rows: Row[] }[] = [
         'Tirer un lien de son point d’accroche le plus proche (l’anneau vert) jusqu’au point de relâchement'
       ],
       [
+        'Départ et arrivée d’un lien',
+        'Toujours de face : le lien quitte une forme et y arrive à angle droit, avec un coude de plus s’il le faut (Maj : l’autre tracé) ; depuis une note, il est en pointillés'
+      ],
+      [
+        'Glisser le segment qui sort d’une forme',
+        'Son point d’attache glisse le long du côté, d’une accroche à l’autre'
+      ],
+      ['Ctrl+clic sur un lien', 'Ajouter un sommet sur une partie droite, ou retirer le coin visé'],
+      [
         'Glisser l’étiquette d’un lien',
         'Elle longe le trait, toujours à la même distance, et change de côté quand on le traverse'
       ],
@@ -151,6 +168,10 @@ const sections: { title: string; rows: Row[] }[] = [
       ],
       ['Ctrl+glisser sur une forme', 'Saisir sa poignée la plus proche'],
       ['Ctrl (sans sélection)', 'Poignées de la boîte du composant : glisser un coin ou un côté'],
+      [
+        'Broches, dans le panneau',
+        '« + Groupe » crée un groupe nommé ; glisser une broche change son ordre ou son groupe, son numéro suit'
+      ],
       ...SELECTION,
       ['Ctrl+Page haut / bas', 'Avancer / reculer la forme (Maj : premier / arrière-plan)'],
       [

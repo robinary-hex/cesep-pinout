@@ -10,10 +10,11 @@ import {
   layoutLabel,
   layoutLinkLabel,
   linkDashArray,
+  linkEndAt,
   linkLabelBox,
   linkShape,
   linksFollowingNodes,
-  moveSegment,
+  moveLinkSegment,
   nearestOnPath,
   nearestSegmentIndex,
   NODE_SPECS,
@@ -23,7 +24,7 @@ import {
   rectsIntersect,
   resizeBox,
   resizeNodeBox,
-  routeLAuto,
+  routeLink,
   screenToWorld,
   textEmphasisAttrs,
   textLabelBounds,
@@ -187,6 +188,23 @@ function linkSnap(point: LocalPoint): { point: GridPoint; anchored: boolean } {
   return anchor
     ? { point: anchor.point, anchored: true }
     : { point: snapGrid(point), anchored: false }
+}
+
+/**
+ * Trajet du dernier sommet posé jusqu'au point visé. Le départ d'un tracé quitte sa forme de face
+ * et l'arrivée sur une accroche y entre de face (`routeLink`) ; entre deux coudes posés à la main,
+ * c'est un simple L. Maj donne l'autre trajet.
+ */
+function routeTo(
+  points: readonly GridPoint[],
+  snap: { point: GridPoint; anchored: boolean }
+): GridPoint[] {
+  const last = points.at(-1)
+  if (!last) return []
+  const nodes = store.doc.nodes
+  const from = points.length === 1 ? linkEndAt(nodes, last) : { point: last, normals: [] }
+  const to = snap.anchored ? linkEndAt(nodes, snap.point) : { point: snap.point, normals: [] }
+  return routeLink(from, to, store.shiftHeld)
 }
 
 // Grille : une ligne par cellule de près, une sur deux de loin (la cellule d'un diagramme est fine).
@@ -492,7 +510,7 @@ const drawingPreview = computed(() => {
   const committed = wirePathData(points, look.value.cornerRadius)
   if (!point) return { committed, pending: '', end: null as GridPoint | null, anchored: false }
   const snap = linkSnap(point)
-  const route = routeLAuto(last, snap.point, store.shiftHeld)
+  const route = routeTo(points, snap)
   return {
     committed,
     pending: wirePathData([...points, ...route.slice(1)], look.value.cornerRadius),
@@ -636,8 +654,26 @@ const titleRows = computed(() => editing.value?.title.split('\n').length ?? 1)
 
 // Interactions
 
+/** Déplacement, en pixels, à partir duquel un appui devient un geste qui garde le pointeur. */
+const CAPTURE_PX = 3
+/** Appui en attente de capture : le pointeur n'est gardé qu'une fois qu'il a vraiment bougé. */
+let pendingCapture: { id: number; x: number; y: number } | null = null
+
+/**
+ * Le canevas garde le pointeur pendant un geste, même quand il sort de la zone de dessin. La
+ * capture attend le premier vrai mouvement : un pointeur capturé dès l'appui ferait arriver le
+ * clic et le double-clic au canevas, pas à l'élément visé, et son double-clic ne ferait rien.
+ */
 function capture(event: PointerEvent): void {
-  svg.value?.setPointerCapture(event.pointerId)
+  pendingCapture = { id: event.pointerId, x: event.clientX, y: event.clientY }
+}
+
+function captureOnceMoved(event: PointerEvent): void {
+  const pending = pendingCapture
+  if (!pending || pending.id !== event.pointerId) return
+  if (Math.hypot(event.clientX - pending.x, event.clientY - pending.y) < CAPTURE_PX) return
+  pendingCapture = null
+  if (drag.value) svg.value?.setPointerCapture(event.pointerId)
 }
 
 function selectTool(event: PointerEvent): boolean {
@@ -720,9 +756,30 @@ function selectLink(id: string, event: PointerEvent): boolean {
   return true
 }
 
+/**
+ * Ctrl+clic sur un lien : un sommet de plus sur la partie droite visée, ou le coin visé en moins.
+ * Le lien devient la sélection ; un lien groupé est d'abord pris seul, sans rien changer.
+ */
+function toggleVertexAt(id: string, point: LocalPoint): void {
+  const alone =
+    store.selectedLinks.length === 1 &&
+    store.selectedLinks[0] === id &&
+    store.selectedNodes.length === 0 &&
+    store.selectedTexts.length === 0
+  const grouped = store.groups.some((group) => group.members.link.includes(id))
+  store.clearSelection()
+  store.selectedLinks = [id]
+  if (!grouped || alone) store.toggleLinkVertex(id, point)
+  store.revealInspector()
+}
+
 function onLinkDown(id: string, event: PointerEvent): void {
   if (!selectTool(event)) return
   event.stopPropagation()
+  if (event.ctrlKey) {
+    toggleVertexAt(id, toWorld(screenPoint(event)))
+    return
+  }
   if (!selectLink(id, event)) return
   // Plusieurs éléments sélectionnés, ou copie : le glisser déplace tout ; un lien seul : son segment.
   if (
@@ -767,6 +824,12 @@ function onVertexDown(linkId: string, index: number, event: PointerEvent): void 
   event.stopPropagation()
   const link = store.doc.links.find((candidate) => candidate.id === linkId)
   if (!link) return
+  const vertex = link.points[index]
+  if (event.ctrlKey && vertex) {
+    // Ctrl+clic sur la poignée d'un coin : il s'en va.
+    toggleVertexAt(linkId, { x: vertex[0], y: vertex[1] })
+    return
+  }
   drag.value = {
     kind: 'link-vertex',
     linkId,
@@ -865,7 +928,7 @@ function onPointerDown(event: PointerEvent): void {
     }
     const last = current.points.at(-1)
     if (!last) return
-    store.appendLinkPoints(routeLAuto(last, snap.point, store.shiftHeld).slice(1))
+    store.appendLinkPoints(routeTo(current.points, snap).slice(1))
     // Arriver sur un point d'accroche termine le lien.
     if (snap.anchored) store.finishLink()
     return
@@ -877,6 +940,7 @@ function onPointerDown(event: PointerEvent): void {
 }
 
 function onPointerMove(event: PointerEvent): void {
+  captureOnceMoved(event)
   const world = toWorld(screenPoint(event))
   hover.value = world
   // Ctrl a pu être enfoncée ou relâchée hors de la fenêtre : l'événement fait foi.
@@ -912,10 +976,12 @@ function onPointerMove(event: PointerEvent): void {
       const b = current.original[current.index + 1]
       if (!a || !b) break
       const horizontal = a[1] === b[1]
-      current.preview = moveSegment(
+      // Le segment qui sort d'une forme emmène son point d'attache le long du côté.
+      current.preview = moveLinkSegment(
         current.original,
         current.index,
-        Math.round(horizontal ? world.y : world.x)
+        Math.round(horizontal ? world.y : world.x),
+        store.doc.nodes
       )
       break
     }
@@ -970,6 +1036,7 @@ function commitTextBox(start: GridPoint, end: GridPoint): void {
 }
 
 function onPointerUp(event: PointerEvent): void {
+  pendingCapture = null
   const current = drag.value
   if (!current) return
   if (current.kind === 'text-box') {
@@ -1023,7 +1090,7 @@ function onPointerUp(event: PointerEvent): void {
       if (current.moved) {
         // Relâché sur l'accroche de départ, le lien n'a qu'un point : `addLink` le refuse.
         const snap = linkSnap(toWorld(screenPoint(event)))
-        store.addLink(routeLAuto(current.origin, snap.point, store.shiftHeld))
+        store.addLink(routeTo([current.origin], snap))
       } else {
         store.clearSelection()
         store.selectedNodes = [current.nodeId]

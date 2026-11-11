@@ -326,3 +326,79 @@ describe('éditeur de composants : groupes', () => {
     wrapper.unmount()
   })
 })
+
+describe('éditeur de composants : groupes de broches dans le panneau', () => {
+  it('range les broches dans des groupes nommés et les réordonne par glisser-déposer', async () => {
+    const store = useComponentEditorStore()
+    const a = store.addPin({ x: 0, y: 0 })
+    const b = store.addPin({ x: 0, y: 1 })
+    const c = store.addPin({ x: 0, y: 2 })
+    store.selection = null
+    store.inspectorOpen = true
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    const order = (): [string, string | undefined][] =>
+      store.doc.pins.map((pin) => [pin.id, pin.pinGroup])
+    const rows = (): ReturnType<typeof wrapper.findAll> => wrapper.findAll('.pin-row')
+    /** Glisse une ligne sur une cible ; `clientY` dit si on vise le haut ou le bas de la cible. */
+    const dragTo = async (
+      row: { trigger: (name: string) => Promise<void> } | undefined,
+      target: { element: Element; trigger: (name: string) => Promise<void> },
+      clientY = 0
+    ): Promise<void> => {
+      await row?.trigger('dragstart')
+      target.element.dispatchEvent(
+        new MouseEvent('dragover', { bubbles: true, cancelable: true, clientY })
+      )
+      await nextTick()
+      await target.trigger('drop')
+    }
+
+    // Sans groupe : la liste de toujours, sans titre de section.
+    expect(wrapper.find('.pin-group-head').exists()).toBe(false)
+    await wrapper.get('.block-title button').trigger('click')
+    const name = wrapper.get('.pin-group-head input')
+    await name.setValue('Alimentation')
+    await name.trigger('change')
+    expect(store.doc.pinGroups).toEqual([{ id: 'pg1', name: 'Alimentation' }])
+    expect(wrapper.text()).toContain('Glisser une broche ici.')
+    expect(wrapper.text()).toContain('Sans groupe')
+
+    // La troisième broche glissée sur le titre du groupe : elle y entre et devient la première.
+    await dragTo(rows()[2], wrapper.get('.pin-group-head'))
+    expect(order()).toEqual([
+      [c, 'pg1'],
+      [a, undefined],
+      [b, undefined]
+    ])
+    expect(rows().map((row) => row.get('.ordinal').text())).toEqual(['1', '2', '3'])
+
+    // La dernière glissée sur le haut de la ligne de c : devant elle, dans son groupe.
+    await dragTo(rows()[2], rows()[0] ?? wrapper)
+    expect(order()).toEqual([
+      [b, 'pg1'],
+      [c, 'pg1'],
+      [a, undefined]
+    ])
+    // Sur le bas de la même ligne : après elle.
+    await dragTo(rows()[0], rows()[1] ?? wrapper, 50)
+    expect(order()).toEqual([
+      [c, 'pg1'],
+      [b, 'pg1'],
+      [a, undefined]
+    ])
+    // Sur « Sans groupe » : elle en sort.
+    await dragTo(rows()[0], wrapper.get('.pin-group-head.loose'))
+    expect(order()).toEqual([
+      [b, 'pg1'],
+      [a, undefined],
+      [c, undefined]
+    ])
+
+    // La corbeille du groupe le défait ; ses broches restent.
+    await wrapper.get('.pin-group-head button').trigger('click')
+    expect(store.doc.pinGroups).toBeUndefined()
+    expect(store.doc.pins).toHaveLength(3)
+    expect(wrapper.find('.pin-group-head').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})

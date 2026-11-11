@@ -25,7 +25,11 @@ import {
   turnedTextBox,
   unionRects,
   wireBounds,
+  insertVertex,
+  nearestWirePoint,
   regroupedCopies,
+  removeVertex,
+  touchesNote,
   wireGeometryProblem,
   withGroup,
   zoomedView,
@@ -39,6 +43,7 @@ import {
   type LinkDash,
   type LinkLabelSide,
   type NodeFill,
+  type LocalPoint,
   type NodeShape,
   type NodeTextStyle,
   type StackMove,
@@ -693,7 +698,9 @@ export const useDiagramStore = defineStore('diagram', () => {
       id,
       points: clean,
       color: linkColor.value,
-      dash: linkDash.value,
+      // Un lien attaché à une note est son trait d'ancrage : en pointillés, sans changer le style
+      // des prochains liens.
+      dash: touchesNote(doc.value.nodes, clean) ? 'dashed' : linkDash.value,
       startArrow: linkStartArrow.value,
       endArrow: linkEndArrow.value,
       label: '',
@@ -750,6 +757,29 @@ export const useDiagramStore = defineStore('diagram', () => {
       const link = draft.links.find((candidate) => candidate.id === id)
       if (link) link.points = castDraft(clean)
     })
+  }
+
+  /**
+   * Ctrl+clic sur un lien : un sommet de plus sur la partie droite visée, ou le coin visé en
+   * moins s'il laisse un lien valide (ses voisins alignés). Vrai si le lien a changé.
+   */
+  function toggleLinkVertex(id: string, point: LocalPoint): boolean {
+    const link = doc.value.links.find((candidate) => candidate.id === id)
+    const spot = link ? nearestWirePoint(link.points, point) : null
+    if (!link || !spot || spot.location.kind === 'end') return false
+    const added = spot.location.kind === 'segment'
+    const points = added
+      ? insertVertex(link.points, spot.point)
+      : removeVertex(link.points, spot.location.index)
+    if (!points || wireGeometryProblem(points, true) !== null) {
+      status.value = 'Ce coin ne se retire pas : ses deux voisins ne sont pas alignés.'
+      return false
+    }
+    apply(added ? 'Ajouter un sommet' : 'Supprimer un sommet', (draft) => {
+      const target = draft.links.find((candidate) => candidate.id === id)
+      if (target) target.points = castDraft(points)
+    })
+    return true
   }
 
   function setLinksStyle(ids: readonly string[], patch: Partial<LinkStyle>): void {
@@ -1186,6 +1216,7 @@ export const useDiagramStore = defineStore('diagram', () => {
     finishLink,
     stopLinkDrawing,
     setLinkPoints,
+    toggleLinkVertex,
     setLinksStyle,
     setLinkLabel,
     setLinkLabelPlacement,

@@ -111,9 +111,9 @@ describe('export SVG d’un diagramme', () => {
     if (!result) throw new Error('export vide')
     const parsed = new DOMParser().parseFromString(result.svg, 'image/svg+xml')
     // Premier lien : de (8, 2) à (8, 6), pointe à l'arrivée. La pointe finit à y = 5,6, sans
-    // toucher le nœud ; le trait s'arrête dedans, à 4,94.
+    // toucher le nœud ; le trait s'arrête dedans, à 5,06.
     const first = parsed.querySelectorAll('g.links > g')[0]
-    expect(first?.querySelector('path')?.getAttribute('d')).toBe('M 8 2 L 8 4.94')
+    expect(first?.querySelector('path')?.getAttribute('d')).toBe('M 8 2 L 8 5.06')
     expect(first?.querySelector('polygon')?.getAttribute('points')).toContain('8,5.6')
   })
 

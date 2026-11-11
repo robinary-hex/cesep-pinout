@@ -101,6 +101,8 @@ export const ICONS = {
     'M10 12h7v5h-7z'
   ],
   ungroup: ['M4 4h9v7H4z', 'M11 13h9v7h-9z'],
+  // Poignée de glisser-déposer : six points.
+  grip: ['M9 6h.01', 'M9 12h.01', 'M9 18h.01', 'M15 6h.01', 'M15 12h.01', 'M15 18h.01'],
   tag: [
     'M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z',
     'M7 7h.01'
