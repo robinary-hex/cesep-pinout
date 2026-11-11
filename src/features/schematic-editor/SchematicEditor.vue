@@ -66,7 +66,7 @@ async function save(as = false): Promise<void> {
 // Nouveau et Ouvrir ne remplacent rien : chaque montage a son onglet.
 
 async function open(): Promise<void> {
-  const path = await chooseProjectToOpen(library.lastProjectDir)
+  const path = await chooseProjectToOpen(await library.documentDir('montage'))
   if (path === null) return
   await store.openPath(path)
 }

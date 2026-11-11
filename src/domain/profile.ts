@@ -96,3 +96,17 @@ export function profileDifferences(profile: StyleProfile, reference: StyleProfil
 export function sameProfile(a: StyleProfile, b: StyleProfile): boolean {
   return profileDifferences(a, b).length === 0
 }
+
+/** Version du fichier des profils enregistrés (profils.json). */
+export const PROFILES_SCHEMA_VERSION = 1
+
+/**
+ * Fichier des profils de style enregistrés : tous dans un seul fichier, à côté des paramètres
+ * (décision du 11 novembre 2026 ; ils étaient un par fichier). Dans l'ordre alphabétique.
+ */
+export function serializeProfiles(profiles: readonly StyleProfile[]): string {
+  const sorted = [...profiles].sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+  return (
+    JSON.stringify({ schemaVersion: PROFILES_SCHEMA_VERSION, profiles: sorted }, null, 2) + '\n'
+  )
+}

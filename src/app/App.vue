@@ -39,6 +39,7 @@ import { applyTheme } from '@/ui/theme'
 import type { UpdateStatus } from '../../electron/api'
 import { openExternalFile } from './externalFiles'
 import { currentSession, restoreSession, savedSession, saveSession } from './session'
+import DataFolderDialog from './DataFolderDialog.vue'
 import ShortcutsHelp from './ShortcutsHelp.vue'
 import { updateButtonLabel, updateButtonTitle } from './update'
 
@@ -694,6 +695,9 @@ async function askThenQuit(): Promise<void> {
 let unsubscribe: (() => void) | null = null
 let unsubscribeOpenFile: (() => void) | null = null
 
+/** Tenue par la boîte du premier lancement, une fois le dossier de Pinout choisi. */
+let dataFolderChosen: (() => void) | null = null
+
 onMounted(async () => {
   unsubscribe = bridge().onAppRequest((request) => {
     void (async () => {
@@ -707,6 +711,8 @@ onMounted(async () => {
   })
   unsubscribeOpenFile = bridge().onOpenFile((path) => void openExternal(path))
   await library.init()
+  // Premier lancement : rien ne continue tant que le dossier de Pinout n'est pas choisi.
+  if (library.firstRun !== null) await new Promise<void>((resolve) => (dataFolderChosen = resolve))
   // Les paramètres sont lus : le montage vierge du lancement repart du profil et de la couleur
   // par défaut.
   if (schematic.pristine) schematic.newProject()
@@ -904,6 +910,7 @@ onUnmounted(() => {
       <DiagramEditor v-else-if="mode === 'diagram'" ref="diagramEditor" />
       <SchematicEditor v-else ref="schematicEditor" @edit-component="editComponentOf" />
     </main>
+    <DataFolderDialog v-if="library.firstRun" @done="dataFolderChosen?.()" />
     <SettingsDialog v-if="showSettings" @close="showSettings = false" />
     <ProfileDialog
       v-if="showProfile"

@@ -281,4 +281,72 @@ describe('session : ce qui était ouvert revient au lancement suivant', () => {
     wrapper.unmount()
     document.body.innerHTML = ''
   })
+
+  it('au premier lancement, demande le dossier de Pinout avant tout le reste', async () => {
+    fs.presetDataDir = null
+    const button = (text: string): HTMLButtonElement => {
+      const found = [...document.body.querySelectorAll('button')].find(
+        (candidate) => candidate.textContent?.trim() === text
+      )
+      if (!found) throw new Error(`bouton « ${text} » introuvable`)
+      return found
+    }
+    const dialog = (): Element | null => document.body.querySelector('[role="dialog"]')
+    const wrapper = mount(App, { attachTo: document.body })
+    await flushPromises()
+    expect(dialog()?.getAttribute('aria-label')).toBe('Dossier de Pinout')
+    // Le dossier proposé, et ce qu'il contiendra.
+    expect(dialog()?.textContent).toContain('C:/fake/Documents/Pinout')
+    for (const name of ['Composants', 'Montages', 'Diagrammes', 'Applications']) {
+      expect(dialog()?.textContent).toContain(name)
+    }
+    // Elle attend un choix : pas de croix, et Échap ne la ferme pas.
+    expect(dialog()?.querySelector('button.close')).toBeNull()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+    expect(dialog()).not.toBeNull()
+    // Rien n'est écrit tant qu'on n'a pas choisi ; annuler le choix d'un dossier laisse la boîte.
+    expect(fs.texts.size).toBe(0)
+    button('Choisir un autre dossier…').click()
+    await flushPromises()
+    expect(dialog()).not.toBeNull()
+    expect(fs.texts.size).toBe(0)
+    button('Utiliser ce dossier').click()
+    await flushPromises()
+    expect(dialog()).toBeNull()
+    expect(await fs.pathExists('C:/fake/Documents/Pinout/Applications/parametres.json')).toBe(true)
+    expect(await fs.pathExists('C:/fake/Documents/Pinout/Montages')).toBe(true)
+    // L'application a continué son démarrage.
+    expect(wrapper.findAll('.doc-tab').map((tab) => tab.text())).toEqual(['Nouveau montage ✕'])
+    wrapper.unmount()
+    document.body.innerHTML = ''
+
+    // Au lancement suivant, plus de question.
+    setActivePinia(createPinia())
+    const second = mount(App, { attachTo: document.body })
+    await flushPromises()
+    expect(dialog()).toBeNull()
+    second.unmount()
+    document.body.innerHTML = ''
+  })
+
+  it('range un nouveau montage dans le dossier Montages du dossier de Pinout', async () => {
+    const wrapper = mount(App, { attachTo: document.body })
+    await flushPromises()
+    const store = useSchematicStore()
+    store.addWire([
+      [0, 0],
+      [4, 0]
+    ])
+    fs.saveDialogAnswers.push('C:/fake/Donnees/Montages/essai.pinout')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true }))
+    await flushPromises()
+    // Le dialogue s'ouvre dans Montages ; le fichier y est écrit.
+    expect(fs.saveDialogCalls.at(-1)?.defaultPath).toBe(
+      'C:/fake/Donnees/Montages/nouveau-montage.pinout'
+    )
+    expect(await fs.pathExists('C:/fake/Donnees/Montages/essai.pinout')).toBe(true)
+    wrapper.unmount()
+    document.body.innerHTML = ''
+  })
 })

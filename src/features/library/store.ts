@@ -19,13 +19,24 @@ import {
 } from '@/domain'
 import { bridge } from '@/io/bridge'
 import { listComponents, type LibraryEntry } from '@/io/library'
+import {
+  copyComponents,
+  dataFolder,
+  legacyLibraryDir,
+  portableDir,
+  prepareDataFolder,
+  proposedDataDir,
+  resolveDataRoot,
+  type LegacyFolders
+} from '@/io/dataFolder'
+import { isDiagramPath } from '@/io/diagramFiles'
 import { baseName, dirOf } from '@/io/paths'
+import { addMissingProfiles, listProfiles, readLegacyProfiles } from '@/io/profiles'
 import {
   loadSettings,
-  portableDir,
+  readLegacySettings,
   readSharedSettings,
   relocateSharedSettings,
-  resolveLibraryDir,
   saveSettings,
   withLocalPart
 } from '@/io/settings'
@@ -38,14 +49,33 @@ export interface LibraryGroup {
 const UNREADABLE_GROUP = 'Illisibles'
 const MAX_RECENT_FILES = 10
 
+/** Les documents qui s'enregistrent dans un fichier qu'on choisit. */
+export type DocumentKind = 'montage' | 'diagram'
+
+/** Premier lancement : le dossier de Pinout reste à choisir. */
+export interface FirstRun {
+  /** Dossier proposé. */
+  proposal: string
+}
+
 /** Bibliothèque de composants sur disque et paramètres de l'application. */
 export const useLibraryStore = defineStore('library', () => {
   const settings = shallowRef<Settings | null>(null)
-  /** Fichier de paramètres partagé, ou null s'ils restent sur cette machine. */
+  /** Fichier de paramètres partagé, ou null tant que le dossier de Pinout n'est pas choisi. */
   const sharedSettingsPath = ref<string | null>(null)
-  /** Dossier choisi pour ce fichier sur cette machine ; vide = le dossier par défaut. */
-  const settingsDir = computed(() => settings.value?.settingsDir ?? '')
-  const libraryDir = ref('')
+  /**
+   * Le dossier de Pinout de cette machine : tout y est rangé (voir `src/io/dataFolder.ts`). Null
+   * tant qu'il n'est pas choisi.
+   */
+  const dataRoot = ref<string | null>(null)
+  /** La bibliothèque de composants : le dossier Composants du dossier de Pinout. */
+  const libraryDir = computed(() =>
+    dataRoot.value === null ? '' : dataFolder(dataRoot.value).components
+  )
+  /** Non nul au premier lancement : l'application demande où mettre le dossier de Pinout. */
+  const firstRun = ref<FirstRun | null>(null)
+  /** Les deux dossiers de l'ancienne organisation, repris au premier choix du dossier. */
+  let legacy: LegacyFolders = { settingsDir: '', libraryDir: '' }
   const entries = shallowRef<LibraryEntry[]>([])
   const loading = ref(false)
   const problem = ref('')
@@ -73,11 +103,6 @@ export const useLibraryStore = defineStore('library', () => {
     () => settings.value?.defaultWireColor ?? DEFAULT_SETTINGS.defaultWireColor
   )
   const recentFiles = computed<readonly string[]>(() => settings.value?.recentFiles ?? [])
-  /** Dossier du dernier projet enregistré ou ouvert : là où Enregistrer et Ouvrir s'ouvrent. */
-  const lastProjectDir = computed<string | null>(() => {
-    const last = recentFiles.value[0]
-    return last ? dirOf(last) : null
-  })
   const exportDefaults = computed<ExportSettings>(() => settings.value?.export ?? DEFAULT_EXPORT)
   const autosaveSeconds = computed(
     () => settings.value?.autosaveSeconds ?? DEFAULT_AUTOSAVE_SECONDS
@@ -142,10 +167,26 @@ export const useLibraryStore = defineStore('library', () => {
       settings.value = loaded.settings
       sharedSettingsPath.value = loaded.sharedPath
       problem.value = loaded.problem ?? ''
-      libraryDir.value = await resolveLibraryDir(loaded.settings)
+      legacy = loaded.legacy
+      dataRoot.value = await resolveDataRoot(loaded.settings.dataDir)
+      if (dataRoot.value === null) {
+        // Pas encore de dossier de Pinout : rien n'est lu ni écrit, la coque le demande.
+        firstRun.value = { proposal: await proposedDataDir(legacy) }
+        return
+      }
+      await prepare(dataRoot.value)
       await refresh()
     } catch (error) {
       problem.value = `Démarrage incomplet : ${describe(error)}`
+    }
+  }
+
+  /** Crée les sous-dossiers du dossier de Pinout ; un dossier hors d'atteinte se dit, sans plus. */
+  async function prepare(root: string): Promise<void> {
+    try {
+      await prepareDataFolder(root)
+    } catch (error) {
+      problem.value = `Dossier de Pinout hors d’atteinte (${root}) : ${describe(error)}`
     }
   }
 
@@ -166,17 +207,13 @@ export const useLibraryStore = defineStore('library', () => {
     const current = settings.value
     if (!current) return false
     try {
-      const shared = await readSharedSettings(current.settingsDir)
+      const shared = await readSharedSettings(current.dataDir)
       if (!shared) return false
       const next = withLocalPart(shared, current)
       if (JSON.stringify(next) === JSON.stringify(current)) return false
       settings.value = next
       // La copie locale suit ; le fichier partagé, identique, n'est pas réécrit.
       await saveSettings(next)
-      if (next.libraryDir !== current.libraryDir) {
-        libraryDir.value = await resolveLibraryDir(next)
-        await refresh()
-      }
       return true
     } catch {
       return false
@@ -184,19 +221,13 @@ export const useLibraryStore = defineStore('library', () => {
   }
 
   /**
-   * Enregistre un sous-ensemble de paramètres ; un nouveau dossier de bibliothèque est relu. On
-   * part des réglages partagés les plus frais : ce qu'une autre machine a changé entre-temps
-   * n'est écrasé que pour les réglages de `patch`.
+   * Enregistre un sous-ensemble de paramètres. On part des réglages partagés les plus frais : ce
+   * qu'une autre machine a changé entre-temps n'est écrasé que pour les réglages de `patch`.
    */
   async function updateSettings(patch: Partial<Settings>): Promise<void> {
     await reloadSharedSettings()
     const current = settings.value ?? structuredClone(DEFAULT_SETTINGS)
-    const next: Settings = { ...current, ...patch }
-    await persist(next)
-    if (patch.libraryDir !== undefined) {
-      libraryDir.value = await resolveLibraryDir(next)
-      await refresh()
-    }
+    await persist({ ...current, ...patch })
   }
 
   /**
@@ -220,7 +251,7 @@ export const useLibraryStore = defineStore('library', () => {
     try {
       const mine = settings.value
       if (!mine) return
-      const shared = await readSharedSettings(mine.settingsDir)
+      const shared = await readSharedSettings(mine.dataDir)
       const latest = settings.value ?? mine
       const next = { ...(shared ? withLocalPart(shared, latest) : latest), ...view(latest) }
       await saveSettings(next)
@@ -231,52 +262,83 @@ export const useLibraryStore = defineStore('library', () => {
     }
   }
 
-  async function chooseDir(): Promise<void> {
-    const dir = await bridge().showOpenDialog({
-      title: 'Dossier de la bibliothèque de composants',
-      directory: true,
-      defaultPath: libraryDir.value
-    })
-    if (dir === null) return
-    problem.value = ''
-    const { oneDrive } = await bridge().getAppPaths()
-    await updateSettings({ libraryDir: portableDir(dir, oneDrive) })
-  }
-
   /**
-   * Met le fichier de paramètres partagé dans un autre dossier (vide = le dossier par défaut),
-   * réglage propre à cette machine. Un dossier qui a déjà des paramètres les donne à
-   * l'application (`adopted`) ; sinon les réglages courants y sont écrits (`moved`). Un échec
-   * (`failed`) ne change rien et s'explique dans `problem`.
+   * Met le dossier de Pinout à cet endroit, réglage propre à cette machine. Un dossier qui a déjà
+   * ses données les apporte : ses paramètres deviennent ceux de l'application (`adopted`), ses
+   * composants et ses profils aussi. Un dossier neuf reçoit ce que l'application avait (`moved`) :
+   * réglages, profils enregistrés et composants y sont copiés, de l'ancienne organisation au
+   * premier lancement, du dossier précédent ensuite. Rien n'est supprimé là d'où l'on vient. Un
+   * échec (`failed`) ne change rien et s'explique dans `problem`.
    */
-  async function setSettingsDir(dir: string): Promise<'adopted' | 'moved' | 'failed'> {
+  async function setDataDir(dir: string): Promise<'adopted' | 'moved' | 'failed'> {
     const current = settings.value ?? structuredClone(DEFAULT_SETTINGS)
+    const first = firstRun.value !== null
+    const previousRoot = dataRoot.value
     try {
-      const moved = await relocateSharedSettings(current, dir)
+      const { oneDrive } = await bridge().getAppPaths()
+      const stored = portableDir(dir, oneDrive)
+      const root = (await resolveDataRoot(stored)) ?? dir
+      await prepareDataFolder(root)
+      // Les profils qu'on avait, relevés avant de changer de dossier.
+      const profiles = first
+        ? await readLegacyProfiles()
+        : (await listProfiles(previousRoot)).map((saved) => saved.profile)
+      const moved = await relocateSharedSettings(
+        current,
+        stored,
+        first ? await readLegacySettings(legacy) : null
+      )
+      const library = first
+        ? await legacyLibraryDir(legacy)
+        : previousRoot === null
+          ? null
+          : dataFolder(previousRoot).components
+      if (library !== null) await copyComponents(library, dataFolder(root).components)
+      await addMissingProfiles(root, profiles)
       settings.value = moved.settings
       sharedSettingsPath.value = moved.sharedPath
+      dataRoot.value = root
+      firstRun.value = null
       problem.value = ''
-      if (moved.settings.libraryDir !== current.libraryDir) {
-        libraryDir.value = await resolveLibraryDir(moved.settings)
-        await refresh()
-      }
+      await refresh()
       return moved.adopted ? 'adopted' : 'moved'
     } catch (error) {
-      problem.value = `Emplacement des paramètres inchangé : ${describe(error)}`
+      problem.value = `Dossier de Pinout inchangé : ${describe(error)}`
       return 'failed'
     }
   }
 
-  /** Dialogue de choix du dossier des paramètres ; null si l'utilisateur annule. */
-  async function chooseSettingsDir(): Promise<'adopted' | 'moved' | 'failed' | null> {
+  /** Dialogue de choix du dossier de Pinout ; null si l'utilisateur annule. */
+  async function chooseDataDir(): Promise<'adopted' | 'moved' | 'failed' | null> {
+    const from = dataRoot.value ?? firstRun.value?.proposal
     const dir = await bridge().showOpenDialog({
-      title: 'Dossier des paramètres de l’application',
+      title: 'Dossier de Pinout',
       directory: true,
-      ...(sharedSettingsPath.value ? { defaultPath: dirOf(sharedSettingsPath.value) } : {})
+      ...(from && (await bridge().pathExists(from)) ? { defaultPath: from } : {})
     })
-    if (dir === null) return null
-    const { oneDrive } = await bridge().getAppPaths()
-    return setSettingsDir(portableDir(dir, oneDrive))
+    return dir === null ? null : setDataDir(dir)
+  }
+
+  /**
+   * Dossier où s'ouvrent « Enregistrer sous » et « Ouvrir » pour ce genre de document : le dernier
+   * qui a servi (celui du plus récent des fichiers récents de ce genre), s'il existe encore ;
+   * sinon, et au moindre souci, son dossier dans le dossier de Pinout. Null sans dossier de Pinout.
+   */
+  async function documentDir(kind: DocumentKind): Promise<string | null> {
+    const ofKind = (file: string): boolean => isDiagramPath(file) === (kind === 'diagram')
+    const last = recentFiles.value.find(ofKind)
+    try {
+      if (last && (await bridge().pathExists(dirOf(last)))) return dirOf(last)
+    } catch {
+      // Dossier illisible : on retombe sur celui de Pinout.
+    }
+    const root = dataRoot.value
+    if (root === null) return null
+    const dir = kind === 'diagram' ? dataFolder(root).diagrams : dataFolder(root).montages
+    await bridge()
+      .ensureDir(dir)
+      .catch(() => undefined)
+    return dir
   }
 
   async function addRecentFile(path: string): Promise<void> {
@@ -293,7 +355,8 @@ export const useLibraryStore = defineStore('library', () => {
   return {
     settings,
     sharedSettingsPath,
-    settingsDir,
+    dataRoot,
+    firstRun,
     libraryDir,
     entries,
     filtered,
@@ -305,7 +368,6 @@ export const useLibraryStore = defineStore('library', () => {
     diagramPalette,
     defaultWireColor,
     recentFiles,
-    lastProjectDir,
     exportDefaults,
     autosaveSeconds,
     theme,
@@ -322,9 +384,9 @@ export const useLibraryStore = defineStore('library', () => {
     refresh,
     updateSettings,
     reloadSharedSettings,
-    chooseDir,
-    setSettingsDir,
-    chooseSettingsDir,
+    setDataDir,
+    chooseDataDir,
+    documentDir,
     addRecentFile,
     removeRecentFile
   }

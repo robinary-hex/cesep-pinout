@@ -6,8 +6,8 @@
 // Le scénario est un module CommonJS qui exporte une fonction asynchrone ; elle reçoit les outils
 // ci-dessous (`click`, `drag`, `key`, `js`, `fill`, `theme`, `shot`, `wait`…). Rien n'est lu ni
 // écrit hors du dossier de sortie : le profil de l'application y est recréé à chaque lancement
-// (`profile/`) et les variables OneDrive sont retirées, donc ni la bibliothèque ni les paramètres
-// de l'utilisateur ne sont touchés. La fenêtre hors écran n'a pas le focus du système : le texte
+// (`profile/`), son dossier de Pinout y est imposé (`profile/Pinout`) et les variables OneDrive
+// sont retirées, donc ni la bibliothèque ni les paramètres de l'utilisateur ne sont touchés. La fenêtre hors écran n'a pas le focus du système : le texte
 // d'un champ se pose avec `fill`, pas au clavier ; les raccourcis de l'application, eux, passent.
 // Un chemin de fichier `.pinout` ou `.pinuml` ajouté à la fin est ouvert au lancement, comme un
 // fichier double-cliqué.
@@ -53,6 +53,12 @@ if (process.env.APPSHOT_KEEP_PROFILE !== '1') {
   fs.rmSync(path.join(outDir, 'profile'), { recursive: true, force: true })
 }
 app.setPath('userData', path.join(outDir, 'profile'))
+// Documents aussi : c'est là que l'application propose son dossier sans OneDrive.
+app.setPath('documents', path.join(outDir, 'profile', 'Documents'))
+// Le dossier de Pinout est imposé, dans le profil : pas de question au premier lancement. Avec
+// APPSHOT_FIRST_RUN=1 il ne l'est pas, pour voir cette question.
+if (process.env.APPSHOT_FIRST_RUN === '1') delete process.env.PINOUT_DATA_DIR
+else process.env.PINOUT_DATA_DIR = path.join(outDir, 'profile', 'Pinout')
 
 // La fenêtre de l'application devient une fenêtre hors écran : elle ne s'affiche jamais, mais la
 // page se peint et se capture. Le processus principal reçoit ce `BrowserWindow` à la place du vrai.

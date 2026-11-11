@@ -159,7 +159,6 @@ describe('panneau de la bibliothèque', () => {
       'Nouveau composant',
       'Liste',
       'Grille',
-      'Changer de dossier…',
       'Afficher le dossier dans l’Explorateur'
     ])
     menuEntry('Grille').click()

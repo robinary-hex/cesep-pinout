@@ -96,6 +96,10 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.pathExists, (_event, path: string) => exists(path))
 
+  ipcMain.handle(IPC.ensureDir, async (_event, path: string) => {
+    await mkdir(path, { recursive: true })
+  })
+
   ipcMain.handle(IPC.deleteFile, async (_event, path: string) => {
     try {
       await unlink(path)
@@ -139,7 +143,8 @@ function registerIpc(): void {
   ipcMain.handle(IPC.getAppPaths, (): AppPaths => ({
     userData: app.getPath('userData'),
     documents: app.getPath('documents'),
-    oneDrive: process.env['OneDriveCommercial'] ?? process.env['OneDrive'] ?? null
+    oneDrive: process.env['OneDriveCommercial'] ?? process.env['OneDrive'] ?? null,
+    presetDataDir: process.env['PINOUT_DATA_DIR'] ?? null
   }))
 
   ipcMain.handle(IPC.launchFile, async () =>

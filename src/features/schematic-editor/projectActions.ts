@@ -28,8 +28,9 @@ export async function saveProject(
 ): Promise<boolean> {
   let path = store.filePath
   if (as || path === null) {
-    // Dossier proposé : celui du projet s'il en a un, sinon celui du dernier projet enregistré ou ouvert.
-    const dir = path ? dirOf(path) : library.lastProjectDir
+    // Dossier proposé : celui du montage s'il a un fichier, sinon le dernier qui a servi pour un
+    // montage, à défaut le dossier Montages du dossier de Pinout.
+    const dir = path ? dirOf(path) : await library.documentDir('montage')
     path = await chooseProjectToSave(store.doc.name, dir)
     if (path === null) return false
   }

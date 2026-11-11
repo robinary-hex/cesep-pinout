@@ -30,6 +30,12 @@ export interface AppPaths {
   documents: string
   /** Racine OneDrive de la machine (OneDriveCommercial, sinon OneDrive), ou null sans OneDrive. */
   oneDrive: string | null
+  /**
+   * Dossier de Pinout imposé par la variable d'environnement PINOUT_DATA_DIR, ou null. Pour les
+   * essais automatisés : ils ne doivent ni rencontrer la question du premier lancement, ni
+   * toucher aux données de l'utilisateur.
+   */
+  presetDataDir: string | null
 }
 
 export interface DirEntry {
@@ -64,6 +70,8 @@ export interface PinoutApi {
   /** Entrées d'un dossier ; liste vide si le dossier n'existe pas. */
   readDir(path: string): Promise<DirEntry[]>
   pathExists(path: string): Promise<boolean>
+  /** Crée un dossier, et ceux qui le contiennent ; sans effet s'il existe déjà. */
+  ensureDir(path: string): Promise<void>
   /** Supprime un fichier (pas un dossier) ; sans effet s'il n'existe pas. */
   deleteFile(path: string): Promise<void>
   /** Supprime un dossier de composant ; refusé s'il ne contient pas component.json. */
@@ -109,6 +117,7 @@ export const IPC = {
   writeBinaryFile: 'fs:write-binary-file',
   readDir: 'fs:read-dir',
   pathExists: 'fs:path-exists',
+  ensureDir: 'fs:ensure-dir',
   deleteFile: 'fs:delete-file',
   removeComponentFolder: 'fs:remove-component-folder',
   showInFolder: 'shell:show-in-folder',

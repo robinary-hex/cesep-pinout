@@ -27,7 +27,7 @@ import { heading, item, SEPARATOR, submenu, type MenuItem } from '@/ui/contextMe
 import type { IconName } from '@/ui/icons'
 import { openModals } from '@/ui/modalState'
 import PromptDialog from '@/ui/PromptDialog.vue'
-import { lastDiagramDir, saveDiagram } from './diagramActions'
+import { saveDiagram } from './diagramActions'
 import DiagramCanvas from './DiagramCanvas.vue'
 import DiagramInspector from './DiagramInspector.vue'
 import DiagramToolbar from './DiagramToolbar.vue'
@@ -61,7 +61,7 @@ async function save(as = false): Promise<void> {
 }
 
 async function open(): Promise<void> {
-  const path = await chooseDiagramToOpen(lastDiagramDir(library))
+  const path = await chooseDiagramToOpen(await library.documentDir('diagram'))
   if (path === null) return
   await store.openPath(path)
 }

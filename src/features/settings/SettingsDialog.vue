@@ -12,7 +12,7 @@ import {
 import { useDiagramStore } from '@/features/diagram-editor/store'
 import { useLibraryStore } from '@/features/library/store'
 import { useSchematicStore } from '@/features/schematic-editor/store'
-import { dirOf } from '@/io/paths'
+import { bridge } from '@/io/bridge'
 import Icon from '@/ui/Icon.vue'
 import ModalDialog from '@/ui/ModalDialog.vue'
 import { applyTheme } from '@/ui/theme'
@@ -21,9 +21,9 @@ import PaletteEditor from './PaletteEditor.vue'
 // Paramètres de l'application : apparence, dossiers et palette des fils à gauche ; copie de
 // secours, export et palette des diagrammes à droite (les fils ont des couleurs vives, les
 // diagrammes les leurs, pastel au départ). On édite une copie et on n'enregistre qu'à la
-// validation ; les deux dossiers
-// (bibliothèque, paramètres) changent tout de suite, dès qu'on en choisit un autre. Le profil de
-// style a sa propre boîte (ProfileDialog), ouverte depuis la barre d'application.
+// validation ; le dossier de Pinout, le seul que les paramètres pointent, change tout de suite,
+// dès qu'on en choisit un autre. Le profil de style a sa propre boîte (ProfileDialog), ouverte
+// depuis la barre d'application.
 
 const emit = defineEmits<{ close: [] }>()
 const library = useLibraryStore()
@@ -61,17 +61,14 @@ function setTheme(theme: Theme): void {
 
 onUnmounted(() => applyTheme(library.theme))
 
-// Dossier du fichier de paramètres partagé
+// Dossier de Pinout
 
-const settingsPlace = computed(() =>
-  library.sharedSettingsPath ? dirOf(library.sharedSettingsPath) : 'Sur cette machine seulement'
-)
-const settingsNote = ref('')
+const dataNote = ref('')
 
 /**
- * Change le dossier des paramètres. S'il en contenait déjà, ils remplacent ceux de l'application :
- * la boîte les montre, et les documents ouverts qui suivaient l'ancien style général prennent le
- * nouveau.
+ * Change le dossier de Pinout. S'il avait déjà ses réglages, ils remplacent ceux de
+ * l'application : la boîte les montre, et les documents ouverts qui suivaient l'ancien style
+ * général prennent le nouveau.
  */
 async function relocate(move: () => Promise<'adopted' | 'moved' | 'failed' | null>): Promise<void> {
   const previousProfile = library.defaultProfile
@@ -79,14 +76,14 @@ async function relocate(move: () => Promise<'adopted' | 'moved' | 'failed' | nul
   const result = await move()
   if (result === null) return
   if (result === 'failed') {
-    settingsNote.value = library.problem
+    dataNote.value = library.problem
     return
   }
   if (result === 'moved') {
-    settingsNote.value = 'Paramètres enregistrés dans ce dossier.'
+    dataNote.value = 'Dossier préparé : réglages, profils et composants y sont copiés.'
     return
   }
-  settingsNote.value = 'Paramètres repris de ce dossier.'
+  dataNote.value = 'Ce dossier avait déjà ses réglages : ils sont repris.'
   draft.value = structuredClone(library.settings ?? DEFAULT_SETTINGS)
   applyTheme(draft.value.theme)
   schematic.followGeneralProfile(previousProfile, library.defaultProfile)
@@ -185,39 +182,30 @@ async function save(): Promise<void> {
         </section>
 
         <section class="block">
-          <h3>Bibliothèque de composants</h3>
-          <p class="hint path">{{ library.libraryDir || 'Dossier par défaut' }}</p>
-          <button type="button" class="with-icon" @click="library.chooseDir()">
-            <Icon name="folder-open" /> Choisir un autre dossier…
-          </button>
-        </section>
-
-        <section class="block">
-          <h3>Paramètres de l’application</h3>
+          <h3>Dossier de Pinout</h3>
           <p
             class="hint path"
-            title="Dossier du fichier settings.json : réglages et profil de style général, communs aux machines qui pointent sur lui. Les fichiers récents restent sur chaque machine."
+            title="Tout y est rangé : Composants, Montages, Diagrammes, et Applications (réglages et profils). Les fichiers récents restent sur chaque machine."
           >
-            {{ settingsPlace }}
+            {{ library.dataRoot ?? 'Pas encore choisi' }}
           </p>
           <div class="row tight">
             <button
               type="button"
               class="with-icon"
-              @click="relocate(() => library.chooseSettingsDir())"
+              @click="relocate(() => library.chooseDataDir())"
             >
               <Icon name="folder-open" /> Choisir un autre dossier…
             </button>
             <button
-              v-if="library.settingsDir.length > 0"
+              v-if="library.dataRoot"
               type="button"
-              title="Revenir au dossier Pinout de OneDrive"
-              @click="relocate(() => library.setSettingsDir(''))"
+              @click="bridge().showInFolder(library.dataRoot)"
             >
-              Dossier par défaut
+              Afficher dans l’Explorateur
             </button>
           </div>
-          <p v-if="settingsNote" class="hint">{{ settingsNote }}</p>
+          <p v-if="dataNote" class="hint">{{ dataNote }}</p>
         </section>
 
         <section class="block">

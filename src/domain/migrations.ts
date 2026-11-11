@@ -1,7 +1,12 @@
 import { COMPONENT_SCHEMA_VERSION, IMAGE_FILE_PATTERN } from './component'
 import { DIAGRAM_SCHEMA_VERSION } from './diagram'
 import { pathPointAt } from './diagramLinks'
-import { DEFAULT_COMPONENT_STROKE, DEFAULT_END_LABEL_SIZE } from './profile'
+import {
+  DEFAULT_COMPONENT_STROKE,
+  DEFAULT_END_LABEL_SIZE,
+  styleProfileSchema,
+  type StyleProfile
+} from './profile'
 import { PROJECT_SCHEMA_VERSION } from './project'
 import {
   DEFAULT_AUTOSAVE_SECONDS,
@@ -50,6 +55,28 @@ export function completeProfile(raw: unknown): RawRecord {
     endLabelFont: { family, size: DEFAULT_END_LABEL_SIZE },
     ...profile
   }
+}
+
+/**
+ * Profils d'un fichier de profils enregistrés (profils.json), complétés des champs apparus depuis.
+ * Un profil illisible est écarté sans empêcher de lire les autres ; un fichier qui n'en est pas un
+ * est refusé.
+ */
+export function parseProfiles(text: string): StyleProfile[] {
+  let raw: unknown
+  try {
+    raw = JSON.parse(text)
+  } catch {
+    throw new FileFormatError('Profils : ce fichier n’est pas du JSON', [])
+  }
+  const list = isRecord(raw) && Array.isArray(raw['profiles']) ? raw['profiles'] : null
+  if (list === null) throw new FileFormatError('Profils : liste « profiles » attendue', [])
+  const profiles: StyleProfile[] = []
+  for (const entry of list) {
+    const parsed = styleProfileSchema.safeParse(completeProfile(entry))
+    if (parsed.success) profiles.push(parsed.data)
+  }
+  return profiles
 }
 
 /**
@@ -640,6 +667,16 @@ export const settingsMigrations: MigrationTable = {
       ...raw
     }),
     // v13 → v14 : la palette des diagrammes de départ est moins pâle ; une palette retouchée reste.
-    13: migrateSettingsV13
+    13: migrateSettingsV13,
+    // v14 → v15 : un seul dossier, celui de Pinout, au lieu d'un pour la bibliothèque et d'un pour
+    // les paramètres. Il n'est pas encore choisi : l'application le demande, et reprend à ce
+    // moment ce que les deux anciens contenaient (`legacyFoldersOf` de l'entrée-sortie les relit
+    // dans le fichier d'origine).
+    14: (raw) => {
+      const rest = { ...raw }
+      delete rest['libraryDir']
+      delete rest['settingsDir']
+      return { ...rest, dataDir: '' }
+    }
   }
 }

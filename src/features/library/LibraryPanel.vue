@@ -262,7 +262,6 @@ function openListMenu(event: MouseEvent): void {
         checked: view === 'grid'
       }),
       SEPARATOR,
-      item('Changer de dossier…', () => void library.chooseDir(), { icon: 'folder-open' }),
       item(
         'Afficher le dossier dans l’Explorateur',
         () => void bridge().showInFolder(library.libraryDir),
@@ -296,17 +295,6 @@ async function remove(entry: LibraryEntry): Promise<void> {
   <aside class="library">
     <header class="library-head">
       <h2>Composants</h2>
-      <div class="dir-row" :title="library.libraryDir">
-        <span class="dir">{{ baseName(library.libraryDir) || '…' }}</span>
-        <button
-          type="button"
-          class="small"
-          title="Choisir le dossier de la bibliothèque"
-          @click="library.chooseDir()"
-        >
-          Dossier…
-        </button>
-      </div>
       <input v-model="library.search" type="search" placeholder="Rechercher…" class="search" />
     </header>
 
@@ -456,24 +444,9 @@ async function remove(entry: LibraryEntry): Promise<void> {
   gap: 8px;
 }
 
-.dir-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
 .library-head h2 {
   margin: 0;
   font-size: 14px;
-}
-
-.dir {
-  font-size: 12px;
-  color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .search {

@@ -236,8 +236,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   Fichier (nouveau, ouvrir, récents, enregistrer,
   exporter, paramètres, raccourcis, quitter) construit avec `ContextMenu` et appelant les actions
   que `SchematicEditor` / `ComponentEditor` exposent par `defineExpose` selon le mode. Enregistrer
-  sous propose le dossier du projet, sinon celui du dernier projet enregistré ou ouvert
-  (`lastProjectDir`, dérivé des fichiers récents) ; Ouvrir s'ouvre dans ce dossier. Les barres
+  sous propose le dossier du document, sinon le dernier dossier qui a servi pour ce genre de
+  document, sinon son dossier dans le dossier de Pinout (`documentDir` du store de la
+  bibliothèque, voir « Dossier de Pinout ») ; Ouvrir s'ouvre dans ce même dossier. Les barres
   d'outils ne portent plus d'actions de fichier ; dans le montage, rotation, miroir, duplication,
   suppression et ordre des fils ne sont accessibles que par le menu contextuel et le clavier. Les outils des deux barres sont des
   boutons à pictogramme seul (raccourci dans l'infobulle) ; quand la place manque, la partie gauche
@@ -424,7 +425,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   « Modifier le style… » du panneau) modifie le style du montage affiché, en une commande. Le
   panneau surligne en `--alert` les réglages où le montage s'écarte du profil général
   (`profileDifferences`) et propose de l'y aligner (`adoptGeneralProfile`).
-  Profils enregistrés (`src/io/profiles.ts`, un fichier par profil dans `userData/profiles`) :
+  Profils enregistrés (`src/io/profiles.ts` : un seul fichier, `Applications/profils.json` du
+  dossier de Pinout, `serializeProfiles` / `parseProfiles`) :
   ils sont en tête de l'onglet Montages, un bouton radio devant chacun (décision du 11 novembre
   2026). En choisir un le met dans les champs et à l'aperçu, « Appliquer » le confirme. La
   ligne cochée est celle dont les champs portent le nom (« modifié » s'ils s'en écartent) ; une
@@ -433,22 +435,54 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   ou met à jour celui du même nom. Piège : `structuredClone` refuse les objets que Vue a
   rendus réactifs ; ce qu'on copie tel quel se garde en `shallowRef` (les profils enregistrés
   étaient dans un `ref`, et « Charger » ne faisait rien).
-- Paramètres en deux fichiers (`src/io/settings.ts`) : un fichier partagé `settings.json`, commun
-  aux machines (tout sauf ce qui est propre à chacune ; profil général compris), et le fichier
-  local `userData/settings.json`, copie complète avec les fichiers récents et `settingsDir`. Le
-  fichier partagé vit dans le dossier choisi dans les paramètres (`settingsDir`, réglage local,
-  noté `${OneDrive}…` s'il est dans OneDrive ; `resolveSettingsDir`), par défaut
-  `<OneDrive>\(Cours)\Robotique\(Ressources)\Pinout` ; sans dossier choisi ni OneDrive, seul le
-  local existe. Changer de dossier (`relocateSharedSettings`, `chooseSettingsDir`) reprend les
-  paramètres qui s'y trouvent déjà, sinon y écrit les réglages courants ; un fichier illisible
-  n'est pas écrasé. Le fichier partagé est relu au lancement, avant chaque enregistrement
+- Dossier de Pinout (décision du 11 novembre 2026 ; `src/io/dataFolder.ts`) : un seul dossier
+  pour tout, le seul chemin que les paramètres pointent (`dataDir`, réglage local, noté
+  `${OneDrive}…` s'il est dans OneDrive : `portableDir`, `resolveDataRoot`). Il contient
+  `Composants` (la bibliothèque : un dossier par composant), `Montages`, `Diagrammes` et
+  `Applications` (deux fichiers : `parametres.json`, les réglages, et `profils.json`, les
+  profils de style enregistrés) ; `prepareDataFolder` crée ce qui manque. Le store de la
+  bibliothèque en tient la racine (`dataRoot`) et en tire `libraryDir`.
+  - Premier lancement : tant que `dataDir` est vide (ou que son OneDrive manque sur la
+    machine), `init` ne lit ni n'écrit rien et pose `firstRun` ; `App.vue` montre alors
+    `src/app/DataFolderDialog.vue`, une `ModalDialog` `persistent` (pas de croix, Échap et un
+    clic à côté sans effet), et n'ouvre rien d'autre avant le choix. Dossier proposé
+    (`proposedDataDir`) : l'ancien dossier des paramètres s'il y en avait un, sinon
+    `<OneDrive>\Pinout`, sinon `<Documents>\Pinout`.
+  - Choisir un dossier (`setDataDir`, `chooseDataDir` ; au premier lancement et dans la boîte
+    des paramètres, où il change tout de suite) : un dossier qui a déjà ses réglages est
+    repris tel quel, avec ses composants et ses profils (`adopted`) ; un dossier neuf reçoit
+    une copie de ce que l'application avait (`moved`) : réglages, profils et composants, de
+    l'ancienne organisation au premier lancement, du dossier précédent ensuite. On copie,
+    on ne supprime jamais rien là d'où l'on vient, et on n'écrase rien : les composants ne
+    vont que dans une bibliothèque vide (`copyComponents`), les profils ne s'ajoutent que
+    s'il manque leur nom (`addMissingProfiles`), un fichier de réglages illisible fait
+    refuser le dossier.
+  - Ancienne organisation (jusqu'à la 1.5.0 : `settings.json` partagé dans un dossier au
+    choix, bibliothèque `…\Pinout\library` ou `userData/library`, un fichier par profil dans
+    `userData/profiles`) : lue une seule fois, au premier lancement, par les fonctions
+    `legacy…` de `dataFolder.ts`, `readLegacySettings` et `readLegacyProfiles`. Ses fichiers
+    restent en place, pour une machine restée à une version antérieure.
+  - Dossiers d'enregistrement : montages et diagrammes s'enregistrent où l'on veut.
+    `documentDir('montage' | 'diagram')` donne le dossier où s'ouvrent « Enregistrer sous »
+    et « Ouvrir » : le dernier qui a servi pour ce genre de document (celui du plus récent
+    des fichiers récents), s'il existe encore ; sinon, et au moindre souci, `Montages` ou
+    `Diagrammes` du dossier de Pinout.
+  - `PINOUT_DATA_DIR` (variable d'environnement, `presetDataDir` des chemins du pont) impose
+    le dossier sans poser la question : c'est ce que font `appshot.cjs` et, dans les tests,
+    `FakeFs` (`presetDataDir`, à mettre à `null` pour rencontrer le premier lancement).
+- Paramètres en deux fichiers (`src/io/settings.ts`) : le fichier partagé
+  `Applications/parametres.json` du dossier de Pinout, commun aux machines (tout sauf ce qui
+  est propre à chacune ; profil général compris), et le fichier local
+  `userData/settings.json`, copie complète avec les fichiers récents et `dataDir`
+  (`withLocalPart`). Le fichier partagé est relu au lancement, avant chaque enregistrement
   (seuls les réglages modifiés écrasent) et quand la fenêtre reprend la main
   (`reloadSharedSettings`) ; il n'est réécrit que si son contenu change. La boîte des paramètres
-  n'enregistre que ses propres réglages : les deux dossiers changent dès qu'on les choisit.
-- Bibliothèque de composants : dossier par défaut = racine OneDrive de la machine (variables
-  `OneDriveCommercial` puis `OneDrive`, exposées par `getAppPaths().oneDrive`) + `(Cours)\Robotique\(Ressources)\Pinout\library`,
-  sinon `userData/library` ; un dossier choisi dans OneDrive est enregistré avec le préfixe
-  `${OneDrive}` (`portableDir`), résolu sur chaque machine (`resolveLibraryDir`). Panneau en
+  n'enregistre que ses propres réglages : le dossier de Pinout change dès qu'on le choisit
+  (`relocateSharedSettings`).
+- Bibliothèque de composants : le dossier `Composants` du dossier de Pinout (`libraryDir` du
+  store), sans réglage à elle ; le panneau n'a pas de bouton de dossier. La racine OneDrive
+  de la machine vient des variables `OneDriveCommercial` puis `OneDrive`
+  (`getAppPaths().oneDrive`). Panneau en
   liste (nom, broches) ou en grille de vignettes (nom en petit dessous) selon `libraryView`
   (paramètres) ; catégories repliables. Le panneau n'a pas de bouton « Nouveau » (un composant ou
   un montage se crée par le « + » des onglets ou Ctrl+N) et ses composants ne portent pas de
@@ -527,7 +561,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     l'Explorateur (`showInFolder` du pont), fermer, fermer les autres.
   - Bibliothèque : sur un composant, ouvrir, dupliquer, renommer, catégorie, afficher dans
     l'Explorateur, supprimer ; dans le montage, poser ou modifier dans l'éditeur de composants ;
-    dans le vide, nouveau composant, liste ou grille, dossier.
+    dans le vide, nouveau composant, liste ou grille.
   - Montage : sur un fil, ce qui dépend de l'endroit du clic (`nearestWirePoint`) : ajouter un
     sommet (`insertVertex`), supprimer ce sommet si ses voisins peuvent se rejoindre
     (`removeVertex`), couper le fil (`splitPoints`, `splitWire` : rien ne bouge, les deux
@@ -696,9 +730,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     composant posé s'appelle « libellé » dans l'interface.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 15, projet 21, paramètres 14,
-  diagramme 5 (depuis la 1.5.0 : palette des diagrammes dans les paramètres, couleur du texte
-  d'un nœud dans le diagramme ; un fichier enregistré ne s'ouvre plus dans une version antérieure)
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 15, projet 21, paramètres 15,
+  diagramme 5 (depuis la 1.5.0 : palette des diagrammes et dossier de Pinout dans les
+  paramètres, couleur du texte d'un nœud dans le diagramme ; un fichier enregistré ne s'ouvre
+  plus dans une version antérieure)
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé). Composant 15 et projet 21 sont ceux de la 1.4.0, publiée le 11 novembre 2026 : depuis, tout
   nouveau champ d'un fichier, même optionnel, demande une montée de version et une migration
@@ -745,8 +780,11 @@ release/latest.yml release/pinout-X.Y.Z-portable.exe --latest` avec des notes qu
   `node scripts/appshot.cjs <scénario.cjs> <dossier>` (après `pnpm build`) la lance dans une
   fenêtre hors écran, joue un scénario de clics et de touches et écrit des captures PNG dans le
   dossier (à mettre dans le dossier temporaire de la session, pas dans le dépôt). Le profil de
-  l'application y est recréé à chaque fois et les variables OneDrive sont retirées : ni la
-  bibliothèque ni les paramètres de Robin ne sont lus. Le scénario exporte une fonction qui
+  l'application y est recréé à chaque fois (`profile/`, Documents compris), son dossier de
+  Pinout y est imposé (`profile/Pinout`, par `PINOUT_DATA_DIR`) et les variables OneDrive sont
+  retirées : ni la bibliothèque ni les paramètres de Robin ne sont lus. `APPSHOT_FIRST_RUN=1`
+  n'impose pas le dossier, pour voir la question du premier lancement. Le scénario exporte une
+  fonction qui
   reçoit `click`, `rightClick`, `drag`, `key`, `js`, `fill`, `theme`, `shot`, `wait` ; la
   fenêtre n'a pas le focus du système, donc le texte d'un champ se pose avec `fill`. Un fichier
   `.pinout` ou `.pinuml` ajouté à la fin de la commande est ouvert au lancement, et

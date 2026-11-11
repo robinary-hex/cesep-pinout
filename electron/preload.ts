@@ -16,6 +16,7 @@ const api: PinoutApi = {
   writeBinaryFile: (path, base64) => ipcRenderer.invoke(IPC.writeBinaryFile, path, base64),
   readDir: (path) => ipcRenderer.invoke(IPC.readDir, path),
   pathExists: (path) => ipcRenderer.invoke(IPC.pathExists, path),
+  ensureDir: (path) => ipcRenderer.invoke(IPC.ensureDir, path),
   deleteFile: (path) => ipcRenderer.invoke(IPC.deleteFile, path),
   removeComponentFolder: (path) => ipcRenderer.invoke(IPC.removeComponentFolder, path),
   showInFolder: (path) => ipcRenderer.invoke(IPC.showInFolder, path),

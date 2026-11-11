@@ -3,7 +3,7 @@ import { hexColorSchema } from './color'
 import { DEFAULT_DIAGRAM_STYLE, diagramStyleSchema, nodeFillSchema } from './diagram'
 import { DEFAULT_PROFILE, styleProfileSchema } from './profile'
 
-export const SETTINGS_SCHEMA_VERSION = 14
+export const SETTINGS_SCHEMA_VERSION = 15
 
 export const paletteColorSchema = z.object({
   name: z.string().min(1),
@@ -102,13 +102,13 @@ export const DEFAULT_DIAGRAM_DEFAULTS: DiagramDefaults = {
 
 export const settingsSchema = z.object({
   schemaVersion: z.literal(SETTINGS_SCHEMA_VERSION),
-  /** Dossier de la bibliothèque de composants ; vide = dossier par défaut dans userData. */
-  libraryDir: z.string(),
   /**
-   * Dossier du fichier de paramètres partagé (settings.json), propre à chaque machine : vide =
-   * le dossier Pinout de OneDrive. Un dossier de OneDrive s'écrit `${OneDrive}…`.
+   * Dossier de Pinout sur cette machine : tout y est rangé (composants, montages, diagrammes,
+   * réglages et profils). Propre à chaque machine, donc absent du fichier partagé. Vide tant
+   * qu'il n'est pas choisi : l'application le demande au premier lancement. Un dossier de
+   * OneDrive s'écrit `${OneDrive}…`.
    */
-  settingsDir: z.string(),
+  dataDir: z.string(),
   /** Couleurs proposées pour les fils d'un montage. */
   palette: z.array(paletteColorSchema).min(1),
   defaultWireColor: hexColorSchema,
@@ -137,8 +137,7 @@ export type Settings = z.infer<typeof settingsSchema>
 
 export const DEFAULT_SETTINGS: Settings = {
   schemaVersion: SETTINGS_SCHEMA_VERSION,
-  libraryDir: '',
-  settingsDir: '',
+  dataDir: '',
   palette: [...DEFAULT_PALETTE],
   defaultWireColor: '#000000',
   diagramPalette: [...DEFAULT_DIAGRAM_PALETTE],

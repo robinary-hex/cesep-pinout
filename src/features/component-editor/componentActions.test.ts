@@ -52,7 +52,7 @@ describe('fermer un onglet de composant', () => {
     store.addPrimitive(dot, 'Ajouter un point')
     dialogs.answers.push('save')
     expect(await closeComponentTabAsking(store, library, store.activeTabId)).toBe(true)
-    expect(fs.texts.get('C:/fake/Pinout/library/led/component.json')).toContain('"name": "LED"')
+    expect(fs.texts.get('C:/fake/Donnees/Composants/led/component.json')).toContain('"name": "LED"')
     expect(store.pristine).toBe(true)
   })
 })

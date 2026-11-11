@@ -1,7 +1,7 @@
 import type { useLibraryStore } from '@/features/library/store'
 import { describeError } from '@/features/schematic-editor/projectActions'
 import { syncDiagramAutosaves } from '@/io/autosave'
-import { chooseDiagramToSave, isDiagramPath, writeDiagram } from '@/io/diagramFiles'
+import { chooseDiagramToSave, writeDiagram } from '@/io/diagramFiles'
 import { dirOf } from '@/io/paths'
 import { askToSave } from '@/ui/dialogs'
 import type { useDiagramStore } from './store'
@@ -11,12 +11,6 @@ import type { useDiagramStore } from './store'
 
 type DiagramStore = ReturnType<typeof useDiagramStore>
 type LibraryStore = ReturnType<typeof useLibraryStore>
-
-/** Dossier proposé pour un diagramme : celui du dernier diagramme enregistré ou ouvert. */
-export function lastDiagramDir(library: LibraryStore): string | null {
-  const last = library.recentFiles.find(isDiagramPath)
-  return last ? dirOf(last) : library.lastProjectDir
-}
 
 /**
  * Enregistre le diagramme ; demande un chemin s'il n'en a pas (ou si `as`). Vrai si le fichier
@@ -29,7 +23,10 @@ export async function saveDiagram(
 ): Promise<boolean> {
   let path = store.filePath
   if (as || path === null) {
-    path = await chooseDiagramToSave(store.doc.name, path ? dirOf(path) : lastDiagramDir(library))
+    // Dossier proposé : celui du diagramme s'il a un fichier, sinon le dernier qui a servi pour un
+    // diagramme, à défaut le dossier Diagrammes du dossier de Pinout.
+    const dir = path ? dirOf(path) : await library.documentDir('diagram')
+    path = await chooseDiagramToSave(store.doc.name, dir)
     if (path === null) return false
   }
   try {

@@ -1,12 +1,15 @@
-import type { AppRequest, DirEntry, PinoutApi } from '../../../electron/api'
+import type { AppPaths, AppRequest, DirEntry, PinoutApi } from '../../../electron/api'
 
 /**
  * Système de fichiers en mémoire qui imite le pont Electron, pour les tests.
- * Les chemins sont normalisés avec « / » ; un dossier existe dès qu'un fichier s'y trouve.
+ * Les chemins sont normalisés avec « / » ; un dossier existe dès qu'un fichier s'y trouve, ou
+ * qu'il a été créé par `ensureDir`.
  */
 export class FakeFs implements PinoutApi {
   readonly texts = new Map<string, string>()
   readonly binaries = new Map<string, string>()
+  /** Dossiers créés vides. */
+  readonly dirs = new Set<string>()
   /** Réponses programmées des dialogues : chaque appel consomme la première. */
   readonly openDialogAnswers: Array<string | null> = []
   readonly saveDialogAnswers: Array<string | null> = []
@@ -55,12 +58,22 @@ export class FakeFs implements PinoutApi {
       if (slash === -1) names.set(rest, false)
       else names.set(rest.slice(0, slash), true)
     }
+    for (const dir of this.dirs) {
+      if (!dir.startsWith(prefix)) continue
+      const first = dir.slice(prefix.length).split('/')[0]
+      if (first) names.set(first, true)
+    }
     return [...names].map(([name, isDirectory]) => ({ name, isDirectory }))
   }
 
   async pathExists(path: string): Promise<boolean> {
     const n = this.norm(path)
+    if ([...this.dirs].some((dir) => dir === n || dir.startsWith(n + '/'))) return true
     return this.keys().some((key) => key === n || key.startsWith(n + '/'))
+  }
+
+  async ensureDir(path: string): Promise<void> {
+    this.dirs.add(this.norm(path))
   }
 
   async deleteFile(path: string): Promise<void> {
@@ -97,15 +110,31 @@ export class FakeFs implements PinoutApi {
     return this.openDialogAnswers.shift() ?? null
   }
 
-  async showSaveDialog(): Promise<string | null> {
+  /** Ce que chaque dialogue d'enregistrement a reçu, dans l'ordre des appels. */
+  readonly saveDialogCalls: Parameters<PinoutApi['showSaveDialog']>[0][] = []
+
+  async showSaveDialog(
+    options?: Parameters<PinoutApi['showSaveDialog']>[0]
+  ): Promise<string | null> {
+    this.saveDialogCalls.push(options)
     return this.saveDialogAnswers.shift() ?? null
   }
 
   /** Racine OneDrive simulée ; null par défaut, comme une machine sans OneDrive. */
   oneDrive: string | null = null
+  /**
+   * Dossier de Pinout imposé, comme par PINOUT_DATA_DIR : les tests n'ont pas à répondre à la
+   * question du premier lancement. Mis à null pour la rencontrer.
+   */
+  presetDataDir: string | null = 'C:/fake/Donnees'
 
-  async getAppPaths(): Promise<{ userData: string; documents: string; oneDrive: string | null }> {
-    return { userData: 'C:/fake/Pinout', documents: 'C:/fake/Documents', oneDrive: this.oneDrive }
+  async getAppPaths(): Promise<AppPaths> {
+    return {
+      userData: 'C:/fake/Pinout',
+      documents: 'C:/fake/Documents',
+      oneDrive: this.oneDrive,
+      presetDataDir: this.presetDataDir
+    }
   }
 
   async getLaunchFile(): Promise<string | null> {

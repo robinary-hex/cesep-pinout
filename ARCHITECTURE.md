@@ -211,21 +211,29 @@ Tous en JSON indenté, avec `schemaVersion`, validés par Zod à l'ouverture, mi
 (`src/domain/migrations.ts`). Un fichier d'exemple par version dans `src/domain/fixtures/`.
 Versions courantes : composant 15 (image en forme du dessin, textes verticaux, angles arrondis des polylignes, forme point, opacité du remplissage, italique, souligné et barré des textes, orientation réglée texte par texte, textes droits sur le montage, boîtes de texte multilignes, flèche au milieu, graisse des textes, épaisseur en multiplicateur, flèches, textes variables avec
 unité, plus de `labelPrefix`), projet 21 (composants derrière les fils, fils en diagonale à 45°, fond optionnel des étiquettes texte, styles, sens et couleur des étiquettes texte, couleurs de fil propres au montage, étiquettes texte en boîte, police des étiquettes d'extrémité dans le profil, graisse des étiquettes, étiquettes d'extrémité des fils, `componentStroke` dans le profil, `fields` par instance,
-définitions embarquées migrées à chaque version des composants), diagramme 5 (couleur du texte d'un nœud, fond optionnel des étiquettes de lien et des textes, étiquette d'un lien tenue le long du tracé, style de texte par nœud ; nœuds, liens, textes libres, style et couleurs du diagramme), paramètres 14 (palette des diagrammes à part de celle des fils, moins pâle qu'à la v13, cases d'affichage des barres d'outils, dossier du fichier partagé au choix, style général des diagrammes, `componentStroke`
+définitions embarquées migrées à chaque version des composants), diagramme 5 (couleur du texte d'un nœud, fond optionnel des étiquettes de lien et des textes, étiquette d'un lien tenue le long du tracé, style de texte par nœud ; nœuds, liens, textes libres, style et couleurs du diagramme), paramètres 15 (un seul dossier, celui de Pinout : `dataDir` remplace `libraryDir` et `settingsDir` ; palette des diagrammes à part de celle des fils, moins pâle qu'à la v13, cases d'affichage des barres d'outils, style général des diagrammes, `componentStroke`
 et `endLabelFont` du profil par défaut, thème sombre par défaut, ouverture du panneau, affichage de
 la bibliothèque).
 
-| Donnée                  | Schéma                      | Emplacement                                                                                                                                                                                                                  |
-| ----------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Définition de composant | `componentDefinitionSchema` | `<bibliothèque>/<id>/component.json` (+ un PNG par image du dessin)                                                                                                                                                          |
-| Projet                  | `projectSchema`             | où l'utilisateur veut, `*.pinout.json`, autonome                                                                                                                                                                             |
-| Profil de style         | `styleProfileSchema`        | général dans les paramètres, copié dans chaque projet ; modèles dans `userData/profiles/`                                                                                                                                    |
-| Paramètres              | `settingsSchema`            | partagés : `settings.json` du dossier choisi (par défaut `<OneDrive>\(Cours)\Robotique\(Ressources)\Pinout`) ; locaux (copie, fichiers récents, dossier choisi) : `userData/settings.json` (`userData` = `%APPDATA%\Pinout`) |
+| Donnée                  | Schéma                      | Emplacement                                                                                                                                                                      |
+| ----------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Définition de composant | `componentDefinitionSchema` | `<dossier de Pinout>/Composants/<id>/component.json` (+ un PNG par image du dessin)                                                                                              |
+| Projet                  | `projectSchema`             | où l'utilisateur veut, `*.pinout`, autonome ; par défaut `<dossier de Pinout>/Montages` (diagrammes : `*.pinuml`, `Diagrammes`)                                                  |
+| Profil de style         | `styleProfileSchema`        | général dans les paramètres, copié dans chaque projet ; profils enregistrés dans `<dossier de Pinout>/Applications/profils.json`                                                 |
+| Paramètres              | `settingsSchema`            | partagés : `<dossier de Pinout>/Applications/parametres.json` ; locaux (copie, fichiers récents, dossier de Pinout) : `userData/settings.json` (`userData` = `%APPDATA%\Pinout`) |
 
-La bibliothèque vit par défaut dans OneDrive (`(Cours)\Robotique\(Ressources)\Pinout\library` sous la racine
-`OneDriveCommercial` ou `OneDrive` de la machine), sinon dans `userData/library` ; les paramètres
-peuvent pointer ailleurs, un dossier pris dans OneDrive étant enregistré relativement à sa racine. Le nom du dossier d'un composant est son identifiant,
-dérivé du nom à la première sauvegarde et stable ensuite.
+Tout vit dans un seul dossier, le dossier de Pinout (`src/io/dataFolder.ts`), que l'application
+demande au premier lancement (`src/app/DataFolderDialog.vue`, boîte `persistent` : rien ne
+s'ouvre avant le choix) et que les paramètres pointent seul (`dataDir`, enregistré relativement à
+la racine OneDrive quand il s'y trouve) : `Composants`, `Montages`, `Diagrammes`, `Applications`.
+Le processus principal ne fait que créer les dossiers (`ensureDir` du pont) ; ce qu'on y range se
+décide dans `src/io/`. Choisir un dossier qui a déjà ses réglages les reprend ; un dossier neuf
+reçoit une copie des réglages, des profils et des composants qu'on avait (de l'ancienne
+organisation au premier lancement : `settings.json` partagé, `library`, `userData/profiles/`),
+sans rien supprimer ni écraser. Montages et diagrammes s'enregistrent où l'on veut : le dialogue
+s'ouvre dans le dernier dossier qui a servi, sinon dans celui du dossier de Pinout
+(`documentDir`). Le nom du dossier d'un composant est son identifiant, dérivé du nom à la
+première sauvegarde et stable ensuite.
 
 Un projet embarque une copie de chaque définition utilisée (`embeddedDefs`, une par type, images
 en dataUrl) et de son profil : il se rouvre à l'identique sans bibliothèque. Les jonctions ne sont

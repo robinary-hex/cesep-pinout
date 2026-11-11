@@ -5,9 +5,16 @@ import { modalStack, openModals } from './modalState'
 // Boîte de dialogue modale : fond assombri, Échap ou clic hors de la boîte pour fermer.
 // Tant qu'elle est ouverte, les éditeurs ignorent leurs raccourcis (voir openModals). `wide` pour
 // une boîte à deux colonnes, `large` pour une planche à trois colonnes (l'aide), qui gère
-// elle-même son défilement, `compact` pour une simple question.
+// elle-même son défilement, `compact` pour une simple question. `persistent` : une boîte qui
+// attend un choix, sans croix, qu'Échap et un clic à côté ne ferment pas.
 
-defineProps<{ title: string; wide?: boolean; large?: boolean; compact?: boolean }>()
+const props = defineProps<{
+  title: string
+  wide?: boolean
+  large?: boolean
+  compact?: boolean
+  persistent?: boolean
+}>()
 const emit = defineEmits<{ close: [] }>()
 const id = Symbol('boîte')
 
@@ -16,7 +23,7 @@ function onKeyDown(event: KeyboardEvent): void {
   if (modalStack.at(-1) !== id) return
   if (event.key === 'Escape') {
     event.stopPropagation()
-    emit('close')
+    if (!props.persistent) emit('close')
   }
 }
 
@@ -35,7 +42,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="backdrop" @pointerdown.self="emit('close')">
+  <div class="backdrop" @pointerdown.self="persistent || emit('close')">
     <div
       class="dialog"
       :class="{ wide, large, compact }"
@@ -45,7 +52,15 @@ onUnmounted(() => {
     >
       <header class="head">
         <h2>{{ title }}</h2>
-        <button type="button" class="close" title="Fermer (Échap)" @click="emit('close')">✕</button>
+        <button
+          v-if="!persistent"
+          type="button"
+          class="close"
+          title="Fermer (Échap)"
+          @click="emit('close')"
+        >
+          ✕
+        </button>
       </header>
       <div class="body">
         <slot />

@@ -12,7 +12,6 @@ let fs: FakeFs
 
 beforeEach(() => {
   fs = new FakeFs()
-  fs.oneDrive = 'D:/OneDrive'
   setBridge(fs)
   setActivePinia(createPinia())
 })
@@ -36,52 +35,70 @@ function click(text: string, index = 0): void {
 }
 
 describe('paramètres de l’application', () => {
-  it('garde le dossier de bibliothèque choisi quand on enregistre ensuite la boîte', async () => {
+  /** Une machine dont le dossier de Pinout est déjà choisi : D:/Pinout. */
+  async function settled(): Promise<ReturnType<typeof useLibraryStore>> {
+    fs.presetDataDir = null
+    await fs.writeTextFile(
+      'C:/fake/Pinout/settings.json',
+      serializeSettings({ ...DEFAULT_SETTINGS, dataDir: 'D:/Pinout' })
+    )
     const library = useLibraryStore()
     await library.init()
+    return library
+  }
+
+  it('ne pointe qu’un dossier, celui de Pinout, et le garde quand on enregistre ensuite la boîte', async () => {
+    const library = await settled()
     const wrapper = mount(SettingsDialog, { attachTo: document.body })
     await flushPromises()
-    fs.openDialogAnswers.push('F:/composants')
+    expect(document.body.textContent).toContain('Dossier de Pinout')
+    expect(document.body.textContent).toContain('D:/Pinout')
+    // Un seul dossier à choisir : plus un pour la bibliothèque et un pour les paramètres.
+    expect(buttons('Choisir un autre dossier…')).toHaveLength(1)
+    fs.openDialogAnswers.push('F:/Atelier')
     click('Choisir un autre dossier…')
     await flushPromises()
-    expect(library.libraryDir).toBe('F:/composants')
+    expect(fs.openDialogCalls.at(-1)).toMatchObject({ directory: true })
+    // Il change tout de suite : la bibliothèque est maintenant son dossier Composants.
+    expect(library.dataRoot).toBe('F:/Atelier')
+    expect(library.libraryDir).toBe('F:/Atelier/Composants')
+    expect(document.body.textContent).toContain('F:/Atelier')
+    expect(document.body.textContent).toContain('Dossier préparé')
     click('Enregistrer')
     await flushPromises()
-    expect(library.libraryDir).toBe('F:/composants')
-    expect(library.settings?.libraryDir).toBe('F:/composants')
+    expect(library.dataRoot).toBe('F:/Atelier')
+    expect(library.settings?.dataDir).toBe('F:/Atelier')
     wrapper.unmount()
   })
 
-  it('change le dossier des paramètres, reprend ceux qui s’y trouvent, et revient au dossier par défaut', async () => {
-    const library = useLibraryStore()
-    await library.init()
+  it('reprend les réglages d’un dossier qui en a déjà, et le montre dans l’Explorateur', async () => {
+    const library = await settled()
     await fs.writeTextFile(
-      'F:/partage/settings.json',
+      'F:/partage/Applications/parametres.json',
       serializeSettings({ ...DEFAULT_SETTINGS, theme: 'light', autosaveSeconds: 300 })
     )
     const wrapper = mount(SettingsDialog, { attachTo: document.body })
     await flushPromises()
-    expect(document.body.textContent).toContain('D:/OneDrive/(Cours)/Robotique/(Ressources)/Pinout')
-    expect(buttons('Dossier par défaut')).toHaveLength(0)
-    // Second bouton « Choisir un autre dossier… » : celui des paramètres.
     fs.openDialogAnswers.push('F:/partage')
-    click('Choisir un autre dossier…', 1)
+    click('Choisir un autre dossier…')
     await flushPromises()
-    expect(library.sharedSettingsPath).toBe('F:/partage/settings.json')
+    expect(library.sharedSettingsPath).toBe('F:/partage/Applications/parametres.json')
     expect(library.autosaveSeconds).toBe(300)
-    expect(document.body.textContent).toContain('Paramètres repris de ce dossier.')
+    expect(document.body.textContent).toContain('Ce dossier avait déjà ses réglages')
     // La boîte montre les réglages repris, et les essaie (thème clair).
     const interval = document.body.querySelector<HTMLInputElement>('input[type="number"]')
     expect(interval?.value).toBe('300')
     expect(document.documentElement.dataset['theme']).toBe('light')
-    // Enregistrer la boîte ne remet pas l'ancien dossier.
-    click('Dossier par défaut')
+    click('Afficher dans l’Explorateur')
     await flushPromises()
-    expect(library.settingsDir).toBe('')
-    expect(library.sharedSettingsPath).toBe(
-      'D:/OneDrive/(Cours)/Robotique/(Ressources)/Pinout/settings.json'
-    )
-    expect(library.autosaveSeconds).toBe(DEFAULT_SETTINGS.autosaveSeconds)
+    expect(fs.shownInFolder).toEqual(['F:/partage'])
+    // Un dossier dont les réglages sont illisibles est refusé : la boîte le dit, rien ne change.
+    await fs.writeTextFile('F:/casse/Applications/parametres.json', 'pas du JSON')
+    fs.openDialogAnswers.push('F:/casse')
+    click('Choisir un autre dossier…')
+    await flushPromises()
+    expect(document.body.textContent).toContain('illisible')
+    expect(library.dataRoot).toBe('F:/partage')
     wrapper.unmount()
   })
 

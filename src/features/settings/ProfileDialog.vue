@@ -116,7 +116,7 @@ onUnmounted(() => {
 
 async function refresh(): Promise<void> {
   try {
-    saved.value = await listProfiles()
+    saved.value = await listProfiles(library.dataRoot)
   } catch (error) {
     report(error instanceof Error ? error.message : String(error), true)
   }
@@ -174,7 +174,7 @@ async function saveNamed(): Promise<void> {
   const profile = valid()
   if (!profile) return
   try {
-    const path = await saveProfile(profile)
+    const path = await saveProfile(library.dataRoot, profile)
     await refresh()
     report(`Profil « ${profile.name} » enregistré : ${path}`)
   } catch (error) {
@@ -206,7 +206,7 @@ async function remove(entry: SavedProfile): Promise<void> {
     danger: true
   })
   if (!confirmed) return
-  await deleteProfile(entry.path)
+  await deleteProfile(library.dataRoot, entry.profile.name)
   await refresh()
 }
 </script>
@@ -228,7 +228,7 @@ async function remove(entry: SavedProfile): Promise<void> {
         <div class="profile-list" role="radiogroup" aria-label="Profils de style">
           <label
             v-for="entry in saved"
-            :key="entry.path"
+            :key="entry.profile.name"
             class="profile-row"
             :class="{ selected: entry === shownEntry }"
           >

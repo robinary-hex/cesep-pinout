@@ -3,12 +3,11 @@ import { DEFAULT_SETTINGS, parseSettings, serializeSettings } from '@/domain'
 import { setBridge } from './bridge'
 import {
   loadSettings,
-  portableDir,
+  readLegacySettings,
   readSharedSettings,
   relocateSharedSettings,
-  resolveLibraryDir,
-  resolveSettingsDir,
-  saveSettings
+  saveSettings,
+  sharedSettingsPath
 } from './settings'
 import { FakeFs } from './testing/fakeFs'
 
@@ -16,49 +15,22 @@ let fs: FakeFs
 
 beforeEach(() => {
   fs = new FakeFs()
+  fs.presetDataDir = null
   setBridge(fs)
 })
 
-describe('dossier de la bibliothèque', () => {
-  it('va par défaut dans OneDrive quand la machine en a un, sinon dans userData', async () => {
-    expect(await resolveLibraryDir(DEFAULT_SETTINGS)).toBe('C:/fake/Pinout/library')
-    fs.oneDrive = 'D:/Cesep/OneDrive - CESEP'
-    expect(await resolveLibraryDir(DEFAULT_SETTINGS)).toBe(
-      'D:/Cesep/OneDrive - CESEP/(Cours)/Robotique/(Ressources)/Pinout/library'
-    )
-  })
-
-  it('résout un dossier enregistré relativement à OneDrive sur la racine de la machine', async () => {
-    fs.oneDrive = 'E:/Autre/OneDrive - CESEP'
-    const settings = { ...DEFAULT_SETTINGS, libraryDir: '${OneDrive}/Pinout/lib' }
-    expect(await resolveLibraryDir(settings)).toBe('E:/Autre/OneDrive - CESEP/Pinout/lib')
-    expect(await resolveLibraryDir({ ...DEFAULT_SETTINGS, libraryDir: 'F:/ailleurs' })).toBe(
-      'F:/ailleurs'
-    )
-  })
-
-  it('enregistre un dossier choisi dans OneDrive sous forme relative', () => {
-    expect(portableDir('D:/Cesep/OneDrive - CESEP/Pinout/lib', 'D:/Cesep/OneDrive - CESEP')).toBe(
-      '${OneDrive}/Pinout/lib'
-    )
-    expect(portableDir('D:/Cesep/OneDrive - CESEP', 'D:/Cesep/OneDrive - CESEP/')).toBe(
-      '${OneDrive}'
-    )
-    expect(portableDir('F:/ailleurs', 'D:/Cesep/OneDrive - CESEP')).toBe('F:/ailleurs')
-    expect(portableDir('F:/ailleurs', null)).toBe('F:/ailleurs')
-  })
-})
+const LOCAL = 'C:/fake/Pinout/settings.json'
+const SHARED = 'D:/Pinout/Applications/parametres.json'
+const mine = {
+  ...DEFAULT_SETTINGS,
+  theme: 'light' as const,
+  recentFiles: ['C:/Docs/a.pinout']
+}
+const settled = { ...mine, dataDir: 'D:/Pinout' }
 
 describe('paramètres locaux et partagés', () => {
-  const LOCAL = 'C:/fake/Pinout/settings.json'
-  const SHARED = 'D:/OneDrive/(Cours)/Robotique/(Ressources)/Pinout/settings.json'
-  const mine = {
-    ...DEFAULT_SETTINGS,
-    theme: 'light' as const,
-    recentFiles: ['C:/Docs/a.pinout']
-  }
-
-  it('sans OneDrive, tout reste dans le fichier local', async () => {
+  it('tant que le dossier de Pinout n’est pas choisi, tout reste dans le fichier local', async () => {
+    expect(await sharedSettingsPath('')).toBeNull()
     await saveSettings(mine)
     expect([...fs.texts.keys()]).toEqual([LOCAL])
     const loaded = await loadSettings()
@@ -66,112 +38,145 @@ describe('paramètres locaux et partagés', () => {
     expect(loaded.settings).toEqual(mine)
   })
 
-  it('initialise le fichier partagé avec les réglages de la machine, sans ses fichiers récents', async () => {
-    await saveSettings(mine)
-    fs.oneDrive = 'D:/OneDrive'
+  it('range le fichier partagé dans le dossier Applications du dossier de Pinout', async () => {
+    expect(await sharedSettingsPath('D:/Pinout')).toBe(SHARED)
+    fs.oneDrive = 'E:/OneDrive'
+    expect(await sharedSettingsPath('${OneDrive}/Pinout')).toBe(
+      'E:/OneDrive/Pinout/Applications/parametres.json'
+    )
+  })
+
+  it('initialise le fichier partagé avec les réglages de la machine, sans ce qui lui est propre', async () => {
+    await fs.writeTextFile(LOCAL, serializeSettings(settled))
     const loaded = await loadSettings()
     expect(loaded.sharedPath).toBe(SHARED)
-    expect(loaded.settings).toEqual(mine)
+    expect(loaded.settings).toEqual(settled)
+    // Le fichier partagé ne dit ni où il est rangé ni quels fichiers la machine a ouverts.
     const shared = parseSettings(await fs.readTextFile(SHARED))
     expect(shared.theme).toBe('light')
     expect(shared.recentFiles).toEqual([])
+    expect(shared.dataDir).toBe('')
   })
 
-  it('prend les réglages partagés et garde les fichiers récents de la machine', async () => {
-    await saveSettings(mine)
-    fs.oneDrive = 'D:/OneDrive'
+  it('prend les réglages partagés et garde ce qui est propre à la machine', async () => {
+    await fs.writeTextFile(LOCAL, serializeSettings(settled))
     const elsewhere = {
       ...DEFAULT_SETTINGS,
       theme: 'dark' as const,
-      defaultProfile: { ...DEFAULT_SETTINGS.defaultProfile, name: 'Cours', wireWidth: 0.2 },
-      recentFiles: []
+      defaultProfile: { ...DEFAULT_SETTINGS.defaultProfile, name: 'Cours', wireWidth: 0.2 }
     }
     await fs.writeTextFile(SHARED, serializeSettings(elsewhere))
     const loaded = await loadSettings()
     expect(loaded.settings.theme).toBe('dark')
     expect(loaded.settings.defaultProfile.name).toBe('Cours')
     expect(loaded.settings.recentFiles).toEqual(['C:/Docs/a.pinout'])
-    expect((await readSharedSettings(''))?.defaultProfile.wireWidth).toBe(0.2)
+    expect(loaded.settings.dataDir).toBe('D:/Pinout')
+    expect((await readSharedSettings('D:/Pinout'))?.defaultProfile.wireWidth).toBe(0.2)
   })
 
   it('ne réécrit pas le fichier partagé quand seuls les fichiers récents changent', async () => {
-    fs.oneDrive = 'D:/OneDrive'
-    await saveSettings(mine)
+    await saveSettings(settled)
     const write = vi.spyOn(fs, 'writeTextFile')
-    await saveSettings({ ...mine, recentFiles: ['C:/Docs/b.pinout', 'C:/Docs/a.pinout'] })
+    await saveSettings({ ...settled, recentFiles: ['C:/Docs/b.pinout', 'C:/Docs/a.pinout'] })
     expect(write.mock.calls.map(([path]) => path)).toEqual([LOCAL])
-    await saveSettings({ ...mine, theme: 'dark' })
+    await saveSettings({ ...settled, theme: 'dark' })
     expect(write.mock.calls.map(([path]) => path)).toEqual([LOCAL, LOCAL, SHARED])
   })
 
   it('garde les réglages de la machine quand le fichier partagé est illisible', async () => {
-    await saveSettings(mine)
-    fs.oneDrive = 'D:/OneDrive'
+    await fs.writeTextFile(LOCAL, serializeSettings(settled))
     await fs.writeTextFile(SHARED, '{ "schemaVersion": ')
     const loaded = await loadSettings()
-    expect(loaded.settings).toEqual(mine)
+    expect(loaded.settings).toEqual(settled)
     expect(loaded.problem).toContain('partagés illisibles')
-    expect(await readSharedSettings('')).toBeNull()
+    expect(await readSharedSettings('D:/Pinout')).toBeNull()
+  })
+
+  it('n’écrit rien au lancement tant que le dossier reste à choisir', async () => {
+    const loaded = await loadSettings()
+    expect(loaded.settings).toEqual(DEFAULT_SETTINGS)
+    expect(loaded.sharedPath).toBeNull()
+    expect(fs.texts.size).toBe(0)
   })
 })
 
-describe('dossier du fichier de paramètres partagé', () => {
-  const LOCAL = 'C:/fake/Pinout/settings.json'
-  const ELSEWHERE = 'F:/partage/settings.json'
-  const mine = {
-    ...DEFAULT_SETTINGS,
-    theme: 'light' as const,
-    recentFiles: ['C:/Docs/a.pinout']
-  }
-
-  it('est celui de OneDrive par défaut, ou un dossier noté relativement à OneDrive', async () => {
-    expect(await resolveSettingsDir('')).toBeNull()
-    expect(await resolveSettingsDir('${OneDrive}/Commun')).toBeNull()
-    expect(await resolveSettingsDir('F:/partage')).toBe('F:/partage')
-    fs.oneDrive = 'D:/OneDrive'
-    expect(await resolveSettingsDir('')).toBe('D:/OneDrive/(Cours)/Robotique/(Ressources)/Pinout')
-    expect(await resolveSettingsDir('${OneDrive}/Commun')).toBe('D:/OneDrive/Commun')
-  })
-
-  it('suit le dossier choisi sur cette machine, même sans OneDrive', async () => {
-    await saveSettings({ ...mine, settingsDir: 'F:/partage' })
-    // Le fichier partagé ne dit ni où il est rangé ni quels fichiers la machine a ouverts.
-    const shared = parseSettings(await fs.readTextFile(ELSEWHERE))
-    expect(shared.theme).toBe('light')
-    expect(shared.settingsDir).toBe('')
-    expect(shared.recentFiles).toEqual([])
-    const loaded = await loadSettings()
-    expect(loaded.sharedPath).toBe(ELSEWHERE)
-    expect(loaded.settings).toEqual({ ...mine, settingsDir: 'F:/partage' })
-  })
-
-  it('déplacé dans un dossier vide, y écrit les réglages courants', async () => {
-    const moved = await relocateSharedSettings(mine, 'F:/partage')
+describe('changement de dossier de Pinout', () => {
+  it('dans un dossier neuf, y écrit les réglages courants', async () => {
+    const moved = await relocateSharedSettings(mine, 'D:/Pinout')
     expect(moved.adopted).toBe(false)
-    expect(moved.sharedPath).toBe(ELSEWHERE)
-    expect(moved.settings).toEqual({ ...mine, settingsDir: 'F:/partage' })
-    expect(parseSettings(await fs.readTextFile(ELSEWHERE)).theme).toBe('light')
-    expect(parseSettings(await fs.readTextFile(LOCAL)).settingsDir).toBe('F:/partage')
+    expect(moved.sharedPath).toBe(SHARED)
+    expect(moved.settings).toEqual(settled)
+    expect(parseSettings(await fs.readTextFile(SHARED)).theme).toBe('light')
+    expect(parseSettings(await fs.readTextFile(LOCAL)).dataDir).toBe('D:/Pinout')
   })
 
-  it('déplacé dans un dossier qui a déjà des paramètres, les reprend', async () => {
-    await fs.writeTextFile(
-      ELSEWHERE,
-      serializeSettings({ ...DEFAULT_SETTINGS, autosaveSeconds: 300 })
-    )
-    const moved = await relocateSharedSettings(mine, 'F:/partage')
+  it('dans un dossier qui a déjà ses paramètres, les reprend', async () => {
+    await fs.writeTextFile(SHARED, serializeSettings({ ...DEFAULT_SETTINGS, autosaveSeconds: 300 }))
+    const brought = { ...DEFAULT_SETTINGS, autosaveSeconds: 45 }
+    const moved = await relocateSharedSettings(mine, 'D:/Pinout', brought)
     expect(moved.adopted).toBe(true)
+    // Ceux du dossier l'emportent, même sur ce qu'on apportait.
     expect(moved.settings.autosaveSeconds).toBe(300)
     expect(moved.settings.theme).toBe(DEFAULT_SETTINGS.theme)
     // Ce qui est propre à la machine reste.
     expect(moved.settings.recentFiles).toEqual(['C:/Docs/a.pinout'])
-    expect(moved.settings.settingsDir).toBe('F:/partage')
+    expect(moved.settings.dataDir).toBe('D:/Pinout')
+  })
+
+  it('dans un dossier neuf, y met les paramètres apportés de l’ancienne organisation', async () => {
+    const brought = { ...DEFAULT_SETTINGS, autosaveSeconds: 45, theme: 'dark' as const }
+    const moved = await relocateSharedSettings(mine, 'D:/Pinout', brought)
+    expect(moved.adopted).toBe(false)
+    expect(moved.settings.autosaveSeconds).toBe(45)
+    expect(moved.settings.theme).toBe('dark')
+    expect(moved.settings.recentFiles).toEqual(['C:/Docs/a.pinout'])
+    expect(parseSettings(await fs.readTextFile(SHARED)).autosaveSeconds).toBe(45)
   })
 
   it('refuse un dossier dont le fichier est illisible, sans l’écraser', async () => {
-    await fs.writeTextFile(ELSEWHERE, '{ "schemaVersion": ')
-    await expect(relocateSharedSettings(mine, 'F:/partage')).rejects.toThrow(/illisible/)
-    expect(await fs.readTextFile(ELSEWHERE)).toBe('{ "schemaVersion": ')
+    await fs.writeTextFile(SHARED, '{ "schemaVersion": ')
+    await expect(relocateSharedSettings(mine, 'D:/Pinout')).rejects.toThrow(/illisible/)
+    expect(await fs.readTextFile(SHARED)).toBe('{ "schemaVersion": ')
     expect(fs.texts.has(LOCAL)).toBe(false)
+  })
+})
+
+describe('paramètres de l’ancienne organisation', () => {
+  const OLD_SHARED = 'D:/OneDrive/(Cours)/Robotique/(Ressources)/Pinout/settings.json'
+  /** Un fichier de paramètres d'avant : version 14, avec ses deux dossiers. */
+  const old = (patch: object): string =>
+    JSON.stringify({
+      ...DEFAULT_SETTINGS,
+      schemaVersion: 14,
+      dataDir: undefined,
+      libraryDir: '',
+      settingsDir: '',
+      ...patch
+    })
+
+  it('au lancement, sont lus sans que rien ne soit écrit ; leurs dossiers sont retenus', async () => {
+    await fs.writeTextFile(LOCAL, old({ libraryDir: 'F:/lib', theme: 'light' }))
+    const loaded = await loadSettings()
+    // Migrés : le dossier de Pinout reste à choisir.
+    expect(loaded.settings.dataDir).toBe('')
+    expect(loaded.settings.theme).toBe('light')
+    expect(loaded.sharedPath).toBeNull()
+    expect(loaded.legacy).toEqual({ libraryDir: 'F:/lib', settingsDir: '' })
+    // Le fichier d'origine n'a pas bougé : tant qu'on n'a pas choisi, on peut tout reprendre.
+    expect(JSON.parse(await fs.readTextFile(LOCAL))).toMatchObject({ schemaVersion: 14 })
+    expect(fs.texts.size).toBe(1)
+  })
+
+  it('se retrouvent dans l’ancien fichier partagé, s’il y en a un de lisible', async () => {
+    const defaults = { libraryDir: '', settingsDir: '' }
+    expect(await readLegacySettings(defaults)).toBeNull()
+    fs.oneDrive = 'D:/OneDrive'
+    expect(await readLegacySettings(defaults)).toBeNull()
+    await fs.writeTextFile(OLD_SHARED, old({ autosaveSeconds: 90 }))
+    const settings = await readLegacySettings(defaults)
+    expect(settings?.autosaveSeconds).toBe(90)
+    expect(settings?.dataDir).toBe('')
+    await fs.writeTextFile(OLD_SHARED, '{ "schemaVersion": ')
+    expect(await readLegacySettings(defaults)).toBeNull()
   })
 })
