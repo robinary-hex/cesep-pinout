@@ -94,7 +94,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   un croisement en milieu de segment ne connecte pas.
 - Touches de modification et gestes de souris : le même sens dans les trois éditeurs (décision du
   10 novembre 2026). Avant d'en ajouter un, vérifier qu'il ne contredit pas ce tableau, et le dire
-  de la même façon dans l'aide (`SELECTION` et `VIEW` de `src/app/ShortcutsHelp.vue`).
+  de la même façon dans l'aide (`SELECT`, `EDIT` et `VIEW` de `src/app/shortcuts.ts`).
   - Maj : ajoute à la sélection ou en retire (Maj+clic, Maj+lasso) ; pendant un tracé, le
     contraint ou le varie (carré ou cercle dans l'éditeur de composants, L inversé d'un fil ou
     d'un lien). Jamais autre chose.
@@ -128,7 +128,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     R / Maj+R rotation, T / Maj+T miroir, Suppr, Échap, flèches = déplacer d'une cellule,
     Ctrl+A / D / C / V, Ctrl+Z / Y, Ctrl+S, Ctrl+Maj+S, Ctrl+O, Ctrl+N, Ctrl+E export, F1 aide,
     Ctrl+Page haut/bas
-    (Maj pour premier/arrière-plan) = ordre des fils, 0 ajuster au contenu, 1 zoom 100 %,
+    (Maj pour premier/arrière-plan) = ordre des fils entre eux et des composants entre eux,
+    0 ajuster au contenu, 1 zoom 100 %,
     molette = zoom, Espace + glisser ou bouton du milieu = déplacer la vue, double-clic du bouton
     du milieu = ajuster au contenu, E étiquette texte (deux clics ou un glisser donnent deux coins
     opposés de la boîte ; deux clics au même point, la boîte par défaut),
@@ -439,6 +440,20 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   `src/ui/ContextMenu.vue` (menu contextuel, entrées décrites dans `contextMenu.ts`, listes
   dessinées par `MenuList.vue`) comptent aussi
   dans `openModals`. Échap ne ferme que la boîte du dessus (`modalStack`).
+- Aide (F1 ; `src/app/ShortcutsHelp.vue`, contenu dans `src/app/shortcuts.ts` ; décision du 11
+  novembre 2026) : un onglet par mode, au nom et dans l'ordre des boutons de mode (Composants,
+  Montage, Diagramme), ouverte sur le mode affiché (`label` du `ModeAdapter`). Les raccourcis
+  sont rangés par thèmes (`ShortcutCategory`) : « Outils » et les thèmes propres à l'éditeur
+  d'abord, puis « Ordre », « Sélectionner », « Modifier », « Vue », « Fichiers et onglets »,
+  les mêmes dans les trois ; un cadre par thème, sur trois colonnes (`ModalDialog` `large`).
+  Une ligne = le geste, ce qu'il fait, le pictogramme de l'action s'il a un bouton ou une
+  entrée de menu. Le geste se dessine : une touche par capuchon (`kbd`), un geste de souris
+  par pastille, avec la souris et son bouton enfoncé (`MOUSE_GESTURES`, `comboTokens` ; « / »
+  sépare deux façons de faire, « + » ce qu'on fait ensemble), l'endroit où il vaut en petit
+  (`where`). Ce qu'il fait tient en quelques mots (45 caractères au plus, un test le vérifie) ;
+  la variante avec Maj se dit sous le libellé (`withShift`), pas sur une autre ligne. Pas de
+  phrase d'explication : ce qui en demanderait une se redit plus court, ou n'est pas un
+  raccourci. En tête, à droite des onglets, le sens des trois touches de modification.
 - Menus contextuels (décision du 11 novembre 2026) : un clic droit partout où il y a un élément.
   Même ordre dans tous : titre, actions propres à l'élément, style, ordre d'empilement, puis
   Grouper / Dégrouper quand la sélection s'y prête (`groupItems`), Dupliquer / Copier /
@@ -544,10 +559,19 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Composants et fils, ordre d'empilement du montage : un composant se pose derrière les fils
   (décision du 11 novembre 2026 : `behindWires` vaut vrai à la pose), pour que les fils tracés
   sur lui restent visibles ; on le passe devant, ou derrière à nouveau, par la case « Derrière
-  les fils » du panneau, le menu contextuel ou Ctrl+Page haut / bas sur un composant sélectionné
-  (`setInstancesBehindWires`, `restackSelection`). Les composants des montages déjà enregistrés
-  gardent leur réglage. Même ordre à l'écran (`STACK` et `layers` de `SchematicCanvas.vue`) et à
-  l'export (`componentLayer` de `svg.ts`) ; les textes d'un composant suivent sa couche.
+  les fils » du panneau ou le menu contextuel (`setInstancesBehindWires`). Les composants des
+  montages déjà enregistrés gardent leur réglage.
+  Entre eux, les composants s'empilent dans l'ordre de la liste (`components` du montage : le
+  dernier posé est au-dessus de tous les autres) et se rangent à la main (décision du 11
+  novembre 2026) : sous-menu « Ordre » du clic droit, quatre boutons du panneau, Ctrl+Page haut
+  / bas (Maj : premier plan / arrière-plan). `reorderInstances` ne range un composant que parmi
+  ceux de sa couche, derrière ou devant les fils : les fils restent où ils sont.
+  `restackSelection` (le clavier) range d'un même geste les fils sélectionnés entre eux (leur
+  `stack`) et les composants entre eux ; `restackedIds` du domaine fait le calcul pour les
+  fils, les composants et les nœuds du diagramme. Même ordre à l'écran (`STACK` et `layers` de
+  `SchematicCanvas.vue`) et à l'export (`componentLayer` de `svg.ts`) ; les textes d'un
+  composant se dessinent juste après lui (`textsByInstance`), pas au-dessus de toute sa
+  couche : un composant posé sur un autre cache aussi ses textes.
 - Croisements : `src/domain/crossings.ts` (croisements stricts entre deux segments de directions
   différentes, fil du dessus redessiné dans sa direction par `crossingPieceEnds`, exceptions
   Alt+clic élaguées à chaque commande ; deux diagonales peuvent se croiser au milieu d'une

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { createEmptyComponent, type ComponentDefinition, type Primitive } from './component'
 import projectText from './fixtures/v1/project.json?raw'
 import projectV10 from './fixtures/v10/project.json?raw'
+import { DEFAULT_PROFILE } from './profile'
+import { createEmptyProject, type ComponentInstance, type Project } from './project'
 import { parseProject } from './serialize'
 import { DEFAULT_EXPORT } from './settings'
 import { buildProjectSvg, escapeXml, primitiveSvg } from './svg'
@@ -329,5 +332,67 @@ describe('export SVG', () => {
     // Le trait s'arrête à la base de la pointe (0,7 cellule avant le bout) pour ne pas la couvrir.
     expect(arrow).toContain('x2="1.3"')
     expect(arrow).toContain('<polygon points="2,1 1.3,1.28 1.3,0.72" fill="#000000"/>')
+  })
+})
+
+/** Composant vide qui ne porte qu'un texte. */
+function captioned(id: string, text: string): ComponentDefinition {
+  const caption: Primitive = {
+    kind: 'text',
+    x: 0,
+    y: 0,
+    w: 8,
+    h: 4,
+    text,
+    size: 0.5,
+    anchor: 'start',
+    color: '#000000',
+    variable: false,
+    defaultValue: '',
+    unit: '',
+    bold: false,
+    followsRotation: false,
+    italic: false,
+    underline: false,
+    strike: false,
+    vertical: false
+  }
+  return { ...createEmptyComponent(id, id), visual: { kind: 'drawing', primitives: [caption] } }
+}
+
+describe('export : ordre des composants', () => {
+  it('dessine chaque composant puis ses textes, le dernier de la liste au-dessus', () => {
+    const instance = (id: string, defId: string): ComponentInstance => ({
+      id,
+      defId,
+      x: 0,
+      y: 0,
+      rotation: 0,
+      mirror: false,
+      label: '',
+      fields: {},
+      behindWires: true
+    })
+    const stacked: Project = {
+      ...createEmptyProject('Essai', DEFAULT_PROFILE),
+      components: [instance('c1', 'dessous'), instance('c2', 'dessus')],
+      embeddedDefs: {
+        dessous: captioned('dessous', 'DESSOUS'),
+        dessus: captioned('dessus', 'DESSUS')
+      }
+    }
+    const svg = buildProjectSvg(stacked, DEFAULT_EXPORT)?.svg ?? ''
+    // Le texte du premier sort avant le dessin du second : posé dessus, le second le cache.
+    const lower = svg.indexOf('>DESSOUS</tspan>')
+    const upper = svg.indexOf('>DESSUS</tspan>')
+    expect(lower).toBeGreaterThan(-1)
+    expect(upper).toBeGreaterThan(lower)
+    expect(svg.lastIndexOf('<g transform=', upper)).toBeGreaterThan(lower)
+    // L'ordre de la liste est celui du dessin.
+    const swapped =
+      buildProjectSvg({ ...stacked, components: [...stacked.components].reverse() }, DEFAULT_EXPORT)
+        ?.svg ?? ''
+    expect(swapped.indexOf('>DESSUS</tspan>')).toBeGreaterThan(-1)
+    expect(swapped.indexOf('>DESSUS</tspan>')).toBeLessThan(swapped.indexOf('>DESSOUS</tspan>'))
   })
 })

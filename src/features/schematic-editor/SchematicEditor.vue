@@ -341,11 +341,29 @@ function openMenu(request: MenuRequest): void {
       item(
         'Derrière les fils',
         () => store.setInstancesBehindWires(store.selection, !instance.behindWires),
-        {
-          hint: instance.behindWires ? 'Ctrl+Page haut' : 'Ctrl+Page bas',
-          icon: 'arrow-down-line',
-          checked: instance.behindWires
-        }
+        { checked: instance.behindWires }
+      ),
+      submenu(
+        'Ordre',
+        [
+          item('Avancer', () => store.reorderInstances('up'), {
+            hint: 'Ctrl+Page haut',
+            icon: 'arrow-up'
+          }),
+          item('Reculer', () => store.reorderInstances('down'), {
+            hint: 'Ctrl+Page bas',
+            icon: 'arrow-down'
+          }),
+          item('Premier plan', () => store.reorderInstances('top'), {
+            hint: 'Ctrl+Maj+Page haut',
+            icon: 'arrow-up-line'
+          }),
+          item('Arrière-plan', () => store.reorderInstances('bottom'), {
+            hint: 'Ctrl+Maj+Page bas',
+            icon: 'arrow-down-line'
+          })
+        ],
+        { icon: 'arrow-up-line' }
       ),
       SEPARATOR,
       ...commonItems()

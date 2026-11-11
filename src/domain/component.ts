@@ -682,6 +682,44 @@ export function primitiveBounds(primitive: Primitive): Bounds {
 /** Déplacement d'un élément dans l'ordre d'empilement. */
 export type StackMove = 'up' | 'down' | 'top' | 'bottom'
 
+/**
+ * Ordre d'empilement (le dernier est dessiné au-dessus) après avoir avancé ou reculé d'un rang les
+ * éléments choisis, ou les avoir mis tout devant ou tout derrière. Plusieurs éléments choisis
+ * gardent leur ordre entre eux.
+ */
+export function restackedIds(
+  order: readonly string[],
+  chosen: ReadonlySet<string>,
+  move: StackMove
+): string[] {
+  const next = [...order]
+  if (move === 'top' || move === 'bottom') {
+    const picked = next.filter((id) => chosen.has(id))
+    const others = next.filter((id) => !chosen.has(id))
+    return move === 'top' ? [...others, ...picked] : [...picked, ...others]
+  }
+  if (move === 'up') {
+    for (let i = next.length - 2; i >= 0; i--) {
+      const here = next[i]
+      const above = next[i + 1]
+      if (here !== undefined && above !== undefined && chosen.has(here) && !chosen.has(above)) {
+        next[i] = above
+        next[i + 1] = here
+      }
+    }
+    return next
+  }
+  for (let i = 1; i < next.length; i++) {
+    const here = next[i]
+    const below = next[i - 1]
+    if (here !== undefined && below !== undefined && chosen.has(here) && !chosen.has(below)) {
+      next[i] = below
+      next[i - 1] = here
+    }
+  }
+  return next
+}
+
 /** Même liste avec l'élément `index` avancé, reculé, au premier ou à l'arrière-plan ; nouvel index. */
 export function reorderItem<T>(
   list: readonly T[],

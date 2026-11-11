@@ -271,3 +271,39 @@ describe('montage : variante d’un composant posé', () => {
     wrapper.unmount()
   })
 })
+
+describe('montage : ordre des composants', () => {
+  it('se change par le clic droit, le panneau ou Ctrl+Page', async () => {
+    const store = useSchematicStore()
+    store.startPlacing(createEmptyComponent('led', 'LED'))
+    const a = store.placeAt(2, 3)
+    const b = store.placeAt(12, 3)
+    store.stopPlacing()
+    store.clearSelection()
+    if (!a || !b) throw new Error('composants attendus')
+    const order = (): string[] => store.doc.components.map((instance) => instance.id)
+    const wrapper = mount(SchematicEditor, { attachTo: document.body })
+    // Le premier posé est dessiné le premier, donc dessous.
+    rightClick(wrapper.get('.instance .hit').element, ...at(store, 4, 3.5))
+    await flushPromises()
+    expect(menuLabels()).toContain('Ordre')
+    menuEntry('Ordre').click()
+    await flushPromises()
+    expect(subMenuLabels()).toEqual(['Avancer', 'Reculer', 'Premier plan', 'Arrière-plan'])
+    menuEntry('Premier plan').click()
+    await flushPromises()
+    expect(order()).toEqual([b, a])
+    // Dans le panneau : les mêmes quatre boutons que pour un fil.
+    store.inspectorOpen = true
+    await flushPromises()
+    await wrapper.get('.inspector button[title^="Reculer parmi"]').trigger('click')
+    expect(order()).toEqual([a, b])
+    // Au clavier : Ctrl+Page haut avance, Ctrl+Page bas recule ; la couche ne change pas.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageUp', ctrlKey: true }))
+    expect(order()).toEqual([b, a])
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageDown', ctrlKey: true }))
+    expect(order()).toEqual([a, b])
+    expect(store.doc.components.every((instance) => instance.behindWires)).toBe(true)
+    wrapper.unmount()
+  })
+})

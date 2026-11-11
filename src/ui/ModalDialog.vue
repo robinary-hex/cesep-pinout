@@ -4,9 +4,10 @@ import { modalStack, openModals } from './modalState'
 
 // Boîte de dialogue modale : fond assombri, Échap ou clic hors de la boîte pour fermer.
 // Tant qu'elle est ouverte, les éditeurs ignorent leurs raccourcis (voir openModals). `wide` pour
-// une boîte à deux colonnes, `compact` pour une simple question.
+// une boîte à deux colonnes, `large` pour une planche à trois colonnes (l'aide), `compact` pour
+// une simple question.
 
-defineProps<{ title: string; wide?: boolean; compact?: boolean }>()
+defineProps<{ title: string; wide?: boolean; large?: boolean; compact?: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 const id = Symbol('boîte')
 
@@ -37,7 +38,7 @@ onUnmounted(() => {
   <div class="backdrop" @pointerdown.self="emit('close')">
     <div
       class="dialog"
-      :class="{ wide, compact }"
+      :class="{ wide, large, compact }"
       role="dialog"
       aria-modal="true"
       :aria-label="title"
@@ -78,6 +79,10 @@ onUnmounted(() => {
 
 .dialog.wide {
   width: min(960px, calc(100vw - 32px));
+}
+
+.dialog.large {
+  width: min(1240px, calc(100vw - 32px));
 }
 
 .dialog.compact {

@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
-import { createEmptyComponent, type ComponentDefinition } from '@/domain'
+import { createEmptyComponent, type ComponentDefinition, type Primitive } from '@/domain'
 import SchematicCanvas from './SchematicCanvas.vue'
 import { useSchematicStore } from './store'
 
@@ -506,5 +506,71 @@ describe('canevas du montage : sommets au Ctrl+clic, double-clic sur un fil', ()
     expect(capture).toHaveBeenCalledTimes(1)
     await fire(svg, 'pointerup', at(store, 6, 4))
     expect(store.doc.components[0]).toMatchObject({ x: 4, y: 3 })
+  })
+})
+
+/** Composant vide qui ne porte qu'un texte. */
+function captioned(id: string, text: string): ComponentDefinition {
+  const caption: Primitive = {
+    kind: 'text',
+    x: 0,
+    y: 0,
+    w: 8,
+    h: 4,
+    text,
+    size: 0.5,
+    anchor: 'start',
+    color: '#000000',
+    variable: false,
+    defaultValue: '',
+    unit: '',
+    bold: false,
+    followsRotation: false,
+    italic: false,
+    underline: false,
+    strike: false,
+    vertical: false
+  }
+  return { ...createEmptyComponent(id, id), visual: { kind: 'drawing', primitives: [caption] } }
+}
+
+describe('canevas du montage : ordre des composants', () => {
+  it('dessine les textes d’un composant avec lui, sous le composant posé dessus', () => {
+    const store = useSchematicStore()
+    store.startPlacing(captioned('dessous', 'DESSOUS'))
+    store.placeAt(2, 3)
+    store.startPlacing(captioned('dessus', 'DESSUS'))
+    store.placeAt(3, 3)
+    store.stopPlacing()
+    const wrapper = mount(SchematicCanvas)
+    const drawn = [...(wrapper.get('.instance').element.parentElement?.children ?? [])]
+      .map((child) => child.getAttribute('class') ?? '')
+      .filter((name) => name.startsWith('instance'))
+    expect(drawn).toEqual(['instance', 'instance-texts', 'instance', 'instance-texts'])
+    expect(wrapper.findAll('.instance-texts').map((group) => group.text())).toEqual([
+      'DESSOUS',
+      'DESSUS'
+    ])
+    wrapper.unmount()
+  })
+
+  it('dessine les composants dans l’ordre de la liste, le dernier posé au-dessus', async () => {
+    const store = useSchematicStore()
+    store.startPlacing(resistor())
+    const first = store.placeAt(2, 3)
+    const second = store.placeAt(12, 3)
+    store.stopPlacing()
+    if (!first || !second) throw new Error('composants attendus')
+    const wrapper = mount(SchematicCanvas)
+    const drawn = (): (string | undefined)[] =>
+      wrapper.findAll('.instance').map((item) => item.attributes('transform'))
+    const [below, above] = drawn()
+    expect(below).not.toBe(above)
+    // Le premier posé passe devant : il est dessiné après l'autre.
+    store.selection = [first]
+    store.reorderInstances('top')
+    await nextTick()
+    expect(drawn()).toEqual([above, below])
+    wrapper.unmount()
   })
 })

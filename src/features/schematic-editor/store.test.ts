@@ -828,7 +828,7 @@ describe('onglets de montage', () => {
 })
 
 describe('montage : composants derrière les fils, fils à 45°', () => {
-  it('pose les composants derrière les fils ; commande ou Ctrl+Page les passe devant ou derrière', () => {
+  it('pose les composants derrière les fils ; une commande les passe devant ou derrière', () => {
     const store = useSchematicStore()
     store.startPlacing(resistor())
     const first = store.placeAt(2, 3)
@@ -844,15 +844,9 @@ describe('montage : composants derrière les fils, fils à 45°', () => {
     store.setInstancesBehindWires([first], false)
     store.undo()
     expect(store.doc.components[0]?.behindWires).toBe(true)
-    // Ctrl+Page haut sur la sélection, puis Ctrl+Page bas.
-    store.selection = [second]
-    store.restackSelection('up')
-    expect(store.doc.components.map((instance) => instance.behindWires)).toEqual([true, false])
-    store.restackSelection('bottom')
-    expect(store.doc.components[1]?.behindWires).toBe(true)
-    expect(store.undoLabel).toBe('Passer derrière les fils')
     // Le réglage s'enregistre avec le montage.
-    store.restackSelection('top')
+    store.setInstancesBehindWires([second], false)
+    expect(store.undoLabel).toBe('Passer devant les fils')
     const reread = parseProject(serializeProject(store.doc))
     expect(reread.components.map((instance) => instance.behindWires)).toEqual([true, false])
   })
@@ -1299,5 +1293,80 @@ describe('montage : aperçu d’un composant de la bibliothèque', () => {
     await library.refresh()
     expect(store.newerLibraryDefinition('resistor')).not.toBeNull()
     setBridge(null)
+  })
+})
+
+describe('montage : ordre des composants entre eux', () => {
+  it('pose le dernier composant au-dessus ; Ctrl+Page le range parmi les autres', () => {
+    const store = useSchematicStore()
+    store.startPlacing(resistor())
+    const a = store.placeAt(0, 0)
+    const b = store.placeAt(1, 0)
+    const c = store.placeAt(2, 0)
+    store.stopPlacing()
+    if (!a || !b || !c) throw new Error('composants attendus')
+    const order = (): string[] => store.doc.components.map((instance) => instance.id)
+    // Dans l'ordre de la pose : le dernier est dessiné au-dessus des autres.
+    expect(order()).toEqual([a, b, c])
+
+    store.selection = [a]
+    store.restackSelection('up')
+    expect(store.undoLabel).toBe('Ordre des composants')
+    expect(order()).toEqual([b, a, c])
+    store.restackSelection('top')
+    expect(order()).toEqual([b, c, a])
+    // Déjà tout devant : rien à faire, rien de plus à annuler.
+    store.restackSelection('top')
+    store.restackSelection('bottom')
+    expect(order()).toEqual([a, b, c])
+    store.selection = [c]
+    store.reorderInstances('down')
+    expect(order()).toEqual([a, c, b])
+    store.undo()
+    expect(order()).toEqual([a, b, c])
+    // Ranger les composants ne touche pas à leur couche : ils restent derrière les fils.
+    expect(store.doc.components.every((instance) => instance.behindWires)).toBe(true)
+  })
+
+  it('ne range un composant que parmi ceux de sa couche, devant ou derrière les fils', () => {
+    const store = useSchematicStore()
+    store.startPlacing(resistor())
+    const a = store.placeAt(0, 0)
+    const b = store.placeAt(1, 0)
+    const c = store.placeAt(2, 0)
+    store.stopPlacing()
+    if (!a || !b || !c) throw new Error('composants attendus')
+    // b passe devant les fils : a et c restent derrière, et se rangent entre eux.
+    store.setInstancesBehindWires([b], false)
+    store.selection = [a]
+    store.reorderInstances('up')
+    expect(store.doc.components.map((instance) => instance.id)).toEqual([c, b, a])
+    // Seul devant les fils, b n'a personne à dépasser.
+    store.selection = [b]
+    store.reorderInstances('top')
+    expect(store.undoLabel).toBe('Ordre des composants')
+    expect(store.doc.components.map((instance) => instance.id)).toEqual([c, b, a])
+  })
+
+  it('avance les fils et les composants sélectionnés ensemble, chacun parmi les siens', () => {
+    const store = useSchematicStore()
+    store.startPlacing(resistor())
+    const a = store.placeAt(0, 0)
+    const b = store.placeAt(10, 0)
+    store.stopPlacing()
+    const first = store.addWire([
+      [0, 6],
+      [4, 6]
+    ])
+    const second = store.addWire([
+      [0, 8],
+      [4, 8]
+    ])
+    if (!a || !b || !first || !second) throw new Error('éléments attendus')
+    store.selection = [a]
+    store.selectedWires = [first]
+    store.restackSelection('top')
+    expect(store.doc.components.map((instance) => instance.id)).toEqual([b, a])
+    expect(store.sortedWires.map((wire) => wire.id)).toEqual([second, first])
   })
 })

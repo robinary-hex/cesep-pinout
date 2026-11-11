@@ -1,256 +1,151 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import Icon from '@/ui/Icon.vue'
 import ModalDialog from '@/ui/ModalDialog.vue'
+import { comboTokens, SHORTCUT_SECTIONS } from './shortcuts'
 
-// Aide : les raccourcis d'un éditeur à la fois, celui qu'on regarde d'abord ; des onglets mènent
-// aux autres.
+// Aide : les raccourcis d'un éditeur à la fois, celui qu'on regarde d'abord ; des onglets, dans
+// l'ordre et au nom des boutons de mode, mènent aux autres. Le contenu est dans shortcuts.ts ;
+// ici, on le dessine : thèmes en colonnes, une touche par capuchon, la souris en pictogramme.
 
-/** `initial` : titre de la section montrée à l'ouverture. */
+/** `initial` : titre de la section montrée à l'ouverture (le nom du mode affiché). */
 const props = defineProps<{ initial?: string }>()
 const emit = defineEmits<{ close: [] }>()
 
-/** Une ligne de l'aide : les touches ou le geste, puis ce qu'il fait. */
-type Row = [string, string]
-
-// Gestes communs aux trois éditeurs, dits partout de la même façon. Les touches de modification
-// gardent le même sens d'un éditeur à l'autre : Maj ajoute à la sélection ou contraint un tracé,
-// Alt copie, Ctrl saisit le point d'attache le plus proche de ce qu'on survole.
-const SELECTION: Row[] = [
-  [
-    'Clic, lasso dans le vide',
-    'Sélectionner ; glisser un élément sélectionné déplace toute la sélection'
-  ],
-  ['Maj+clic, Maj+lasso', 'Ajouter à la sélection, ou en retirer'],
-  ['Alt+glisser', 'Déposer une copie de la sélection'],
-  ['Flèches', 'Déplacer la sélection d’un pas de grille'],
-  ['Suppr', 'Supprimer la sélection'],
-  ['Ctrl+A / D', 'Tout sélectionner / dupliquer'],
-  [
-    'Ctrl+G / Ctrl+Maj+G',
-    'Grouper la sélection / défaire ses groupes (aussi par le clic droit) ; un groupe se sélectionne et se déplace d’un bloc'
-  ],
-  ['Ctrl+clic sur un élément groupé', 'Le sélectionner seul, sans son groupe'],
-  ['Ctrl+C / V', 'Copier / coller, aussi d’un onglet à l’autre'],
-  ['Ctrl+Z / Y', 'Annuler / rétablir'],
-  ['Échap', 'Annuler le geste en cours, puis la sélection, puis revenir à l’outil Sélection']
-]
-
-const VIEW: Row[] = [
-  ['Molette', 'Zoom autour du curseur'],
-  ['Espace + glisser, bouton du milieu', 'Déplacer la vue'],
-  ['Double-clic du bouton du milieu, 0', 'Ajuster la vue au contenu'],
-  ['1', 'Zoom 100 %']
-]
-
-const sections: { title: string; rows: Row[] }[] = [
-  {
-    title: 'Montage',
-    rows: [
-      ['V', 'Sélection ; arrête la pose ou le tracé'],
-      ['F', 'Tracer un fil : un clic par coude, l’axe dominant d’abord'],
-      ['Alt pendant le tracé', 'Tracer à 45° : une diagonale, puis un segment droit'],
-      ['Maj pendant le tracé', 'Inverser l’ordre : le L du fil, ou la diagonale à l’arrivée'],
-      ['Entrée / double-clic', 'Terminer le fil (finir sur une broche ou un fil le termine aussi)'],
-      ['Retour arrière', 'Retirer le dernier sommet du fil en cours'],
-      [
-        'Ctrl+glisser sur un composant',
-        'Tirer un fil de sa broche la plus proche (l’anneau vert) jusqu’au point de relâchement'
-      ],
-      ['E', 'Étiquette texte : deux clics ou un glisser pour les deux coins de sa boîte'],
-      ['R / Maj+R', 'Rotation horaire / antihoraire'],
-      ['T / Maj+T', 'Miroir horizontal / vertical'],
-      ...SELECTION,
-      ['Alt+clic sur un croisement', 'Inverser l’ordre des deux fils à cet endroit seulement'],
-      [
-        'Variante d’un composant',
-        'Dans la bibliothèque, une pastille par variante la pose ; une fois posé, clic droit ou panneau pour en changer, ses fils suivent'
-      ],
-      [
-        'Ctrl+clic sur un fil',
-        'Ajouter un sommet sur une partie droite, ou retirer le coin visé (un fil groupé est d’abord pris seul)'
-      ],
-      [
-        'Double-clic sur un fil',
-        'Démarrer à cet endroit un nouveau fil, raccordé par une jonction'
-      ],
-      [
-        'Ctrl+Page haut / bas',
-        'Avancer / reculer les fils (Maj : premier / arrière-plan) ; un composant passe devant / derrière les fils'
-      ],
-      [
-        'Double-clic',
-        'Valeur d’un composant, texte d’une étiquette, étiquette d’une extrémité libre'
-      ],
-      [
-        'Clic droit',
-        'Menu contextuel : composant, fil (sommet ou coupe à l’endroit du clic, net, croisement), étiquette ou vide'
-      ],
-      ...VIEW,
-      [
-        'I',
-        'Panneau de propriétés : l’ouvrir pour de bon ou le masquer ; un clic sur un élément le montre le temps de la sélection'
-      ],
-      ['Ctrl+N / O / S', 'Nouveau / ouvrir (dans un onglet) / enregistrer (Ctrl+Maj+S : sous…)'],
-      ['Ctrl+E', 'Exporter en PNG ou SVG'],
-      [
-        'Ctrl+Tab / Ctrl+Maj+Tab',
-        'Montage suivant / précédent ; sur un onglet, clic du milieu : le fermer, clic droit : enregistrer, fermer les autres'
-      ],
-      [
-        'Glisser un fichier',
-        'Dans la fenêtre : un montage ou un diagramme s’ouvre dans un onglet, un composant dans son éditeur'
-      ]
-    ]
-  },
-  {
-    title: 'Diagramme',
-    rows: [
-      [
-        'Bibliothèque',
-        'Clic sur une forme puis sur le diagramme, ou glisser-déposer ; le texte se tape aussitôt'
-      ],
-      ['V', 'Sélection ; arrête la pose ou le tracé'],
-      ['F', 'Tracer un lien : un clic par coude ; arriver sur un nœud le termine'],
-      ['Maj pendant le tracé', 'Inverser le L du lien'],
-      ['Entrée / double-clic', 'Terminer le lien ; sur un nœud sélectionné, taper son texte'],
-      ['Retour arrière', 'Retirer le dernier sommet du lien en cours'],
-      [
-        'Ctrl+glisser sur un nœud',
-        'Tirer un lien de son point d’accroche le plus proche (l’anneau vert) jusqu’au point de relâchement'
-      ],
-      [
-        'Départ et arrivée d’un lien',
-        'Toujours de face : le lien quitte une forme et y arrive à angle droit, avec un coude de plus s’il le faut (Maj : l’autre tracé) ; depuis une note, il est en pointillés'
-      ],
-      [
-        'Glisser le segment qui sort d’une forme',
-        'Son point d’attache glisse le long du côté, d’une accroche à l’autre'
-      ],
-      ['Ctrl+clic sur un lien', 'Ajouter un sommet sur une partie droite, ou retirer le coin visé'],
-      [
-        'Glisser l’étiquette d’un lien',
-        'Elle longe le trait, toujours à la même distance, et change de côté quand on le traverse'
-      ],
-      ['E', 'Texte libre : deux clics ou un glisser pour les deux coins de sa boîte'],
-      ['R', 'Tourner une barre de fourche d’un quart de tour'],
-      ...SELECTION,
-      ['Ctrl+Page haut / bas', 'Avancer / reculer les nœuds (Maj : premier / arrière-plan)'],
-      [
-        'Double-clic',
-        'Texte d’un nœud (Entrée valide, Maj+Entrée va à la ligne), étiquette d’un lien, texte libre'
-      ],
-      [
-        'Clic droit',
-        'Menu contextuel : nœud (forme, texte), lien (étiquette, sommets), texte, ou vide pour poser une forme'
-      ],
-      ...VIEW,
-      [
-        'I',
-        'Panneau de propriétés : l’ouvrir pour de bon ou le masquer ; un clic sur un élément le montre le temps de la sélection'
-      ],
-      ['Ctrl+N / O / S', 'Nouveau / ouvrir (dans un onglet) / enregistrer en .pinuml'],
-      ['Ctrl+E', 'Exporter en PNG ou SVG'],
-      [
-        'Ctrl+Tab / Ctrl+Maj+Tab',
-        'Diagramme suivant / précédent ; sur un onglet, clic du milieu : le fermer, clic droit : enregistrer, fermer les autres'
-      ]
-    ]
-  },
-  {
-    title: 'Éditeur de composants',
-    rows: [
-      ['V', 'Sélection'],
-      ['R / O / N', 'Rectangle / ellipse / point (un clic par point)'],
-      ['L / P', 'Ligne / polyligne'],
-      ['Maj pendant le tracé', 'Carré ou cercle plutôt que rectangle ou ellipse'],
-      ['Entrée / double-clic', 'Terminer la polyligne'],
-      ['Retour arrière', 'Retirer le dernier point de la polyligne en cours'],
-      ['E / B', 'Texte / broche (sur une intersection du composant)'],
-      [
-        'Bouton Image',
-        'Importer un PNG, posé comme une forme : 80 px du fichier par cellule, donc des broches à dessiner tous les 80 px'
-      ],
-      ['Ctrl+glisser sur une forme', 'Saisir sa poignée la plus proche'],
-      ['Ctrl (sans sélection)', 'Poignées de la boîte du composant : glisser un coin ou un côté'],
-      [
-        'Glisser une image PNG dans la fenêtre',
-        'L’ajouter au composant affiché, comme par le bouton Image de la barre d’outils'
-      ],
-      [
-        'Variantes',
-        'Le même composant dessiné autrement : le bouton de la barre en crée une par copie, la liste choisit celle qu’on modifie ; dans le panneau, le point devant un nom la choisit aussi, glisser une ligne change l’ordre'
-      ],
-      [
-        'B, puis glisser une zone',
-        'Une broche à chaque intersection libre de la zone, numérotées à la suite et rangées dans un groupe de broches à nommer'
-      ],
-      [
-        'Broches, dans le panneau',
-        '« + Groupe » crée un groupe nommé ; glisser une broche change son ordre ou son groupe, son numéro suit'
-      ],
-      ...SELECTION,
-      ['Ctrl+Page haut / bas', 'Avancer / reculer la forme (Maj : premier / arrière-plan)'],
-      [
-        'Clic hors de la feuille',
-        'Désélectionner ; avec un outil de dessin, le quitter et revenir à la sélection'
-      ],
-      ['Clic droit', 'Menu contextuel : forme, broche ou vide'],
-      [
-        'Clic droit dans la bibliothèque',
-        'Ouvrir, dupliquer, renommer, changer de catégorie ou supprimer un composant'
-      ],
-      ...VIEW,
-      [
-        'I',
-        'Panneau de propriétés : l’ouvrir pour de bon ou le masquer ; un clic sur un élément le montre le temps de la sélection'
-      ],
-      ['Ctrl+N / S', 'Nouveau / enregistrer dans la bibliothèque'],
-      [
-        'Ctrl+Tab / Ctrl+Maj+Tab',
-        'Composant suivant / précédent ; sur un onglet, clic du milieu : le fermer, clic droit : enregistrer, fermer les autres'
-      ]
-    ]
-  }
-]
-
 /** Section montrée : celle demandée à l'ouverture, sinon la première. */
 const current = ref(
-  sections.find((section) => section.title === props.initial)?.title ?? sections[0]?.title ?? ''
+  SHORTCUT_SECTIONS.find((section) => section.title === props.initial)?.title ??
+    SHORTCUT_SECTIONS[0]?.title ??
+    ''
 )
-const rows = computed(() => sections.find((section) => section.title === current.value)?.rows ?? [])
+const categories = computed(
+  () => SHORTCUT_SECTIONS.find((section) => section.title === current.value)?.categories ?? []
+)
+
+/** Le sens des touches de modification, le même dans les trois éditeurs. */
+const MODIFIERS: [string, string][] = [
+  ['Maj', 'ajoute, ou varie un tracé'],
+  ['Alt', 'copie'],
+  ['Ctrl', 'saisit le point le plus proche']
+]
 </script>
 
 <template>
-  <ModalDialog title="Raccourcis clavier" wide @close="emit('close')">
-    <nav class="tabs">
-      <button
-        v-for="section in sections"
-        :key="section.title"
-        type="button"
-        :class="{ active: section.title === current }"
-        @click="current = section.title"
-      >
-        {{ section.title }}
-      </button>
-    </nav>
-    <table>
-      <tbody>
-        <tr v-for="[keys, action] in rows" :key="keys">
-          <td>
-            <kbd>{{ keys }}</kbd>
-          </td>
-          <td>{{ action }}</td>
-        </tr>
-      </tbody>
-    </table>
+  <ModalDialog title="Raccourcis clavier" large @close="emit('close')">
+    <div class="top">
+      <nav class="tabs">
+        <button
+          v-for="section in SHORTCUT_SECTIONS"
+          :key="section.title"
+          type="button"
+          class="with-icon"
+          :class="{ active: section.title === current }"
+          @click="current = section.title"
+        >
+          <Icon :name="section.icon" :size="16" />
+          {{ section.title }}
+        </button>
+      </nav>
+      <ul class="modifiers">
+        <li v-for="[key, meaning] in MODIFIERS" :key="key">
+          <kbd>{{ key }}</kbd>
+          {{ meaning }}
+        </li>
+      </ul>
+    </div>
+
+    <div class="sheet">
+      <section v-for="category in categories" :key="category.title" class="category">
+        <h3>{{ category.title }}</h3>
+        <p v-if="category.hint" class="hint">{{ category.hint }}</p>
+        <div v-for="(row, index) in category.rows" :key="index" class="row">
+          <div class="keys">
+            <template v-for="(combo, rank) in row.keys" :key="combo">
+              <span v-if="rank > 0" class="joint">ou</span>
+              <span class="combo">
+                <template v-for="(token, place) in comboTokens(combo)" :key="place">
+                  <span v-if="place > 0" class="joint">+</span>
+                  <span v-if="token.mouse" class="mouse">
+                    <svg
+                      class="glyph"
+                      viewBox="0 0 20 20"
+                      width="16"
+                      height="16"
+                      aria-hidden="true"
+                    >
+                      <path class="shell" d="M5 7a5 5 0 0 1 10 0v6a5 5 0 0 1-10 0z" />
+                      <path
+                        v-if="token.mouse.button === 'left'"
+                        class="pressed"
+                        d="M10 2a5 5 0 0 0-5 5v2.5h5z"
+                      />
+                      <path
+                        v-if="token.mouse.button === 'right'"
+                        class="pressed"
+                        d="M10 2a5 5 0 0 1 5 5v2.5h-5z"
+                      />
+                      <path
+                        class="outline"
+                        d="M5 7a5 5 0 0 1 10 0v6a5 5 0 0 1-10 0z M5 9.5h10 M10 2v7.5"
+                      />
+                      <path
+                        v-if="token.mouse.button === 'middle' || token.mouse.button === 'wheel'"
+                        class="wheel"
+                        d="M8.5 4.6a1.5 1.5 0 0 1 3 0v2.4a1.5 1.5 0 0 1-3 0z"
+                      />
+                      <path
+                        v-if="token.mouse.drag"
+                        class="motion"
+                        d="M17 7.5l2.2 2.5-2.2 2.5 M3 7.5l-2.2 2.5 2.2 2.5"
+                      />
+                      <path
+                        v-if="token.mouse.button === 'wheel'"
+                        class="motion"
+                        d="M16.4 7.2l1.6-2 1.6 2 M16.4 12.8l1.6 2 1.6-2"
+                      />
+                      <path
+                        v-if="token.mouse.double"
+                        class="motion"
+                        d="M1.6 4.6l2 1.2 M4 1.2l1.2 2"
+                      />
+                    </svg>
+                    {{ token.text }}
+                  </span>
+                  <kbd v-else>{{ token.text }}</kbd>
+                </template>
+              </span>
+            </template>
+            <span v-if="row.where" class="where">{{ row.where }}</span>
+          </div>
+          <div class="does">
+            <span class="label">{{ row.label }}</span>
+            <span v-if="row.withShift" class="more">
+              <span class="joint">+</span>
+              <kbd>Maj</kbd>
+              {{ row.withShift }}
+            </span>
+            <span v-if="row.note" class="more">{{ row.note }}</span>
+          </div>
+          <Icon v-if="row.icon" :name="row.icon" :size="15" />
+        </div>
+      </section>
+    </div>
   </ModalDialog>
 </template>
 
 <style scoped>
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 14px;
+}
+
 .tabs {
   display: flex;
   gap: 4px;
-  margin-bottom: 12px;
 }
 
 .tabs button.active {
@@ -259,24 +154,161 @@ const rows = computed(() => sections.find((section) => section.title === current
   color: var(--accent);
 }
 
-table {
-  border-collapse: collapse;
-  width: 100%;
-  font-size: 13px;
+.modifiers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
-td {
-  padding: 3px 8px 3px 0;
-  vertical-align: top;
+/* Thèmes en colonnes : trois dans la boîte large, moins quand la fenêtre est étroite. */
+.sheet {
+  columns: 3 300px;
+  column-gap: 14px;
+}
+
+.category {
+  break-inside: avoid;
+  margin: 0 0 14px;
+  padding: 8px 10px 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.category h3 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.hint {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Une ligne : le geste à gauche, ce qu'il fait au milieu, le pictogramme de l'action au bout.
+   Le même partage dans tous les thèmes : les libellés s'alignent d'un cadre à l'autre. */
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 44%) minmax(0, 1fr) 16px;
+  column-gap: 10px;
+  align-items: start;
+  padding: 3px 0;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.row + .row {
   border-top: 1px solid var(--border-soft);
 }
 
-kbd {
+.keys {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 4px;
+}
+
+.combo {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   white-space: nowrap;
-  padding: 1px 6px;
+}
+
+.joint {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* Une touche : un capuchon, plus épais en bas. */
+kbd {
+  display: inline-block;
+  min-width: 22px;
+  padding: 0 6px;
   font-size: 12px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  line-height: 17px;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--text);
   background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+}
+
+/* Un geste de souris : une pastille, avec la souris et son bouton enfoncé. */
+.mouse {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 8px 0 3px;
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+  color: var(--text);
+  background: var(--accent-soft);
+  border-radius: 10px;
+}
+
+.glyph {
+  flex: none;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.glyph .shell {
+  fill: var(--surface);
+}
+
+.glyph .outline {
+  stroke: var(--text);
+  stroke-width: 1.3;
+}
+
+.glyph .pressed,
+.glyph .wheel {
+  fill: var(--accent);
+}
+
+.glyph .motion {
+  stroke: var(--accent);
+  stroke-width: 1.6;
+}
+
+.where {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Ce que fait le geste : son libellé, puis ses précisions en petit. */
+.does {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Pictogramme de l'action, celui de son bouton ou de son entrée de menu. */
+.row > .icon {
+  margin-top: 3px;
+  color: var(--text-muted);
 }
 </style>

@@ -13,6 +13,7 @@ import {
   nextVariantId,
   nextVariantName,
   previewDefinition,
+  restackedIds,
   sameComponentContent,
   variantDefinition,
   withPreviewVariant,
@@ -195,5 +196,20 @@ describe('variante de l’aperçu', () => {
     expect(sameComponentContent(def, withPreview)).toBe(true)
     expect(sameComponentContent(def, { ...withPreview, name: 'DEL' })).toBe(false)
     expect(parseComponentDefinition(serializeComponentDefinition(withPreview))).toEqual(withPreview)
+  })
+})
+
+describe('ordre d’empilement', () => {
+  it('avance, recule, met tout devant ou tout derrière les éléments choisis', () => {
+    const order = ['a', 'b', 'c', 'd']
+    expect(restackedIds(order, new Set(['a']), 'up')).toEqual(['b', 'a', 'c', 'd'])
+    expect(restackedIds(order, new Set(['d']), 'down')).toEqual(['a', 'b', 'd', 'c'])
+    expect(restackedIds(order, new Set(['a']), 'top')).toEqual(['b', 'c', 'd', 'a'])
+    expect(restackedIds(order, new Set(['c']), 'bottom')).toEqual(['c', 'a', 'b', 'd'])
+    // Plusieurs éléments gardent leur ordre entre eux ; au bout, rien ne bouge.
+    expect(restackedIds(order, new Set(['a', 'b']), 'up')).toEqual(['c', 'a', 'b', 'd'])
+    expect(restackedIds(order, new Set(['d']), 'up')).toEqual(order)
+    expect(restackedIds(order, new Set(['a', 'c']), 'top')).toEqual(['b', 'd', 'a', 'c'])
+    expect(order).toEqual(['a', 'b', 'c', 'd'])
   })
 })

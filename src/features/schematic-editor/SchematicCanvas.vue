@@ -365,7 +365,7 @@ const instanceTexts = computed(() =>
       const { primitive, anchor } = placement
       return {
         key: `${item.instance.id}:${index}`,
-        behind: item.instance.behindWires,
+        instanceId: item.instance.id,
         primitive,
         anchor,
         fill: stale ? 'var(--stale)' : screenColor(primitive.color),
@@ -386,16 +386,28 @@ const STACK = ['back', 'wires', 'front'] as const
 
 interface ComponentLayer {
   instances: PlacedInstance[]
-  texts: (typeof instanceTexts.value)[number][]
 }
 
-/** Composants et textes de composant de chaque couche, dans l'ordre du montage. */
+/** Composants de chaque couche, dans l'ordre du montage : le dernier est dessiné au-dessus. */
 const layers = computed<Record<(typeof STACK)[number], ComponentLayer>>(() => {
   const layer = (behind: boolean): ComponentLayer => ({
-    instances: store.placed.filter((item) => item.instance.behindWires === behind),
-    texts: instanceTexts.value.filter((entry) => entry.behind === behind)
+    instances: store.placed.filter((item) => item.instance.behindWires === behind)
   })
-  return { back: layer(true), wires: { instances: [], texts: [] }, front: layer(false) }
+  return { back: layer(true), wires: { instances: [] }, front: layer(false) }
+})
+
+/**
+ * Textes de chaque composant. Ils se dessinent juste après lui, pas au-dessus de toute la
+ * couche : un composant posé sur un autre cache aussi ses textes.
+ */
+const textsByInstance = computed(() => {
+  const byInstance = new Map<string, (typeof instanceTexts.value)[number][]>()
+  for (const entry of instanceTexts.value) {
+    const list = byInstance.get(entry.instanceId)
+    if (list) list.push(entry)
+    else byInstance.set(entry.instanceId, [entry])
+  }
+  return byInstance
 })
 
 // Étiquettes texte
@@ -1439,57 +1451,58 @@ const cursorClass = computed(() => {
             </template>
 
             <template v-else>
-              <g
-                v-for="item in layers[layer].instances"
-                :key="item.instance.id"
-                class="instance"
-                :transform="transformOf(item)"
-                @pointerdown="onInstanceDown(item.instance.id, $event)"
-                @dblclick="onInstanceDoubleClick(item.instance.id, $event)"
-                @contextmenu="onContextMenu($event, { kind: 'instance', id: item.instance.id })"
-              >
-                <ComponentGraphic
-                  :def="item.def"
-                  :cell-px="1"
-                  :stroke-base="profile.componentStroke"
-                  :fields="item.instance.fields"
-                  :ink="store.staleDefIds.has(item.def.id) ? 'var(--stale)' : null"
-                  skip-texts
-                />
-                <rect
-                  v-if="store.staleDefIds.has(item.def.id) && componentImages(item.def).length > 0"
-                  class="stale-frame"
-                  :width="item.def.size.widthCells"
-                  :height="item.def.size.heightCells"
-                />
-                <rect
-                  class="hit"
-                  :width="item.def.size.widthCells"
-                  :height="item.def.size.heightCells"
-                  fill="transparent"
-                />
-              </g>
-
-              <g v-if="layers[layer].texts.length > 0" class="instance-texts">
-                <text
-                  v-for="entry in layers[layer].texts"
-                  :key="entry.key"
-                  :transform="entry.transform"
-                  :font-size="entry.primitive.size"
-                  :text-anchor="entry.anchor"
-                  :fill="entry.fill"
-                  v-bind="textStyleAttrs(entry.primitive)"
+              <template v-for="item in layers[layer].instances" :key="item.instance.id">
+                <g
+                  class="instance"
+                  :transform="transformOf(item)"
+                  @pointerdown="onInstanceDown(item.instance.id, $event)"
+                  @dblclick="onInstanceDoubleClick(item.instance.id, $event)"
+                  @contextmenu="onContextMenu($event, { kind: 'instance', id: item.instance.id })"
                 >
-                  <tspan
-                    v-for="(line, l) in entry.layout.lines"
-                    :key="l"
-                    :x="entry.layout.x"
-                    :y="line.y"
+                  <ComponentGraphic
+                    :def="item.def"
+                    :cell-px="1"
+                    :stroke-base="profile.componentStroke"
+                    :fields="item.instance.fields"
+                    :ink="store.staleDefIds.has(item.def.id) ? 'var(--stale)' : null"
+                    skip-texts
+                  />
+                  <rect
+                    v-if="
+                      store.staleDefIds.has(item.def.id) && componentImages(item.def).length > 0
+                    "
+                    class="stale-frame"
+                    :width="item.def.size.widthCells"
+                    :height="item.def.size.heightCells"
+                  />
+                  <rect
+                    class="hit"
+                    :width="item.def.size.widthCells"
+                    :height="item.def.size.heightCells"
+                    fill="transparent"
+                  />
+                </g>
+                <g v-if="textsByInstance.has(item.instance.id)" class="instance-texts">
+                  <text
+                    v-for="entry in textsByInstance.get(item.instance.id)"
+                    :key="entry.key"
+                    :transform="entry.transform"
+                    :font-size="entry.primitive.size"
+                    :text-anchor="entry.anchor"
+                    :fill="entry.fill"
+                    v-bind="textStyleAttrs(entry.primitive)"
                   >
-                    {{ line.text }}
-                  </tspan>
-                </text>
-              </g>
+                    <tspan
+                      v-for="(line, l) in entry.layout.lines"
+                      :key="l"
+                      :x="entry.layout.x"
+                      :y="line.y"
+                    >
+                      {{ line.text }}
+                    </tspan>
+                  </text>
+                </g>
+              </template>
             </template>
           </template>
 

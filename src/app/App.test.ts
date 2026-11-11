@@ -105,6 +105,13 @@ describe('coque de l’application', () => {
     const active = document.body.querySelector('.tabs button.active')
     expect(active?.textContent?.trim()).toBe('Diagramme')
     expect(document.body.textContent).toContain('Tracer un lien')
+    // Les onglets de l'aide portent le nom des modes, dans l'ordre de leurs boutons.
+    const tabs = [...document.body.querySelectorAll('.tabs button')]
+    const names = tabs.map((tab) => tab.textContent?.trim())
+    expect(names).toEqual(['Composants', 'Montage', 'Diagramme'])
+    expect(wrapper.findAll('.modes button').map((button) => button.attributes('title'))).toEqual(
+      names
+    )
     wrapper.unmount()
   })
 

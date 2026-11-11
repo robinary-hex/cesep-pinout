@@ -266,8 +266,9 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
   const labelParts: string[] = []
   const labelSize = profile.labelFont.size / profile.cellPx
   const componentLayer = (behind: boolean): string[] => {
+    // Chaque composant puis ses textes, dans l'ordre du montage : le dernier est au-dessus, et
+    // un composant posé sur un autre cache aussi ses textes.
     const instanceParts: string[] = []
-    const componentTextParts: string[] = []
     for (const instance of project.components) {
       const def = instanceDefinition(project, instance)
       if (!def || instance.behindWires !== behind) continue
@@ -288,7 +289,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
             (line) => `<tspan ${attrs({ x: layout.x, y: line.y })}>${escapeXml(line.text)}</tspan>`
           )
           .join('')
-        componentTextParts.push(
+        instanceParts.push(
           `<text ${attrs({ 'font-size': primitive.size, 'text-anchor': placement.anchor, fill: primitive.color, ...textStyleAttrs(primitive), transform: textPlacementTransform(placement) })}>${spans}</text>`
         )
       }
@@ -303,9 +304,6 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
     const layer: string[] = []
     if (instanceParts.length > 0 || !behind) {
       layer.push(`<g class="components${suffix}">${instanceParts.join('')}</g>`)
-    }
-    if (componentTextParts.length > 0) {
-      layer.push(`<g class="component-texts${suffix}">${componentTextParts.join('')}</g>`)
     }
     return layer
   }

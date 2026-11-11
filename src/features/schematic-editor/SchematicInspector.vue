@@ -450,11 +450,45 @@ function setLabelVertical(event: Event): void {
         </div>
         <label
           class="check"
-          title="Le composant se dessine sous les fils, qui restent visibles sur son image (Ctrl+Page bas ; Ctrl+Page haut le ramène devant)"
+          title="Le composant se dessine sous les fils, qui restent visibles sur lui"
         >
           <input type="checkbox" :checked="single.instance.behindWires" @change="setBehindWires" />
           <span>Derrière les fils</span>
         </label>
+        <div class="row">
+          <button
+            type="button"
+            class="icon-only"
+            title="Reculer parmi les composants (Ctrl+Page bas)"
+            @click="store.reorderInstances('down')"
+          >
+            <Icon name="arrow-down" />
+          </button>
+          <button
+            type="button"
+            class="icon-only"
+            title="Avancer parmi les composants (Ctrl+Page haut)"
+            @click="store.reorderInstances('up')"
+          >
+            <Icon name="arrow-up" />
+          </button>
+          <button
+            type="button"
+            class="icon-only"
+            title="Derrière tous les composants (Ctrl+Maj+Page bas)"
+            @click="store.reorderInstances('bottom')"
+          >
+            <Icon name="arrow-down-line" />
+          </button>
+          <button
+            type="button"
+            class="icon-only"
+            title="Devant tous les composants (Ctrl+Maj+Page haut)"
+            @click="store.reorderInstances('top')"
+          >
+            <Icon name="arrow-up-line" />
+          </button>
+        </div>
         <div class="row">
           <button
             type="button"

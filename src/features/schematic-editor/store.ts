@@ -29,6 +29,7 @@ import {
   pruneCrossingOverrides,
   regroupedCopies,
   removeVertex,
+  restackedIds,
   rotatedInstance,
   sameProfile,
   simplifyPoints,
@@ -1041,39 +1042,11 @@ export const useSchematicStore = defineStore('schematic', () => {
   function reorderWires(move: StackMove): void {
     const ids = new Set(selectedWires.value)
     if (ids.size === 0) return
-    const order = sortedWires.value.map((wire) => wire.id)
-    if (move === 'top' || move === 'bottom') {
-      const chosen = order.filter((id) => ids.has(id))
-      const others = order.filter((id) => !ids.has(id))
-      order.splice(
-        0,
-        order.length,
-        ...(move === 'top' ? [...others, ...chosen] : [...chosen, ...others])
-      )
-    } else if (move === 'up') {
-      for (let i = order.length - 2; i >= 0; i--) {
-        const current = order[i]
-        const next = order[i + 1]
-        if (current !== undefined && next !== undefined && ids.has(current) && !ids.has(next)) {
-          order[i] = next
-          order[i + 1] = current
-        }
-      }
-    } else {
-      for (let i = 1; i < order.length; i++) {
-        const current = order[i]
-        const previous = order[i - 1]
-        if (
-          current !== undefined &&
-          previous !== undefined &&
-          ids.has(current) &&
-          !ids.has(previous)
-        ) {
-          order[i] = previous
-          order[i - 1] = current
-        }
-      }
-    }
+    const order = restackedIds(
+      sortedWires.value.map((wire) => wire.id),
+      ids,
+      move
+    )
     const rank = new Map(order.map((id, index) => [id, index]))
     apply('Ordre des fils', (draft) => {
       for (const wire of draft.wires) wire.stack = rank.get(wire.id) ?? wire.stack
@@ -1097,12 +1070,40 @@ export const useSchematicStore = defineStore('schematic', () => {
   }
 
   /**
-   * Ctrl+Page haut / bas sur la sélection : les fils avancent ou reculent entre eux ; les
-   * composants passent devant les fils (haut) ou derrière (bas).
+   * Ordre des composants sélectionnés parmi les autres : le dernier de la liste est dessiné
+   * au-dessus, donc le dernier posé l'est par défaut. Un composant ne se range que parmi ceux de
+   * sa couche, derrière ou devant les fils : les fils, eux, ne bougent pas.
+   */
+  function reorderInstances(move: StackMove): void {
+    const ids = new Set(selection.value)
+    const before = doc.value.components.map((instance) => instance.id)
+    let order = before
+    for (const behind of [true, false]) {
+      const layer = doc.value.components
+        .filter((instance) => instance.behindWires === behind)
+        .map((instance) => instance.id)
+      if (!layer.some((id) => ids.has(id))) continue
+      // Les rangs qu'occupe la couche dans la liste restent les siens ; seul leur contenu tourne.
+      const restacked = restackedIds(layer, ids, move)
+      const inLayer = new Set(layer)
+      let next = 0
+      order = order.map((id) => (inLayer.has(id) ? (restacked[next++] ?? id) : id))
+    }
+    if (order.join(' ') === before.join(' ')) return
+    const rank = new Map(order.map((id, index) => [id, index]))
+    apply('Ordre des composants', (draft) => {
+      draft.components.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
+    })
+  }
+
+  /**
+   * Ctrl+Page haut / bas sur la sélection : les fils avancent ou reculent entre eux, les
+   * composants entre eux. Passer un composant devant ou derrière les fils est un autre réglage
+   * (`setInstancesBehindWires`).
    */
   function restackSelection(move: StackMove): void {
     reorderWires(move)
-    setInstancesBehindWires(selection.value, move === 'down' || move === 'bottom')
+    reorderInstances(move)
   }
 
   /** Alt+clic près d'un croisement : l'autre fil passe au-dessus à cet endroit seulement. */
@@ -1548,6 +1549,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     reorderWires,
     setInstancesBehindWires,
     restackSelection,
+    reorderInstances,
     toggleCrossing,
     clearSelection,
     revealInspector,

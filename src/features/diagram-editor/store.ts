@@ -29,6 +29,7 @@ import {
   nearestWirePoint,
   regroupedCopies,
   removeVertex,
+  restackedIds,
   touchesNote,
   wireGeometryProblem,
   withGroup,
@@ -650,34 +651,11 @@ export const useDiagramStore = defineStore('diagram', () => {
   function reorderNodes(move: StackMove): void {
     const ids = new Set(selectedNodes.value)
     if (ids.size === 0) return
-    const order = doc.value.nodes.map((node) => node.id)
-    if (move === 'top' || move === 'bottom') {
-      const chosen = order.filter((id) => ids.has(id))
-      const others = order.filter((id) => !ids.has(id))
-      order.splice(
-        0,
-        order.length,
-        ...(move === 'top' ? [...others, ...chosen] : [...chosen, ...others])
-      )
-    } else if (move === 'up') {
-      for (let i = order.length - 2; i >= 0; i--) {
-        const here = order[i]
-        const next = order[i + 1]
-        if (here !== undefined && next !== undefined && ids.has(here) && !ids.has(next)) {
-          order[i] = next
-          order[i + 1] = here
-        }
-      }
-    } else {
-      for (let i = 1; i < order.length; i++) {
-        const here = order[i]
-        const previous = order[i - 1]
-        if (here !== undefined && previous !== undefined && ids.has(here) && !ids.has(previous)) {
-          order[i] = previous
-          order[i - 1] = here
-        }
-      }
-    }
+    const order = restackedIds(
+      doc.value.nodes.map((node) => node.id),
+      ids,
+      move
+    )
     const rank = new Map(order.map((id, index) => [id, index]))
     apply('Ordre des nœuds', (draft) => {
       draft.nodes.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))

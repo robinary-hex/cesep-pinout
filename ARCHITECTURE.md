@@ -84,7 +84,9 @@ contraint un tracé, Alt copie, Ctrl saisit le point d'attache le plus proche de
 diagramme, ce Ctrl+glisser est pris en phase de capture sur le SVG (`onGrabDown`), avant les
 gestes propres aux éléments ; l'anneau qui l'annonce n'apparaît que Ctrl enfoncée (`ctrlHeld` du
 store, tenu par le clavier et recalé sur chaque mouvement du pointeur). CLAUDE.md tient le
-tableau de ces gestes ; l'aide F1 les dit de la même façon dans chaque section.
+tableau de ces gestes ; l'aide F1 les dit de la même façon dans chaque section (son contenu est
+dans `src/app/shortcuts.ts`, des données que `ShortcutsHelp.vue` dessine : thèmes, capuchons de
+touches, pictogrammes de souris).
 
 ## Profil de style
 

@@ -1,0 +1,79 @@
+// @vitest-environment jsdom
+import { mount, type DOMWrapper, type VueWrapper } from '@vue/test-utils'
+import { describe, expect, it } from 'vitest'
+import ShortcutsHelp from './ShortcutsHelp.vue'
+
+/** Ligne de l'aide portant ce libellé. */
+function rowOf(wrapper: VueWrapper, label: string): DOMWrapper<Element> {
+  const found = wrapper.findAll('.row').find((row) => row.get('.label').text() === label)
+  if (!found) throw new Error(`ligne « ${label} » introuvable`)
+  return found
+}
+
+describe('aide sur les raccourcis', () => {
+  it('s’ouvre sur le mode demandé ; ses onglets mènent aux autres', async () => {
+    const wrapper = mount(ShortcutsHelp, { props: { initial: 'Montage' } })
+    expect(wrapper.findAll('.tabs button').map((tab) => tab.text())).toEqual([
+      'Composants',
+      'Montage',
+      'Diagramme'
+    ])
+    expect(wrapper.get('.tabs button.active').text()).toBe('Montage')
+    expect(wrapper.findAll('.category h3').map((title) => title.text())).toEqual([
+      'Outils',
+      'Tracer un fil',
+      'Retoucher un fil',
+      'Composants et étiquettes',
+      'Ordre',
+      'Sélectionner',
+      'Modifier',
+      'Vue',
+      'Fichiers et onglets'
+    ])
+    await wrapper.findAll('.tabs button')[0]?.trigger('click')
+    expect(wrapper.get('.tabs button.active').text()).toBe('Composants')
+    expect(
+      rowOf(wrapper, 'Rectangle')
+        .findAll('kbd')
+        .map((key) => key.text())
+    ).toEqual(['R'])
+    wrapper.unmount()
+  })
+
+  it('montre la première section quand on ne lui en demande aucune', () => {
+    const wrapper = mount(ShortcutsHelp)
+    expect(wrapper.get('.tabs button.active').text()).toBe('Composants')
+    wrapper.unmount()
+  })
+
+  it('dessine une touche par capuchon et la souris en pictogramme', () => {
+    const wrapper = mount(ShortcutsHelp, { props: { initial: 'Montage' } })
+    // Deux touches, deux capuchons ; la variante avec Maj a le sien.
+    const group = rowOf(wrapper, 'Grouper')
+    expect(group.findAll('.keys kbd').map((key) => key.text())).toEqual(['Ctrl', 'G'])
+    expect(group.get('.more').text()).toContain('dégrouper')
+    expect(group.get('.more kbd').text()).toBe('Maj')
+    // Un geste de souris : sa pastille, avec le dessin de la souris.
+    const menu = rowOf(wrapper, 'Menu contextuel')
+    expect(menu.get('.mouse').text()).toBe('clic droit')
+    expect(menu.find('.mouse svg .pressed').exists()).toBe(true)
+    expect(menu.findAll('.keys kbd')).toHaveLength(0)
+    // Touche et souris ensemble, et l'endroit où le geste se fait.
+    const pull = rowOf(wrapper, 'Tirer un fil de sa broche la plus proche')
+    expect(pull.findAll('.keys kbd').map((key) => key.text())).toEqual(['Ctrl'])
+    expect(pull.get('.mouse').text()).toBe('glisser')
+    expect(pull.get('.where').text()).toBe('sur un composant')
+    // Deux façons de faire la même chose, séparées par « ou ».
+    const pan = rowOf(wrapper, 'Déplacer la vue')
+    expect(pan.findAll('.combo')).toHaveLength(2)
+    expect(pan.text()).toContain('ou')
+    // L'ordre des composants a sa ligne, et dit ce qu'il range.
+    expect(
+      rowOf(wrapper, 'Avancer')
+        .findAll('.keys kbd')
+        .map((key) => key.text())
+    ).toEqual(['Ctrl', 'Page haut'])
+    expect(wrapper.get('.hint').text()).toContain('Les composants entre eux')
+    wrapper.unmount()
+  })
+})

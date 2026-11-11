@@ -142,15 +142,13 @@ interface StripTab {
 
 /** Ce que la coque demande à un mode, quel que soit son éditeur. */
 interface ModeAdapter {
-  /** Nom du mode : infobulle de son bouton. */
+  /** Nom du mode : infobulle de son bouton, et titre de sa section dans l'aide (F1). */
   label: string
   icon: IconName
   /** Nom d'un document de ce mode, dans les infobulles (« Nouveau montage »). */
   kind: string
   /** Infobulle du point « modifié » sur le bouton du mode quand on en regarde un autre. */
   dirtyTitle: string
-  /** Section de l'aide (F1) montrée d'abord dans ce mode. */
-  helpSection: string
   tabs: () => StripTab[]
   activeId: () => number
   anyDirty: () => boolean
@@ -175,7 +173,6 @@ const modes: Record<Mode, ModeAdapter> = {
     icon: 'chip',
     kind: 'composant',
     dirtyTitle: "Un composant ouvert n'est pas enregistré",
-    helpSection: 'Éditeur de composants',
     tabs: () =>
       editor.tabs.map((tab) => ({
         id: tab.id,
@@ -201,7 +198,6 @@ const modes: Record<Mode, ModeAdapter> = {
     icon: 'schematic',
     kind: 'montage',
     dirtyTitle: "Un montage ouvert n'est pas enregistré",
-    helpSection: 'Montage',
     tabs: () =>
       schematic.tabs.map((tab) => ({
         id: tab.id,
@@ -228,7 +224,6 @@ const modes: Record<Mode, ModeAdapter> = {
     icon: 'diagram',
     kind: 'diagramme',
     dirtyTitle: "Un diagramme ouvert n'est pas enregistré",
-    helpSection: 'Diagramme',
     tabs: () =>
       diagram.tabs.map((tab) => ({
         id: tab.id,
@@ -916,7 +911,7 @@ onUnmounted(() => {
       :initial-tab="mode === 'diagram' ? 'diagram' : 'montage'"
       @close="showProfile = false"
     />
-    <ShortcutsHelp v-if="showHelp" :initial="current.helpSection" @close="showHelp = false" />
+    <ShortcutsHelp v-if="showHelp" :initial="current.label" @close="showHelp = false" />
     <ContextMenu
       v-if="fileMenu"
       :x="fileMenu.x"
