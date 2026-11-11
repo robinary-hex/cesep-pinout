@@ -35,6 +35,7 @@ import {
 } from './diagramLinks'
 import {
   DARK_GROUND,
+  DIAMOND_ROUNDING,
   estimatedNodeTextWidth,
   groundOf,
   layoutNodeText,
@@ -406,30 +407,33 @@ describe('diagramme : formes', () => {
     expect(estimatedNodeTextWidth({ ...line, bold: true, font: 'mono' })).toBeCloseTo(4 * 0.6 * 1.4)
   })
 
-  it('garde les pointes d’un losange sur ses accroches, même aplati', () => {
-    // Rayons des arcs du contour, et recul de chaque pointe : rayon × (1 / sin(angle / 2) − 1).
-    const radii = (shape: DiagramNode): number[] =>
-      [...(nodeParts(shape, style)[0]?.d ?? '').matchAll(/A ([\d.]+) /g)].map((found) =>
-        Number(found[1])
-      )
-    const limit = style.lineWidth / 4
-    // Losange carré : quatre angles droits, qui reculeraient de 0,12 avec le rayon de 0,3.
-    const square = radii(node({ shape: 'diamond', w: 4, h: 4 }))
-    expect(square).toHaveLength(4)
-    for (const radius of square) expect(radius * (Math.SQRT2 - 1)).toBeCloseTo(limit, 3)
-    // Losange aplati (16 × 4) : pointes de gauche et de droite à 28°, haut et bas à 152°.
-    const flat = radii(node({ shape: 'diamond', w: 16, h: 4 }))
-    const sharp = Math.sin(Math.atan2(2, 8))
-    const blunt = Math.sin(Math.atan2(8, 2))
-    // Le tracé commence après sa première pointe : droite, bas, gauche, puis haut.
-    const [right, bottom, left, top] = flat
-    expect(flat).toHaveLength(4)
-    expect(left).toBeCloseTo(right ?? -1, 4)
-    expect((right ?? 9) * (1 / sharp - 1)).toBeCloseTo(limit, 3)
-    // Les angles obtus reculent à peine : ils gardent tout leur arrondi.
-    expect(top).toBeCloseTo(style.nodeRadius * 0.3, 4)
-    expect(bottom).toBeCloseTo(style.nodeRadius * 0.3, 4)
-    expect((top ?? 9) * (1 / blunt - 1)).toBeLessThan(limit)
+  it('arrondit les quatre pointes d’un losange sans les éloigner de ses accroches', () => {
+    const outline = (shape: DiagramNode, nodeRadius: number): string =>
+      nodeParts(shape, { ...style, nodeRadius })[0]?.d ?? ''
+    // Losange de 10 × 8, pointes de rayon 1 : le losange intérieur a des demi-diagonales de 4 et
+    // 3, donc des côtés de 5, décalés de (0,6 ; 0,8) vers l'extérieur.
+    const diamond = node({ shape: 'diamond', w: 10, h: 8 })
+    expect(outline(diamond, 1 / DIAMOND_ROUNDING)).toBe(
+      'M 5.6 0.2 L 9.6 3.2 A 1 1 0 0 1 9.6 4.8 L 5.6 7.8 A 1 1 0 0 1 4.4 7.8 ' +
+        'L 0.4 4.8 A 1 1 0 0 1 0.4 3.2 L 4.4 0.2 A 1 1 0 0 1 5.6 0.2 Z'
+    )
+    // L'arc de droite, de (9,6 ; 3,2) à (9,6 ; 4,8), a son centre en (9 ; 4) : son sommet est en
+    // (10 ; 4), l'accroche de droite, là où un lien s'attache. De même pour les trois autres.
+    expect(nodeAnchors(diamond)).toEqual([
+      [5, 0],
+      [5, 8],
+      [0, 4],
+      [10, 4]
+    ])
+    // Même rayon aux quatre pointes d'un losange aplati, aiguës ou obtuses.
+    const flat = outline(node({ shape: 'diamond', w: 32, h: 8 }), 1)
+    expect(flat.match(/A 0\.5 0\.5 /g)).toHaveLength(4)
+    // Sans rayon : quatre sommets vifs, de pointe à pointe.
+    expect(outline(diamond, 0)).toBe('M 5 0 L 10 4 L 5 8 L 0 4 Z')
+    // Petit losange : le rayon ne dépasse pas le quart d'une dimension.
+    expect(outline(node({ shape: 'diamond', w: 2, h: 2 }), 4).match(/A 0\.5 0\.5 /g)).toHaveLength(
+      4
+    )
   })
 
   it('fait suivre son texte à un nœud : il grandit, et rétrécit aussi', () => {

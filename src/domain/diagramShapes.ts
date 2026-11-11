@@ -28,13 +28,8 @@ export const TINT_SHARE = { light: 0.2, dark: 0.4 } as const
  * couleur sombre, foncé sur une couleur claire. Part de la couleur gardée dans le contour.
  */
 export const SOLID_BORDER_SHARE = 0.62
-/**
- * Recul maximal des pointes arrondies d'un losange, en parts de l'épaisseur du trait. Ses quatre
- * pointes sont ses accroches : arrondie sans limite, celle d'un losange aplati reculerait de
- * près d'une cellule, et le lien qui s'y attache semblerait s'arrêter dans le vide. À un quart
- * de trait, le contour passe encore sur le bout du lien.
- */
-export const DIAMOND_TIP_RETREAT = 0.25
+/** Rayon des pointes d'un losange, en parts du rayon des coins du diagramme (`nodeRadius`). */
+export const DIAMOND_ROUNDING = 0.5
 /** Le sous-titre s'efface un peu devant le titre. */
 export const SUBTITLE_OPACITY = 0.75
 
@@ -108,8 +103,51 @@ function circlePath(cx: number, cy: number, r: number): string {
   )
 }
 
-function polygonPath(points: readonly LocalPoint[], radius = 0, maxRetreat = Infinity): string {
-  return roundedPathData(points, radius, true, maxRetreat)
+function polygonPath(points: readonly LocalPoint[], radius = 0): string {
+  return roundedPathData(points, radius, true)
+}
+
+/**
+ * Losange aux quatre pointes arrondies, qui passe quand même par ses accroches : les milieux des
+ * côtés de sa boîte. Le contour est celui d'un losange plus petit, grossi du rayon tout autour :
+ * chaque pointe est un arc de ce rayon dont le sommet reste sur l'accroche, quel que soit
+ * l'angle. Arrondir par un arc tangent aux côtés d'un losange tracé de pointe à pointe ferait au
+ * contraire reculer la pointe, d'autant plus que l'angle est aigu, et le lien qui s'y attache
+ * semblerait s'arrêter dans le vide. Le rayon ne dépasse pas le quart d'une dimension.
+ */
+function diamondPath(
+  cx: number,
+  cy: number,
+  halfWidth: number,
+  halfHeight: number,
+  radius: number
+): string {
+  const r = Math.max(0, Math.min(radius, halfWidth / 2, halfHeight / 2))
+  // Demi-diagonales du losange intérieur, dont les sommets sont les centres des arcs.
+  const p = halfWidth - r
+  const q = halfHeight - r
+  const side = Math.hypot(p, q)
+  if (r === 0 || side === 0) {
+    return polygonPath([
+      { x: cx, y: cy - halfHeight },
+      { x: cx + halfWidth, y: cy },
+      { x: cx, y: cy + halfHeight },
+      { x: cx - halfWidth, y: cy }
+    ])
+  }
+  // Décalage d'un côté vers l'extérieur : sa normale, longue du rayon.
+  const nx = (q / side) * r
+  const ny = (p / side) * r
+  const at = (px: number, py: number): string => `${fmt(px)} ${fmt(py)}`
+  const arc = (px: number, py: number): string => `A ${fmt(r)} ${fmt(r)} 0 0 1 ${at(px, py)}`
+  // Du haut, dans le sens horaire : un côté, puis l'arc de la pointe où il arrive.
+  return (
+    `M ${at(cx + nx, cy - q - ny)} ` +
+    `L ${at(cx + p + nx, cy - ny)} ${arc(cx + p + nx, cy + ny)} ` +
+    `L ${at(cx + nx, cy + q + ny)} ${arc(cx - nx, cy + q + ny)} ` +
+    `L ${at(cx - p - nx, cy + ny)} ${arc(cx - p - nx, cy - ny)} ` +
+    `L ${at(cx - nx, cy - q - ny)} ${arc(cx + nx, cy - q - ny)} Z`
+  )
 }
 
 /** Un tracé d'un nœud et la façon de le peindre. */
@@ -135,16 +173,7 @@ export function nodeParts(node: DiagramNode, style: DiagramStyle): NodePart[] {
     case 'diamond':
       return [
         {
-          d: polygonPath(
-            [
-              { x: cx, y },
-              { x: x + w, y: cy },
-              { x: cx, y: y + h },
-              { x, y: cy }
-            ],
-            style.nodeRadius * 0.3,
-            style.lineWidth * DIAMOND_TIP_RETREAT
-          ),
+          d: diamondPath(cx, cy, w / 2, h / 2, style.nodeRadius * DIAMOND_ROUNDING),
           fill: 'body',
           stroke: true
         }

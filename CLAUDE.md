@@ -286,9 +286,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     Pas de bibliothèque à créer : `DiagramLibrary.vue` montre le catalogue. Le domaine
     décrit ce que chaque forme dessine (`nodeParts`, `layoutNodeText`) ; `DiagramNodeGraphic.vue`
     à l'écran et `buildDiagramSvg` à l'export peignent la même chose. Les pointes d'un losange
-    sont ses accroches : leur arrondi ne les fait jamais reculer de plus d'un quart de trait
-    (`DIAMOND_TIP_RETREAT`, `maxRetreat` de `roundedPathData`), sinon le lien attaché à un
-    losange aplati semblait s'arrêter dans le vide ; un angle aigu s'arrondit donc moins.
+    sont ses accroches, et elles sont arrondies toutes les quatre du même rayon (la moitié de
+    `nodeRadius` : `DIAMOND_ROUNDING`) sans s'en éloigner : son contour est celui d'un losange
+    plus petit grossi du rayon tout autour (`diamondPath`), donc le sommet de chaque arc reste
+    sur l'accroche. Un arc tangent aux côtés ferait reculer la pointe, d'autant plus que
+    l'angle est aigu : le lien attaché à un losange aplati semblait s'arrêter dans le vide.
     Losange, disques et les
     formes à pointes ou à sommets centrés (début / fin, parallélogramme, hexagone, cylindre,
     nuage) ont des
