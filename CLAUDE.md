@@ -302,8 +302,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     en thème sombre (`TINT_SHARE` : 20 % de couleur en clair, 40 % en sombre ; `--node-tint` dans
     style.css) ; en plein, le fond est la
     couleur même et le contour s'en détache, éclairci sur une couleur sombre, foncé sur une
-    couleur claire (`SOLID_BORDER_SHARE`). Le texte prend la couleur de la forme (décision du
-    11 novembre 2026), sauf sur un fond plein, où elle ne se lirait pas sur elle-même : il y
+    couleur claire (`SOLID_BORDER_SHARE`). Le texte prend la couleur de la forme, tirée vers
+    l'encre du papier pour ressortir (`NODE_TEXT_SHARE` : moitié couleur, moitié encre ;
+    décision du 11 novembre 2026) : plus foncée que la forme sur un papier clair, plus claire
+    sur un papier sombre, où la foncer l'effacerait ; à la couleur même de la forme, il se
+    lisait mal. Sur un fond plein, où elle ne se lirait pas sur elle-même, le texte
     contraste avec le fond. Un nœud peut avoir sa propre couleur de texte (`textColor`, null =
     celle de la forme ; pastilles « Couleur du texte » du panneau, avec « Auto », et sous-menu
     « Texte » du clic droit ; `setNodesTextStyle`) : son noir pur est l'encre du thème, sauf

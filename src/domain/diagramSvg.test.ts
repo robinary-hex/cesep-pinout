@@ -46,7 +46,7 @@ describe('export SVG d’un diagramme', () => {
     expect(parsed.querySelector('g.texts text')?.textContent).toBe('tant que')
   })
 
-  it('peint un nœud teinté d’un fond mêlé à la couleur de l’image, texte de la couleur de la forme', () => {
+  it('peint un nœud teinté d’un fond mêlé à la couleur de l’image, texte de sa teinte, plus foncé', () => {
     const result = buildDiagramSvg(diagram, { ...DEFAULT_EXPORT, background: '#f6f7f9' })
     if (!result) throw new Error('export vide')
     const parsed = new DOMParser().parseFromString(result.svg, 'image/svg+xml')
@@ -56,7 +56,7 @@ describe('export SVG d’un diagramme', () => {
     expect(paths[0]?.getAttribute('fill')).toBe(mixColors('#c2255c', '#f6f7f9', 0.2))
     expect(paths[0]?.getAttribute('stroke')).toBe('#c2255c')
     const text = decision?.querySelector('text')
-    expect(text?.getAttribute('fill')).toBe('#c2255c')
+    expect(text?.getAttribute('fill')).toBe(mixColors('#c2255c', '#000000', 0.5))
     expect(text?.textContent).toBe('conditionbouton == HIGH')
     // Chasse fixe : le sous-titre est en italique, le titre reste maigre.
     const spans = text?.querySelectorAll('tspan') ?? []
@@ -80,11 +80,14 @@ describe('export SVG d’un diagramme', () => {
     expect(decision?.querySelector('path')?.getAttribute('fill')).toBe(
       mixColors('#c2255c', '#16181d', 0.4)
     )
-    // Le texte du nœud garde la couleur de sa forme ; celui d'un nœud noir passe à l'encre claire.
-    expect(decision?.querySelector('text')?.getAttribute('fill')).toBe('#c2255c')
+    // Le texte du nœud tire sa couleur vers l'encre claire ; celui d'un nœud noir y passe tout à fait.
+    expect(decision?.querySelector('text')?.getAttribute('fill')).toBe(
+      mixColors('#c2255c', '#e6edf3', 0.5)
+    )
     const action = parsed.querySelectorAll('g.nodes > g')[2]
+    expect(action?.querySelector('path')?.getAttribute('stroke')).toBe('#d9730d')
     expect(action?.querySelector('text')?.getAttribute('fill')).toBe(
-      action?.querySelector('path')?.getAttribute('stroke')
+      mixColors('#d9730d', '#e6edf3', 0.5)
     )
     expect(parsed.querySelector('g.texts text')?.getAttribute('fill')).toBe('#e6edf3')
     // Transparent : encre noire par défaut, claire si l'image va sur une page sombre.

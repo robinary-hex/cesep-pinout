@@ -30,6 +30,13 @@ export const TINT_SHARE = { light: 0.2, dark: 0.4 } as const
 export const SOLID_BORDER_SHARE = 0.62
 /** Rayon des pointes d'un losange, en parts du rayon des coins du diagramme (`nodeRadius`). */
 export const DIAMOND_ROUNDING = 0.5
+/**
+ * Texte d'un nœud sans couleur propre : part de la couleur de la forme qu'il garde, le reste
+ * étant l'encre du papier. À la couleur même de la forme, il se lisait mal sur son fond teinté
+ * comme sur le papier ; à moitié encre, il en garde la teinte et ressort (contraste d'au moins
+ * 5 sur papier clair avec la palette des diagrammes).
+ */
+export const NODE_TEXT_SHARE = 0.5
 /** Le sous-titre s'efface un peu devant le titre. */
 export const SUBTITLE_OPACITY = 0.75
 
@@ -513,10 +520,12 @@ export interface NodePaint {
  * Couleurs d'un nœud selon son fond. Contour : le trait a sa couleur, pas de fond. Teinté : le fond
  * est sa couleur mêlée au papier. Plein : le fond est sa couleur, et le contour s'en détache.
  *
- * Le texte prend la couleur de la forme (décision du 11 novembre 2026), sauf sur un fond plein, où
- * elle ne se lirait pas sur elle-même : il y contraste avec le fond. Un nœud peut avoir sa propre
- * couleur de texte (`textColor`) ; son noir pur est l'encre du papier, sauf sur un fond plein, où
- * il reste noir.
+ * Le texte prend la couleur de la forme, tirée vers l'encre du papier pour ressortir
+ * (`NODE_TEXT_SHARE` ; décision du 11 novembre 2026) : plus foncée que la forme sur un papier
+ * clair, plus claire sur un papier sombre, où la foncer l'effacerait. Sur un fond plein elle ne se
+ * lirait pas sur elle-même : le texte y contraste avec le fond, noir ou blanc. Un nœud peut avoir
+ * sa propre couleur de texte (`textColor`), reprise telle quelle ; son noir pur est l'encre du
+ * papier, sauf sur un fond plein, où il reste noir.
  */
 export function nodePaint(
   node: Pick<DiagramNode, 'color' | 'fill' | 'textColor'>,
@@ -538,7 +547,10 @@ export function nodePaint(
         ? mixColors(color, ground.paper, ground.dark ? TINT_SHARE.dark : TINT_SHARE.light)
         : null,
     solid: color,
-    text: node.textColor === null ? color : inkColor(node.textColor, ground)
+    text:
+      node.textColor === null
+        ? mixColors(color, ground.ink, NODE_TEXT_SHARE)
+        : inkColor(node.textColor, ground)
   }
 }
 

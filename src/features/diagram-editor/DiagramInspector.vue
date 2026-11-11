@@ -411,7 +411,7 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
                 type="button"
                 class="auto"
                 :class="{ current: singleNode.textColor === null }"
-                title="La couleur de la forme"
+                title="D’après la couleur de la forme, foncée ou éclaircie pour se lire"
                 @click="setNodeTextColor(null)"
               >
                 Auto

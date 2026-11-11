@@ -47,6 +47,7 @@ import {
   nodePaint,
   nodeParts,
   nodeSizeForText,
+  NODE_TEXT_SHARE,
   nodeTextBox
 } from './diagramShapes'
 import fixtureV1 from './fixtures/v1/diagram.json?raw'
@@ -343,13 +344,16 @@ describe('diagramme : formes', () => {
     expect(groundOf('#20242c')).toMatchObject({ ink: '#e6edf3', dark: true })
   })
 
-  it('contour : le trait a la couleur, pas de fond, et le texte la prend aussi', () => {
+  it('contour : le trait a la couleur, pas de fond, et le texte la prend, plus foncée', () => {
     expect(nodePaint({ color: '#1d4ed8', fill: 'none', textColor: null }, LIGHT_GROUND)).toEqual({
       stroke: '#1d4ed8',
       fill: null,
       solid: '#1d4ed8',
-      text: '#1d4ed8'
+      // À moitié encre : la teinte de la forme, en plus foncé sur le papier blanc.
+      text: '#0f276c'
     })
+    expect(NODE_TEXT_SHARE).toBe(0.5)
+    expect(mixColors('#1d4ed8', '#000000', NODE_TEXT_SHARE)).toBe('#0f276c')
     // Le noir pur est l'encre : claire sur un papier sombre, pour le trait comme pour le texte.
     expect(
       nodePaint({ color: '#000000', fill: 'none', textColor: null }, DARK_GROUND)
@@ -363,10 +367,13 @@ describe('diagramme : formes', () => {
     const light = nodePaint({ color: '#1d4ed8', fill: 'tint', textColor: null }, LIGHT_GROUND)
     expect(light.stroke).toBe('#1d4ed8')
     expect(light.fill).toBe(mixColors('#1d4ed8', '#ffffff', 0.2))
-    expect(light.text).toBe('#1d4ed8')
+    // Texte plus foncé que la forme sur un fond clair…
+    expect(light.text).toBe(mixColors('#1d4ed8', '#000000', 0.5))
     const dark = nodePaint({ color: '#7f77dd', fill: 'tint', textColor: null }, DARK_GROUND)
     expect(dark.fill).toBe(mixColors('#7f77dd', '#16181d', 0.4))
-    expect(dark.text).toBe('#7f77dd')
+    // … et plus clair sur un fond sombre, où le foncer l'effacerait.
+    expect(dark.text).toBe(mixColors('#7f77dd', '#e6edf3', 0.5))
+    expect(dark.text).toBe('#b3b2e8')
   })
 
   it('plein : le fond est la couleur, le contour s’en détache, le texte contraste', () => {

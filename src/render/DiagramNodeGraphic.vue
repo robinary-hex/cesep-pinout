@@ -7,6 +7,7 @@ import {
   mixColors,
   nodeLineAttrs,
   nodeParts,
+  NODE_TEXT_SHARE,
   SOLID_BORDER_SHARE,
   solidBorderToward,
   SUBTITLE_OPACITY,
@@ -20,7 +21,7 @@ import { screenColor } from './ink'
 // état ; le canevas, la bibliothèque et les aperçus s'en servent. Mêmes règles de couleur que
 // `nodePaint` du domaine (ce que l'export écrit), mais avec les variables du thème : le noir pur
 // prend l'encre, un fond teinté mêle la couleur au papier (`--node-tint`), un fond plein garde la
-// couleur et son contour s'en détache ; le texte prend la couleur de la forme.
+// couleur et son contour s'en détache ; le texte prend la couleur de la forme, tirée vers l'encre.
 
 const props = defineProps<{ node: DiagramNode; look: DiagramStyle }>()
 
@@ -49,15 +50,19 @@ function fillOf(part: NodePart): string {
 }
 
 /**
- * Texte : la couleur de la forme, sauf sur un fond plein, où elle ne se lirait pas : il y
- * contraste avec le fond. Ou la couleur propre au nœud ; son noir pur est l'encre du thème, sauf
+ * Texte : la couleur de la forme, tirée vers l'encre du thème pour ressortir (plus foncée en
+ * clair, plus claire en sombre) ; sur un fond plein, où elle ne se lirait pas, il contraste avec
+ * le fond. Ou la couleur propre au nœud, telle quelle ; son noir pur est l'encre du thème, sauf
  * sur un fond plein, où il reste noir.
  */
 const textColor = computed(() => {
   const own = props.node.textColor
   const solid = props.node.fill === 'solid'
   if (own !== null) return solid ? own : screenColor(own)
-  if (!solid) return color.value
+  if (!solid) {
+    if (isInk.value) return 'var(--ink)'
+    return `color-mix(in srgb, ${color.value} ${NODE_TEXT_SHARE * 100}%, var(--ink))`
+  }
   // Fond plein à l'encre du thème : le texte prend la couleur du papier.
   if (isInk.value) return 'var(--paper)'
   return isDarkColor(props.node.color) ? '#ffffff' : '#000000'

@@ -11,9 +11,11 @@ function textFill(patch: Partial<DiagramNode>): string | undefined {
 }
 
 describe('DiagramNodeGraphic', () => {
-  it('donne au texte la couleur de la forme, en contour comme en teinté', () => {
-    expect(textFill({ color: '#1d4ed8', fill: 'none' })).toBe('#1d4ed8')
-    expect(textFill({ color: '#1d4ed8', fill: 'tint' })).toBe('#1d4ed8')
+  it('donne au texte la couleur de la forme tirée vers l’encre, en contour comme en teinté', () => {
+    // À moitié encre du thème : plus foncée que la forme en clair, plus claire en sombre.
+    const mixed = 'color-mix(in srgb, #1d4ed8 50%, var(--ink))'
+    expect(textFill({ color: '#1d4ed8', fill: 'none' })).toBe(mixed)
+    expect(textFill({ color: '#1d4ed8', fill: 'tint' })).toBe(mixed)
     // Le noir pur est l'encre du thème, pour le trait comme pour le texte.
     expect(textFill({ color: '#000000', fill: 'tint' })).toBe('var(--ink)')
   })
