@@ -87,7 +87,13 @@ export class FakeFs implements PinoutApi {
     this.shownInFolder.push(this.norm(path))
   }
 
-  async showOpenDialog(): Promise<string | null> {
+  /** Ce que chaque dialogue d'ouverture a reçu, dans l'ordre des appels. */
+  readonly openDialogCalls: Parameters<PinoutApi['showOpenDialog']>[0][] = []
+
+  async showOpenDialog(
+    options: Parameters<PinoutApi['showOpenDialog']>[0]
+  ): Promise<string | null> {
+    this.openDialogCalls.push(options)
     return this.openDialogAnswers.shift() ?? null
   }
 

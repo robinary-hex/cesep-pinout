@@ -73,6 +73,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   broches d'un dessin se placent tous les 80 px. Le bouton Image de la barre d'outils
   (`importImage` de `pngImport.ts`, puis du store) pose le PNG à sa taille naturelle, par-dessus
   le dessin, centré sur des cellules entières ; un composant vierge prend la taille de l'image.
+  Le dialogue du bouton se rouvre dans le dossier de la dernière image qu'il a servi à choisir
+  (`pickPng`), retenu d'un lancement à l'autre par la mémoire de l'interface
+  (`recall` / `remember` de `src/io/localMemory.ts` : le stockage local de la fenêtre, propre à
+  la machine ; c'est là que vont ces petits conforts, pas dans les paramètres, dont le format
+  est publié et partagé entre machines).
   Un PNG déposé dans la fenêtre en mode Composants fait exactement de même, sans dialogue
   (`importImageFile`, appelé par `onWindowDrop` d'`App.vue` pour tout fichier d'image :
   `isImagePath`) ; dans un autre mode, ou pour une image qui n'est pas un PNG, la barre d'état

@@ -82,3 +82,32 @@ describe('image déposée dans l’éditeur de composants', () => {
     expect(store.doc.visual.primitives).toHaveLength(0)
   })
 })
+
+describe('dossier de la dernière image importée', () => {
+  it('le dialogue du bouton Image s’y rouvre, pas dans celui d’une image déposée', async () => {
+    localStorage.clear()
+    fs.binaries.set('C:/images/led.png', dataUrlToBase64(pngHeaderDataUrl(160, 240)))
+    fs.binaries.set('D:/ailleurs/photo.png', dataUrlToBase64(pngHeaderDataUrl(80, 80)))
+    fs.openDialogAnswers.push('C:/images/led.png', null, null)
+    const store = useComponentEditorStore()
+    const wrapper = mount(EditorToolbar)
+    const button = wrapper.get('button[title^="Importer une image"]')
+    // Première fois : rien de retenu, le dialogue s'ouvre où le système veut.
+    await button.trigger('click')
+    await flushPromises()
+    // Deuxième fois, même annulée : dans le dossier de l'image choisie la première fois.
+    await button.trigger('click')
+    await flushPromises()
+    // Une image déposée depuis un autre dossier ne change pas ce dossier-là.
+    await importImageFile(store, 'D:/ailleurs/photo.png')
+    await button.trigger('click')
+    await flushPromises()
+    expect(fs.openDialogCalls.map((options) => options?.defaultPath)).toEqual([
+      undefined,
+      'C:/images',
+      'C:/images'
+    ])
+    expect(localStorage.getItem('pinout.lastImageDir')).toBe('C:/images')
+    localStorage.clear()
+  })
+})

@@ -1,6 +1,7 @@
 import { base64ToBytes, pngDataUrl, pngDimensions } from '@/domain'
 import { bridge } from '@/io/bridge'
-import { baseName } from '@/io/paths'
+import { recall, remember } from '@/io/localMemory'
+import { baseName, dirOf } from '@/io/paths'
 import type { useComponentEditorStore } from './store'
 
 export interface PickedPng {
@@ -10,13 +11,23 @@ export interface PickedPng {
   height: number
 }
 
-/** Ouvre le dialogue, lit le PNG et ses dimensions ; null si l'utilisateur annule. */
+/** Clé, dans la mémoire de l'interface, du dossier de la dernière image choisie par le dialogue. */
+const LAST_IMAGE_DIR = 'lastImageDir'
+
+/**
+ * Ouvre le dialogue, lit le PNG et ses dimensions ; null si l'utilisateur annule. Le dialogue
+ * s'ouvre dans le dossier de la dernière image qu'il a servi à choisir, d'un lancement à l'autre.
+ */
 export async function pickPng(): Promise<PickedPng | null> {
+  const lastDir = recall(LAST_IMAGE_DIR)
   const path = await bridge().showOpenDialog({
     title: 'Importer une image PNG (80 px par cellule)',
-    filters: [{ name: 'Image PNG', extensions: ['png'] }]
+    filters: [{ name: 'Image PNG', extensions: ['png'] }],
+    ...(lastDir ? { defaultPath: lastDir } : {})
   })
-  return path === null ? null : readPng(path)
+  if (path === null) return null
+  remember(LAST_IMAGE_DIR, dirOf(path))
+  return readPng(path)
 }
 
 /** Lit un PNG et ses dimensions ; lève une erreur si le fichier n'en est pas un. */
