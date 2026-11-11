@@ -108,6 +108,50 @@ describe('éditeur de composants : clic hors de la feuille', () => {
     wrapper.unmount()
   })
 
+  it('en sélection, un glisser parti du tour de la feuille est un lasso', async () => {
+    const store = withRectangle()
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    const svg = wrapper.get('svg.canvas')
+    // Position à l'écran d'un point du composant, en cellules (jsdom place le SVG en (0, 0)).
+    const origin = /translate\(([-\d.]+) ([-\d.]+)\)/.exec(
+      svg.get('g[transform]').attributes('transform') ?? ''
+    )
+    const at = (x: number, y: number): MouseEventInit => ({
+      clientX: Number(origin?.[1] ?? 0) + x * store.cellPx,
+      clientY: Number(origin?.[2] ?? 0) + y * store.cellPx
+    })
+    const follow = async (type: string, position: MouseEventInit): Promise<void> => {
+      svg.element.dispatchEvent(
+        new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, ...position })
+      )
+      await nextTick()
+    }
+    // Appui hors de la feuille, au-dessus et à gauche du composant : le dessin capture le
+    // pointeur et reçoit la suite du geste.
+    await press(wrapper.get('.canvas-scroll'), at(-3, -3))
+    expect(Element.prototype.setPointerCapture).toHaveBeenCalled()
+    await follow('pointermove', at(3.5, 2))
+    expect(wrapper.find('.band').exists()).toBe(true)
+    await follow('pointerup', at(3.5, 2))
+    expect(wrapper.find('.band').exists()).toBe(false)
+    expect(store.selectedIndexes).toEqual([0])
+    // Un simple clic hors de la feuille désélectionne toujours.
+    await press(wrapper.get('.canvas-scroll'), at(-3, -3))
+    await follow('pointerup', at(-3, -3))
+    expect(store.selection).toBeNull()
+    // Avec Maj, le lasso ajoute à la sélection au lieu de la remplacer.
+    store.addPrimitive(
+      { kind: 'rect', x: 4, y: 12, w: 4, h: 4, rx: 0, style: DEFAULT_SHAPE_STYLE },
+      'Ajouter un rectangle'
+    )
+    store.selectPrimitives([1])
+    await press(wrapper.get('.canvas-scroll'), { ...at(-3, -3), shiftKey: true })
+    await follow('pointermove', at(3.5, 2))
+    await follow('pointerup', at(3.5, 2))
+    expect([...store.selectedIndexes].sort()).toEqual([0, 1])
+    wrapper.unmount()
+  })
+
   it('termine la polyligne en cours avant de quitter l’outil', async () => {
     const store = useComponentEditorStore()
     const wrapper = mount(ComponentEditor, { attachTo: document.body })

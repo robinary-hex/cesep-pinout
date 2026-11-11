@@ -79,22 +79,29 @@ describe('aide sur les raccourcis', () => {
     expect(menu.get('.mouse').text()).toBe('clic droit')
     expect(menu.find('.mouse svg .pressed').exists()).toBe(true)
     expect(menu.findAll('.keys kbd')).toHaveLength(0)
-    // Touche et souris ensemble, et l'endroit où le geste se fait.
-    const pull = rowOf(wrapper, 'Tirer un fil de sa broche la plus proche')
+    // Touche et souris ensemble.
+    const pull = rowOf(wrapper, 'Tirer un fil d’une broche')
     expect(pull.findAll('.keys kbd').map((key) => key.text())).toEqual(['Ctrl'])
     expect(pull.get('.mouse').text()).toBe('glisser')
-    expect(pull.get('.where').text()).toBe('sur un composant')
-    // Deux façons de faire la même chose, séparées par « ou ».
-    const pan = rowOf(wrapper, 'Déplacer la vue')
-    expect(pan.findAll('.combo')).toHaveLength(2)
-    expect(pan.text()).toContain('ou')
-    // L'ordre des composants a sa ligne, et dit ce qu'il range.
+    // Deux façons de faire la même chose, séparées par « ou » ; un double-clic se dit « ×2 ».
+    const fit = rowOf(wrapper, 'Ajuster la vue')
+    expect(fit.findAll('.combo')).toHaveLength(2)
+    expect(fit.text()).toContain('ou')
+    expect(fit.get('.mouse').text()).toBe('milieu ×2')
+    expect(rowOf(wrapper, 'Terminer le fil').get('.mouse').text()).toBe('clic ×2')
+    // L'ordre des composants a sa ligne.
     expect(
       rowOf(wrapper, 'Avancer')
         .findAll('.keys kbd')
         .map((key) => key.text())
     ).toEqual(['Ctrl', 'Page haut'])
-    expect(wrapper.get('.sheet.shown .hint').text()).toContain('Les composants entre eux')
+    // Une ligne par raccourci : le geste, son libellé, et rien dessous.
+    for (const row of wrapper.findAll('.sheet.shown .row')) {
+      expect(row.findAll('.keys')).toHaveLength(1)
+      expect(row.findAll('.label')).toHaveLength(1)
+    }
+    expect(wrapper.find('.where').exists()).toBe(false)
+    expect(wrapper.find('.hint').exists()).toBe(false)
     wrapper.unmount()
   })
 })

@@ -707,6 +707,20 @@ function onPanDown(event: PointerEvent): void {
   capture(event)
 }
 
+/**
+ * Lasso, depuis le vide : il part du point pressé, sur la feuille ou autour d'elle (le pointeur
+ * est capturé par le dessin, qui suit donc le geste où qu'il aille). Maj garde la sélection et
+ * y ajoute ; sinon elle tombe, et un simple clic désélectionne.
+ */
+function startBand(event: PointerEvent): void {
+  const cells = pointerCells(event)
+  const base = event.shiftKey ? [...store.selectedIndexes] : []
+  const basePins = event.shiftKey ? [...store.selectedPinIds] : []
+  if (!event.shiftKey) store.selection = null
+  drag.value = { kind: 'band', start: cells, current: cells, base, basePins }
+  capture(event)
+}
+
 function onPointerDown(event: PointerEvent): void {
   if (event.button === 1) {
     event.preventDefault()
@@ -727,15 +741,9 @@ function onPointerDown(event: PointerEvent): void {
   const q = toQuarters(cells)
 
   switch (tool) {
-    case 'select': {
-      // Clic dans le vide : lasso ; Maj garde la sélection et y ajoute.
-      const base = event.shiftKey ? [...store.selectedIndexes] : []
-      const basePins = event.shiftKey ? [...store.selectedPinIds] : []
-      if (!event.shiftKey) store.selection = null
-      drag.value = { kind: 'band', start: cells, current: cells, base, basePins }
-      capture(event)
+    case 'select':
+      startBand(event)
       break
-    }
     case 'rect':
     case 'ellipse':
     case 'line':
@@ -920,14 +928,16 @@ function onPrimitiveMenu(index: number, event: MouseEvent): void {
 }
 
 /**
- * Clic dans l'espace de travail, hors de la feuille. En sélection, la sélection tombe, comme sur
- * la feuille. Avec un outil de dessin, on le quitte : le tracé en cours se termine (une polyligne
- * d'au moins deux points est gardée) et l'éditeur revient à l'outil Sélection.
+ * Appui dans l'espace de travail, hors de la feuille. En sélection, un lasso part de là comme
+ * il partirait de la feuille (décision du 11 novembre 2026) : pas besoin de viser la feuille pour
+ * entourer ce qui touche son bord ; un simple clic désélectionne. Avec un outil de dessin, on le
+ * quitte : le tracé en cours se termine (une polyligne d'au moins deux points est gardée) et
+ * l'éditeur revient à l'outil Sélection.
  */
 function onOutsideDown(event: PointerEvent): void {
   if (event.button !== 0) return
   if (store.tool === 'select') {
-    store.selection = null
+    startBand(event)
     return
   }
   finishPolyline()

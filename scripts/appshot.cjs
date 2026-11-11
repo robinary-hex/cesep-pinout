@@ -101,10 +101,13 @@ function tools(win) {
   }
   const rightClick = (x, y) => click(x, y, { button: 'right' })
   const drag = async (x1, y1, x2, y2, extra = {}) => {
+    // Bouton tenu pendant le trajet : sans lui, Chromium croit le bouton relâché et rend le
+    // pointeur capturé dès qu'il sort de l'élément.
+    const held = { ...extra, modifiers: [...(extra.modifiers ?? []), 'leftButtonDown'] }
     await mouse('mouseMove', x1, y1)
     await mouse('mouseDown', x1, y1, extra)
-    await mouse('mouseMove', (x1 + x2) / 2, (y1 + y2) / 2, extra)
-    await mouse('mouseMove', x2, y2, extra)
+    await mouse('mouseMove', (x1 + x2) / 2, (y1 + y2) / 2, held)
+    await mouse('mouseMove', x2, y2, held)
     await mouse('mouseUp', x2, y2, extra)
     await wait(150)
   }

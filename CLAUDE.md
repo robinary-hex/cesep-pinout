@@ -454,14 +454,20 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   superposées dans la même case (`.sheets`, une seule `shown`), donc la boîte a la taille de
   la plus haute ; chacune défile pour elle-même sous les onglets, et garde la place de son
   ascenseur qu'il y en ait un ou non (`scrollbar-gutter: stable`, `--scrollbar-size`).
-  Une ligne = le geste, ce qu'il fait, le pictogramme de l'action s'il a un bouton ou une
+  Un raccourci = une ligne, jamais deux (décision du 11 novembre 2026) : le geste dans une
+  colonne étroite (144 px), ce qu'il fait, le pictogramme de l'action s'il a un bouton ou une
   entrée de menu. Le geste se dessine : une touche par capuchon (`kbd`), un geste de souris
   par pastille, avec la souris et son bouton enfoncé (`MOUSE_GESTURES`, `comboTokens` ; « / »
-  sépare deux façons de faire, « + » ce qu'on fait ensemble), l'endroit où il vaut en petit
-  (`where`). Ce qu'il fait tient en quelques mots (45 caractères au plus, un test le vérifie) ;
-  la variante avec Maj se dit sous le libellé (`withShift`), pas sur une autre ligne. Pas de
-  phrase d'explication : ce qui en demanderait une se redit plus court, ou n'est pas un
-  raccourci. En tête, à droite des onglets, le sens des trois touches de modification.
+  sépare deux façons de faire, « + » ce qu'on fait ensemble ; un double-clic se dit « ×2 »,
+  « déposer » est un fichier glissé dans la fenêtre). Ce qu'il fait tient en quelques mots (30
+  caractères au plus, variante comprise : un test le vérifie) et dit sur quoi il porte quand
+  ce n'est pas évident (« Étiqueter un bout libre ») : pas de précision en petit, ni à côté
+  du geste ni sous le libellé. La variante avec Maj se dit à la suite du libellé
+  (`withShift`). Deux façons de faire trop longues pour une ligne en font deux (« Déplacer la
+  vue »). Une colonne de thèmes ne descend pas sous 392 px, la largeur où tout tient : en
+  dessous, la planche passe à deux colonnes. Ce qui demanderait une phrase se redit plus
+  court, ou n'est pas un raccourci (les gestes des panneaux, les réglages, n'y sont pas). En
+  tête, à droite des onglets, le sens des trois touches de modification.
 - Menus contextuels (décision du 11 novembre 2026) : un clic droit partout où il y a un élément.
   Même ordre dans tous : titre, actions propres à l'élément, style, ordre d'empilement, puis
   Grouper / Dégrouper quand la sélection s'y prête (`groupItems`), Dupliquer / Copier /
@@ -629,7 +635,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     du nom) est plus petit et grisé, le nom garde sa taille (`pinNumberText`). Tout l'espace de travail a la couleur du
     papier ; la marge du canevas vaut une cellule ou la place des repères qui dépassent, et
     l'ajustement à la fenêtre en tient compte (`pinLabelLayout.ts`).
-    Sélection multiple : lasso dans le vide (formes et broches), Maj+clic ajoute ou retire une forme
+    Sélection multiple : lasso dans le vide (formes et broches), parti de la feuille ou de
+    l'espace de travail qui l'entoure (`startBand`, appelé aussi par `onOutsideDown` ; décision
+    du 11 novembre 2026), Maj+clic ajoute ou retire une forme
     ou une broche, glisser déplace tout ce qui est sélectionné (par cellules entières dès qu'une
     broche en fait partie, `moveSelection`), un clic hors de la feuille désélectionne (avec un outil de dessin actif, il
     le quitte d'abord et revient à la sélection, en terminant la polyligne en cours :

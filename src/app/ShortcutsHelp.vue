@@ -64,7 +64,6 @@ const MODIFIERS: [string, string][] = [
         <div class="columns">
           <section v-for="category in section.categories" :key="category.title" class="category">
             <h3>{{ category.title }}</h3>
-            <p v-if="category.hint" class="hint">{{ category.hint }}</p>
             <div v-for="(row, index) in category.rows" :key="index" class="row">
               <div class="keys">
                 <template v-for="(combo, rank) in row.keys" :key="combo">
@@ -122,16 +121,13 @@ const MODIFIERS: [string, string][] = [
                     </template>
                   </span>
                 </template>
-                <span v-if="row.where" class="where">{{ row.where }}</span>
               </div>
               <div class="does">
                 <span class="label">{{ row.label }}</span>
                 <span v-if="row.withShift" class="more">
-                  <span class="joint">+</span>
                   <kbd>Maj</kbd>
                   {{ row.withShift }}
                 </span>
-                <span v-if="row.note" class="more">{{ row.note }}</span>
               </div>
               <Icon v-if="row.icon" :name="row.icon" :size="15" />
             </div>
@@ -199,9 +195,10 @@ const MODIFIERS: [string, string][] = [
   visibility: visible;
 }
 
-/* Thèmes en colonnes : trois dans la boîte large, moins quand la fenêtre est étroite. */
+/* Thèmes en colonnes : trois dans la boîte large, deux ou une quand la fenêtre est plus
+   étroite. Une colonne ne descend pas sous la largeur où chaque raccourci tient sur sa ligne. */
 .columns {
-  columns: 3 300px;
+  columns: 3 392px;
   column-gap: 14px;
 }
 
@@ -222,22 +219,18 @@ const MODIFIERS: [string, string][] = [
   color: var(--accent);
 }
 
-.hint {
-  margin: 0 0 4px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-/* Une ligne : le geste à gauche, ce qu'il fait au milieu, le pictogramme de l'action au bout.
-   Le même partage dans tous les thèmes : les libellés s'alignent d'un cadre à l'autre. */
+/* Un raccourci, une ligne : le geste à gauche, dans une colonne étroite, ce qu'il fait au
+   milieu, le pictogramme de l'action au bout. Le même partage dans tous les thèmes : les
+   libellés s'alignent d'un cadre à l'autre. Rien ne passe à la ligne. */
 .row {
   display: grid;
-  grid-template-columns: minmax(0, 44%) minmax(0, 1fr) 16px;
+  grid-template-columns: 144px minmax(0, 1fr) 16px;
   column-gap: 10px;
-  align-items: start;
+  align-items: center;
   padding: 3px 0;
   font-size: 13px;
   line-height: 20px;
+  white-space: nowrap;
 }
 
 .row + .row {
@@ -246,9 +239,8 @@ const MODIFIERS: [string, string][] = [
 
 .keys {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 3px 4px;
+  gap: 4px;
 }
 
 .combo {
@@ -319,30 +311,37 @@ kbd {
   stroke-width: 1.6;
 }
 
-.where {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-/* Ce que fait le geste : son libellé, puis ses précisions en petit. */
+/* Ce que fait le geste : son libellé puis, à la suite et en petit, ce qu'il fait avec Maj. */
 .does {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
 
+.label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .more {
-  display: flex;
-  flex-wrap: wrap;
+  display: inline-flex;
+  flex: none;
   align-items: center;
-  gap: 3px 4px;
+  gap: 4px;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.more kbd {
+  min-width: 0;
+  padding: 0 4px;
+  font-size: 11px;
+  line-height: 15px;
 }
 
 /* Pictogramme de l'action, celui de son bouton ou de son entrée de menu. */
 .row > .icon {
-  margin-top: 3px;
   color: var(--text-muted);
 }
 </style>

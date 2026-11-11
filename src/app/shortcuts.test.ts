@@ -25,17 +25,18 @@ describe('raccourcis de l’aide', () => {
     }
   })
 
-  it('dit chaque raccourci en peu de mots', () => {
+  it('dit chaque raccourci en peu de mots, de quoi tenir sur une ligne', () => {
     for (const section of SHORTCUT_SECTIONS) {
       for (const category of section.categories) {
         expect(category.rows.length).toBeGreaterThan(0)
         for (const row of category.rows) {
-          expect(row.label.length, row.label).toBeLessThanOrEqual(45)
-          expect((row.where ?? '').length, row.where).toBeLessThanOrEqual(32)
-          expect((row.note ?? '').length, row.note).toBeLessThanOrEqual(32)
+          // Le libellé et, à sa suite, ce que fait le geste avec Maj.
+          const length = row.label.length + (row.withShift ? row.withShift.length + 5 : 0)
+          expect(length, row.label).toBeLessThanOrEqual(30)
+          expect(row.keys.length, row.label).toBeLessThanOrEqual(2)
         }
-        // Un même geste au même endroit ne fait qu'une chose.
-        const gestures = category.rows.map((row) => `${row.keys.join(' / ')} ${row.where ?? ''}`)
+        // Un même geste ne fait qu'une chose dans un thème.
+        const gestures = category.rows.map((row) => row.keys.join(' / '))
         expect(new Set(gestures).size, category.title).toBe(gestures.length)
       }
     }
@@ -49,20 +50,25 @@ describe('raccourcis de l’aide', () => {
     ])
     expect(comboTokens('Alt+glisser')).toEqual([
       { text: 'Alt', mouse: null },
-      { text: 'glisser', mouse: { button: 'left', drag: true } }
+      { text: 'glisser', mouse: { text: 'glisser', button: 'left', drag: true } }
     ])
-    expect(comboTokens('double-clic milieu')[0]?.mouse).toEqual({ button: 'middle', double: true })
+    // Un double-clic se dit « ×2 » : la pastille est plus courte.
+    expect(comboTokens('double-clic')[0]).toEqual({
+      text: 'clic ×2',
+      mouse: { text: 'clic ×2', button: 'left', double: true }
+    })
+    expect(comboTokens('double-clic milieu')[0]?.text).toBe('milieu ×2')
     expect(comboTokens('Flèches')[0]?.text).toBe('← ↑ ↓ →')
     // Tout geste de souris de l'aide est un de ceux qu'on sait dessiner.
     for (const section of SHORTCUT_SECTIONS) {
       for (const row of section.categories.flatMap((category) => category.rows)) {
-        for (const token of row.keys.flatMap(comboTokens)) {
-          expect(token.text).not.toBe('')
-          const looksLikeMouse = /clic|glisser|molette/i.test(token.text)
-          expect(token.mouse !== null, token.text).toBe(looksLikeMouse)
+        for (const part of row.keys.flatMap((combo) => combo.split('+'))) {
+          const name = part.trim()
+          expect(name).not.toBe('')
+          const looksLikeMouse = /clic|glisser|molette|déposer/i.test(name)
+          expect(name in MOUSE_GESTURES, name).toBe(looksLikeMouse)
         }
       }
     }
-    expect(Object.keys(MOUSE_GESTURES)).toContain('clic droit')
   })
 })
