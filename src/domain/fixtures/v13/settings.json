@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 13,
+  "libraryDir": "${OneDrive}/Pinout/lib",
+  "settingsDir": "F:/partage",
+  "palette": [
+    {
+      "name": "Noir",
+      "hex": "#000000"
+    },
+    {
+      "name": "Rouge",
+      "hex": "#d62828"
+    },
+    {
+      "name": "#FF00AA",
+      "hex": "#ff00aa"
+    }
+  ],
+  "defaultWireColor": "#000000",
+  "defaultProfile": {
+    "name": "Standard",
+    "cellPx": 20,
+    "wireWidth": 0.15,
+    "cornerRadius": 0.4,
+    "componentStroke": 0.1,
+    "junctionScale": 2,
+    "junctionColor": "wire",
+    "labelFont": {
+      "family": "Segoe UI",
+      "size": 11
+    },
+    "endLabelFont": {
+      "family": "Segoe UI",
+      "size": 14
+    }
+  },
+  "diagramDefaults": {
+    "style": {
+      "cellPx": 10,
+      "lineWidth": 0.2,
+      "cornerRadius": 0.8,
+      "nodeRadius": 1,
+      "font": "mono",
+      "titleSize": 14,
+      "subtitleSize": 12,
+      "labelSize": 12
+    },
+    "nodeColor": "#1d4ed8",
+    "nodeFill": "none",
+    "linkColor": "#000000"
+  },
+  "recentFiles": [],
+  "export": {
+    "scale": 2,
+    "background": "white",
+    "marginCells": 2,
+    "labels": true,
+    "grid": false
+  },
+  "autosaveSeconds": 120,
+  "theme": "light",
+  "autoOpenInspector": true,
+  "libraryView": "grid",
+  "showPins": true,
+  "showUnconnected": false,
+  "showGroups": true,
+  "diagramPalette": [
+    {
+      "name": "Noir",
+      "hex": "#000000"
+    },
+    {
+      "name": "Rouge pastel",
+      "hex": "#f4a6a6"
+    },
+    {
+      "name": "Orange pastel",
+      "hex": "#f8c28b"
+    },
+    {
+      "name": "Jaune pastel",
+      "hex": "#f7e08a"
+    },
+    {
+      "name": "Vert pastel",
+      "hex": "#a8dba0"
+    },
+    {
+      "name": "Turquoise pastel",
+      "hex": "#93d8cf"
+    },
+    {
+      "name": "Bleu pastel",
+      "hex": "#9fc7f2"
+    },
+    {
+      "name": "Violet pastel",
+      "hex": "#c3b3ee"
+    },
+    {
+      "name": "Rose pastel",
+      "hex": "#f2b0d2"
+    },
+    {
+      "name": "Gris pastel",
+      "hex": "#c5ccd6"
+    }
+  ]
+}

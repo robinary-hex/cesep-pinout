@@ -374,8 +374,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     `movedAnchor`, par `wiresFollowingPins`).
   - Couleurs : la palette des diagrammes puis celles du diagramme (`customColors`). Les
     diagrammes ont leur palette, à part de celle des fils (décision du 11 novembre 2026 ;
-    `diagramPalette` des paramètres, `DEFAULT_DIAGRAM_PALETTE` : le noir, puis des tons pastel,
-    là où les fils ont des couleurs vives). Les deux se règlent dans la boîte des paramètres
+    `diagramPalette` des paramètres, `DEFAULT_DIAGRAM_PALETTE` : le noir, puis des tons doux,
+    plus clairs que les couleurs vives des fils sans être pastel ; une première palette,
+    pastel, était trop pâle, et la migration v13 → v14 des paramètres la remplace quand on n'y
+    a pas touché). Les deux se règlent dans la boîte des paramètres
     (`settings/PaletteEditor.vue`, une fois pour chacune).
     La palette de la barre colore la sélection et règle la couleur des prochains nœuds,
     ou des prochains liens quand on en trace ou qu'on n'a sélectionné qu'eux (`paletteOnLinks`).
@@ -683,7 +685,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     composant posé s'appelle « libellé » dans l'interface.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 15, projet 21, paramètres 13,
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 15, projet 21, paramètres 14,
   diagramme 5 (depuis la 1.5.0 : palette des diagrammes dans les paramètres, couleur du texte
   d'un nœud dans le diagramme ; un fichier enregistré ne s'ouvre plus dans une version antérieure)
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et

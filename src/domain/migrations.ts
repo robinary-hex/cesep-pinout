@@ -574,6 +574,35 @@ export const diagramMigrations: MigrationTable = {
 // Paramètres v1 → v2 : export et copie de secours ; v2 → v3 : trait des composants du profil ;
 // v3 → v4 : thème de l'interface.
 
+/**
+ * La première palette des diagrammes, pastel : celle des paramètres v13, restés le temps d'un
+ * essai. La v14 la remplace par des tons un peu plus soutenus, sauf si on y a touché.
+ */
+const FIRST_DIAGRAM_PALETTE: readonly { name: string; hex: string }[] = [
+  { name: 'Noir', hex: '#000000' },
+  { name: 'Rouge pastel', hex: '#f4a6a6' },
+  { name: 'Orange pastel', hex: '#f8c28b' },
+  { name: 'Jaune pastel', hex: '#f7e08a' },
+  { name: 'Vert pastel', hex: '#a8dba0' },
+  { name: 'Turquoise pastel', hex: '#93d8cf' },
+  { name: 'Bleu pastel', hex: '#9fc7f2' },
+  { name: 'Violet pastel', hex: '#c3b3ee' },
+  { name: 'Rose pastel', hex: '#f2b0d2' },
+  { name: 'Gris pastel', hex: '#c5ccd6' }
+]
+
+function migrateSettingsV13(raw: RawRecord): RawRecord {
+  const palette = Array.isArray(raw['diagramPalette']) ? raw['diagramPalette'] : []
+  const untouched =
+    palette.length === FIRST_DIAGRAM_PALETTE.length &&
+    FIRST_DIAGRAM_PALETTE.every((color, index) => {
+      const stored: unknown = palette[index]
+      return isRecord(stored) && stored['name'] === color.name && stored['hex'] === color.hex
+    })
+  if (!untouched) return raw
+  return { ...raw, diagramPalette: DEFAULT_DIAGRAM_PALETTE.map((color) => ({ ...color })) }
+}
+
 export const settingsMigrations: MigrationTable = {
   current: SETTINGS_SCHEMA_VERSION,
   steps: {
@@ -605,10 +634,12 @@ export const settingsMigrations: MigrationTable = {
     10: (raw) => ({ ...raw, settingsDir: '' }),
     // v11 → v12 : les cases d'affichage des barres d'outils sont gardées ; toutes cochées au départ.
     11: (raw) => ({ ...raw, showPins: true, showUnconnected: true, showGroups: true }),
-    // v12 → v13 : les diagrammes ont leur palette, pastel au départ ; celle des fils ne change pas.
+    // v12 → v13 : les diagrammes ont leur palette ; celle des fils ne change pas.
     12: (raw) => ({
       diagramPalette: DEFAULT_DIAGRAM_PALETTE.map((color) => ({ ...color })),
       ...raw
-    })
+    }),
+    // v13 → v14 : la palette des diagrammes de départ est moins pâle ; une palette retouchée reste.
+    13: migrateSettingsV13
   }
 }

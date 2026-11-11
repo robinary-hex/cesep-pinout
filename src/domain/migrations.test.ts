@@ -27,6 +27,7 @@ import projectV20 from './fixtures/v20/project.json?raw'
 import settingsV10 from './fixtures/v10/settings.json?raw'
 import settingsV11 from './fixtures/v11/settings.json?raw'
 import settingsV12 from './fixtures/v12/settings.json?raw'
+import settingsV13 from './fixtures/v13/settings.json?raw'
 import projectV17 from './fixtures/v17/project.json?raw'
 import projectV18 from './fixtures/v18/project.json?raw'
 import projectV15 from './fixtures/v15/project.json?raw'
@@ -558,7 +559,7 @@ describe('projet v20 → v21', () => {
 describe('paramètres v11 → v12', () => {
   it('coche au départ les cases d’affichage et garde le dossier des paramètres', () => {
     const settings = parseSettings(settingsV11)
-    expect(settings.schemaVersion).toBe(13)
+    expect(settings.schemaVersion).toBe(14)
     expect(settings).toMatchObject({
       showPins: true,
       showUnconnected: true,
@@ -571,7 +572,7 @@ describe('paramètres v11 → v12', () => {
 describe('paramètres v10 → v11', () => {
   it('garde le fichier partagé dans le dossier par défaut, et tous les réglages', () => {
     const settings = parseSettings(settingsV10)
-    expect(settings.schemaVersion).toBe(13)
+    expect(settings.schemaVersion).toBe(14)
     expect(settings.settingsDir).toBe('')
     expect(settings.libraryDir).toBe('${OneDrive}/Pinout/lib')
     expect(settings.diagramDefaults).toMatchObject({ nodeColor: '#1d4ed8', nodeFill: 'none' })
@@ -582,7 +583,7 @@ describe('paramètres v10 → v11', () => {
 describe('paramètres v9 → v10', () => {
   it('reçoit le style général des diagrammes par défaut et garde le reste', () => {
     const settings = parseSettings(settingsV9)
-    expect(settings.schemaVersion).toBe(13)
+    expect(settings.schemaVersion).toBe(14)
     expect(settings.diagramDefaults).toEqual({
       style: DEFAULT_DIAGRAM_STYLE,
       nodeColor: '#000000',
@@ -597,7 +598,7 @@ describe('paramètres v9 → v10', () => {
 describe('paramètres v8 → v9', () => {
   it('range les couleurs personnalisées dans la palette, sans doublon', () => {
     const settings = parseSettings(settingsV8)
-    expect(settings.schemaVersion).toBe(13)
+    expect(settings.schemaVersion).toBe(14)
     expect('customColors' in settings).toBe(false)
     // #D62828 est déjà le rouge de la palette ; #ff00aa s'y ajoute sous son code.
     expect(settings.palette.map((color) => color.hex.toLowerCase())).toEqual([
@@ -613,7 +614,7 @@ describe('paramètres v8 → v9', () => {
 describe('paramètres v7 → v8', () => {
   it('affiche la bibliothèque en liste par défaut et garde le reste', () => {
     const settings = parseSettings(settingsV7)
-    expect(settings.schemaVersion).toBe(13)
+    expect(settings.schemaVersion).toBe(14)
     expect(settings.libraryView).toBe('list')
     expect(settings.theme).toBe('dark')
   })
@@ -622,7 +623,7 @@ describe('paramètres v7 → v8', () => {
 describe('paramètres v6 → v8', () => {
   it('passe au thème sombre et garde le reste', () => {
     const settings = parseSettings(settingsV6)
-    expect(settings.schemaVersion).toBe(13)
+    expect(settings.schemaVersion).toBe(14)
     expect(settings.theme).toBe('dark')
     expect(settings.autoOpenInspector).toBe(true)
     expect(settings.autosaveSeconds).toBe(120)
@@ -632,7 +633,7 @@ describe('paramètres v6 → v8', () => {
 describe('paramètres v5 → v8', () => {
   it('ouvre le panneau de propriétés à la sélection par défaut', () => {
     const settings = parseSettings(settingsV5)
-    expect(settings.schemaVersion).toBe(13)
+    expect(settings.schemaVersion).toBe(14)
     expect(settings.autoOpenInspector).toBe(true)
   })
 })
@@ -640,7 +641,7 @@ describe('paramètres v5 → v8', () => {
 describe('paramètres v4 → v8', () => {
   it('complète le profil par défaut et garde le thème', () => {
     const settings = parseSettings(settingsV4)
-    expect(settings.schemaVersion).toBe(13)
+    expect(settings.schemaVersion).toBe(14)
     expect(settings.theme).toBe('dark')
     expect(settings.defaultProfile.endLabelFont).toEqual({ family: 'Segoe UI', size: 14 })
   })
@@ -649,7 +650,7 @@ describe('paramètres v4 → v8', () => {
 describe('paramètres v1 → v8', () => {
   it('ajoute export, copie de secours, trait des composants et thème', () => {
     const settings = parseSettings(settingsV1)
-    expect(settings.schemaVersion).toBe(13)
+    expect(settings.schemaVersion).toBe(14)
     expect(settings.defaultProfile.componentStroke).toBe(0.1)
     expect(settings.export.scale).toBe(2)
     expect(settings.theme).toBe('dark')
@@ -659,7 +660,7 @@ describe('paramètres v1 → v8', () => {
 describe('paramètres v3 → v8', () => {
   it('ajoute le thème, sombre désormais, et garde le reste', () => {
     const settings = parseSettings(settingsV3)
-    expect(settings.schemaVersion).toBe(13)
+    expect(settings.schemaVersion).toBe(14)
     expect(settings.theme).toBe('dark')
     expect(settings.recentFiles).toEqual(['D:/Documents/diviseur.pinout.json'])
     expect(settings.autosaveSeconds).toBe(60)
@@ -667,9 +668,9 @@ describe('paramètres v3 → v8', () => {
 })
 
 describe('paramètres v12 → v13', () => {
-  it('ajoute la palette des diagrammes, pastel, sans toucher à celle des fils', () => {
+  it('ajoute la palette des diagrammes, sans toucher à celle des fils', () => {
     const settings = parseSettings(settingsV12)
-    expect(settings.schemaVersion).toBe(13)
+    expect(settings.schemaVersion).toBe(14)
     expect(settings.diagramPalette).toEqual(DEFAULT_DIAGRAM_PALETTE)
     // La palette des fils et le reste sont repris tels quels.
     expect(settings.palette.map((color) => color.hex)).toEqual(['#000000', '#d62828', '#ff00aa'])
@@ -681,5 +682,45 @@ describe('paramètres v12 → v13', () => {
     expect(parseSettings(JSON.stringify(raw)).diagramPalette).toEqual([
       { name: 'Encre', hex: '#101010' }
     ])
+  })
+})
+
+describe('paramètres v13 → v14', () => {
+  it('remplace la première palette des diagrammes, trop pâle, si on n’y a pas touché', () => {
+    const before = JSON.parse(settingsV13) as { diagramPalette: { name: string; hex: string }[] }
+    expect(before.diagramPalette[1]).toEqual({ name: 'Rouge pastel', hex: '#f4a6a6' })
+    const settings = parseSettings(settingsV13)
+    expect(settings.schemaVersion).toBe(14)
+    expect(settings.diagramPalette).toEqual(DEFAULT_DIAGRAM_PALETTE)
+    expect(settings.diagramPalette[1]).toEqual({ name: 'Rouge', hex: '#e87773' })
+    // La palette des fils et le reste ne bougent pas.
+    expect(settings.palette.map((color) => color.hex)).toEqual(['#000000', '#d62828', '#ff00aa'])
+    expect(settings.showUnconnected).toBe(false)
+  })
+
+  it('garde une palette des diagrammes retouchée', () => {
+    const retouched = (change: (palette: { name: string; hex: string }[]) => void): unknown => {
+      const raw = JSON.parse(settingsV13) as { diagramPalette: { name: string; hex: string }[] }
+      change(raw.diagramPalette)
+      return parseSettings(JSON.stringify(raw)).diagramPalette
+    }
+    // Une teinte changée, une couleur renommée, une couleur retirée ou ajoutée : c'est la sienne.
+    const tinted = retouched((palette) => {
+      const second = palette[1]
+      if (second) second.hex = '#ff8888'
+    })
+    expect(tinted).toHaveLength(10)
+    expect(tinted).toContainEqual({ name: 'Rouge pastel', hex: '#ff8888' })
+    expect(tinted).toContainEqual({ name: 'Gris pastel', hex: '#c5ccd6' })
+    expect(
+      retouched((palette) => {
+        const second = palette[1]
+        if (second) second.name = 'Saumon'
+      })
+    ).toContainEqual({ name: 'Saumon', hex: '#f4a6a6' })
+    expect(retouched((palette) => palette.pop())).toHaveLength(9)
+    expect(retouched((palette) => palette.push({ name: 'Menthe', hex: '#b5ead7' }))).toHaveLength(
+      11
+    )
   })
 })

@@ -14,14 +14,14 @@ import {
 describe('paramètres', () => {
   it('migre un fichier de version 1 en ajoutant export et copie de secours', () => {
     const settings = parseSettings(settingsV1)
-    expect(settings.schemaVersion).toBe(13)
+    expect(settings.schemaVersion).toBe(14)
     expect(settings.export).toEqual(DEFAULT_EXPORT)
     expect(settings.autosaveSeconds).toBe(DEFAULT_AUTOSAVE_SECONDS)
     expect(settings.libraryDir).toBe('D:/OneDrive/Pinout/library')
     expect(settings.recentFiles).toEqual(['D:/Documents/alim.pinout.json'])
   })
 
-  it('donne aux diagrammes leur palette : le noir, puis des tons pastel', () => {
+  it('donne aux diagrammes leur palette : le noir, puis des tons doux', () => {
     expect(DEFAULT_SETTINGS.diagramPalette).toEqual(DEFAULT_DIAGRAM_PALETTE)
     expect(DEFAULT_DIAGRAM_PALETTE).toHaveLength(10)
     // Le noir d'abord : c'est la couleur d'un nouveau nœud et d'un nouveau lien.

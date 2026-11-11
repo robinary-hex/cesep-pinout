@@ -3,7 +3,7 @@ import { hexColorSchema } from './color'
 import { DEFAULT_DIAGRAM_STYLE, diagramStyleSchema, nodeFillSchema } from './diagram'
 import { DEFAULT_PROFILE, styleProfileSchema } from './profile'
 
-export const SETTINGS_SCHEMA_VERSION = 13
+export const SETTINGS_SCHEMA_VERSION = 14
 
 export const paletteColorSchema = z.object({
   name: z.string().min(1),
@@ -34,20 +34,22 @@ export const DEFAULT_PALETTE: readonly PaletteColor[] = [
 ]
 
 /**
- * Palette de départ des diagrammes : le noir des traits, puis des tons pastel, plus doux que les
- * couleurs vives des fils. Modifiable dans les paramètres.
+ * Palette de départ des diagrammes : le noir des traits, puis des tons doux, plus clairs que les
+ * couleurs vives des fils sans être pastel (une première palette, pastel, était trop pâle :
+ * décision du 11 novembre 2026). Toutes restent assez claires pour porter un texte noir sur un
+ * fond plein. Modifiable dans les paramètres.
  */
 export const DEFAULT_DIAGRAM_PALETTE: readonly PaletteColor[] = [
   { name: 'Noir', hex: '#000000' },
-  { name: 'Rouge pastel', hex: '#f4a6a6' },
-  { name: 'Orange pastel', hex: '#f8c28b' },
-  { name: 'Jaune pastel', hex: '#f7e08a' },
-  { name: 'Vert pastel', hex: '#a8dba0' },
-  { name: 'Turquoise pastel', hex: '#93d8cf' },
-  { name: 'Bleu pastel', hex: '#9fc7f2' },
-  { name: 'Violet pastel', hex: '#c3b3ee' },
-  { name: 'Rose pastel', hex: '#f2b0d2' },
-  { name: 'Gris pastel', hex: '#c5ccd6' }
+  { name: 'Rouge', hex: '#e87773' },
+  { name: 'Orange', hex: '#ed9e5a' },
+  { name: 'Jaune', hex: '#ebc247' },
+  { name: 'Vert', hex: '#75c46e' },
+  { name: 'Turquoise', hex: '#59c0b2' },
+  { name: 'Bleu', hex: '#67a6e9' },
+  { name: 'Violet', hex: '#a087e3' },
+  { name: 'Rose', hex: '#e77eb4' },
+  { name: 'Gris', hex: '#9aa6b6' }
 ]
 
 export const EXPORT_SCALES = [1, 2, 4] as const
