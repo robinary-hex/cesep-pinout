@@ -20,7 +20,7 @@ import { screenColor } from './ink'
 // état ; le canevas, la bibliothèque et les aperçus s'en servent. Mêmes règles de couleur que
 // `nodePaint` du domaine (ce que l'export écrit), mais avec les variables du thème : le noir pur
 // prend l'encre, un fond teinté mêle la couleur au papier (`--node-tint`), un fond plein garde la
-// couleur et son contour s'en détache.
+// couleur et son contour s'en détache ; le texte prend la couleur de la forme.
 
 const props = defineProps<{ node: DiagramNode; look: DiagramStyle }>()
 
@@ -48,9 +48,16 @@ function fillOf(part: NodePart): string {
   return part.fill === 'body' ? body.value : 'none'
 }
 
-/** Texte : l'encre du thème, sauf sur un fond plein, où il contraste avec lui. */
+/**
+ * Texte : la couleur de la forme, sauf sur un fond plein, où elle ne se lirait pas : il y
+ * contraste avec le fond. Ou la couleur propre au nœud ; son noir pur est l'encre du thème, sauf
+ * sur un fond plein, où il reste noir.
+ */
 const textColor = computed(() => {
-  if (props.node.fill !== 'solid') return 'var(--ink)'
+  const own = props.node.textColor
+  const solid = props.node.fill === 'solid'
+  if (own !== null) return solid ? own : screenColor(own)
+  if (!solid) return color.value
   // Fond plein à l'encre du thème : le texte prend la couleur du papier.
   if (isInk.value) return 'var(--paper)'
   return isDarkColor(props.node.color) ? '#ffffff' : '#000000'

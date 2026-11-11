@@ -172,7 +172,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   `apply` à chaque commande et dans l'aperçu du canevas) ; une extrémité sur une broche ou
   déplacée par la commande elle-même ne suit pas. Un nouveau fil prend la couleur du dernier fil tracé ou
   recoloré (`currentColor`, recalée sur le dernier fil du projet à l'ouverture). Couleurs proposées
-  (`colorChoices`) : la palette de l'application (Paramètres), commune à tous les montages, puis
+  (`colorChoices`) : la palette des fils (Paramètres), commune à tous les montages, puis
   les couleurs du montage (`customColors`, huit au plus), ajoutées par le « + » de la barre et
   enregistrées dans son fichier. Extrémités
   libres (`freeEnds`) : nettes, en flèche ou en pointillés, dessinées pareil à l'écran et à
@@ -269,7 +269,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Diagramme (`src/features/diagram-editor/`, domaine `src/domain/diagram.ts`,
   `diagramShapes.ts`, `diagramLinks.ts`, `diagramSvg.ts`) : organigrammes, diagrammes d'activité,
   schémas de communication ; pas de diagrammes de séquence ni de classes (décision du 10 novembre
-  2026). Document à part, fichier `.pinuml` (JSON, `schemaVersion` 4), même grille infinie que le
+  2026). Document à part, fichier `.pinuml` (JSON, `schemaVersion` 5), même grille infinie que le
   montage mais plus fine (`style.cellPx` = 10).
   - Nœuds : une boîte en cellules entières, une forme du catalogue en dur (`NODE_SHAPES`,
     `NODE_SPECS`), un titre et un sous-titre, une couleur et un fond (`fill` : contour, teinté,
@@ -302,8 +302,13 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     en thème sombre (`TINT_SHARE` : 20 % de couleur en clair, 40 % en sombre ; `--node-tint` dans
     style.css) ; en plein, le fond est la
     couleur même et le contour s'en détache, éclairci sur une couleur sombre, foncé sur une
-    couleur claire (`SOLID_BORDER_SHARE`). Texte à l'encre du thème, sauf sur un fond plein où il
-    contraste avec lui. Trois pastilles dans la barre montrent les fonds dans la couleur courante.
+    couleur claire (`SOLID_BORDER_SHARE`). Le texte prend la couleur de la forme (décision du
+    11 novembre 2026), sauf sur un fond plein, où elle ne se lirait pas sur elle-même : il y
+    contraste avec le fond. Un nœud peut avoir sa propre couleur de texte (`textColor`, null =
+    celle de la forme ; pastilles « Couleur du texte » du panneau, avec « Auto », et sous-menu
+    « Texte » du clic droit ; `setNodesTextStyle`) : son noir pur est l'encre du thème, sauf
+    sur un fond plein, où il reste noir. Trois pastilles dans la barre montrent les fonds dans
+    la couleur courante.
     Texte : le diagramme a une police (normale ou chasse fixe) et des tailles ; chaque nœud a son
     style (`NodeTextStyle`, boutons du panneau) : `font` (null = la police du diagramme, sinon la
     sienne ; un bouton bascule la chasse fixe), `bold`, `italic`, `underline`, `strike`, et
@@ -312,14 +317,12 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     maigre, en italique en chasse fixe ; police et taille valent pour les deux
     (`layoutNodeText`, `nodeLineAttrs`). Un nœud neuf a un titre gras en police normale, maigre
     en chasse fixe (`defaultNodeTextStyle`, `createNode`). Un
-    nœud suit son texte (`setNodeText`, et `setNodesTextStyle` quand c'est son style qui
-    change ; même commande, centre gardé ; décision du 11 novembre 2026) : après une
-    modification il a la taille qu'il aurait eue si ce texte avait été le premier, donc il
-    rétrécit aussi (`nodeBoxFollowingText`). Chaque dimension qui avait sa taille automatique
-    (celle par défaut de la forme, agrandie quand le texte le demande) prend celle du nouveau
-    texte ; une dimension réglée à la main ne fait que grandir ; un nœud ajusté au plus près
-    le reste. Rien n'est enregistré : ces cas se reconnaissent à la taille que demandait
-    l'ancien texte. « Ajuster » (panneau, menu contextuel) ramène un nœud au
+    nœud ne règle sa taille qu'à son premier texte (`setNodeText` : la boîte d'un nœud vide
+    grandit si le texte qu'on y écrit déborde, même commande, centre gardé). Ensuite sa taille
+    ne change plus d'elle-même, ni quand on modifie le texte, ni quand on change son style
+    (`setNodesTextStyle`) : un texte peut déborder (décision du 11 novembre 2026, qui revient
+    sur un essai où la boîte suivait chaque modification). « Ajuster » (panneau, menu
+    contextuel) ramène un nœud au
     plus près (`fitNodeToText`, `nodeBoxForText`). La largeur du texte se mesure sur un canevas
     hors écran (`src/render/textMeasure.ts`), estimée sans navigateur. Le style du diagramme
     (trait, coins, coudes, tailles de texte, police) se règle dans le panneau, sans sélection.
@@ -369,8 +372,12 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     (`nodeAnchors` : tour d'un rectangle, quatre pointes d'un losange ou d'un disque, toute une
     barre) le suit quand il bouge, change de taille ou de forme (`linksFollowingNodes`,
     `movedAnchor`, par `wiresFollowingPins`).
-  - Couleurs : la palette de l'application puis celles du diagramme (`customColors`), comme pour
-    les fils. La palette de la barre colore la sélection et règle la couleur des prochains nœuds,
+  - Couleurs : la palette des diagrammes puis celles du diagramme (`customColors`). Les
+    diagrammes ont leur palette, à part de celle des fils (décision du 11 novembre 2026 ;
+    `diagramPalette` des paramètres, `DEFAULT_DIAGRAM_PALETTE` : le noir, puis des tons pastel,
+    là où les fils ont des couleurs vives). Les deux se règlent dans la boîte des paramètres
+    (`settings/PaletteEditor.vue`, une fois pour chacune).
+    La palette de la barre colore la sélection et règle la couleur des prochains nœuds,
     ou des prochains liens quand on en trace ou qu'on n'a sélectionné qu'eux (`paletteOnLinks`).
   - Gestes : forme prise dans la bibliothèque (clic puis clic, ou glisser-déposer), le texte se
     tape aussitôt sur place (petit éditeur HTML par-dessus le nœud : Entrée valide, Maj+Entrée va
@@ -676,10 +683,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     composant posé s'appelle « libellé » dans l'interface.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 15, projet 21, paramètres 12,
-  diagramme 4
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 15, projet 21, paramètres 13,
+  diagramme 5 (depuis la 1.5.0 : palette des diagrammes dans les paramètres, couleur du texte
+  d'un nœud dans le diagramme ; un fichier enregistré ne s'ouvre plus dans une version antérieure)
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
-  supprimé). Ces versions sont celles de la 1.4.0, publiée le 11 novembre 2026 : depuis, tout
+  supprimé). Composant 15 et projet 21 sont ceux de la 1.4.0, publiée le 11 novembre 2026 : depuis, tout
   nouveau champ d'un fichier, même optionnel, demande une montée de version et une migration
   (une version plus ancienne l'ignorerait, puis le perdrait en enregistrant) ; seule exception,
   une indication de présentation dont la perte est sans conséquence (`previewVariant`). Les champs

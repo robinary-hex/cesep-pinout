@@ -511,11 +511,15 @@ export interface NodePaint {
 
 /**
  * Couleurs d'un nœud selon son fond. Contour : le trait a sa couleur, pas de fond. Teinté : le fond
- * est sa couleur mêlée au papier. Plein : le fond est sa couleur, le contour s'en détache, et le
- * texte contraste avec le fond ; ailleurs le texte est à l'encre.
+ * est sa couleur mêlée au papier. Plein : le fond est sa couleur, et le contour s'en détache.
+ *
+ * Le texte prend la couleur de la forme (décision du 11 novembre 2026), sauf sur un fond plein, où
+ * elle ne se lirait pas sur elle-même : il y contraste avec le fond. Un nœud peut avoir sa propre
+ * couleur de texte (`textColor`) ; son noir pur est l'encre du papier, sauf sur un fond plein, où
+ * il reste noir.
  */
 export function nodePaint(
-  node: Pick<DiagramNode, 'color' | 'fill'>,
+  node: Pick<DiagramNode, 'color' | 'fill' | 'textColor'>,
   ground: DiagramGround
 ): NodePaint {
   const color = inkColor(node.color, ground)
@@ -524,7 +528,7 @@ export function nodePaint(
       stroke: mixColors(color, solidBorderToward(color), SOLID_BORDER_SHARE),
       fill: color,
       solid: color,
-      text: isDarkColor(color) ? '#ffffff' : '#000000'
+      text: node.textColor ?? (isDarkColor(color) ? '#ffffff' : '#000000')
     }
   }
   return {
@@ -534,7 +538,7 @@ export function nodePaint(
         ? mixColors(color, ground.paper, ground.dark ? TINT_SHARE.dark : TINT_SHARE.light)
         : null,
     solid: color,
-    text: ground.ink
+    text: node.textColor === null ? color : inkColor(node.textColor, ground)
   }
 }
 
@@ -655,50 +659,6 @@ export function nodeBoxForText(
   }
   const w = even(needed.w, node.w)
   const h = even(needed.h, node.h)
-  if (w === node.w && h === node.h) return null
-  return { x: node.x - (w - node.w) / 2, y: node.y - (h - node.h) / 2, w, h }
-}
-
-/**
- * Boîte d'un nœud dont le texte, ou le style de son texte, vient de changer (`edited` : le nœud
- * tel qu'il devient), centre gardé ; null s'il n'y a rien à changer. Le nœud prend la taille
- * qu'il aurait eue si ce texte avait été le premier qu'on y écrit, donc il rétrécit aussi
- * (décision du 11 novembre 2026) :
- *
- * - un nœud ajusté au plus près (« Ajuster » : il épouse son texte, sous sa taille par défaut) le
- *   reste ;
- * - sinon chaque dimension qui avait sa taille automatique, celle par défaut de la forme,
- *   agrandie quand le texte le demande, prend celle du nouveau texte ;
- * - une dimension réglée à la main ne fait que grandir, là où le texte déborde.
- *
- * Rien n'est enregistré de ces trois cas : ils se reconnaissent à la taille que demandait
- * l'ancien texte, à la cellule près qu'ajoute le centrage sur la grille.
- */
-export function nodeBoxFollowingText(
-  node: DiagramNode,
-  edited: DiagramNode,
-  style: DiagramStyle,
-  measure: NodeTextMeasurer
-): Box | null {
-  if (!NODE_SPECS[edited.shape].text) return null
-  const before = nodeSizeForText(node, style, measure)
-  const needed = nodeSizeForText(edited, style, measure)
-  const preset = NODE_SPECS[edited.shape].defaultSize
-  const matches = (size: number, target: number): boolean => size === target || size === target + 1
-  const hugging =
-    before !== null &&
-    matches(node.w, before.w) &&
-    matches(node.h, before.h) &&
-    (node.w < preset.w || node.h < preset.h)
-  const follow = (size: number, usual: number, old: number, wanted: number | null): number => {
-    let target = Math.max(size, wanted ?? 0)
-    if (hugging) target = wanted ?? size
-    else if (matches(size, Math.max(usual, old))) target = Math.max(usual, wanted ?? 0)
-    // Écart pair : le centre reste sur la grille.
-    return (target - size) % 2 === 0 ? target : target + 1
-  }
-  const w = follow(node.w, preset.w, before?.w ?? 0, needed?.w ?? null)
-  const h = follow(node.h, preset.h, before?.h ?? 0, needed?.h ?? null)
   if (w === node.w && h === node.h) return null
   return { x: node.x - (w - node.w) / 2, y: node.y - (h - node.h) / 2, w, h }
 }

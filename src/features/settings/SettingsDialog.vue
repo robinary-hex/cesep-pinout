@@ -16,9 +16,12 @@ import { dirOf } from '@/io/paths'
 import Icon from '@/ui/Icon.vue'
 import ModalDialog from '@/ui/ModalDialog.vue'
 import { applyTheme } from '@/ui/theme'
+import PaletteEditor from './PaletteEditor.vue'
 
-// Paramètres de l'application : apparence, dossiers et palette à gauche ; copie de secours et
-// export à droite. On édite une copie et on n'enregistre qu'à la validation ; les deux dossiers
+// Paramètres de l'application : apparence, dossiers et palette des fils à gauche ; copie de
+// secours, export et palette des diagrammes à droite (les fils ont des couleurs vives, les
+// diagrammes les leurs, pastel au départ). On édite une copie et on n'enregistre qu'à la
+// validation ; les deux dossiers
 // (bibliothèque, paramètres) changent tout de suite, dès qu'on en choisit un autre. Le profil de
 // style a sa propre boîte (ProfileDialog), ouverte depuis la barre d'application.
 
@@ -41,26 +44,9 @@ function number(event: Event, fallback: number): number {
   return Number.isFinite(value) ? value : fallback
 }
 
-function updatePaletteColor(index: number, changes: Partial<PaletteColor>): void {
-  const palette = draft.value.palette.map((color, i) =>
-    i === index ? { ...color, ...changes } : color
-  )
-  draft.value = { ...draft.value, palette }
-}
-
-function removePaletteColor(index: number): void {
-  if (draft.value.palette.length <= 1) return
-  draft.value = { ...draft.value, palette: draft.value.palette.filter((_, i) => i !== index) }
-}
-
-function addPaletteColor(): void {
-  draft.value = {
-    ...draft.value,
-    palette: [
-      ...draft.value.palette,
-      { name: `Couleur ${draft.value.palette.length + 1}`, hex: '#808080' }
-    ]
-  }
+/** Les deux palettes s'éditent de la même façon : celle des fils, celle des diagrammes. */
+function setPalette(key: 'palette' | 'diagramPalette', colors: PaletteColor[]): void {
+  draft.value = { ...draft.value, [key]: colors }
 }
 
 function setExportScale(scale: ExportScale): void {
@@ -116,14 +102,22 @@ async function save(): Promise<void> {
   }
   // Seuls les réglages de cette boîte sont enregistrés : les dossiers ont déjà changé à leur
   // choix, et le reste (profils, fichiers récents) ne se modifie pas ici.
-  const { theme, libraryView, autoOpenInspector, palette, defaultWireColor, autosaveSeconds } =
-    parsed.data
+  const {
+    theme,
+    libraryView,
+    autoOpenInspector,
+    palette,
+    defaultWireColor,
+    diagramPalette,
+    autosaveSeconds
+  } = parsed.data
   await library.updateSettings({
     theme,
     libraryView,
     autoOpenInspector,
     palette,
     defaultWireColor,
+    diagramPalette,
     autosaveSeconds,
     export: parsed.data.export
   })
@@ -228,32 +222,7 @@ async function save(): Promise<void> {
 
         <section class="block">
           <h3>Palette des fils</h3>
-          <div class="palette-grid">
-            <div v-for="(color, index) in draft.palette" :key="index" class="palette-row">
-              <input
-                type="color"
-                :value="color.hex"
-                @change="updatePaletteColor(index, { hex: text($event) })"
-              />
-              <input
-                type="text"
-                :value="color.name"
-                @change="updatePaletteColor(index, { name: text($event).trim() || color.name })"
-              />
-              <button
-                type="button"
-                class="small danger"
-                title="Retirer"
-                @click="removePaletteColor(index)"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-          <div class="row">
-            <button type="button" class="small with-icon" @click="addPaletteColor">
-              <Icon name="plus" :size="14" /> Ajouter une couleur
-            </button>
+          <PaletteEditor :colors="draft.palette" @change="setPalette('palette', $event)">
             <label class="field inline">
               <span>Couleur des nouveaux fils</span>
               <select
@@ -265,7 +234,7 @@ async function save(): Promise<void> {
                 </option>
               </select>
             </label>
-          </div>
+          </PaletteEditor>
         </section>
       </div>
 
@@ -349,6 +318,14 @@ async function save(): Promise<void> {
             </label>
           </div>
         </section>
+
+        <section class="block">
+          <h3>Palette des diagrammes</h3>
+          <PaletteEditor
+            :colors="draft.diagramPalette"
+            @change="setPalette('diagramPalette', $event)"
+          />
+        </section>
       </div>
     </div>
 
@@ -366,9 +343,10 @@ async function save(): Promise<void> {
 </template>
 
 <style scoped>
+/* Deux colonnes de même largeur : chacune porte une palette, et aucune ne s'élargit pour elle. */
 .columns {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0 28px;
   align-items: start;
 }
@@ -406,35 +384,6 @@ async function save(): Promise<void> {
 .path {
   margin: 0 0 6px;
   word-break: break-all;
-}
-
-.palette-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px 10px;
-}
-
-.palette-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.palette-row input[type='text'] {
-  flex: 1;
-  min-width: 0;
-  font: inherit;
-  padding: 3px 6px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-}
-
-.palette-row input[type='color'] {
-  width: 32px;
-  height: 26px;
-  padding: 0 2px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
 }
 
 .field {

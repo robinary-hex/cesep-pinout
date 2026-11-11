@@ -1,6 +1,12 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { DEFAULT_DIAGRAM_STYLE, linkShape, parseDiagram, serializeDiagram } from '@/domain'
+import {
+  DEFAULT_DIAGRAM_PALETTE,
+  DEFAULT_DIAGRAM_STYLE,
+  linkShape,
+  parseDiagram,
+  serializeDiagram
+} from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import { readDiagramAutosaves, syncDiagramAutosaves } from '@/io/autosave'
 import { setBridge } from '@/io/bridge'
@@ -80,49 +86,54 @@ describe('diagramme : nœuds', () => {
     expect(store.doc.nodes.map((node) => node.id)).toEqual([a, b])
   })
 
-  it('agrandit un nœud dont le texte déborde, et l’ajuste au plus près sur demande', () => {
+  it('règle la taille d’un nœud à son premier texte, puis n’y touche plus', () => {
     const store = useDiagramStore()
     const id = store.addNode('rounded', 10, 10)
     store.addLink([
       [18, 16],
       [18, 22]
     ])
-    // Texte court : la boîte de 16 × 6 suffit.
-    store.setNodeText(id, { title: 'Arduino' })
-    expect(store.doc.nodes[0]).toMatchObject({ x: 10, y: 10, w: 16, h: 6 })
-    // Texte long (estimé à 0,77 cellule par caractère) : la boîte grandit autour de son centre,
-    // en une seule commande avec le texte, et le lien accroché au milieu du bas y reste.
+    // Premier texte, long (estimé à 0,77 cellule par caractère) : la boîte grandit autour de son
+    // centre, en une seule commande avec le texte, et le lien accroché au milieu du bas y reste.
     store.setNodeText(id, { title: 'Publier le message sur le sujet de la partie' })
     const grown = store.doc.nodes[0]
     expect(grown?.w).toBeGreaterThan(16)
     expect((grown?.x ?? 0) + (grown?.w ?? 0) / 2).toBe(18)
     expect(store.doc.links[0]?.points.at(0)).toEqual([18, 16])
     expect(store.undoLabel).toBe('Modifier le texte du nœud')
-    // Texte raccourci : la boîte revient à sa taille par défaut, autour du même centre.
+    const sized = { x: grown?.x, y: 10, w: grown?.w, h: 6 }
+    // Texte modifié ensuite : plus court, la boîte ne rétrécit pas…
     store.setNodeText(id, { title: 'Publier' })
-    expect(store.doc.nodes[0]).toMatchObject({ title: 'Publier', x: 10, y: 10, w: 16, h: 6 })
+    expect(store.doc.nodes[0]).toMatchObject({ title: 'Publier', ...sized })
+    // … et plus long, elle ne grandit pas non plus, même s'il déborde.
+    store.setNodeText(id, {
+      title: 'Publier le message sur le sujet de la partie, puis attendre la réponse du serveur'
+    })
+    expect(store.doc.nodes[0]).toMatchObject(sized)
+    // Un sous-titre ajouté après coup n'y change rien.
+    store.setNodeText(id, { subtitle: '(une ligne de plus)' })
+    expect(store.doc.nodes[0]).toMatchObject(sized)
     expect(store.doc.links[0]?.points.at(0)).toEqual([18, 16])
-    store.undo()
-    expect(store.doc.nodes[0]?.w).toBe(grown?.w)
-    store.undo()
-    expect(store.doc.nodes[0]).toMatchObject({ title: 'Arduino', w: 16 })
-    // « Ajuster » resserre la boîte autour du texte ; le lien suit le bord qui remonte.
+    // « Ajuster » resserre la boîte autour du texte, sur demande ; le lien suit le bord.
+    store.setNodeText(id, { title: 'Arduino', subtitle: '' })
+    expect(store.doc.nodes[0]).toMatchObject(sized)
     store.fitNodeToText(id)
     expect(store.doc.nodes[0]).toMatchObject({ w: 10, h: 4, x: 13, y: 11 })
     expect(store.doc.links[0]?.points.at(0)).toEqual([18, 15])
     expect(store.undoLabel).toBe('Ajuster le nœud à son texte')
-    // Ajusté, il épouse son texte : il grandit et rétrécit avec lui, sans revenir à 16 × 6.
-    store.setNodeText(id, { title: 'Arduino Uno' })
-    const hugging = store.doc.nodes[0]
-    expect(hugging?.w).toBeGreaterThan(10)
-    expect(hugging?.w).toBeLessThan(16)
-    expect(hugging?.h).toBe(4)
-    store.setNodeText(id, { title: 'Uno' })
-    expect(store.doc.nodes[0]?.w).toBeLessThan(10)
+    // Texte effacé, puis réécrit : c'est de nouveau un premier texte.
+    store.setNodeText(id, { title: '' })
+    expect(store.doc.nodes[0]).toMatchObject({ w: 10, h: 4 })
+    store.setNodeText(id, { title: 'Publier le message sur le sujet de la partie' })
+    expect(store.doc.nodes[0]?.w).toBeGreaterThan(16)
     expect((store.doc.nodes[0]?.x ?? 0) + (store.doc.nodes[0]?.w ?? 0) / 2).toBe(18)
+    // Un premier texte court tient dans la boîte par défaut : elle ne bouge pas.
+    const other = store.addNode('rounded', 0, 30)
+    store.setNodeText(other, { title: 'Arduino' })
+    expect(store.doc.nodes[1]).toMatchObject({ x: 0, y: 30, w: 16, h: 6 })
   })
 
-  it('style le texte d’un nœud ; la boîte grandit si le texte grossit', () => {
+  it('style le texte d’un nœud sans toucher à sa taille', () => {
     const store = useDiagramStore()
     const id = store.addNode('rounded', 10, 10)
     expect(store.doc.nodes[0]).toMatchObject({ font: null, bold: true, textScale: 1 })
@@ -131,16 +142,9 @@ describe('diagramme : nœuds', () => {
     store.setNodesTextStyle([id], 'Italique activé', { italic: true, underline: true })
     expect(store.doc.nodes[0]).toMatchObject({ italic: true, underline: true, w: 16 })
     expect(store.undoLabel).toBe('Italique activé')
-    // ×2 : le texte ne tient plus, la boîte grandit autour de son centre, en une commande.
-    store.setNodesTextStyle([id], 'Taille du texte du nœud', { textScale: 2 })
-    const grown = store.doc.nodes[0]
-    expect(grown?.textScale).toBe(2)
-    expect(grown?.w).toBeGreaterThan(16)
-    expect((grown?.x ?? 0) + (grown?.w ?? 0) / 2).toBe(18)
-    // Retour à ×1 : la boîte revient à sa taille, elle aussi.
-    store.setNodesTextStyle([id], 'Taille du texte du nœud', { textScale: 1 })
-    expect(store.doc.nodes[0]).toMatchObject({ textScale: 1, w: 16, h: 6, x: 10 })
-    store.undo()
+    // ×3 : le texte ne tient plus, mais la boîte garde sa taille.
+    store.setNodesTextStyle([id], 'Taille du texte du nœud', { textScale: 3 })
+    expect(store.doc.nodes[0]).toMatchObject({ textScale: 3, x: 10, y: 10, w: 16, h: 6 })
     store.undo()
     expect(store.doc.nodes[0]).toMatchObject({ textScale: 1, w: 16, x: 10 })
     // La police propre au nœud ; null revient à celle du diagramme.
@@ -152,6 +156,52 @@ describe('diagramme : nœuds', () => {
     store.setStyle({ font: 'mono' })
     store.addNode('rect', 0, 30)
     expect(store.doc.nodes[1]?.bold).toBe(false)
+  })
+
+  it('donne au texte la couleur de sa forme, ou celle qu’on lui choisit', () => {
+    const store = useDiagramStore()
+    const a = store.addNode('rounded', 0, 0)
+    const b = store.addNode('rect', 0, 10)
+    // Aucune couleur choisie : le texte suit la forme.
+    expect(store.doc.nodes.map((node) => node.textColor)).toEqual([null, null])
+    store.setNodesTextStyle([a, b], 'Couleur du texte', { textColor: '#d62828' })
+    expect(store.doc.nodes.map((node) => node.textColor)).toEqual(['#d62828', '#d62828'])
+    expect(store.undoLabel).toBe('Couleur du texte')
+    // Recolorer la forme ne touche pas à la couleur choisie pour son texte.
+    store.selectedNodes = [a]
+    store.setCurrentColor('#1d4ed8')
+    expect(store.doc.nodes[0]).toMatchObject({ color: '#1d4ed8', textColor: '#d62828' })
+    // Revenir à la couleur de la forme.
+    store.setNodesTextStyle([a], 'Couleur du texte', { textColor: null })
+    expect(store.doc.nodes[0]?.textColor).toBeNull()
+    // La copie d'un nœud garde la couleur de son texte.
+    store.selectedNodes = [b]
+    store.duplicateSelection()
+    expect(store.doc.nodes.at(-1)?.textColor).toBe('#d62828')
+  })
+
+  it('propose la palette des diagrammes, pas celle des fils', async () => {
+    const library = useLibraryStore()
+    const store = useDiagramStore()
+    expect(store.colorChoices.map((choice) => choice.hex)).toEqual(
+      DEFAULT_DIAGRAM_PALETTE.map((color) => color.hex)
+    )
+    // Une couleur vive des fils n'y est pas.
+    expect(store.colorChoices.some((choice) => choice.hex === '#d62828')).toBe(false)
+    // Elle se règle dans les paramètres, et celles du diagramme la suivent toujours.
+    await library.updateSettings({
+      diagramPalette: [
+        { name: 'Noir', hex: '#000000' },
+        { name: 'Menthe', hex: '#b5ead7' }
+      ]
+    })
+    store.addCustomColor('#ffdac1')
+    expect(store.colorChoices).toEqual([
+      { hex: '#000000', name: 'Noir' },
+      { hex: '#b5ead7', name: 'Menthe' },
+      { hex: '#ffdac1', name: '#ffdac1' }
+    ])
+    expect(library.palette.map((color) => color.hex)).toContain('#d62828')
   })
 
   it('part du style général, le suit quand il change, y revient sur demande', async () => {

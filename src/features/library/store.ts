@@ -3,6 +3,7 @@ import { computed, ref, shallowRef } from 'vue'
 import {
   DEFAULT_AUTOSAVE_SECONDS,
   DEFAULT_DIAGRAM_DEFAULTS,
+  DEFAULT_DIAGRAM_PALETTE,
   DEFAULT_EXPORT,
   DEFAULT_PALETTE,
   DEFAULT_PROFILE,
@@ -60,8 +61,13 @@ export const useLibraryStore = defineStore('library', () => {
   const diagramDefaults = computed<DiagramDefaults>(
     () => settings.value?.diagramDefaults ?? DEFAULT_DIAGRAM_DEFAULTS
   )
+  /** Palette des fils. */
   const palette = computed<readonly PaletteColor[]>(
     () => settings.value?.palette ?? DEFAULT_PALETTE
+  )
+  /** Palette des diagrammes : une autre que celle des fils, pastel au départ. */
+  const diagramPalette = computed<readonly PaletteColor[]>(
+    () => settings.value?.diagramPalette ?? DEFAULT_DIAGRAM_PALETTE
   )
   const defaultWireColor = computed(
     () => settings.value?.defaultWireColor ?? DEFAULT_SETTINGS.defaultWireColor
@@ -296,6 +302,7 @@ export const useLibraryStore = defineStore('library', () => {
     defaultProfile,
     diagramDefaults,
     palette,
+    diagramPalette,
     defaultWireColor,
     recentFiles,
     lastProjectDir,

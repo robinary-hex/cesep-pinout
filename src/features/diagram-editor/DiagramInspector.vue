@@ -150,6 +150,12 @@ function setNodeScale(event: Event): void {
   }
 }
 
+/** Couleur du texte du nœud ; null : il reprend celle de la forme. */
+function setNodeTextColor(color: string | null): void {
+  const node = singleNode.value
+  if (node) store.setNodesTextStyle([node.id], 'Couleur du texte', { textColor: color })
+}
+
 function setNodeFill(event: Event): void {
   const node = singleNode.value
   if (node) store.setNodesStyle([node.id], { fill: inputValue(event) as NodeFill })
@@ -396,6 +402,35 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
                 </option>
               </select>
             </label>
+          </div>
+          <div class="field">
+            <div class="field-head">
+              <span>Couleur du texte</span>
+              <button
+                type="button"
+                class="auto"
+                :class="{ current: singleNode.textColor === null }"
+                title="La couleur de la forme"
+                @click="setNodeTextColor(null)"
+              >
+                Auto
+              </button>
+            </div>
+            <div class="swatches">
+              <button
+                v-for="choice in store.colorChoices"
+                :key="choice.hex"
+                type="button"
+                class="swatch"
+                :class="{
+                  current:
+                    singleNode.textColor !== null && sameColor(choice.hex, singleNode.textColor)
+                }"
+                :style="{ background: choice.hex }"
+                :title="choice.name"
+                @click="setNodeTextColor(choice.hex)"
+              />
+            </div>
           </div>
         </template>
         <div class="field">
@@ -801,5 +836,27 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
 
 .swatch.current {
   box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* « Auto », en regard du libellé : le texte reprend la couleur de la forme. */
+.field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.field-head .auto {
+  height: 20px;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 1;
+  border-radius: 10px;
+}
+
+.field-head .auto.current {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent);
 }
 </style>

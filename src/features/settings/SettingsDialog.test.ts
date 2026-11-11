@@ -84,4 +84,63 @@ describe('paramètres de l’application', () => {
     expect(library.autosaveSeconds).toBe(DEFAULT_SETTINGS.autosaveSeconds)
     wrapper.unmount()
   })
+
+  it('règle la palette des diagrammes à part de celle des fils', async () => {
+    const library = useLibraryStore()
+    await library.init()
+    const wrapper = mount(SettingsDialog, { attachTo: document.body })
+    await flushPromises()
+    const block = (title: string): HTMLElement => {
+      const found = [...document.body.querySelectorAll<HTMLElement>('section.block')].find(
+        (section) => section.querySelector('h3')?.textContent === title
+      )
+      if (!found) throw new Error(`section « ${title} » introuvable`)
+      return found
+    }
+    const names = (title: string): string[] =>
+      [...block(title).querySelectorAll<HTMLInputElement>('.palette-row input[type="text"]')].map(
+        (input) => input.value
+      )
+    const change = (input: HTMLInputElement | null | undefined, value: string): void => {
+      if (!input) throw new Error('champ introuvable')
+      input.value = value
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    // Deux palettes : les couleurs vives des fils, les tons pastel des diagrammes.
+    expect(names('Palette des fils')).toEqual(DEFAULT_SETTINGS.palette.map((color) => color.name))
+    expect(names('Palette des diagrammes')).toEqual(
+      DEFAULT_SETTINGS.diagramPalette.map((color) => color.name)
+    )
+    const diagrams = block('Palette des diagrammes')
+    // Renommer et reteinter une couleur, en retirer une, en ajouter une.
+    change(diagrams.querySelectorAll<HTMLInputElement>('input[type="text"]')[1], 'Corail')
+    await flushPromises()
+    change(
+      block('Palette des diagrammes').querySelectorAll<HTMLInputElement>('input[type="color"]')[1],
+      '#ffb4a2'
+    )
+    await flushPromises()
+    block('Palette des diagrammes').querySelectorAll<HTMLButtonElement>('button.danger')[2]?.click()
+    await flushPromises()
+    const add = [...block('Palette des diagrammes').querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === 'Ajouter une couleur'
+    )
+    add?.click()
+    await flushPromises()
+    const expected = [
+      DEFAULT_SETTINGS.diagramPalette[0],
+      { name: 'Corail', hex: '#ffb4a2' },
+      ...DEFAULT_SETTINGS.diagramPalette.slice(3),
+      { name: 'Couleur 10', hex: '#808080' }
+    ]
+    expect(names('Palette des diagrammes')).toEqual(expected.map((color) => color?.name))
+    // Rien n'est enregistré avant la validation ; la palette des fils n'a pas bougé.
+    expect(library.diagramPalette).toEqual(DEFAULT_SETTINGS.diagramPalette)
+    click('Enregistrer')
+    await flushPromises()
+    expect(library.diagramPalette).toEqual(expected)
+    expect(library.palette).toEqual(DEFAULT_SETTINGS.palette)
+    expect(library.settings?.defaultWireColor).toBe(DEFAULT_SETTINGS.defaultWireColor)
+    wrapper.unmount()
+  })
 })

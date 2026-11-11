@@ -6,6 +6,7 @@ import { PROJECT_SCHEMA_VERSION } from './project'
 import {
   DEFAULT_AUTOSAVE_SECONDS,
   DEFAULT_DIAGRAM_DEFAULTS,
+  DEFAULT_DIAGRAM_PALETTE,
   DEFAULT_EXPORT,
   SETTINGS_SCHEMA_VERSION
 } from './settings'
@@ -554,9 +555,20 @@ function migrateDiagramV3(raw: RawRecord): RawRecord {
   }
 }
 
+// Diagramme v4 → v5 : couleur du texte d'un nœud. Aucune n'est choisie : le texte prend celle de
+// sa forme.
+
+function migrateDiagramV4(raw: RawRecord): RawRecord {
+  const nodes = Array.isArray(raw['nodes']) ? raw['nodes'] : []
+  return {
+    ...raw,
+    nodes: nodes.map((node) => (isRecord(node) ? { textColor: null, ...node } : node))
+  }
+}
+
 export const diagramMigrations: MigrationTable = {
   current: DIAGRAM_SCHEMA_VERSION,
-  steps: { 1: migrateDiagramV1, 2: migrateDiagramV2, 3: migrateDiagramV3 }
+  steps: { 1: migrateDiagramV1, 2: migrateDiagramV2, 3: migrateDiagramV3, 4: migrateDiagramV4 }
 }
 
 // Paramètres v1 → v2 : export et copie de secours ; v2 → v3 : trait des composants du profil ;
@@ -592,6 +604,11 @@ export const settingsMigrations: MigrationTable = {
     // v10 → v11 : dossier du fichier de paramètres partagé, au choix ; vide = celui par défaut.
     10: (raw) => ({ ...raw, settingsDir: '' }),
     // v11 → v12 : les cases d'affichage des barres d'outils sont gardées ; toutes cochées au départ.
-    11: (raw) => ({ ...raw, showPins: true, showUnconnected: true, showGroups: true })
+    11: (raw) => ({ ...raw, showPins: true, showUnconnected: true, showGroups: true }),
+    // v12 → v13 : les diagrammes ont leur palette, pastel au départ ; celle des fils ne change pas.
+    12: (raw) => ({
+      diagramPalette: DEFAULT_DIAGRAM_PALETTE.map((color) => ({ ...color })),
+      ...raw
+    })
   }
 }

@@ -229,7 +229,22 @@ function nodeTextMenu(node: DiagramNode, ids: readonly string[]): MenuItem {
           () => store.setNodesTextStyle(ids, 'Taille du texte du nœud', { textScale: scale }),
           { checked: node.textScale === scale }
         )
-      )
+      ),
+      SEPARATOR,
+      heading('Couleur'),
+      item(
+        'Celle de la forme',
+        () => store.setNodesTextStyle(ids, 'Couleur du texte', { textColor: null }),
+        { checked: node.textColor === null }
+      ),
+      {
+        kind: 'swatches',
+        swatches: store.colorChoices.map((choice) => ({
+          ...choice,
+          current: node.textColor?.toLowerCase() === choice.hex.toLowerCase()
+        })),
+        pick: (hex) => store.setNodesTextStyle(ids, 'Couleur du texte', { textColor: hex })
+      }
     ],
     { icon: 'type' }
   )

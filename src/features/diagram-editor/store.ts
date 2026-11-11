@@ -15,7 +15,6 @@ import {
   nextNumberedId,
   NODE_SPECS,
   nodeBounds,
-  nodeBoxFollowingText,
   nodeBoxForText,
   normalizePoints,
   pannedView,
@@ -209,9 +208,9 @@ export const useDiagramStore = defineStore('diagram', () => {
   const cellPx = computed(() => style.value.cellPx * view.value.zoom)
   /** Points d'accroche de tous les nœuds : là où un lien peut partir ou arriver. */
   const anchors = computed(() => diagramAnchors(doc.value.nodes))
-  /** Couleurs proposées : la palette de l'application, puis celles du diagramme. */
+  /** Couleurs proposées : la palette des diagrammes (paramètres), puis celles de ce diagramme. */
   const colorChoices = computed(() => [
-    ...library.palette.map((color) => ({ hex: color.hex, name: color.name })),
+    ...library.diagramPalette.map((color) => ({ hex: color.hex, name: color.name })),
     ...doc.value.customColors.map((hex) => ({ hex, name: hex }))
   ])
   const hasSelection = computed(
@@ -541,19 +540,23 @@ export const useDiagramStore = defineStore('diagram', () => {
   }
 
   /**
-   * Titre et sous-titre d'un nœud. Sa boîte suit le nouveau texte, dans la même commande : elle
-   * grandit s'il déborde et rétrécit s'il raccourcit, comme si ce texte était le premier qu'on y
-   * écrit ; une taille réglée à la main ne fait que grandir (`nodeBoxFollowingText`).
+   * Titre et sous-titre d'un nœud. Seul le premier texte d'un nœud vide règle sa taille : la boîte
+   * grandit s'il déborde, dans la même commande. Ensuite elle ne change plus d'elle-même, que le
+   * texte raccourcisse ou déborde (décision du 11 novembre 2026) : `fitNodeToText` l'ajuste, sur
+   * demande.
    */
   function setNodeText(id: string, patch: Partial<Pick<DiagramNode, 'title' | 'subtitle'>>): void {
     const node = doc.value.nodes.find((candidate) => candidate.id === id)
     if (!node) return
-    const box = nodeBoxFollowingText(
-      node,
-      { ...node, ...patch },
-      style.value,
-      nodeTextMeasurer(style.value.cellPx)
-    )
+    const first = node.title === '' && node.subtitle === ''
+    const box = first
+      ? nodeBoxForText(
+          { ...node, ...patch },
+          style.value,
+          nodeTextMeasurer(style.value.cellPx),
+          true
+        )
+      : null
     applyWithElasticLinks('Modifier le texte du nœud', (draft) => {
       const target = draft.nodes.find((candidate) => candidate.id === id)
       if (!target) return
@@ -563,8 +566,8 @@ export const useDiagramStore = defineStore('diagram', () => {
   }
 
   /**
-   * Style du texte de nœuds : police, gras, italique, souligné, barré, taille. Les boîtes suivent
-   * leur texte comme quand on le modifie, dans la même commande.
+   * Style du texte de nœuds : police, gras, italique, souligné, barré, taille, couleur. La taille
+   * des boîtes n'en dépend pas : un texte grossi peut déborder, « Ajuster » y remédie.
    */
   function setNodesTextStyle(
     ids: readonly string[],
@@ -572,18 +575,8 @@ export const useDiagramStore = defineStore('diagram', () => {
     patch: Partial<NodeTextStyle>
   ): void {
     if (ids.length === 0) return
-    const measure = nodeTextMeasurer(style.value.cellPx)
-    const boxes = new Map<string, Box>()
-    for (const node of doc.value.nodes) {
-      if (!ids.includes(node.id)) continue
-      const box = nodeBoxFollowingText(node, { ...node, ...patch }, style.value, measure)
-      if (box) boxes.set(node.id, box)
-    }
-    applyWithElasticLinks(label, (draft) => {
-      for (const node of draft.nodes) {
-        if (!ids.includes(node.id)) continue
-        Object.assign(node, patch, boxes.get(node.id) ?? {})
-      }
+    apply(label, (draft) => {
+      for (const node of draft.nodes) if (ids.includes(node.id)) Object.assign(node, patch)
     })
   }
 

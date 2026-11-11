@@ -10,7 +10,7 @@ import { textLabelSchema, wireGeometryProblem } from './project'
 // verticaux) ; des textes libres. Rien ne dit dans le fichier qu'un lien est accroché à un nœud :
 // cela se déduit de la géométrie (une extrémité posée sur un point d'accroche du nœud).
 
-export const DIAGRAM_SCHEMA_VERSION = 4
+export const DIAGRAM_SCHEMA_VERSION = 5
 
 /** Formes du catalogue, dans l'ordre de la bibliothèque (famille par famille). */
 export const NODE_SHAPES = [
@@ -252,14 +252,18 @@ export const diagramNodeSchema = z.object({
   underline: z.boolean(),
   strike: z.boolean(),
   /** Multiplicateur des tailles de texte du diagramme, pour ce nœud (titre et sous-titre). */
-  textScale: z.number().positive()
+  textScale: z.number().positive(),
+  /**
+   * Couleur du texte ; null = celle de la forme (sur un fond plein, une couleur qui s'y lit).
+   */
+  textColor: hexColorSchema.nullable()
 })
 export type DiagramNode = z.infer<typeof diagramNodeSchema>
 
 /** Style du texte d'un nœud. */
 export type NodeTextStyle = Pick<
   DiagramNode,
-  'font' | 'bold' | 'italic' | 'underline' | 'strike' | 'textScale'
+  'font' | 'bold' | 'italic' | 'underline' | 'strike' | 'textScale' | 'textColor'
 >
 
 export const LINK_DASHES = ['solid', 'dashed'] as const
@@ -407,8 +411,9 @@ export function createEmptyDiagram(
 }
 
 /**
- * Style de texte d'un nœud qu'on vient de poser : la police du diagramme, taille ×1, et un titre
- * en gras en police normale, maigre en chasse fixe (les organigrammes de code).
+ * Style de texte d'un nœud qu'on vient de poser : la police du diagramme, taille ×1, la couleur
+ * de la forme, et un titre en gras en police normale, maigre en chasse fixe (les organigrammes
+ * de code).
  */
 export function defaultNodeTextStyle(style: DiagramStyle): NodeTextStyle {
   return {
@@ -417,7 +422,8 @@ export function defaultNodeTextStyle(style: DiagramStyle): NodeTextStyle {
     italic: false,
     underline: false,
     strike: false,
-    textScale: 1
+    textScale: 1,
+    textColor: null
   }
 }
 

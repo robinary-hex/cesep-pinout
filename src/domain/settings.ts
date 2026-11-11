@@ -3,7 +3,7 @@ import { hexColorSchema } from './color'
 import { DEFAULT_DIAGRAM_STYLE, diagramStyleSchema, nodeFillSchema } from './diagram'
 import { DEFAULT_PROFILE, styleProfileSchema } from './profile'
 
-export const SETTINGS_SCHEMA_VERSION = 12
+export const SETTINGS_SCHEMA_VERSION = 13
 
 export const paletteColorSchema = z.object({
   name: z.string().min(1),
@@ -19,7 +19,7 @@ export type Theme = z.infer<typeof themeSchema>
 export const libraryViewSchema = z.enum(['list', 'grid'])
 export type LibraryView = z.infer<typeof libraryViewSchema>
 
-/** Palette de départ : dix couleurs de fils, sans blanc. Modifiable dans les paramètres. */
+/** Palette de départ des fils : dix couleurs vives, sans blanc. Modifiable dans les paramètres. */
 export const DEFAULT_PALETTE: readonly PaletteColor[] = [
   { name: 'Noir', hex: '#000000' },
   { name: 'Rouge', hex: '#d62828' },
@@ -31,6 +31,23 @@ export const DEFAULT_PALETTE: readonly PaletteColor[] = [
   { name: 'Marron', hex: '#7c4a1e' },
   { name: 'Gris foncé', hex: '#4b5563' },
   { name: 'Gris clair', hex: '#9ca3af' }
+]
+
+/**
+ * Palette de départ des diagrammes : le noir des traits, puis des tons pastel, plus doux que les
+ * couleurs vives des fils. Modifiable dans les paramètres.
+ */
+export const DEFAULT_DIAGRAM_PALETTE: readonly PaletteColor[] = [
+  { name: 'Noir', hex: '#000000' },
+  { name: 'Rouge pastel', hex: '#f4a6a6' },
+  { name: 'Orange pastel', hex: '#f8c28b' },
+  { name: 'Jaune pastel', hex: '#f7e08a' },
+  { name: 'Vert pastel', hex: '#a8dba0' },
+  { name: 'Turquoise pastel', hex: '#93d8cf' },
+  { name: 'Bleu pastel', hex: '#9fc7f2' },
+  { name: 'Violet pastel', hex: '#c3b3ee' },
+  { name: 'Rose pastel', hex: '#f2b0d2' },
+  { name: 'Gris pastel', hex: '#c5ccd6' }
 ]
 
 export const EXPORT_SCALES = [1, 2, 4] as const
@@ -90,8 +107,11 @@ export const settingsSchema = z.object({
    * le dossier Pinout de OneDrive. Un dossier de OneDrive s'écrit `${OneDrive}…`.
    */
   settingsDir: z.string(),
+  /** Couleurs proposées pour les fils d'un montage. */
   palette: z.array(paletteColorSchema).min(1),
   defaultWireColor: hexColorSchema,
+  /** Couleurs proposées pour les formes et les liens d'un diagramme : une autre palette. */
+  diagramPalette: z.array(paletteColorSchema).min(1),
   defaultProfile: styleProfileSchema,
   diagramDefaults: diagramDefaultsSchema,
   /** Chemins des derniers projets ouverts, le plus récent d'abord. */
@@ -119,6 +139,7 @@ export const DEFAULT_SETTINGS: Settings = {
   settingsDir: '',
   palette: [...DEFAULT_PALETTE],
   defaultWireColor: '#000000',
+  diagramPalette: [...DEFAULT_DIAGRAM_PALETTE],
   defaultProfile: structuredClone(DEFAULT_PROFILE),
   diagramDefaults: structuredClone(DEFAULT_DIAGRAM_DEFAULTS),
   recentFiles: [],

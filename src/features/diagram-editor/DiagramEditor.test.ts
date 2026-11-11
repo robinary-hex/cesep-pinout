@@ -109,8 +109,24 @@ describe('menu contextuel du diagramme', () => {
       '×1,5',
       '×2',
       '×2,5',
-      '×3'
+      '×3',
+      'Celle de la forme'
     ])
+    // La couleur du texte : une pastille de la palette, ou celle de la forme.
+    const swatches = document.body.querySelectorAll<HTMLElement>('.context-menu.sub-menu .swatch')
+    expect(swatches).toHaveLength(store.colorChoices.length)
+    swatches[1]?.click()
+    await flushPromises()
+    expect(store.doc.nodes[0]?.textColor).toBe(store.colorChoices[1]?.hex)
+    await open()
+    menuEntry('Texte').click()
+    await flushPromises()
+    menuEntry('Celle de la forme').click()
+    await flushPromises()
+    expect(store.doc.nodes[0]?.textColor).toBeNull()
+    await open()
+    menuEntry('Texte').click()
+    await flushPromises()
     menuEntry('Chasse fixe').click()
     await flushPromises()
     expect(store.doc.nodes[0]?.font).toBe('mono')
@@ -201,6 +217,42 @@ describe('diagramme : grouper par le menu et au clavier', () => {
 })
 
 describe('panneau du diagramme', () => {
+  it('panneau d’un nœud : la couleur de son texte, celle de la forme par défaut', async () => {
+    const store = useDiagramStore()
+    const id = store.addNode('rounded', 0, 0)
+    store.setNodeText(id, { title: 'Titre' })
+    store.inspectorOpen = true
+    const wrapper = mount(DiagramEditor, { attachTo: document.body })
+    await flushPromises()
+    const field = (): ReturnType<typeof wrapper.findAll>[number] => {
+      const found = wrapper
+        .findAll('.inspector .field')
+        .find((entry) => entry.find('span').text() === 'Couleur du texte')
+      if (!found) throw new Error('champ « Couleur du texte » introuvable')
+      return found
+    }
+    // « Auto » est choisi : le texte suit la forme. Puis une pastille par couleur de la palette.
+    expect(field().get('button.auto').classes()).toContain('current')
+    expect(field().findAll('button.swatch')).toHaveLength(store.colorChoices.length)
+    expect(field().findAll('button.swatch.current')).toHaveLength(0)
+    await field().findAll('button.swatch')[2]?.trigger('click')
+    expect(store.doc.nodes[0]?.textColor).toBe(store.colorChoices[2]?.hex)
+    expect(store.undoLabel).toBe('Couleur du texte')
+    expect(field().get('button.auto').classes()).not.toContain('current')
+    expect(field().findAll('button.swatch.current')).toHaveLength(1)
+    // La forme garde sa couleur.
+    expect(store.doc.nodes[0]?.color).toBe('#000000')
+    await field().get('button.auto').trigger('click')
+    expect(store.doc.nodes[0]?.textColor).toBeNull()
+    // Une forme sans texte n'a pas ce réglage.
+    store.addNode('start', 0, 20)
+    await flushPromises()
+    expect(wrapper.findAll('.inspector .field span').map((span) => span.text())).not.toContain(
+      'Couleur du texte'
+    )
+    wrapper.unmount()
+  })
+
   it('ne porte pas de bouton pour tourner une barre : la touche R et le clic droit suffisent', async () => {
     const store = useDiagramStore()
     const id = store.addNode('bar', 0, 0)

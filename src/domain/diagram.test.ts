@@ -42,7 +42,6 @@ import {
   layoutNodeText,
   LIGHT_GROUND,
   mixColors,
-  nodeBoxFollowingText,
   nodeBoxForText,
   nodeLineAttrs,
   nodePaint,
@@ -53,6 +52,7 @@ import {
 import fixtureV1 from './fixtures/v1/diagram.json?raw'
 import fixtureV2 from './fixtures/v2/diagram.json?raw'
 import fixture from './fixtures/v3/diagram.json?raw'
+import fixtureV4 from './fixtures/v4/diagram.json?raw'
 import { FileFormatError } from './migrations'
 import { parseDiagram, serializeDiagram } from './serialize'
 
@@ -76,6 +76,7 @@ function node(patch: Partial<DiagramNode> = {}): DiagramNode {
     underline: false,
     strike: false,
     textScale: 1,
+    textColor: null,
     ...patch
   }
 }
@@ -99,7 +100,7 @@ function link(points: [number, number][], patch: Partial<DiagramLink> = {}): Dia
 describe('diagramme : format', () => {
   it('lit et réécrit un fichier sans rien perdre', () => {
     const diagram = parseDiagram(fixture)
-    expect(diagram.schemaVersion).toBe(4)
+    expect(diagram.schemaVersion).toBe(5)
     expect(diagram.nodes.map((entry) => entry.shape)).toEqual([
       'start',
       'diamond',
@@ -140,7 +141,7 @@ describe('diagramme : format', () => {
   it('v1 → v2 : chaque nœud reçoit un style de texte qui garde son allure', () => {
     // Diagramme en chasse fixe : le titre y était maigre, il le reste.
     const mono = parseDiagram(fixtureV1)
-    expect(mono.schemaVersion).toBe(4)
+    expect(mono.schemaVersion).toBe(5)
     expect(mono.nodes[1]).toMatchObject({
       title: 'condition',
       font: null,
@@ -158,7 +159,7 @@ describe('diagramme : format', () => {
 
   it('v2 → v3 : l’étiquette d’un lien revient au milieu du tracé, du côté où elle était', () => {
     const diagram = parseDiagram(fixtureV2)
-    expect(diagram.schemaVersion).toBe(4)
+    expect(diagram.schemaVersion).toBe(5)
     // « vrai » était décalée vers la droite d'un lien vertical : elle reste à droite.
     expect(diagram.links[1]).toMatchObject({ label: 'vrai', labelAt: 0.5, labelSide: 1 })
     expect('labelDx' in (diagram.links[1] ?? {})).toBe(false)
@@ -180,6 +181,20 @@ describe('diagramme : format', () => {
     expect(parseDiagram(JSON.stringify(raw)).links[1]?.labelBackground).toBe(true)
   })
 
+  it('v4 → v5 : le texte d’un nœud prend la couleur de sa forme, aucune n’est choisie', () => {
+    const diagram = parseDiagram(fixtureV4)
+    expect(diagram.schemaVersion).toBe(5)
+    expect(diagram.nodes).toHaveLength(4)
+    expect(diagram.nodes.every((entry) => entry.textColor === null)).toBe(true)
+    // Le reste du fichier est repris tel quel.
+    expect(diagram.links[1]).toMatchObject({ label: 'vrai', labelBackground: false })
+    // Une couleur déjà écrite n'est pas effacée par la migration.
+    const raw = JSON.parse(fixtureV4) as { nodes: { textColor?: string }[] }
+    const second = raw.nodes[1]
+    if (second) second.textColor = '#d62828'
+    expect(parseDiagram(JSON.stringify(raw)).nodes[1]?.textColor).toBe('#d62828')
+  })
+
   it('pose un nœud neuf au style de texte par défaut du diagramme', () => {
     expect(createNode('n1', 'rounded', 3, 4)).toMatchObject({
       x: 3,
@@ -189,7 +204,8 @@ describe('diagramme : format', () => {
       fill: 'tint',
       font: null,
       bold: true,
-      textScale: 1
+      textScale: 1,
+      textColor: null
     })
     expect(defaultNodeTextStyle({ ...style, font: 'mono' }).bold).toBe(false)
   })
@@ -327,44 +343,68 @@ describe('diagramme : formes', () => {
     expect(groundOf('#20242c')).toMatchObject({ ink: '#e6edf3', dark: true })
   })
 
-  it('contour : le trait a la couleur, pas de fond, texte à l’encre', () => {
-    expect(nodePaint({ color: '#1d4ed8', fill: 'none' }, LIGHT_GROUND)).toEqual({
+  it('contour : le trait a la couleur, pas de fond, et le texte la prend aussi', () => {
+    expect(nodePaint({ color: '#1d4ed8', fill: 'none', textColor: null }, LIGHT_GROUND)).toEqual({
       stroke: '#1d4ed8',
       fill: null,
       solid: '#1d4ed8',
-      text: '#000000'
+      text: '#1d4ed8'
     })
-    // Le noir pur est l'encre : claire sur un papier sombre.
-    expect(nodePaint({ color: '#000000', fill: 'none' }, DARK_GROUND)).toMatchObject({
+    // Le noir pur est l'encre : claire sur un papier sombre, pour le trait comme pour le texte.
+    expect(
+      nodePaint({ color: '#000000', fill: 'none', textColor: null }, DARK_GROUND)
+    ).toMatchObject({
       stroke: '#e6edf3',
       text: '#e6edf3'
     })
   })
 
   it('teinté : fond plus clair que le contour sur papier clair, plus sombre sur papier sombre', () => {
-    const light = nodePaint({ color: '#1d4ed8', fill: 'tint' }, LIGHT_GROUND)
+    const light = nodePaint({ color: '#1d4ed8', fill: 'tint', textColor: null }, LIGHT_GROUND)
     expect(light.stroke).toBe('#1d4ed8')
     expect(light.fill).toBe(mixColors('#1d4ed8', '#ffffff', 0.2))
-    expect(light.text).toBe('#000000')
-    const dark = nodePaint({ color: '#7f77dd', fill: 'tint' }, DARK_GROUND)
+    expect(light.text).toBe('#1d4ed8')
+    const dark = nodePaint({ color: '#7f77dd', fill: 'tint', textColor: null }, DARK_GROUND)
     expect(dark.fill).toBe(mixColors('#7f77dd', '#16181d', 0.4))
-    expect(dark.text).toBe('#e6edf3')
+    expect(dark.text).toBe('#7f77dd')
   })
 
   it('plein : le fond est la couleur, le contour s’en détache, le texte contraste', () => {
-    // Couleur sombre : contour éclairci, texte blanc.
-    const deep = nodePaint({ color: '#3c3489', fill: 'solid' }, LIGHT_GROUND)
+    // Couleur sombre : contour éclairci, texte blanc (la couleur de la forme ne s'y lirait pas).
+    const deep = nodePaint({ color: '#3c3489', fill: 'solid', textColor: null }, LIGHT_GROUND)
     expect(deep.fill).toBe('#3c3489')
     expect(deep.stroke).toBe(mixColors('#3c3489', '#ffffff', 0.62))
     expect(deep.text).toBe('#ffffff')
     // Couleur claire : contour foncé, texte noir.
-    const pale = nodePaint({ color: '#ffd33d', fill: 'solid' }, DARK_GROUND)
+    const pale = nodePaint({ color: '#ffd33d', fill: 'solid', textColor: null }, DARK_GROUND)
     expect(pale.stroke).toBe(mixColors('#ffd33d', '#000000', 0.62))
     expect(pale.text).toBe('#000000')
     // Plein à l'encre sur papier sombre : fond clair, texte noir.
-    expect(nodePaint({ color: '#000000', fill: 'solid' }, DARK_GROUND)).toMatchObject({
+    expect(
+      nodePaint({ color: '#000000', fill: 'solid', textColor: null }, DARK_GROUND)
+    ).toMatchObject({
       fill: '#e6edf3',
       text: '#000000'
+    })
+  })
+
+  it('donne au texte la couleur choisie pour ce nœud, quel que soit son fond', () => {
+    const own = (fill: 'none' | 'tint' | 'solid', textColor: string): string =>
+      nodePaint({ color: '#1d4ed8', fill, textColor }, DARK_GROUND).text
+    expect(own('none', '#d62828')).toBe('#d62828')
+    expect(own('tint', '#d62828')).toBe('#d62828')
+    expect(own('solid', '#d62828')).toBe('#d62828')
+    // Le noir pur choisi pour un texte est l'encre du papier, comme partout sur le papier…
+    expect(own('none', '#000000')).toBe('#e6edf3')
+    expect(own('tint', '#000000')).toBe('#e6edf3')
+    // … mais il reste noir sur un fond plein, où il ne repose pas sur le papier.
+    expect(own('solid', '#000000')).toBe('#000000')
+    // La forme garde ses couleurs.
+    expect(
+      nodePaint({ color: '#1d4ed8', fill: 'none', textColor: '#d62828' }, LIGHT_GROUND)
+    ).toMatchObject({
+      stroke: '#1d4ed8',
+      solid: '#1d4ed8'
     })
   })
 
@@ -435,57 +475,6 @@ describe('diagramme : formes', () => {
     expect(outline(node({ shape: 'diamond', w: 2, h: 2 }), 4).match(/A 0\.5 0\.5 /g)).toHaveLength(
       4
     )
-  })
-
-  it('fait suivre son texte à un nœud : il grandit, et rétrécit aussi', () => {
-    const measure = (line: { text: string }): number => line.text.length
-    const follow = (current: DiagramNode, title: string, subtitle = ''): DiagramNode => {
-      const edited = { ...current, title, subtitle }
-      return { ...edited, ...(nodeBoxFollowingText(current, edited, style, measure) ?? {}) }
-    }
-    const size = (shown: DiagramNode): number[] => [shown.w, shown.h]
-    // Taille par défaut (16 × 6), texte court : rien ne bouge.
-    const fresh = node({ title: '', w: 16, h: 6 })
-    const short = follow(fresh, 'Titre')
-    expect(size(short)).toEqual([16, 6])
-    // Texte long : 27 + 3 = 30 de large, autour du centre.
-    const long = follow(short, 'Un titre vraiment très long')
-    expect(long).toMatchObject({ x: -7, w: 30, h: 6 })
-    // Texte raccourci : la largeur redescend à ce qu'il demande, puis à la taille par défaut,
-    // pas en dessous ; le centre ne bouge pas.
-    expect(follow(long, 'Un titre vraiment long')).toMatchObject({ x: -5, w: 26, h: 6 })
-    expect(follow(long, 'Titre')).toMatchObject({ x: 0, w: 16, h: 6 })
-    // Un sous-titre de plus tient dans la hauteur par défaut ; le retirer n'y change rien.
-    const two = follow(short, 'Titre', '(sous-titre)')
-    expect(size(two)).toEqual([16, 6])
-    expect(size(follow(two, 'Titre'))).toEqual([16, 6])
-    // Texte effacé : retour à la taille par défaut.
-    expect(size(follow(long, ''))).toEqual([16, 6])
-    // Ajusté au plus près (8 × 4 pour « Titre ») : il épouse encore son texte après.
-    const hugging = node({ title: 'Titre', x: 4, y: 1, w: 8, h: 4 })
-    expect(follow(hugging, 'Un titre')).toMatchObject({ x: 2, w: 12, h: 4 })
-    expect(follow(hugging, 'Oui')).toMatchObject({ x: 5, w: 6, h: 4 })
-    // Réglé à la main, plus grand qu'il ne faut : il garde sa taille, et ne fait que grandir.
-    const manual = node({ title: 'Titre', w: 24, h: 10 })
-    expect(size(follow(manual, 'Oui'))).toEqual([24, 10])
-    expect(size(follow(manual, 'Un titre vraiment très long'))).toEqual([30, 10])
-    // Largeur réglée à la main, hauteur par défaut : chacune suit sa règle.
-    const wide = node({ title: 'Titre', w: 24, h: 6 })
-    expect(size(follow(wide, 'Titre', '(sous-titre)'))).toEqual([24, 6])
-    // Losange : sa taille par défaut est petite, il épouse toujours son texte.
-    const diamond = follow(node({ shape: 'diamond', title: '', w: 4, h: 4 }), 'Titre')
-    expect(size(diamond)).toEqual([16, 8])
-    expect(size(follow(diamond, 'Oui'))).toEqual([12, 8])
-    expect(size(follow(diamond, 'Un titre'))).toEqual([22, 8])
-    // Une forme sans texte ne change pas.
-    const start = node({ shape: 'start', title: '', w: 2, h: 2 })
-    expect(nodeBoxFollowingText(start, { ...start, title: 'x' }, style, measure)).toBeNull()
-    // Le style du texte compte comme le texte : ×3 grossit la boîte, ×1 la ramène.
-    const big = { ...short, textScale: 3 }
-    const grown = { ...big, ...(nodeBoxFollowingText(short, big, style, measure) ?? {}) }
-    expect(grown.h).toBeGreaterThan(6)
-    const back = { ...grown, textScale: 1 }
-    expect(nodeBoxFollowingText(grown, back, style, measure)).toMatchObject({ w: 16, h: 6 })
   })
 
   it('ajuste la boîte autour de son centre, ou la fait seulement grandir', () => {
