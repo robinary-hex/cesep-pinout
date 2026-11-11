@@ -52,7 +52,20 @@ describe('canevas du diagramme : nœuds', () => {
   it('pose la forme choisie dans la bibliothèque et ouvre la saisie de son texte', async () => {
     const store = useDiagramStore()
     const library = mount(DiagramLibrary)
-    expect(library.findAll('.tile')).toHaveLength(10)
+    // Dix-sept formes, rangées par famille.
+    expect(library.findAll('.tile')).toHaveLength(17)
+    expect(library.findAll('.family h3').map((title) => title.text())).toEqual([
+      'Général',
+      'Organigramme',
+      'Activité',
+      'Communication'
+    ])
+    expect(
+      library
+        .findAll('.family')[1]
+        ?.findAll('.tile-name')
+        .map((name) => name.text())
+    ).toEqual(['Début / fin', 'Entrée / sortie', 'Sous-programme', 'Préparation', 'Renvoi'])
     await library.findAll('.tile')[0]?.trigger('click')
     expect(store.placement).toBe('rounded')
     const wrapper = mount(DiagramCanvas, { attachTo: document.body })
@@ -250,6 +263,25 @@ describe('canevas du diagramme : fond des étiquettes', () => {
     await nextTick()
     expect(wrapper.get('.link-label .label-back').classes()).toContain('filled')
     expect(wrapper.get('.text-label .label-back').classes()).toContain('filled')
+  })
+})
+
+describe('canevas du diagramme : lien sélectionné', () => {
+  it('l’entoure d’un liseré bleu détaché du trait par un filet de la couleur du papier', async () => {
+    const store = useDiagramStore()
+    const id = store.addLink([
+      [0, 0],
+      [10, 0]
+    ])
+    store.clearSelection()
+    const wrapper = mount(DiagramCanvas)
+    expect(wrapper.find('.link-selections path').exists()).toBe(false)
+    store.selectedLinks = id ? [id] : []
+    await nextTick()
+    const marks = wrapper.findAll('.link-selections path')
+    expect(marks.map((mark) => mark.classes())).toEqual([['ring'], ['gap']])
+    const widths = marks.map((mark) => Number(mark.attributes('stroke-width')))
+    expect(widths[0]).toBeGreaterThan(widths[1] ?? 0)
   })
 })
 

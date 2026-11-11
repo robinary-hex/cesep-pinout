@@ -12,21 +12,43 @@ import { textLabelSchema, wireGeometryProblem } from './project'
 
 export const DIAGRAM_SCHEMA_VERSION = 4
 
-/** Formes du catalogue, dans l'ordre de la bibliothèque. */
+/** Formes du catalogue, dans l'ordre de la bibliothèque (famille par famille). */
 export const NODE_SHAPES = [
   'rounded',
   'rect',
   'diamond',
+  'note',
+  'terminal',
+  'io',
+  'subroutine',
+  'preparation',
+  'connector',
   'start',
   'end',
   'flow-end',
   'bar',
   'send',
   'receive',
-  'note'
+  'database',
+  'cloud'
 ] as const
 export const nodeShapeSchema = z.enum(NODE_SHAPES)
 export type NodeShape = z.infer<typeof nodeShapeSchema>
+
+/**
+ * Familles de formes, comme la bibliothèque et les menus les rangent : celles de tous les
+ * schémas, puis celles de l'organigramme, du diagramme d'activité et du schéma de communication
+ * (décision du 11 novembre 2026). Ce n'est qu'un rangement : toute forme va dans tout diagramme.
+ */
+export const NODE_FAMILIES: readonly { label: string; shapes: readonly NodeShape[] }[] = [
+  { label: 'Général', shapes: ['rounded', 'rect', 'diamond', 'note'] },
+  {
+    label: 'Organigramme',
+    shapes: ['terminal', 'io', 'subroutine', 'preparation', 'connector']
+  },
+  { label: 'Activité', shapes: ['start', 'end', 'flow-end', 'bar', 'send', 'receive'] },
+  { label: 'Communication', shapes: ['database', 'cloud'] }
+]
 
 /** Fond d'un nœud : contour seul, teinte légère de sa couleur, ou couleur pleine. */
 export const NODE_FILLS = ['none', 'tint', 'solid'] as const
@@ -128,6 +150,66 @@ export const NODE_SPECS: Record<NodeShape, NodeSpec> = {
     label: 'Note',
     defaultSize: { w: 16, h: 6 },
     step: 1,
+    text: true,
+    line: false,
+    square: false
+  },
+  // Organigramme : début ou fin (bouts arrondis), entrée ou sortie (parallélogramme), appel d'un
+  // sous-programme (rectangle à doubles barres), préparation d'une boucle (hexagone), renvoi
+  // (cercle qui porte une lettre). Dimensions paires là où une pointe doit tomber sur la grille.
+  terminal: {
+    label: 'Début / fin',
+    defaultSize: { w: 12, h: 4 },
+    step: 2,
+    text: true,
+    line: false,
+    square: false
+  },
+  io: {
+    label: 'Entrée / sortie',
+    defaultSize: { w: 16, h: 6 },
+    step: 2,
+    text: true,
+    line: false,
+    square: false
+  },
+  subroutine: {
+    label: 'Sous-programme',
+    defaultSize: { w: 16, h: 6 },
+    step: 1,
+    text: true,
+    line: false,
+    square: false
+  },
+  preparation: {
+    label: 'Préparation',
+    defaultSize: { w: 16, h: 6 },
+    step: 2,
+    text: true,
+    line: false,
+    square: false
+  },
+  connector: {
+    label: 'Renvoi',
+    defaultSize: { w: 4, h: 4 },
+    step: 2,
+    text: true,
+    line: false,
+    square: true
+  },
+  // Schéma de communication : stockage (cylindre) et réseau (nuage).
+  database: {
+    label: 'Base de données',
+    defaultSize: { w: 10, h: 8 },
+    step: 2,
+    text: true,
+    line: false,
+    square: false
+  },
+  cloud: {
+    label: 'Nuage',
+    defaultSize: { w: 14, h: 10 },
+    step: 2,
     text: true,
     line: false,
     square: false

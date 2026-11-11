@@ -508,6 +508,14 @@ const renderedWires = computed(() =>
 
 const hitWidth = computed(() => Math.max(wireWidth.value, 10 / cell.value))
 
+/**
+ * Fil sélectionné : un liseré bleu l'entoure, détaché de lui par un filet de la couleur du
+ * papier, pour se voir quelle que soit la couleur du fil. Largeurs ajoutées à celle du fil, en
+ * pixels d'écran : le liseré déborde de 4,5 px de chaque côté, le filet de 2.
+ */
+const SELECTION_RING_PX = 9
+const SELECTION_GAP_PX = 4
+
 const wireColorById = computed(() => new Map(store.doc.wires.map((wire) => [wire.id, wire.color])))
 
 /** Croisements : le fil du dessus, redessiné sur une demi-cellule avec un liseré couleur papier. */
@@ -1259,7 +1267,20 @@ const cursorClass = computed(() => {
               </g>
               <g class="wire-selections">
                 <template v-for="item in renderedWires" :key="item.wire.id">
-                  <path v-if="item.selected" :d="item.d" :stroke-width="wireWidth + 6 / cell" />
+                  <path
+                    v-if="item.selected"
+                    class="ring"
+                    :d="item.d"
+                    :stroke-width="wireWidth + SELECTION_RING_PX / cell"
+                  />
+                </template>
+                <template v-for="item in renderedWires" :key="`gap:${item.wire.id}`">
+                  <path
+                    v-if="item.selected"
+                    class="gap"
+                    :d="item.d"
+                    :stroke-width="wireWidth + SELECTION_GAP_PX / cell"
+                  />
                 </template>
               </g>
 
@@ -1745,10 +1766,6 @@ const cursorClass = computed(() => {
   opacity: 0.22;
 }
 
-.wire-selections {
-  opacity: 0.35;
-}
-
 .net-glows path,
 .wire-selections path {
   fill: none;
@@ -1760,8 +1777,14 @@ const cursorClass = computed(() => {
   stroke: #ffd33d;
 }
 
-.wire-selections path {
-  stroke: #1f6feb;
+/* Fil sélectionné : liseré bleu franc, puis filet de la couleur du papier sous le fil. Tous les
+   liserés d'abord, tous les filets ensuite : deux fils sélectionnés qui se touchent restent nets. */
+.wire-selections .ring {
+  stroke: var(--selection);
+}
+
+.wire-selections .gap {
+  stroke: var(--paper);
 }
 
 .crossings line {
@@ -1838,7 +1861,7 @@ const cursorClass = computed(() => {
 
 .selection {
   fill: none;
-  stroke: #1f6feb;
+  stroke: var(--selection);
   stroke-width: 1.5;
   stroke-dasharray: 5 3;
   pointer-events: none;
@@ -1853,14 +1876,14 @@ const cursorClass = computed(() => {
 
 .vertex-handle {
   fill: #ffffff;
-  stroke: #1f6feb;
+  stroke: var(--selection);
   stroke-width: 1.5;
   cursor: move;
 }
 
 .box-handle {
   fill: #ffffff;
-  stroke: #1f6feb;
+  stroke: var(--selection);
   stroke-width: 1.5;
   cursor: nwse-resize;
 }
@@ -1878,7 +1901,7 @@ const cursorClass = computed(() => {
 
 .ghost-box {
   fill: none;
-  stroke: #1f6feb;
+  stroke: var(--selection);
   stroke-width: 1;
   stroke-dasharray: 4 3;
 }
@@ -1891,14 +1914,14 @@ const cursorClass = computed(() => {
 }
 
 .drawing .pending {
-  stroke: #1f6feb;
+  stroke: var(--selection);
   stroke-opacity: 0.6;
 }
 
 .drawing .end,
 .wire-start {
   fill: rgba(31, 111, 235, 0.15);
-  stroke: #1f6feb;
+  stroke: var(--selection);
   stroke-width: 1.5;
   pointer-events: none;
 }
@@ -1911,7 +1934,7 @@ const cursorClass = computed(() => {
 
 .band {
   fill: rgba(31, 111, 235, 0.08);
-  stroke: #1f6feb;
+  stroke: var(--selection);
   stroke-width: 1;
   stroke-dasharray: 4 3;
   pointer-events: none;

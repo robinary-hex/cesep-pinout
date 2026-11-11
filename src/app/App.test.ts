@@ -71,7 +71,7 @@ describe('coque de l’application', () => {
     await wrapper.findAll('.modes button')[2]?.trigger('click')
     expect(wrapper.find('.diagram-wrap').exists()).toBe(true)
     expect(wrapper.find('.schematic-wrap').exists()).toBe(false)
-    expect(wrapper.findAll('.library .tile')).toHaveLength(10)
+    expect(wrapper.findAll('.library .tile')).toHaveLength(17)
     expect(wrapper.find('.doc-tab-name').text()).toBe('Nouveau diagramme')
     // Un diagramme modifié : son onglet porte le point, puis le bouton du mode quand on le quitte.
     useDiagramStore().addNode('rounded', 0, 0)

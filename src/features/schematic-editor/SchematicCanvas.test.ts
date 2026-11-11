@@ -318,6 +318,42 @@ describe('canevas du montage : composants derrière les fils', () => {
   })
 })
 
+describe('canevas du montage : fil sélectionné', () => {
+  it('l’entoure d’un liseré bleu détaché du fil par un filet de la couleur du papier', async () => {
+    const store = useSchematicStore()
+    const a = store.addWire([
+      [0, 0],
+      [6, 0]
+    ])
+    const b = store.addWire([
+      [0, 4],
+      [6, 4]
+    ])
+    if (!a || !b) throw new Error('fils refusés')
+    store.clearSelection()
+    const wrapper = mount(SchematicCanvas)
+    expect(wrapper.find('.wire-selections path').exists()).toBe(false)
+    store.selectedWires = [a]
+    await nextTick()
+    const marks = wrapper.findAll('.wire-selections path')
+    expect(marks.map((mark) => mark.classes())).toEqual([['ring'], ['gap']])
+    // À 100 % (20 px par cellule) : le liseré dépasse le fil de 9 px en tout, le filet de 4.
+    const wire = Number(wrapper.get('.wires .wire').attributes('stroke-width'))
+    const widths = marks.map((mark) => Number(mark.attributes('stroke-width')))
+    expect((widths[0] ?? 0) - wire).toBeCloseTo(9 / store.cellPx / store.view.zoom)
+    expect((widths[1] ?? 0) - wire).toBeCloseTo(4 / store.cellPx / store.view.zoom)
+    // Deux fils sélectionnés : tous les liserés d'abord, tous les filets ensuite.
+    store.selectedWires = [a, b]
+    await nextTick()
+    expect(wrapper.findAll('.wire-selections path').map((mark) => mark.classes()[0])).toEqual([
+      'ring',
+      'ring',
+      'gap',
+      'gap'
+    ])
+  })
+})
+
 describe('canevas du montage : groupes', () => {
   /** La résistance (de (2, 3) à (6, 5)) groupée avec un fil de (10, 8) à (14, 8). */
   function withGroup(): {

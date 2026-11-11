@@ -8,7 +8,15 @@ import {
   type DiagramNode,
   type DiagramStyle
 } from './diagram'
-import { BAR_THICKNESS, nodeBounds, noteFold, signalDepth } from './diagramShapes'
+import {
+  BAR_THICKNESS,
+  cylinderCap,
+  hexagonDepth,
+  ioSlant,
+  nodeBounds,
+  noteFold,
+  signalDepth
+} from './diagramShapes'
 import { wiresFollowingPins } from './elastic'
 import type { GridPoint, LocalPoint } from './grid'
 import type { Box } from './handles'
@@ -23,8 +31,10 @@ const pointKey = (point: GridPoint): string => `${point[0]},${point[1]}`
 
 /**
  * Points d'accroche d'un nœud : les intersections de la grille qui sont sur son contour. Un
- * rectangle les offre sur tout son tour ; un losange ou un disque, au milieu de ses quatre côtés ;
- * une barre, tout du long ; les signaux et la note, là où leur contour suit leur boîte.
+ * rectangle les offre sur tout son tour ; un losange, un disque ou un nuage, au milieu de ses
+ * quatre côtés ; une barre, tout du long ; les autres formes, là où leur contour suit leur boîte
+ * (côtés droits d'un début / fin, d'un hexagone, d'un parallélogramme, d'un cylindre), et à leurs
+ * pointes.
  */
 export function nodeAnchors(node: DiagramNode): GridPoint[] {
   const { x, y, w, h } = node
@@ -40,10 +50,51 @@ export function nodeAnchors(node: DiagramNode): GridPoint[] {
     node.shape === 'diamond' ||
     node.shape === 'start' ||
     node.shape === 'end' ||
-    node.shape === 'flow-end'
+    node.shape === 'flow-end' ||
+    node.shape === 'connector' ||
+    node.shape === 'cloud'
   ) {
     if (midX !== null) points.push([midX, y], [midX, y + h])
     if (midY !== null) points.push([x, midY], [x + w, midY])
+    return points
+  }
+  if (node.shape === 'terminal') {
+    // Bouts arrondis : les deux côtés droits, et la pointe de chaque arrondi.
+    const radius = Math.ceil(Math.min(w, h) / 2)
+    if (w >= h) {
+      for (let i = radius; i <= w - radius; i++) points.push([x + i, y], [x + i, y + h])
+      if (midY !== null) points.push([x, midY], [x + w, midY])
+    } else {
+      for (let j = radius; j <= h - radius; j++) points.push([x, y + j], [x + w, y + j])
+      if (midX !== null) points.push([midX, y], [midX, y + h])
+    }
+    return points
+  }
+  if (node.shape === 'preparation') {
+    // Hexagone : le haut et le bas entre les pointes, et les deux pointes.
+    const depth = hexagonDepth(node)
+    for (let i = depth; i <= w - depth; i++) points.push([x + i, y], [x + i, y + h])
+    if (midY !== null) points.push([x, midY], [x + w, midY])
+    return points
+  }
+  if (node.shape === 'io') {
+    // Parallélogramme : le haut est décalé vers la droite, le bas vers la gauche ; les côtés
+    // penchés n'offrent que leur milieu, quand il tombe sur la grille.
+    const slant = ioSlant(node)
+    for (let i = slant; i <= w; i++) points.push([x + i, y])
+    for (let i = 0; i <= w - slant; i++) points.push([x + i, y + h])
+    if (midY !== null && slant % 2 === 0) {
+      points.push([x + slant / 2, midY], [x + w - slant / 2, midY])
+    }
+    return points
+  }
+  if (node.shape === 'database') {
+    // Cylindre : le sommet du dessus, le bas du fond, et les deux côtés droits.
+    const cap = cylinderCap(node)
+    if (midX !== null) points.push([midX, y], [midX, y + h])
+    for (let j = Math.ceil(cap); j <= Math.floor(h - cap); j++) {
+      points.push([x, y + j], [x + w, y + j])
+    }
     return points
   }
   // Formes qui suivent leur boîte : le tour, moins ce que la forme entame.

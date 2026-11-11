@@ -182,8 +182,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   Les trois forment un sélecteur segmenté, sans texte, le mode affiché plein dans la couleur
   d'accent (décision du 11 novembre 2026). Avec le bouton du menu, ils occupent le bloc gauche de
   la barre (`.topbar-side`), large comme le panneau latéral (`--side-panel-width`, 280 px : la
-  bibliothèque de composants et celle des formes du diagramme ont la même largeur) ; sa bordure
-  droite sépare les modes des onglets et tombe sur la bordure du panneau. Ce que la coque demande à un
+  bibliothèque de composants et celle des formes du diagramme ont la même largeur) ; un trait
+  court (`.topbar-side::after`), comme les séparateurs des barres d'outils et non sur toute la
+  hauteur de la barre, sépare les modes des onglets, à l'aplomb de la bordure du panneau. Ce que la coque demande à un
   mode (onglets, fermeture, enregistrement avant de quitter, statut) passe par son `ModeAdapter`.
 - Barres d'outils des trois éditeurs : elles commencent toutes par `src/ui/ToolbarBasics.vue`,
   dans cet ordre (décision du 10 novembre 2026) : zoom arrière, valeur du zoom (un clic ou la
@@ -238,11 +239,22 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   2026). Document à part, fichier `.pinuml` (JSON, `schemaVersion` 4), même grille infinie que le
   montage mais plus fine (`style.cellPx` = 10).
   - Nœuds : une boîte en cellules entières, une forme du catalogue en dur (`NODE_SHAPES`,
-    `NODE_SPECS` : action arrondie, rectangle, décision, départ, fin, fin de flot, fourche, envoi,
-    réception, note), un titre et un sous-titre, une couleur et un fond (`fill` : contour, teinté,
-    plein). Pas de bibliothèque à créer : `DiagramLibrary.vue` montre le catalogue. Le domaine
+    `NODE_SPECS`), un titre et un sous-titre, une couleur et un fond (`fill` : contour, teinté,
+    plein). Dix-sept formes en quatre familles (`NODE_FAMILIES`, décision du 11 novembre 2026 ;
+    un simple rangement, toute forme va dans tout diagramme) : général (action arrondie,
+    rectangle, décision, note), organigramme (début / fin aux bouts arrondis, entrée / sortie
+    en parallélogramme, sous-programme à doubles barres, préparation en hexagone, renvoi : un
+    cercle qui porte une lettre), activité (départ, fin, fin de flot, fourche, envoi,
+    réception), communication (base de données en cylindre, nuage). La bibliothèque, le menu
+    « Forme », « Poser une forme ici » et la liste du panneau suivent ces familles. Ajouter une
+    forme : son nom dans `NODE_SHAPES` et une famille, sa fiche dans `NODE_SPECS`, son tracé
+    dans `nodeParts`, ses accroches dans `nodeAnchors`, la place de son texte (`nodeTextBox`,
+    `nodeSizeForText`) et sa vignette (`SAMPLE_SIZES`).
+    Pas de bibliothèque à créer : `DiagramLibrary.vue` montre le catalogue. Le domaine
     décrit ce que chaque forme dessine (`nodeParts`, `layoutNodeText`) ; `DiagramNodeGraphic.vue`
-    à l'écran et `buildDiagramSvg` à l'export peignent la même chose. Losange et disques ont des
+    à l'écran et `buildDiagramSvg` à l'export peignent la même chose. Losange, disques et les
+    formes à pointes ou à sommets centrés (début / fin, parallélogramme, hexagone, cylindre,
+    nuage) ont des
     dimensions paires (pointes sur la grille), les disques sont carrés, une barre a une épaisseur
     nulle (`fittedNodeSize`, `resizeNodeBox`). Couleurs d'un nœud (`nodePaint`, ce que l'export
     écrit ; l'écran applique les mêmes règles avec les variables du thème) : en contour, le trait
@@ -313,8 +325,12 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   gris bleuté en sombre (grille et textes sur papier via `--grid-*` et `--paper-text`) ; l'export
   garde ses propres couleurs. Le noir pur (`#000000`) des composants et des fils s'affiche dans
   l'encre du thème (`--ink`, via `screenColor` de `src/render/ink.ts`), blanc cassé en sombre ;
-  l'export reste noir. Les surbrillances (net survolé, fils sélectionnés) sont des groupes à
-  opacité unique : deux fils qui se chevauchent ne s'additionnent pas.
+  l'export reste noir. Le net survolé est un groupe à opacité unique : deux fils qui se
+  chevauchent ne s'additionnent pas. Un fil sélectionné (un lien, dans le diagramme) s'entoure
+  d'un liseré franc (`.ring`, `--selection`) détaché de lui par un filet de la couleur du papier
+  (`.gap`), pour se voir quelle que soit sa couleur (décision du 11 novembre 2026) ; tous les
+  liserés sont dessinés avant tous les filets. `--selection` (bleu, plus clair en sombre) est la
+  couleur de la sélection, des poignées et des tracés en cours sur les trois canevas.
   Les marques d'extrémité libre et de broche reliée à rien prennent `--alert` (rouge en clair, ambre
   en sombre) ; l'aperçu d'export transparent montre un point à chaque
   intersection de la grille (`--transparent-*`).
@@ -402,7 +418,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     de composants (`editComponent`, traité par
     `App.vue`), sélectionner les fils reliés. Sur une étiquette : style, alignement.
   - Diagramme : nœud (forme, texte, fond, ordre), lien (étiquette : côté, fond, retrait ;
-    sommets, sans diagonale), texte (style, alignement), vide (poser une des dix formes à
+    sommets, sans diagonale), texte (style, alignement), vide (poser une forme du catalogue à
     l'endroit du clic).
     Dans les tests, `src/ui/testing/menus.ts` lit et actionne le menu ouvert.
 - Groupes (décision du 11 novembre 2026), dans les trois éditeurs : des éléments qu'on
@@ -519,5 +535,13 @@ release/latest.yml release/pinout-X.Y.Z-portable.exe --latest` avec des notes qu
 - Un terminal ouvert par Claude Code hérite de `ELECTRON_RUN_AS_NODE=1` (VS Code) : le retirer
   avant `pnpm dev` (`Remove-Item Env:ELECTRON_RUN_AS_NODE` en PowerShell), sinon le processus
   principal tourne sous Node nu et `electron.app` est indéfini.
-- Le bac à sable de Claude Code n'ouvre pas de fenêtre : la vérification visuelle (`pnpm dev`)
-  revient à Robin. Les tests et `pnpm build` restent la preuve automatisée.
+- Le bac à sable de Claude Code n'ouvre pas de fenêtre, mais l'application se regarde quand même :
+  `node scripts/appshot.cjs <scénario.cjs> <dossier>` (après `pnpm build`) la lance dans une
+  fenêtre hors écran, joue un scénario de clics et de touches et écrit des captures PNG dans le
+  dossier (à mettre dans le dossier temporaire de la session, pas dans le dépôt). Le profil de
+  l'application y est recréé à chaque fois et les variables OneDrive sont retirées : ni la
+  bibliothèque ni les paramètres de Robin ne sont lus. Le scénario exporte une fonction qui
+  reçoit `click`, `rightClick`, `drag`, `key`, `js`, `fill`, `theme`, `shot`, `wait` ; la
+  fenêtre n'a pas le focus du système, donc le texte d'un champ se pose avec `fill`. À faire
+  pour tout changement visible avant de le dire terminé. L'essai à la main (`pnpm dev`) et le
+  jugement sur l'ergonomie restent à Robin ; les tests et `pnpm build`, la preuve automatisée.

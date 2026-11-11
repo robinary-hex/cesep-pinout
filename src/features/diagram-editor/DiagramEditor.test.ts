@@ -36,7 +36,7 @@ function at(store: Store, x: number, y: number): [number, number] {
 }
 
 describe('menu contextuel du diagramme', () => {
-  it('dans le vide : pose une des dix formes à l’endroit du clic et ouvre son texte', async () => {
+  it('dans le vide : pose une forme du catalogue à l’endroit du clic et ouvre son texte', async () => {
     const store = useDiagramStore()
     const wrapper = mount(DiagramEditor, { attachTo: document.body })
     rightClick(wrapper.get('svg.diagram').element, ...at(store, 20, 10))
@@ -44,7 +44,17 @@ describe('menu contextuel du diagramme', () => {
     expect(menuLabels()).toContain('Poser une forme ici')
     menuEntry('Poser une forme ici').click()
     await flushPromises()
-    expect(subMenuLabels()).toHaveLength(10)
+    // Tout le catalogue, famille par famille.
+    expect(subMenuLabels()).toHaveLength(17)
+    expect(subMenuLabels().slice(0, 6)).toEqual([
+      'Action',
+      'Rectangle',
+      'Décision',
+      'Note',
+      'Début / fin',
+      'Entrée / sortie'
+    ])
+    expect(document.body.querySelectorAll('.context-menu.sub-menu .separator')).toHaveLength(3)
     menuEntry('Décision').click()
     await flushPromises()
     // Le losange est centré sur le point cliqué.

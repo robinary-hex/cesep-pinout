@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import {
-  NODE_SHAPES,
+  NODE_FAMILIES,
   NODE_SPECS,
   NODE_TEXT_SCALES,
   nodeFont,
@@ -346,9 +346,11 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
         <label class="field">
           <span>Forme</span>
           <select :value="singleNode.shape" @change="setNodeShape">
-            <option v-for="shape in NODE_SHAPES" :key="shape" :value="shape">
-              {{ NODE_SPECS[shape].label }}
-            </option>
+            <optgroup v-for="family in NODE_FAMILIES" :key="family.label" :label="family.label">
+              <option v-for="shape in family.shapes" :key="shape" :value="shape">
+                {{ NODE_SPECS[shape].label }}
+              </option>
+            </optgroup>
           </select>
         </label>
         <template v-if="NODE_SPECS[singleNode.shape].text">

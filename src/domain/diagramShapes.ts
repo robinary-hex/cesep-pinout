@@ -45,6 +45,44 @@ export function noteFold(box: { w: number; h: number }): number {
   return Math.max(1, Math.min(2, Math.floor(box.w / 2), Math.floor(box.h / 2)))
 }
 
+/** Retrait du haut (et du bas, à l'opposé) d'un parallélogramme d'entrée / sortie, en cellules. */
+export function ioSlant(box: { w: number }): number {
+  return Math.max(1, Math.min(2, Math.floor(box.w / 2)))
+}
+
+/** Profondeur des deux pointes d'un hexagone de préparation, en cellules entières. */
+export function hexagonDepth(box: { w: number; h: number }): number {
+  return Math.max(1, Math.min(Math.floor(box.h / 2), Math.floor(box.w / 4)))
+}
+
+/** Demi-hauteur des ellipses qui ferment un cylindre (base de données), en cellules. */
+export function cylinderCap(box: { h: number }): number {
+  return Math.max(0.5, Math.min(1, box.h / 6))
+}
+
+/** Écart des deux barres d'un sous-programme à ses bords, en cellules. */
+export function subroutineInset(box: { w: number }): number {
+  return Math.min(1, box.w / 4)
+}
+
+/** Part de la boîte d'un nuage où son texte se centre : sous le dôme, dans la partie large. */
+export const CLOUD_TEXT = { left: 0.1, top: 0.3, width: 0.8, height: 0.7 } as const
+
+/**
+ * Nuage : deux lobes de côté et un dôme sur une base plate, dessinés dans une boîte de 20 × 14
+ * puis étirés à celle du nœud (les arcs de cercle deviennent des arcs d'ellipse). Le sommet du
+ * dôme et le milieu de la base tombent au milieu des côtés haut et bas.
+ */
+function cloudPath(x: number, y: number, w: number, h: number): string {
+  const sx = w / 20
+  const sy = h / 14
+  const at = (px: number, py: number): string => `${fmt(x + px * sx)} ${fmt(y + py * sy)}`
+  const arc = (radius: number, px: number, py: number): string =>
+    `A ${fmt(radius * sx)} ${fmt(radius * sy)} 0 0 1 ${at(px, py)}`
+  // Lobe gauche (rayon 5), dôme (rayon 6), lobe droit : les points de rencontre sont calculés.
+  return `M ${at(5, 14)} ${arc(5, 4.3273, 4.0455)} ${arc(6, 15.6727, 4.0455)} ${arc(5, 15, 14)} Z`
+}
+
 function rectPath(x: number, y: number, w: number, h: number, radius: number): string {
   const r = Math.max(0, Math.min(radius, w / 2, h / 2))
   if (r === 0) return `M ${fmt(x)} ${fmt(y)} h ${fmt(w)} v ${fmt(h)} h ${fmt(-w)} Z`
@@ -184,12 +222,94 @@ export function nodeParts(node: DiagramNode, style: DiagramStyle): NodePart[] {
         }
       ]
     }
+    case 'terminal':
+      // Bouts en demi-cercle : le rayon vaut la moitié du petit côté.
+      return [{ d: rectPath(x, y, w, h, r), fill: 'body', stroke: true }]
+    case 'io': {
+      const slant = ioSlant(node)
+      return [
+        {
+          d: polygonPath([
+            { x: x + slant, y },
+            { x: x + w, y },
+            { x: x + w - slant, y: y + h },
+            { x, y: y + h }
+          ]),
+          fill: 'body',
+          stroke: true
+        }
+      ]
+    }
+    case 'subroutine': {
+      const inset = subroutineInset(node)
+      return [
+        { d: rectPath(x, y, w, h, 0), fill: 'body', stroke: true },
+        {
+          d:
+            `M ${fmt(x + inset)} ${fmt(y)} v ${fmt(h)} ` +
+            `M ${fmt(x + w - inset)} ${fmt(y)} v ${fmt(h)}`,
+          fill: 'none',
+          stroke: true
+        }
+      ]
+    }
+    case 'preparation': {
+      const depth = hexagonDepth(node)
+      return [
+        {
+          d: polygonPath([
+            { x: x + depth, y },
+            { x: x + w - depth, y },
+            { x: x + w, y: cy },
+            { x: x + w - depth, y: y + h },
+            { x: x + depth, y: y + h },
+            { x, y: cy }
+          ]),
+          fill: 'body',
+          stroke: true
+        }
+      ]
+    }
+    case 'connector':
+      return [{ d: circlePath(cx, cy, r), fill: 'body', stroke: true }]
+    case 'database': {
+      const cap = cylinderCap(node)
+      const rim = (sweep: 0 | 1, dx: number): string =>
+        `a ${fmt(w / 2)} ${fmt(cap)} 0 0 ${sweep} ${fmt(dx)} 0`
+      return [
+        // Le corps : le dessus par l'arrière, un côté, le fond par l'avant, l'autre côté.
+        {
+          d: `M ${fmt(x)} ${fmt(y + cap)} ${rim(1, w)} v ${fmt(h - 2 * cap)} ${rim(1, -w)} Z`,
+          fill: 'body',
+          stroke: true
+        },
+        // Le bord avant du dessus.
+        { d: `M ${fmt(x)} ${fmt(y + cap)} ${rim(0, w)}`, fill: 'none', stroke: true }
+      ]
+    }
+    case 'cloud':
+      return [{ d: cloudPath(x, y, w, h), fill: 'body', stroke: true }]
   }
 }
 
-/** Boîte où le texte d'un nœud se centre : la sienne, moins la pointe ou l'encoche d'un signal. */
+/**
+ * Boîte où le texte d'un nœud se centre : la sienne, moins la pointe ou l'encoche d'un signal, le
+ * dessus d'un cylindre, le dôme d'un nuage.
+ */
 export function nodeTextBox(node: DiagramNode): Box {
   const { x, y, w, h } = node
+  if (node.shape === 'database') {
+    const cap = cylinderCap(node)
+    return { x, y: y + 2 * cap, w, h: h - 2 * cap }
+  }
+  if (node.shape === 'cloud') {
+    return {
+      x: x + w * CLOUD_TEXT.left,
+      y: y + h * CLOUD_TEXT.top,
+      w: w * CLOUD_TEXT.width,
+      h: h * CLOUD_TEXT.height
+    }
+  }
   if (node.shape === 'send') return { x, y, w: w - signalDepth(node), h }
   if (node.shape === 'receive') {
     const depth = signalDepth(node)
@@ -444,7 +564,9 @@ export const estimatedNodeTextWidth: NodeTextMeasurer = (line) =>
 /**
  * Taille qu'il faut à un nœud pour contenir son texte, marges comprises, ramenée à ce que sa forme
  * permet ; null pour un nœud sans texte. Un losange n'offre à son texte que la moitié de chaque
- * dimension ; un signal perd la profondeur de sa pointe ou de son encoche.
+ * dimension ; un signal perd la profondeur de sa pointe ou de son encoche, un hexagone celle de
+ * ses deux pointes, un début / fin ses bouts arrondis, un parallélogramme et un sous-programme
+ * leurs bords, un cylindre son dessus, un nuage son dôme et ses lobes.
  */
 export function nodeSizeForText(
   node: DiagramNode,
@@ -462,6 +584,17 @@ export function nodeSizeForText(
     h *= 2
   } else if (node.shape === 'send' || node.shape === 'receive') {
     w += Math.max(1, Math.floor(Math.ceil(h) / 2))
+  } else if (node.shape === 'preparation') {
+    w += 2 * Math.max(1, Math.floor(Math.ceil(h) / 2))
+  } else if (node.shape === 'terminal') {
+    w += Math.ceil(h) / 2
+  } else if (node.shape === 'io' || node.shape === 'subroutine') {
+    w += 2
+  } else if (node.shape === 'database') {
+    h += 3
+  } else if (node.shape === 'cloud') {
+    w /= CLOUD_TEXT.width
+    h /= CLOUD_TEXT.height
   }
   return fittedNodeSize(node.shape, Math.ceil(w), Math.ceil(h))
 }

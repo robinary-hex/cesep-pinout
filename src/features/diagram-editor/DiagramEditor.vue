@@ -5,7 +5,7 @@ import {
   insertVertex,
   isEmptyDiagram,
   nearestWirePoint,
-  NODE_SHAPES,
+  NODE_FAMILIES,
   NODE_SPECS,
   NODE_TEXT_SCALES,
   nodeFont,
@@ -160,6 +160,14 @@ function commonItems(): MenuItem[] {
   ]
 }
 
+/** Les formes du catalogue en entrées de menu, famille par famille, un séparateur entre deux. */
+function shapeItems(entry: (shape: NodeShape) => MenuItem): MenuItem[] {
+  return NODE_FAMILIES.flatMap((family, index) => [
+    ...(index > 0 ? [SEPARATOR] : []),
+    ...family.shapes.map(entry)
+  ])
+}
+
 function orderItems(): MenuItem[] {
   return [
     item('Avancer', () => store.reorderNodes('up'), { hint: 'Ctrl+Page haut', icon: 'arrow-up' }),
@@ -295,7 +303,7 @@ function openMenu(request: DiagramMenuRequest): void {
       items.push(
         submenu(
           'Forme',
-          NODE_SHAPES.map((shape) =>
+          shapeItems((shape) =>
             item(NODE_SPECS[shape].label, () => store.setNodeShape(node.id, shape), {
               checked: node.shape === shape
             })
@@ -444,7 +452,7 @@ function openMenu(request: DiagramMenuRequest): void {
       SEPARATOR,
       submenu(
         'Poser une forme ici',
-        NODE_SHAPES.map((shape) => item(NODE_SPECS[shape].label, () => placeShape(shape, x, y))),
+        shapeItems((shape) => item(NODE_SPECS[shape].label, () => placeShape(shape, x, y))),
         { icon: 'plus' }
       ),
       item('Tracer un lien', () => store.startLinkTool(), { hint: 'F', icon: 'link' }),

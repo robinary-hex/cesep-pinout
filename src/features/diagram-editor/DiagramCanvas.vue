@@ -374,6 +374,13 @@ const textHandles = computed(() => {
   return text ? boxHandles(text).map((handle) => ({ ...handle, textId: text.id })) : []
 })
 
+/**
+ * Lien sélectionné : un liseré bleu l'entoure, détaché de lui par un filet de la couleur du
+ * papier, comme un fil du montage. Largeurs ajoutées à celle du trait, en pixels d'écran.
+ */
+const SELECTION_RING_PX = 9
+const SELECTION_GAP_PX = 4
+
 // Groupes
 
 /** Marge du contour d'un groupe autour de ses membres, en cellules (fines : 10 px). */
@@ -1197,7 +1204,20 @@ const cursorClass = computed(() => {
         <g :transform="`translate(${view.panX} ${view.panY}) scale(${cell})`">
           <g class="link-selections">
             <template v-for="item in renderedLinks" :key="item.link.id">
-              <path v-if="item.selected" :d="item.reach" :stroke-width="lineWidth + 6 / cell" />
+              <path
+                v-if="item.selected"
+                class="ring"
+                :d="item.reach"
+                :stroke-width="lineWidth + SELECTION_RING_PX / cell"
+              />
+            </template>
+            <template v-for="item in renderedLinks" :key="`gap:${item.link.id}`">
+              <path
+                v-if="item.selected"
+                class="gap"
+                :d="item.reach"
+                :stroke-width="lineWidth + SELECTION_GAP_PX / cell"
+              />
             </template>
           </g>
 
@@ -1569,16 +1589,23 @@ const cursorClass = computed(() => {
   cursor: pointer;
 }
 
+/* Lien sélectionné : liseré bleu franc, puis filet de la couleur du papier sous le trait. */
 .link-selections {
-  opacity: 0.35;
   pointer-events: none;
 }
 
 .link-selections path {
   fill: none;
-  stroke: #1f6feb;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.link-selections .ring {
+  stroke: var(--selection);
+}
+
+.link-selections .gap {
+  stroke: var(--paper);
 }
 
 .node,
@@ -1612,7 +1639,7 @@ const cursorClass = computed(() => {
 
 .selection {
   fill: none;
-  stroke: #1f6feb;
+  stroke: var(--selection);
   stroke-width: 1.5;
   stroke-dasharray: 5 3;
   pointer-events: none;
@@ -1620,14 +1647,14 @@ const cursorClass = computed(() => {
 
 .vertex-handle {
   fill: #ffffff;
-  stroke: #1f6feb;
+  stroke: var(--selection);
   stroke-width: 1.5;
   cursor: move;
 }
 
 .box-handle {
   fill: #ffffff;
-  stroke: #1f6feb;
+  stroke: var(--selection);
   stroke-width: 1.5;
 }
 
@@ -1643,7 +1670,7 @@ const cursorClass = computed(() => {
 
 .ghost-box {
   fill: none;
-  stroke: #1f6feb;
+  stroke: var(--selection);
   stroke-width: 1;
   stroke-dasharray: 4 3;
 }
@@ -1656,14 +1683,14 @@ const cursorClass = computed(() => {
 }
 
 .drawing .pending {
-  stroke: #1f6feb;
+  stroke: var(--selection);
   stroke-opacity: 0.6;
 }
 
 .drawing .end,
 .link-start {
   fill: rgba(31, 111, 235, 0.15);
-  stroke: #1f6feb;
+  stroke: var(--selection);
   stroke-width: 1.5;
   pointer-events: none;
 }
@@ -1676,7 +1703,7 @@ const cursorClass = computed(() => {
 
 .band {
   fill: rgba(31, 111, 235, 0.08);
-  stroke: #1f6feb;
+  stroke: var(--selection);
   stroke-width: 1;
   stroke-dasharray: 4 3;
   pointer-events: none;

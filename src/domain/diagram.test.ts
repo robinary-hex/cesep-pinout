@@ -6,6 +6,7 @@ import {
   defaultNodeTextStyle,
   fittedNodeSize,
   isEmptyDiagram,
+  NODE_FAMILIES,
   NODE_SHAPES,
   NODE_SPECS,
   nodeSizeProblem,
@@ -38,7 +39,8 @@ import {
   nodeLineAttrs,
   nodePaint,
   nodeParts,
-  nodeSizeForText
+  nodeSizeForText,
+  nodeTextBox
 } from './diagramShapes'
 import fixtureV1 from './fixtures/v1/diagram.json?raw'
 import fixtureV2 from './fixtures/v2/diagram.json?raw'
@@ -205,6 +207,44 @@ describe('diagramme : formes', () => {
     }
   })
 
+  it('range chaque forme du catalogue dans une famille, dans l’ordre de la bibliothèque', () => {
+    expect(NODE_FAMILIES.flatMap((family) => family.shapes)).toEqual([...NODE_SHAPES])
+    expect(NODE_FAMILIES.map((family) => family.label)).toEqual([
+      'Général',
+      'Organigramme',
+      'Activité',
+      'Communication'
+    ])
+  })
+
+  it('dessine les formes d’organigramme et de communication dans leur boîte', () => {
+    // Sous-programme : le rectangle, puis ses deux barres à une cellule des bords.
+    const subroutine = nodeParts(node({ shape: 'subroutine' }), style)
+    expect(subroutine).toHaveLength(2)
+    expect(subroutine[1]).toMatchObject({ d: 'M 1 0 v 6 M 15 0 v 6', fill: 'none', stroke: true })
+    // Parallélogramme : le haut décalé de deux cellules vers la droite, le bas vers la gauche.
+    expect(nodeParts(node({ shape: 'io' }), style)[0]?.d).toBe('M 2 0 L 16 0 L 14 6 L 0 6 Z')
+    // Cylindre : le corps fermé, puis le bord avant du dessus.
+    const database = nodeParts(node({ shape: 'database', w: 10, h: 8 }), style)
+    expect(database.map((part) => part.fill)).toEqual(['body', 'none'])
+    expect(database[0]?.d).toBe('M 0 1 a 5 1 0 0 1 10 0 v 6 a 5 1 0 0 1 -10 0 Z')
+    // Nuage : il part du bas du lobe gauche et son dôme culmine au milieu du haut de la boîte.
+    const cloud = nodeParts(node({ shape: 'cloud', w: 20, h: 14 }), style)[0]?.d ?? ''
+    expect(cloud.startsWith('M 5 14 A 5 5 0 0 1 ')).toBe(true)
+    expect(cloud).toContain('A 6 6 0 0 1 15.6727 4.0455')
+    expect(cloud.endsWith('A 5 5 0 0 1 15 14 Z')).toBe(true)
+    // Le texte d'un cylindre se centre sous son dessus ; celui d'un nuage, sous son dôme.
+    expect(nodeTextBox(node({ shape: 'database', w: 10, h: 8 }))).toEqual({
+      x: 0,
+      y: 2,
+      w: 10,
+      h: 6
+    })
+    const inCloud = nodeTextBox(node({ shape: 'cloud', w: 20, h: 10 }))
+    expect(inCloud.x + inCloud.w / 2).toBeCloseTo(10)
+    expect(inCloud.y).toBeCloseTo(3)
+  })
+
   it('ramène une taille à ce que la forme permet', () => {
     expect(fittedNodeSize('rounded', 0, 3)).toEqual({ w: 1, h: 3 })
     // Losange : dimensions paires, pour que ses pointes tombent sur la grille.
@@ -333,6 +373,22 @@ describe('diagramme : formes', () => {
     expect(nodeSizeForText(node({ shape: 'diamond' }), style, measure)).toEqual({ w: 16, h: 8 })
     // Envoi : la pointe s'ajoute à la largeur.
     expect(nodeSizeForText(node({ shape: 'send' }), style, measure)).toEqual({ w: 10, h: 4 })
+    // Début / fin : ses bouts arrondis ; parallélogramme et sous-programme : leurs bords.
+    expect(nodeSizeForText(node({ shape: 'terminal' }), style, measure)).toEqual({ w: 10, h: 4 })
+    expect(nodeSizeForText(node({ shape: 'io' }), style, measure)).toEqual({ w: 10, h: 4 })
+    expect(nodeSizeForText(node({ shape: 'subroutine' }), style, measure)).toEqual({
+      w: 10,
+      h: 4
+    })
+    // Hexagone : ses deux pointes ; renvoi : un cercle, donc un carré ; cylindre : son dessus.
+    expect(nodeSizeForText(node({ shape: 'preparation' }), style, measure)).toEqual({
+      w: 12,
+      h: 4
+    })
+    expect(nodeSizeForText(node({ shape: 'connector' }), style, measure)).toEqual({ w: 8, h: 8 })
+    expect(nodeSizeForText(node({ shape: 'database' }), style, measure)).toEqual({ w: 8, h: 8 })
+    // Nuage : le texte n'a que la partie large, sous le dôme.
+    expect(nodeSizeForText(node({ shape: 'cloud' }), style, measure)).toEqual({ w: 10, h: 6 })
     expect(nodeSizeForText(node({ title: '' }), style, measure)).toBeNull()
     expect(nodeSizeForText(node({ shape: 'start', w: 2, h: 2 }), style, measure)).toBeNull()
     // L'estimation sans écran : un caractère moyen par lettre.
@@ -396,6 +452,53 @@ describe('diagramme : accroche des liens', () => {
     expect(note).not.toContainEqual([16, 0])
     expect(note).toContainEqual([14, 0])
     expect(note).toContainEqual([16, 2])
+  })
+
+  it('suit le contour des formes d’organigramme et de communication', () => {
+    // Début / fin de 12 × 4 : bouts de rayon 2, donc le haut de x = 2 à 10, et les deux pointes.
+    const terminal = nodeAnchors(node({ shape: 'terminal', w: 12, h: 4 }))
+    expect(terminal).toHaveLength(20)
+    expect(terminal).toContainEqual([2, 0])
+    expect(terminal).toContainEqual([10, 4])
+    expect(terminal).toContainEqual([0, 2])
+    expect(terminal).not.toContainEqual([1, 0])
+    expect(terminal).not.toContainEqual([0, 1])
+    // Hexagone : pointes de 3, le haut de x = 3 à 13.
+    const hexagon = nodeAnchors(node({ shape: 'preparation', w: 16, h: 6 }))
+    expect(hexagon).toContainEqual([3, 0])
+    expect(hexagon).toContainEqual([13, 6])
+    expect(hexagon).not.toContainEqual([2, 0])
+    expect(hexagon.filter((point) => point[0] === 0 || point[0] === 16)).toEqual([
+      [0, 3],
+      [16, 3]
+    ])
+    // Parallélogramme : haut décalé à droite, bas à gauche, milieu des côtés penchés.
+    const parallelogram = nodeAnchors(node({ shape: 'io', w: 16, h: 6 }))
+    expect(parallelogram).toContainEqual([2, 0])
+    expect(parallelogram).toContainEqual([16, 0])
+    expect(parallelogram).toContainEqual([0, 6])
+    expect(parallelogram).toContainEqual([14, 6])
+    expect(parallelogram).toContainEqual([1, 3])
+    expect(parallelogram).toContainEqual([15, 3])
+    expect(parallelogram).not.toContainEqual([0, 0])
+    expect(parallelogram).not.toContainEqual([16, 6])
+    // Cylindre : le sommet et le bas au milieu, les côtés droits entre les deux ellipses.
+    const cylinder = nodeAnchors(node({ shape: 'database', w: 10, h: 8 }))
+    expect(cylinder).toContainEqual([5, 0])
+    expect(cylinder).toContainEqual([5, 8])
+    expect(cylinder).toContainEqual([0, 1])
+    expect(cylinder).toContainEqual([10, 7])
+    expect(cylinder).not.toContainEqual([0, 0])
+    // Renvoi et nuage : le milieu de leurs quatre côtés ; sous-programme : tout son tour.
+    const tips = [
+      [2, 0],
+      [2, 4],
+      [0, 2],
+      [4, 2]
+    ]
+    expect(nodeAnchors(node({ shape: 'connector', w: 4, h: 4 }))).toEqual(tips)
+    expect(nodeAnchors(node({ shape: 'cloud', w: 4, h: 4 }))).toEqual(tips)
+    expect(nodeAnchors(node({ shape: 'subroutine', w: 4, h: 2 }))).toHaveLength(12)
   })
 
   it('déplace une accroche avec sa boîte : bord, milieu, ou position gardée', () => {

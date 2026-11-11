@@ -56,7 +56,7 @@ sous jsdom avec de vrais événements de souris.
 ## Diagrammes
 
 Un diagramme est un document à part (`src/domain/diagram.ts`, fichiers `.pinuml`) : des nœuds, des
-liens, des textes libres. Les formes des nœuds viennent d'un catalogue en dur ; `diagramShapes.ts`
+liens, des textes libres. Les formes des nœuds viennent d'un catalogue en dur, rangé en familles (`NODE_FAMILIES`) ; `diagramShapes.ts`
 décrit ce que chacune dessine (des tracés SVG en cellules et la mise en page du titre et du
 sous-titre), et les deux peintres, `DiagramNodeGraphic.vue` à l'écran et `diagramSvg.ts` à
 l'export, ne font que colorer ces descriptions. Un lien a exactement la géométrie d'un fil : tout

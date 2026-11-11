@@ -1127,7 +1127,7 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
               v-if="isSelectedPin(pin.id) || store.hoverPinId === pin.id"
               r="10"
               fill="none"
-              stroke="#1f6feb"
+              stroke="var(--selection)"
               stroke-width="2"
             />
             <circle r="6" :fill="PIN_COLORS[pin.kind]" stroke="var(--paper)" stroke-width="2" />
@@ -1272,7 +1272,7 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
 
 .selection-box {
   fill: none;
-  stroke: #1f6feb;
+  stroke: var(--selection);
   stroke-width: 1.5;
   stroke-dasharray: 5 3;
   pointer-events: none;
@@ -1280,19 +1280,19 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
 
 .handle {
   fill: #ffffff;
-  stroke: #1f6feb;
+  stroke: var(--selection);
   stroke-width: 1.5;
 }
 
 .pin-targets circle {
   fill: none;
-  stroke: #1f6feb;
+  stroke: var(--selection);
   stroke-opacity: 0.45;
   pointer-events: none;
 }
 
 .pin-targets .pin-target-active {
-  fill: #1f6feb;
+  fill: var(--selection);
   fill-opacity: 0.2;
   stroke-opacity: 1;
 }
@@ -1313,7 +1313,7 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
 
 .preview > * {
   fill: rgba(31, 111, 235, 0.08);
-  stroke: #1f6feb;
+  stroke: var(--selection);
   stroke-width: 1.5;
   stroke-dasharray: 5 3;
   pointer-events: none;
@@ -1326,7 +1326,7 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
 
 .band {
   fill: rgba(31, 111, 235, 0.08);
-  stroke: #1f6feb;
+  stroke: var(--selection);
   stroke-width: 1;
   stroke-dasharray: 4 3;
   pointer-events: none;

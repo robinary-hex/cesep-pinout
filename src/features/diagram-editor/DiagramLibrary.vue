@@ -2,7 +2,7 @@
 import {
   createNode,
   DEFAULT_DIAGRAM_STYLE,
-  NODE_SHAPES,
+  NODE_FAMILIES,
   NODE_SPECS,
   type DiagramNode,
   type DiagramStyle,
@@ -11,7 +11,8 @@ import {
 import DiagramNodeGraphic from '@/render/DiagramNodeGraphic.vue'
 import { useDiagramStore } from './store'
 
-// Bibliothèque du diagramme : les formes du catalogue, en vignettes. Un clic puis un clic sur le
+// Bibliothèque du diagramme : les formes du catalogue, en vignettes, rangées par famille
+// (général, organigramme, activité, communication). Un clic puis un clic sur le
 // diagramme pose la forme, ou on la glisse directement dessus. Rien à créer ni à enregistrer ici :
 // les formes sont définies en dur dans le domaine.
 
@@ -31,7 +32,14 @@ const SAMPLE_SIZES: Record<NodeShape, { w: number; h: number }> = {
   bar: { w: 14, h: 0 },
   send: { w: 16, h: 6 },
   receive: { w: 16, h: 6 },
-  note: { w: 16, h: 6 }
+  note: { w: 16, h: 6 },
+  terminal: { w: 16, h: 6 },
+  io: { w: 16, h: 6 },
+  subroutine: { w: 16, h: 6 },
+  preparation: { w: 16, h: 6 },
+  connector: { w: 6, h: 6 },
+  database: { w: 8, h: 6 },
+  cloud: { w: 10, h: 6 }
 }
 
 function sample(shape: NodeShape): DiagramNode {
@@ -44,10 +52,13 @@ function sample(shape: NodeShape): DiagramNode {
   }
 }
 
-const tiles = NODE_SHAPES.map((shape) => ({
-  shape,
-  label: NODE_SPECS[shape].label,
-  node: sample(shape)
+const families = NODE_FAMILIES.map((family) => ({
+  label: family.label,
+  tiles: family.shapes.map((shape) => ({
+    shape,
+    label: NODE_SPECS[shape].label,
+    node: sample(shape)
+  }))
 }))
 
 function onDragStart(shape: NodeShape, event: DragEvent): void {
@@ -69,25 +80,28 @@ function onDragEnd(): void {
     <header class="library-head">
       <h2>Formes</h2>
     </header>
-    <div class="grid">
-      <button
-        v-for="tile in tiles"
-        :key="tile.shape"
-        type="button"
-        class="tile"
-        :class="{ current: store.placement === tile.shape }"
-        :title="`${tile.label} : clic ici puis sur le diagramme, ou glisser-déposer`"
-        draggable="true"
-        @click="store.startPlacing(tile.shape)"
-        @dragstart="onDragStart(tile.shape, $event)"
-        @dragend="onDragEnd"
-      >
-        <svg viewBox="-1 -1 18 8" width="72" height="32" aria-hidden="true">
-          <DiagramNodeGraphic :node="tile.node" :look="THUMB_LOOK" />
-        </svg>
-        <span class="tile-name">{{ tile.label }}</span>
-      </button>
-    </div>
+    <section v-for="family in families" :key="family.label" class="family">
+      <h3>{{ family.label }}</h3>
+      <div class="grid">
+        <button
+          v-for="tile in family.tiles"
+          :key="tile.shape"
+          type="button"
+          class="tile"
+          :class="{ current: store.placement === tile.shape }"
+          :title="`${tile.label} : clic ici puis sur le diagramme, ou glisser-déposer`"
+          draggable="true"
+          @click="store.startPlacing(tile.shape)"
+          @dragstart="onDragStart(tile.shape, $event)"
+          @dragend="onDragEnd"
+        >
+          <svg viewBox="-1 -1 18 8" width="72" height="32" aria-hidden="true">
+            <DiagramNodeGraphic :node="tile.node" :look="THUMB_LOOK" />
+          </svg>
+          <span class="tile-name">{{ tile.label }}</span>
+        </button>
+      </div>
+    </section>
   </aside>
 </template>
 
@@ -112,11 +126,22 @@ function onDragEnd(): void {
   font-size: 14px;
 }
 
+/* Titre d'une famille de formes : comme une catégorie de la bibliothèque de composants. */
+.family h3 {
+  margin: 0;
+  padding: 10px 12px 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 4px;
-  padding: 8px;
+  padding: 4px 8px 6px;
 }
 
 .tile {

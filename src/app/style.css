@@ -55,6 +55,8 @@
   /* Aperçu d'export transparent : fond et points de la grille. */
   --transparent-bg: #ffffff;
   --transparent-dot: #b9c0c9;
+  /* Sélection, poignées et tracés en cours sur les canevas. */
+  --selection: #1f6feb;
   /* Contour des groupes sur les canevas : violet, à part du bleu de la sélection. */
   --group: #8250df;
   /* Traits d'un composant dont la bibliothèque a une version plus récente : rouge en clair. */
@@ -113,6 +115,8 @@
   --alert: #d29922;
   --transparent-bg: #2a2f36;
   --transparent-dot: #566070;
+  /* Bleu plus clair en sombre : celui du thème clair se perd sur le papier gris-bleu. */
+  --selection: #58a6ff;
   --group: #d2a8ff;
   /* Jaune en sombre : le rouge se perdrait sur le papier gris-bleu. */
   --stale: #e3b341;
@@ -168,18 +172,29 @@ body,
 }
 
 /* Bloc gauche de la barre d'application : le menu et les trois modes, au-dessus du panneau
-   latéral et de la même largeur. Sa bordure droite prolonge celle du panneau jusqu'en haut de
-   la fenêtre et sépare les modes des onglets. */
+   latéral et de la même largeur. */
 .topbar-side {
+  position: relative;
   flex: none;
-  align-self: stretch;
   width: var(--side-panel-width);
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: -6px 0 -6px -16px;
-  padding: 6px 12px;
-  border-right: 1px solid var(--topbar-separator);
+  margin-left: -16px;
+  padding: 0 12px;
+}
+
+/* Séparateur entre les modes et les onglets : un trait court, comme ceux des barres d'outils,
+   à l'aplomb de la bordure du panneau latéral. */
+.topbar-side::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: 1px;
+  height: 26px;
+  transform: translateY(-50%);
+  background: var(--topbar-separator);
 }
 
 .topbar .menu-button {
