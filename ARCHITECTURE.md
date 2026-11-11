@@ -239,6 +239,8 @@ pas stockées, elles se déduisent de la géométrie des fils.
 - `electron`, `electron-vite`, `electron-builder` : coque, build, installeur.
 - `electron-updater` : mise à jour automatique depuis les releases GitHub (vérification au
   lancement, téléchargement à la demande, installation au clic) ; lit `latest.yml` de la release.
+  `scripts/admin-update.mjs` y pose `isAdminRightsRequired` après le build : l'installeur d'une
+  mise à jour se lance alors avec les droits d'administrateur (`elevate.exe`).
 - Outillage : TypeScript strict, ESLint (configs electron-toolkit + plugin Vue), Prettier, Vitest,
   Vue Test Utils + jsdom pour les tests de rendu.
 

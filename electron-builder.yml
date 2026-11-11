@@ -40,7 +40,9 @@ portable:
   artifactName: ${name}-${version}-portable.${ext}
 npmRebuild: false
 # Releases GitHub : electron-builder génère latest.yml (lu par electron-updater au lancement) ; la
-# publication elle-même se fait à la main avec gh release create.
+# publication elle-même se fait à la main avec gh release create. Après le build,
+# scripts/admin-update.mjs y ajoute isAdminRightsRequired : la mise à jour se lance alors avec les
+# droits d'administrateur. (electron-builder ne l'écrit lui-même que pour perMachine: true.)
 publish:
   - provider: github
     owner: robinary-hex

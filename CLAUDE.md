@@ -702,6 +702,15 @@ release/latest.yml release/pinout-X.Y.Z-portable.exe --latest` avec des notes qu
   récente, un bouton apparaît en haut à droite (`App.vue`, libellés dans `src/app/update.ts`) :
   télécharger en arrière-plan, puis installer et relancer. La version portable ne peut pas se
   réinstaller : son bouton ouvre la page de la release. Rien en développement ni hors ligne.
+  L'installeur d'une mise à jour se lance avec les droits d'administrateur (décision du 11
+  novembre 2026) : sans eux l'installation s'arrêtait en route quand Pinout est installé dans
+  un dossier que le compte ne peut pas écrire. C'est `latest.yml` qui le demande
+  (`isAdminRightsRequired: true` sur l'installeur) : l'application installée lance alors
+  l'installeur par `elevate.exe` et Windows pose sa question. electron-builder n'écrit ce
+  drapeau que pour un installeur `perMachine`, ce que le nôtre n'est pas (on y choisit « pour
+  moi » ou « pour tous ») : `scripts/admin-update.mjs`, dernière étape de `pnpm build:win`,
+  le pose, et arrête le build si `latest.yml` n'a pas la forme attendue. Ne jamais publier un
+  `latest.yml` sans ce drapeau (un build lancé par `electron-builder` seul n'en a pas).
 
 - Un commit par phase de la feuille de route (accordé par Robin le 8 novembre 2026), après
   `pnpm check` vert. Message en français, trailer `Co-Authored-By` conservé.

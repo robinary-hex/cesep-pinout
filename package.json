@@ -11,7 +11,7 @@
     "start": "electron-vite preview",
     "build": "pnpm typecheck && electron-vite build",
     "build:unpack": "pnpm build && electron-builder --dir",
-    "build:win": "pnpm build && electron-builder --win --publish never",
+    "build:win": "pnpm build && electron-builder --win --publish never && node scripts/admin-update.mjs",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "pnpm typecheck:node && pnpm typecheck:web",
