@@ -141,6 +141,14 @@ describe('éditeur de composants : menu contextuel', () => {
     menuEntry('Dupliquer').click()
     await flushPromises()
     expect(store.doc.visual.primitives).toHaveLength(2)
+    // L'ordre se règle par ce menu ou Ctrl+Page : le panneau n'a pas de boutons pour ça.
+    store.selectPrimitives([0])
+    store.inspectorOpen = true
+    await flushPromises()
+    expect(wrapper.get('.inspector').text()).toContain('Rectangle')
+    expect(wrapper.get('.inspector').text()).not.toContain('Ordre')
+    const titles = wrapper.findAll('.inspector button').map((button) => button.attributes('title'))
+    expect(titles.filter((title) => /avancer|reculer|plan/i.test(title ?? ''))).toEqual([])
     wrapper.unmount()
   })
 

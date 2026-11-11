@@ -273,7 +273,7 @@ describe('montage : variante d’un composant posé', () => {
 })
 
 describe('montage : ordre des composants', () => {
-  it('se change par le clic droit, le panneau ou Ctrl+Page', async () => {
+  it('se change par le clic droit ou Ctrl+Page ; le panneau n’a pas de boutons pour ça', async () => {
     const store = useSchematicStore()
     store.startPlacing(createEmptyComponent('led', 'LED'))
     const a = store.placeAt(2, 3)
@@ -293,10 +293,16 @@ describe('montage : ordre des composants', () => {
     menuEntry('Premier plan').click()
     await flushPromises()
     expect(order()).toEqual([b, a])
-    // Dans le panneau : les mêmes quatre boutons que pour un fil.
+    // Le panneau montre l'orientation et la couche du composant, sans boutons d'ordre, de
+    // rotation ni de miroir : clavier et menu suffisent.
     store.inspectorOpen = true
     await flushPromises()
-    await wrapper.get('.inspector button[title^="Reculer parmi"]').trigger('click')
+    expect(wrapper.find('.inspector select').exists()).toBe(true)
+    const titles = wrapper.findAll('.inspector button').map((button) => button.attributes('title'))
+    expect(
+      titles.filter((title) => /rotation|miroir|avancer|reculer|plan/i.test(title ?? ''))
+    ).toEqual([])
+    store.reorderInstances('down')
     expect(order()).toEqual([a, b])
     // Au clavier : Ctrl+Page haut avance, Ctrl+Page bas recule ; la couche ne change pas.
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageUp', ctrlKey: true }))

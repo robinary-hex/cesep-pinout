@@ -4,6 +4,8 @@
   /* Largeur du panneau latéral gauche (composants, formes). Le bloc gauche de la barre
      d'application a la même : son séparateur tombe sur la bordure du panneau. */
   --side-panel-width: 280px;
+  /* Épaisseur des ascenseurs : la place qu'on leur garde là où le contenu ne doit pas bouger. */
+  --scrollbar-size: 10px;
   color-scheme: light;
   font-family: 'Segoe UI', system-ui, sans-serif;
   font-size: 13px;
@@ -449,8 +451,8 @@ input[type='radio'] {
 
 /* Ascenseurs discrets (Chromium) : glissière transparente, curseur fin et arrondi. */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
 }
 
 ::-webkit-scrollbar-track,

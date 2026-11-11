@@ -115,7 +115,6 @@ const singleLabel = computed(() =>
 const mixedCount = computed(
   () => store.selection.length + store.selectedWires.length + store.selectedLabels.length
 )
-const rotatable = computed(() => store.selection.length > 0 && onlyInstances.value)
 
 /** Contenu du montage, pour le bloc « Éléments ». */
 const inventory = computed(() => {
@@ -455,74 +454,6 @@ function setLabelVertical(event: Event): void {
           <input type="checkbox" :checked="single.instance.behindWires" @change="setBehindWires" />
           <span>Derrière les fils</span>
         </label>
-        <div class="row">
-          <button
-            type="button"
-            class="icon-only"
-            title="Reculer parmi les composants (Ctrl+Page bas)"
-            @click="store.reorderInstances('down')"
-          >
-            <Icon name="arrow-down" />
-          </button>
-          <button
-            type="button"
-            class="icon-only"
-            title="Avancer parmi les composants (Ctrl+Page haut)"
-            @click="store.reorderInstances('up')"
-          >
-            <Icon name="arrow-up" />
-          </button>
-          <button
-            type="button"
-            class="icon-only"
-            title="Derrière tous les composants (Ctrl+Maj+Page bas)"
-            @click="store.reorderInstances('bottom')"
-          >
-            <Icon name="arrow-down-line" />
-          </button>
-          <button
-            type="button"
-            class="icon-only"
-            title="Devant tous les composants (Ctrl+Maj+Page haut)"
-            @click="store.reorderInstances('top')"
-          >
-            <Icon name="arrow-up-line" />
-          </button>
-        </div>
-        <div class="row">
-          <button
-            type="button"
-            class="icon-only"
-            title="Rotation antihoraire (Maj+R)"
-            @click="store.rotate('ccw')"
-          >
-            <Icon name="rotate-ccw" />
-          </button>
-          <button
-            type="button"
-            class="icon-only"
-            title="Rotation horaire (R)"
-            @click="store.rotate('cw')"
-          >
-            <Icon name="rotate-cw" />
-          </button>
-          <button
-            type="button"
-            class="icon-only"
-            title="Miroir horizontal (T)"
-            @click="store.flip('horizontal')"
-          >
-            <Icon name="flip-h" />
-          </button>
-          <button
-            type="button"
-            class="icon-only"
-            title="Miroir vertical (Maj+T)"
-            @click="store.flip('vertical')"
-          >
-            <Icon name="flip-v" />
-          </button>
-        </div>
       </section>
     </template>
 
@@ -583,30 +514,6 @@ function setLabelVertical(event: Event): void {
           </label>
         </div>
       </template>
-      <div class="row">
-        <button type="button" class="icon-only" title="Reculer" @click="store.reorderWires('down')">
-          <Icon name="arrow-down" />
-        </button>
-        <button type="button" class="icon-only" title="Avancer" @click="store.reorderWires('up')">
-          <Icon name="arrow-up" />
-        </button>
-        <button
-          type="button"
-          class="icon-only"
-          title="Arrière-plan"
-          @click="store.reorderWires('bottom')"
-        >
-          <Icon name="arrow-down-line" />
-        </button>
-        <button
-          type="button"
-          class="icon-only"
-          title="Premier plan"
-          @click="store.reorderWires('top')"
-        >
-          <Icon name="arrow-up-line" />
-        </button>
-      </div>
     </section>
 
     <template v-else-if="singleLabel">
@@ -694,47 +601,10 @@ function setLabelVertical(event: Event): void {
         {{ store.selectedLabels.length }} étiquette(s).
       </p>
       <div class="row">
-        <button
-          type="button"
-          class="icon-only"
-          :disabled="!rotatable"
-          title="Rotation antihoraire"
-          @click="store.rotate('ccw')"
-        >
-          <Icon name="rotate-ccw" />
-        </button>
-        <button
-          type="button"
-          class="icon-only"
-          :disabled="!rotatable"
-          title="Rotation horaire"
-          @click="store.rotate('cw')"
-        >
-          <Icon name="rotate-cw" />
-        </button>
-        <button
-          type="button"
-          class="icon-only"
-          :disabled="!rotatable"
-          title="Miroir horizontal"
-          @click="store.flip('horizontal')"
-        >
-          <Icon name="flip-h" />
-        </button>
-        <button
-          type="button"
-          class="icon-only"
-          :disabled="!rotatable"
-          title="Miroir vertical"
-          @click="store.flip('vertical')"
-        >
-          <Icon name="flip-v" />
-        </button>
         <button type="button" class="with-icon" @click="store.duplicateSelection()">
           <Icon name="duplicate" /> Dupliquer
         </button>
       </div>
-      <p v-if="!rotatable" class="hint">Rotation et miroir s’appliquent aux composants seuls.</p>
     </section>
   </aside>
 </template>
@@ -952,9 +822,15 @@ function setLabelVertical(event: Event): void {
   cursor: pointer;
 }
 
-.custom input {
+/* À la taille de la pastille, et plus précis que la règle des champs de couleur du panneau : à
+   leur largeur, celui-ci dépasserait du panneau et lui donnerait un ascenseur horizontal. */
+.field .custom input[type='color'] {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
   opacity: 0;
   cursor: pointer;
 }

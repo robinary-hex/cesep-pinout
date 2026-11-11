@@ -225,7 +225,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   est gardé dans les paramètres (`showPins`, `showUnconnected`, `showGroups`, `VIEW_OPTIONS`) :
   les stores des éditeurs les lisent et les écrivent par `setViewOption` du store de la
   bibliothèque, à l'écran tout de suite, dans le fichier en arrière-plan. Supprimer ne se trouve pas dans les panneaux de propriétés : corbeille, touche Suppr
-  ou menu contextuel. Dans les panneaux, X, Y, largeur et hauteur ont leur propre section
+  ou menu contextuel. L'ordre d'empilement, la rotation et le miroir non plus (décision du 11
+  novembre 2026) : pas de boutons pour eux dans les panneaux des trois éditeurs, le clavier et
+  le menu contextuel suffisent ; un panneau montre des propriétés (la liste « Rotation », les
+  cases « Miroir » et « Derrière les fils » d'un composant posé en sont), il ne double pas les
+  commandes. Dans les panneaux, X, Y, largeur et hauteur ont leur propre section
   (« Position et taille », « Position et orientation » pour un composant posé, « Taille » pour
   un composant).
 - Barre d'application (`src/app/App.vue`) : tout à gauche, un bouton à trois barres ouvre le menu
@@ -446,6 +450,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   sont rangés par thèmes (`ShortcutCategory`) : « Outils » et les thèmes propres à l'éditeur
   d'abord, puis « Ordre », « Sélectionner », « Modifier », « Vue », « Fichiers et onglets »,
   les mêmes dans les trois ; un cadre par thème, sur trois colonnes (`ModalDialog` `large`).
+  Rien ne bouge quand on change d'onglet : les planches des trois modes sont toutes rendues,
+  superposées dans la même case (`.sheets`, une seule `shown`), donc la boîte a la taille de
+  la plus haute ; chacune défile pour elle-même sous les onglets, et garde la place de son
+  ascenseur qu'il y en ait un ou non (`scrollbar-gutter: stable`, `--scrollbar-size`).
   Une ligne = le geste, ce qu'il fait, le pictogramme de l'action s'il a un bouton ou une
   entrée de menu. Le geste se dessine : une touche par capuchon (`kbd`), un geste de souris
   par pastille, avec la souris et son bouton enfoncé (`MOUSE_GESTURES`, `comboTokens` ; « / »
@@ -563,8 +571,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   montages déjà enregistrés gardent leur réglage.
   Entre eux, les composants s'empilent dans l'ordre de la liste (`components` du montage : le
   dernier posé est au-dessus de tous les autres) et se rangent à la main (décision du 11
-  novembre 2026) : sous-menu « Ordre » du clic droit, quatre boutons du panneau, Ctrl+Page haut
-  / bas (Maj : premier plan / arrière-plan). `reorderInstances` ne range un composant que parmi
+  novembre 2026) : sous-menu « Ordre » du clic droit, Ctrl+Page haut / bas (Maj : premier plan /
+  arrière-plan). `reorderInstances` ne range un composant que parmi
   ceux de sa couche, derrière ou devant les fils : les fils restent où ils sont.
   `restackSelection` (le clavier) range d'un même geste les fils sélectionnés entre eux (leur
   `stack`) et les composants entre eux ; `restackedIds` du domaine fait le calcul pour les
@@ -590,7 +598,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     l'outil reste actif), L ligne, P polyligne, E texte,
     B broche, Suppr, Échap, Entrée (termine une polyligne), Ctrl+Z / Ctrl+Y, Ctrl+S, Ctrl+N,
     Ctrl+Page haut/bas (Maj pour premier/arrière-plan) = ordre d'empilement de la forme
-    sélectionnée (`reorderItem`, aussi par boutons dans le panneau),
+    sélectionnée (`reorderItem`, aussi par le sous-menu « Ordre » du clic droit),
     molette = zoom centré sur le curseur (boutons −/+/Ajuster dans la barre), bouton du milieu
     maintenu ou Espace + glisser = déplacer la vue, double-clic du bouton du milieu ou 0 =
     ajuster à la fenêtre, flèches = déplacer la sélection (d'un quart de cellule, d'une cellule

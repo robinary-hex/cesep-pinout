@@ -4,8 +4,8 @@ import { modalStack, openModals } from './modalState'
 
 // Boîte de dialogue modale : fond assombri, Échap ou clic hors de la boîte pour fermer.
 // Tant qu'elle est ouverte, les éditeurs ignorent leurs raccourcis (voir openModals). `wide` pour
-// une boîte à deux colonnes, `large` pour une planche à trois colonnes (l'aide), `compact` pour
-// une simple question.
+// une boîte à deux colonnes, `large` pour une planche à trois colonnes (l'aide), qui gère
+// elle-même son défilement, `compact` pour une simple question.
 
 defineProps<{ title: string; wide?: boolean; large?: boolean; compact?: boolean }>()
 const emit = defineEmits<{ close: [] }>()
@@ -83,6 +83,14 @@ onUnmounted(() => {
 
 .dialog.large {
   width: min(1240px, calc(100vw - 32px));
+}
+
+/* Une planche ne défile pas tout entière : son contenu garde son en-tête en place et fait
+   défiler le reste. */
+.dialog.large .body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .dialog.compact {

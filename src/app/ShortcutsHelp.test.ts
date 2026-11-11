@@ -5,7 +5,9 @@ import ShortcutsHelp from './ShortcutsHelp.vue'
 
 /** Ligne de l'aide portant ce libellé. */
 function rowOf(wrapper: VueWrapper, label: string): DOMWrapper<Element> {
-  const found = wrapper.findAll('.row').find((row) => row.get('.label').text() === label)
+  const found = wrapper
+    .findAll('.sheet.shown .row')
+    .find((row) => row.get('.label').text() === label)
   if (!found) throw new Error(`ligne « ${label} » introuvable`)
   return found
 }
@@ -19,7 +21,7 @@ describe('aide sur les raccourcis', () => {
       'Diagramme'
     ])
     expect(wrapper.get('.tabs button.active').text()).toBe('Montage')
-    expect(wrapper.findAll('.category h3').map((title) => title.text())).toEqual([
+    expect(wrapper.findAll('.sheet.shown .category h3').map((title) => title.text())).toEqual([
       'Outils',
       'Tracer un fil',
       'Retoucher un fil',
@@ -37,6 +39,25 @@ describe('aide sur les raccourcis', () => {
         .findAll('kbd')
         .map((key) => key.text())
     ).toEqual(['R'])
+    wrapper.unmount()
+  })
+
+  it('garde les trois planches en place, une seule visible : la boîte ne change pas de taille', async () => {
+    const wrapper = mount(ShortcutsHelp, { props: { initial: 'Diagramme' } })
+    const shown = (): boolean[] =>
+      wrapper.findAll('.sheets > .sheet').map((sheet) => sheet.classes().includes('shown'))
+    expect(shown()).toEqual([false, false, true])
+    expect(wrapper.findAll('.sheet').map((sheet) => sheet.attributes('aria-hidden'))).toEqual([
+      'true',
+      'true',
+      'false'
+    ])
+    await wrapper.findAll('.tabs button')[1]?.trigger('click')
+    expect(shown()).toEqual([false, true, false])
+    // Chaque planche a ses thèmes, qu'on la voie ou non.
+    for (const sheet of wrapper.findAll('.sheet')) {
+      expect(sheet.findAll('.category').length).toBeGreaterThan(5)
+    }
     wrapper.unmount()
   })
 
@@ -73,7 +94,7 @@ describe('aide sur les raccourcis', () => {
         .findAll('.keys kbd')
         .map((key) => key.text())
     ).toEqual(['Ctrl', 'Page haut'])
-    expect(wrapper.get('.hint').text()).toContain('Les composants entre eux')
+    expect(wrapper.get('.sheet.shown .hint').text()).toContain('Les composants entre eux')
     wrapper.unmount()
   })
 })

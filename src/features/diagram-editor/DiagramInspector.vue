@@ -431,15 +431,6 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
           >
             <Icon name="fit" /> Ajuster
           </button>
-          <button
-            v-if="NODE_SPECS[singleNode.shape].line"
-            type="button"
-            class="with-icon"
-            title="Tourner la barre d'un quart de tour (R)"
-            @click="store.turnBar(singleNode.id)"
-          >
-            <Icon name="rotate-cw" /> Tourner
-          </button>
           <button type="button" class="with-icon" @click="store.duplicateSelection()">
             <Icon name="duplicate" /> Dupliquer
           </button>

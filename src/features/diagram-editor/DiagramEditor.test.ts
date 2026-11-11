@@ -199,3 +199,25 @@ describe('diagramme : grouper par le menu et au clavier', () => {
     wrapper.unmount()
   })
 })
+
+describe('panneau du diagramme', () => {
+  it('ne porte pas de bouton pour tourner une barre : la touche R et le clic droit suffisent', async () => {
+    const store = useDiagramStore()
+    const id = store.addNode('bar', 0, 0)
+    store.clearSelection()
+    const wrapper = mount(DiagramEditor, { attachTo: document.body })
+    rightClick(wrapper.get('.node .hit').element, ...at(store, 0, 0))
+    await flushPromises()
+    expect(store.selectedNodes).toEqual([id])
+    expect(menuLabels()).toContain('Tourner')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+    store.selectedNodes = [id]
+    store.inspectorOpen = true
+    await flushPromises()
+    const buttons = wrapper.findAll('.inspector button').map((button) => button.text())
+    expect(buttons).toContain('Dupliquer')
+    expect(buttons).not.toContain('Tourner')
+    wrapper.unmount()
+  })
+})

@@ -182,7 +182,6 @@ function isDropEnd(section: PinSection): boolean {
 
 const primitive = computed(() => store.selectedPrimitive)
 const primitiveIndex = computed(() => store.selectedIndexes[0] ?? -1)
-const primitiveCount = computed(() => store.shown.visual.primitives.length)
 /** Formes et broches sélectionnées, ensemble. */
 const multiCount = computed(() => store.selectedIndexes.length + store.selectedPinIds.length)
 const shapeStyle = computed(() =>
@@ -432,47 +431,6 @@ function setClosed(event: Event): void {
     <!-- Une forme seule -->
     <section v-if="primitive" class="block">
       <h3>{{ PRIMITIVE_KIND_LABELS[primitive.kind] }}</h3>
-      <div class="row order">
-        <span class="hint">Ordre {{ primitiveIndex + 1 }} / {{ primitiveCount }}</span>
-        <div class="toggles">
-          <button
-            type="button"
-            class="toggle"
-            title="Arrière-plan (Ctrl+Maj+Page bas)"
-            :disabled="primitiveIndex === 0"
-            @click="store.reorderPrimitive('bottom')"
-          >
-            <Icon name="arrow-down-line" />
-          </button>
-          <button
-            type="button"
-            class="toggle"
-            title="Reculer (Ctrl+Page bas)"
-            :disabled="primitiveIndex === 0"
-            @click="store.reorderPrimitive('down')"
-          >
-            <Icon name="arrow-down" />
-          </button>
-          <button
-            type="button"
-            class="toggle"
-            title="Avancer (Ctrl+Page haut)"
-            :disabled="primitiveIndex >= primitiveCount - 1"
-            @click="store.reorderPrimitive('up')"
-          >
-            <Icon name="arrow-up" />
-          </button>
-          <button
-            type="button"
-            class="toggle"
-            title="Premier plan (Ctrl+Maj+Page haut)"
-            :disabled="primitiveIndex >= primitiveCount - 1"
-            @click="store.reorderPrimitive('top')"
-          >
-            <Icon name="arrow-up-line" />
-          </button>
-        </div>
-      </div>
 
       <template v-if="primitive.kind === 'text'">
         <label class="check">
@@ -1020,16 +978,6 @@ function setClosed(event: Event): void {
   background: var(--accent-soft);
   border-color: var(--accent-border);
   color: var(--accent);
-}
-
-.order {
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.order .hint {
-  margin: 0;
 }
 
 .field.opacity {
