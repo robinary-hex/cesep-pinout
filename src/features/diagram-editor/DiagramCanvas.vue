@@ -280,7 +280,7 @@ const shown = computed<{ nodes: DiagramNode[]; links: DiagramLink[]; texts: Text
 
 const renderedLinks = computed(() =>
   shown.value.links.map((link) => {
-    const shape = linkShape(link, shown.value.nodes, lineWidth.value)
+    const shape = linkShape(link, shown.value.nodes, lineWidth.value, look.value.cornerRadius)
     return {
       link,
       // Le trait s'arrête dans ses pointes ; la sélection et la zone cliquable vont jusqu'au bout.

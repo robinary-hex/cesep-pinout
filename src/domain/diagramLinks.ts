@@ -473,6 +473,11 @@ export function linkArrowSize(lineWidth: number): number {
 /** Hauteur d'un triangle équilatéral, pour un côté de 1. */
 const EQUILATERAL_HEIGHT = Math.sqrt(3) / 2
 
+/** Hauteur d'une pointe de flèche, de sa base à son sommet, en cellules. */
+export function linkArrowLength(lineWidth: number): number {
+  return linkArrowSize(lineWidth) * EQUILATERAL_HEIGHT
+}
+
 /**
  * Pointe de flèche pleine : un petit triangle équilatéral (décision du 11 novembre 2026), un
  * sommet en `tip`, le côté opposé en travers du lien. Polygone coin, pointe, coin, dans la
@@ -489,9 +494,8 @@ export function linkArrowHead(
   if (length === 0) return null
   const ux = dx / length
   const uy = dy / length
-  const side = linkArrowSize(lineWidth)
-  const half = side / 2
-  const height = side * EQUILATERAL_HEIGHT
+  const half = linkArrowSize(lineWidth) / 2
+  const height = linkArrowLength(lineWidth)
   const baseX = tip.x - ux * height
   const baseY = tip.y - uy * height
   return [
@@ -565,35 +569,218 @@ export interface LinkShape {
   heads: LocalPoint[][]
 }
 
-/** Trait et pointes d'un lien, en cellules ; l'écran et l'export dessinent la même chose. */
+/** Arc qui arrondit un coude d'un tracé. */
+interface CornerArc {
+  start: GridPoint
+  end: GridPoint
+  center: GridPoint
+  radius: number
+  /** Angle dont le tracé tourne, en radians : positif dans le sens horaire à l'écran. */
+  sweep: number
+  /** Longueur prise sur chacun des deux segments. */
+  reach: number
+}
+
+/** L'arc d'un coude, tel que `wirePathData` le trace ; null pour un sommet qui reste vif. */
+function cornerArc(
+  previous: GridPoint,
+  vertex: GridPoint,
+  next: GridPoint,
+  cornerRadius: number
+): CornerArc | null {
+  const inLength = Math.hypot(vertex[0] - previous[0], vertex[1] - previous[1])
+  const outLength = Math.hypot(next[0] - vertex[0], next[1] - vertex[1])
+  if (cornerRadius <= 0 || inLength === 0 || outLength === 0) return null
+  const inX = (vertex[0] - previous[0]) / inLength
+  const inY = (vertex[1] - previous[1]) / inLength
+  const outX = (next[0] - vertex[0]) / outLength
+  const outY = (next[1] - vertex[1]) / outLength
+  const cross = inX * outY - inY * outX
+  if (Math.abs(cross) < 1e-9) return null
+  const tanHalf = Math.abs(cross) / (1 + inX * outX + inY * outY)
+  const reach = Math.min(cornerRadius * tanHalf, inLength / 2, outLength / 2)
+  const radius = reach / tanHalf
+  const side = cross > 0 ? 1 : -1
+  const start: GridPoint = [vertex[0] - inX * reach, vertex[1] - inY * reach]
+  return {
+    start,
+    end: [vertex[0] + outX * reach, vertex[1] + outY * reach],
+    center: [start[0] - inY * side * radius, start[1] + inX * side * radius],
+    radius,
+    sweep: side * 2 * Math.atan(tanHalf),
+    reach
+  }
+}
+
+/** Écart d'angle entre deux points pris sur un arc, en radians. */
+const ARC_STEP = Math.PI / 12
+
+/** Le tracé tel qu'on le voit, coudes arrondis : chaque arc est remplacé par des points pris dessus. */
+function flattenedPath(points: readonly GridPoint[], cornerRadius: number): GridPoint[] {
+  const curve: GridPoint[] = []
+  points.forEach((vertex, index) => {
+    const previous = points[index - 1]
+    const next = points[index + 1]
+    const arc = previous && next ? cornerArc(previous, vertex, next, cornerRadius) : null
+    if (!arc) {
+      curve.push([vertex[0], vertex[1]])
+      return
+    }
+    const steps = Math.max(1, Math.ceil(Math.abs(arc.sweep) / ARC_STEP))
+    const from = Math.atan2(arc.start[1] - arc.center[1], arc.start[0] - arc.center[0])
+    curve.push(arc.start)
+    for (let step = 1; step < steps; step++) {
+      const angle = from + (arc.sweep * step) / steps
+      curve.push([
+        arc.center[0] + arc.radius * Math.cos(angle),
+        arc.center[1] + arc.radius * Math.sin(angle)
+      ])
+    }
+    curve.push(arc.end)
+  })
+  return curve
+}
+
+/**
+ * Longueur de la partie droite par laquelle un tracé finit, après l'arc de son dernier coude.
+ * Infinie pour un seul segment : rien n'y tourne.
+ */
+function straightEnd(points: readonly GridPoint[], cornerRadius: number): number {
+  const tip = points[points.length - 1]
+  const corner = points[points.length - 2]
+  const before = points[points.length - 3]
+  if (!tip || !corner) return 0
+  if (!before) return Infinity
+  const run = Math.hypot(tip[0] - corner[0], tip[1] - corner[1])
+  return run - (cornerArc(before, corner, tip, cornerRadius)?.reach ?? 0)
+}
+
+/**
+ * Où la base d'une pointe se pose sur le tracé qui mène à son sommet, le dernier point : le
+ * premier point rencontré en le remontant qui soit à une hauteur de pointe du sommet, à vol
+ * d'oiseau. `kept` : combien de points du tracé restent avant la base. Un tracé plus court que la
+ * pointe la laisse sur son premier point.
+ */
+function arrowSeat(
+  track: readonly GridPoint[],
+  length: number
+): { kept: number; point: GridPoint } {
+  const tip = track[track.length - 1]
+  for (let index = track.length - 2; tip && index >= 0; index--) {
+    const near = track[index + 1]
+    const far = track[index]
+    if (!near || !far) continue
+    const dx = far[0] - near[0]
+    const dy = far[1] - near[1]
+    const ox = near[0] - tip[0]
+    const oy = near[1] - tip[1]
+    // Le point du segment à `length` du sommet : near + s × (far − near), s entre 0 et 1.
+    const a = dx * dx + dy * dy
+    const b = 2 * (dx * ox + dy * oy)
+    const c = ox * ox + oy * oy - length * length
+    const root = b * b - 4 * a * c
+    if (a === 0 || root < 0) continue
+    const s = (-b + Math.sqrt(root)) / (2 * a)
+    if (s >= 0 && s <= 1) return { kept: index + 1, point: [near[0] + dx * s, near[1] + dy * s] }
+  }
+  const first = track[0] ?? [0, 0]
+  return { kept: 0, point: [first[0], first[1]] }
+}
+
+/**
+ * Trait et pointes d'un lien, en cellules ; l'écran et l'export dessinent la même chose.
+ * `cornerRadius` : le rayon des coudes du diagramme, avec lequel le trait sera tracé.
+ *
+ * Une pointe se dessine dans l'axe du dernier tronçon tant qu'il est assez long pour la porter.
+ * Sinon elle déborderait de la ligne, plantée en travers du tronçon précédent : elle penche alors
+ * (décision du 11 novembre 2026). Son sommet ne bouge pas ; sa base se pose sur le tracé arrondi,
+ * là où il passe à une hauteur de pointe du sommet, et elle vise son sommet depuis ce point. Le
+ * trait suit le tracé jusqu'à la base : le coude que la pointe remplace n'est plus dessiné.
+ */
 export function linkShape(
   link: DiagramLink,
   nodes: readonly DiagramNode[],
-  lineWidth: number
+  lineWidth: number,
+  cornerRadius = 0
 ): LinkShape {
   const points = linkRenderPoints(link, nodes, lineWidth)
-  const stroke = points.map((point): GridPoint => [point[0], point[1]])
   const heads: LocalPoint[][] = []
+  const length = linkArrowLength(lineWidth)
   // À un demi-côté du sommet, la pointe est déjà bien plus large que le trait.
   const inset = linkArrowSize(lineWidth) / 2
-  const arrow = (tipIndex: number, fromIndex: number): void => {
-    const tip = points[tipIndex]
-    const from = points[fromIndex]
-    if (!tip || !from) return
-    const head = linkArrowHead({ x: from[0], y: from[1] }, { x: tip[0], y: tip[1] }, lineWidth)
-    if (!head) return
-    heads.push(head)
-    // Le trait s'arrête dans la pointe : son bout carré ne dépasse pas du bout effilé.
-    const length = Math.hypot(tip[0] - from[0], tip[1] - from[1])
-    const back = Math.min(inset, length * 0.9)
-    stroke[tipIndex] = [
-      tip[0] + ((from[0] - tip[0]) / length) * back,
-      tip[1] + ((from[1] - tip[1]) / length) * back
-    ]
+  const backwards = [...points].reverse()
+  const leans =
+    (link.endArrow && straightEnd(points, cornerRadius) < length) ||
+    (link.startArrow && straightEnd(backwards, cornerRadius) < length)
+
+  if (!leans) {
+    const stroke = points.map((point): GridPoint => [point[0], point[1]])
+    const arrow = (tipIndex: number, fromIndex: number): void => {
+      const tip = points[tipIndex]
+      const from = points[fromIndex]
+      if (!tip || !from) return
+      const head = linkArrowHead({ x: from[0], y: from[1] }, { x: tip[0], y: tip[1] }, lineWidth)
+      if (!head) return
+      heads.push(head)
+      // Le trait s'arrête dans la pointe : son bout carré ne dépasse pas du bout effilé.
+      const run = Math.hypot(tip[0] - from[0], tip[1] - from[1])
+      const back = Math.min(inset, run * 0.9)
+      stroke[tipIndex] = [
+        tip[0] + ((from[0] - tip[0]) / run) * back,
+        tip[1] + ((from[1] - tip[1]) / run) * back
+      ]
+    }
+    if (link.startArrow) arrow(0, 1)
+    if (link.endArrow) arrow(points.length - 1, points.length - 2)
+    return { points, stroke, heads }
   }
-  if (link.startArrow) arrow(0, 1)
-  if (link.endArrow) arrow(points.length - 1, points.length - 2)
-  return { points, stroke, heads }
+
+  // Une pointe penche : tout se mesure sur le tracé arrondi, celui qu'on voit.
+  const curve = flattenedPath(points, cornerRadius)
+  const last = curve.length - 1
+  /** Pointe au bout d'un tracé : son polygone, sa base sur le tracé, le bout du trait dedans. */
+  const mount = (
+    track: readonly GridPoint[]
+  ): { kept: number; base: GridPoint[]; inner: GridPoint; tip: GridPoint } | null => {
+    const tip = track[track.length - 1]
+    if (!tip) return null
+    const seat = arrowSeat(track, length)
+    const from = seat.point
+    const run = Math.hypot(tip[0] - from[0], tip[1] - from[1])
+    const head = linkArrowHead({ x: from[0], y: from[1] }, { x: tip[0], y: tip[1] }, lineWidth)
+    if (!head || run === 0) return null
+    heads.push(head)
+    const back = Math.min(inset, run * 0.9)
+    return {
+      kept: seat.kept,
+      // Sur la partie droite du bout, la base est dans l'alignement : pas de sommet de plus.
+      base: seat.kept === track.length - 1 ? [] : [from],
+      inner: [
+        tip[0] + ((from[0] - tip[0]) / run) * back,
+        tip[1] + ((from[1] - tip[1]) / run) * back
+      ],
+      tip
+    }
+  }
+  const start = link.startArrow ? mount([...curve].reverse()) : null
+  const end = link.endArrow ? mount(curve) : null
+  // Ce qui reste du tracé entre les deux bases (ou jusqu'au bout sans pointe).
+  const lo = start ? last - start.kept + 1 : 0
+  const hi = end ? end.kept - 1 : last
+  const middle = lo <= hi ? curve.slice(lo, hi + 1) : []
+  return {
+    points: [
+      ...(start ? [start.tip, ...start.base] : []),
+      ...middle,
+      ...(end ? [...end.base, end.tip] : [])
+    ],
+    stroke: [
+      ...(start ? [start.inner, ...start.base] : []),
+      ...middle,
+      ...(end ? [...end.base, end.inner] : [])
+    ],
+    heads
+  }
 }
 
 // Étiquette : elle longe le tracé, d'un côté ou de l'autre, toujours à la même distance du trait.

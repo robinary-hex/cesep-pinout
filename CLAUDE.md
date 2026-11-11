@@ -347,7 +347,14 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     et/ou à l'arrivée, trait plein ou pointillé, couleur. Inverser le sens d'un lien
     (`reverseLinks`) retourne ses sommets et rien d'autre : « Flèche à l'arrivée » reste
     cochée, la pointe passe donc à l'autre bout (le lien de A vers B va de B vers A) ;
-    l'étiquette reste où elle est. Au dessin seulement (`linkShape`,
+    l'étiquette reste où elle est. Une pointe se dessine dans l'axe du dernier tronçon tant
+    qu'il est assez long pour la porter (sa partie droite, après l'arc du coude, vaut au
+    moins la hauteur de la pointe) ; sinon elle déborderait de la ligne, plantée en travers,
+    et elle penche (décision du 11 novembre 2026) : son sommet ne bouge pas, sa base se pose
+    sur le tracé arrondi, là où il passe à une hauteur de pointe du sommet à vol d'oiseau
+    (`arrowSeat`, sur `flattenedPath`), et le trait s'arrête à la base, le coude que la
+    pointe remplace n'étant plus dessiné. `linkShape` reçoit pour cela le rayon des coudes.
+    Au dessin seulement (`linkShape`,
     écran et export), une extrémité qui porte une pointe s'arrête un peu avant son point
     d'arrivée (`linkArrowGap`, 0,4 cellule) : la pointe ne touche pas la forme, et le trait
     s'arrête dans la pointe ; les sommets enregistrés ne changent pas. Étiquette (`label`) :

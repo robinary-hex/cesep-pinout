@@ -130,7 +130,7 @@ export function buildDiagramSvg(
 
   if (diagram.links.length > 0) {
     const linkParts = diagram.links.map((link) => {
-      const shape = linkShape(link, diagram.nodes, lineWidth)
+      const shape = linkShape(link, diagram.nodes, lineWidth, style.cornerRadius)
       const color = inkColor(link.color, ground)
       // Pointes pleines, de la couleur du lien ; un filet de trait en adoucit les angles.
       const heads = shape.heads

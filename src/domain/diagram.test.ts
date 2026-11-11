@@ -18,6 +18,7 @@ import {
   diagramBounds,
   linkArrowGap,
   linkArrowHead,
+  linkArrowLength,
   linkLabelPlacement,
   linkRenderPoints,
   linkShape,
@@ -682,6 +683,114 @@ describe('diagramme : dessin des liens', () => {
     expect(plain.stroke).toEqual(arriving.points)
     // Deux pointes : une à chaque bout.
     expect(linkShape({ ...arriving, startArrow: true }, [], 0.15).heads).toHaveLength(2)
+  })
+
+  it('penche la pointe quand le dernier tronçon est trop court pour la porter', () => {
+    const middle = (head: readonly { x: number; y: number }[] | undefined): [number, number] => [
+      ((head?.[0]?.x ?? NaN) + (head?.[2]?.x ?? NaN)) / 2,
+      ((head?.[0]?.y ?? NaN) + (head?.[2]?.y ?? NaN)) / 2
+    ]
+    // Trait épais (0,3) : une pointe de 1,17 de haut, à 0,5 du bout d'un tronçon d'une cellule.
+    // Dans l'axe de ce tronçon elle déborderait de 0,67 sous la ligne qui arrive.
+    const height = linkArrowLength(0.3)
+    expect(height).toBeCloseTo(1.169)
+    const hooked = link([
+      [0, 10],
+      [10, 10],
+      [10, 9]
+    ])
+    const sharp = linkShape(hooked, [], 0.3)
+    // Le sommet reste au bout du tracé, moins l'espace devant la pointe.
+    expect(sharp.heads[0]?.[1]).toEqual({ x: 10, y: 9.5 })
+    // La base se pose sur la ligne qui arrive, à une hauteur de pointe du sommet, à vol d'oiseau.
+    const base = middle(sharp.heads[0])
+    expect(base[1]).toBeCloseTo(10)
+    expect(base[0]).toBeCloseTo(10 - Math.sqrt(height ** 2 - 0.25))
+    // Le trait suit le tracé jusqu'à la base puis entre dans la pointe : le coude a disparu.
+    expect(sharp.stroke).toHaveLength(3)
+    expect(sharp.stroke[0]).toEqual([0, 10])
+    expect(sharp.stroke[1]?.[0]).toBeCloseTo(base[0])
+    expect(sharp.stroke[1]?.[1]).toBeCloseTo(10)
+    expect(sharp.stroke[2]?.[1]).toBeLessThan(10)
+    expect(sharp.stroke[2]?.[1]).toBeGreaterThan(9.5)
+    // La sélection et la zone cliquable vont de la base au sommet.
+    expect(sharp.points).toHaveLength(3)
+    expect(sharp.points.at(-1)).toEqual([10, 9.5])
+
+    // Coudes arrondis (rayon 0,8), tronçon final de 2 : il reste 1,25 jusqu'au sommet, dont un
+    // arc de 0,625. La base se pose sur cet arc, la pointe penche un peu.
+    const curved = linkShape(
+      link([
+        [0, 10],
+        [10, 10],
+        [10, 12]
+      ]),
+      [],
+      0.3,
+      0.8
+    )
+    const seat = middle(curved.heads[0])
+    expect(curved.heads[0]?.[1]).toEqual({ x: 10, y: 11.25 })
+    expect(Math.hypot(seat[0] - 9.375, seat[1] - 10.625)).toBeCloseTo(0.625, 2)
+    expect(Math.hypot(10 - seat[0], 11.25 - seat[1])).toBeCloseTo(height)
+    expect(seat[0]).toBeLessThan(9.9)
+    expect(seat[0]).toBeGreaterThan(9.5)
+    // Le trait suit l'arc, point par point, jusqu'à la base.
+    expect(curved.stroke.length).toBeGreaterThan(4)
+    expect(curved.stroke[0]).toEqual([0, 10])
+    expect(curved.stroke[1]).toEqual([9.375, 10])
+
+    // Tronçon final de 3 : 1,45 de droit après l'arc, la pointe y tient, dans l'axe.
+    const long = linkShape(
+      link([
+        [0, 10],
+        [10, 10],
+        [10, 13]
+      ]),
+      [],
+      0.3,
+      0.8
+    )
+    expect(long.heads[0]?.[0]?.y).toBeCloseTo(long.heads[0]?.[2]?.y ?? NaN)
+    expect(long.stroke).toHaveLength(3)
+    expect(long.stroke[1]).toEqual([10, 10])
+
+    // Au départ, de même : la pointe vise le début du tracé.
+    const leaving = linkShape(
+      link(
+        [
+          [10, 9],
+          [10, 10],
+          [0, 10]
+        ],
+        { startArrow: true, endArrow: false }
+      ),
+      [],
+      0.3
+    )
+    expect(leaving.heads).toHaveLength(1)
+    expect(leaving.heads[0]?.[1]).toEqual({ x: 10, y: 9.5 })
+    expect(middle(leaving.heads[0])[0]).toBeCloseTo(base[0])
+    expect(leaving.stroke.at(-1)).toEqual([0, 10])
+    expect(leaving.points[0]).toEqual([10, 9.5])
+    // Deux pointes : chacune sur son bout, le reste du tracé entre leurs bases.
+    const both = linkShape(
+      link(
+        [
+          [10, 9],
+          [10, 10],
+          [0, 10],
+          [0, 9]
+        ],
+        { startArrow: true }
+      ),
+      [],
+      0.3
+    )
+    expect(both.heads).toHaveLength(2)
+    expect(both.stroke).toHaveLength(4)
+    expect(both.points[0]).toEqual([10, 9.5])
+    expect(both.points.at(-1)).toEqual([0, 9.5])
   })
 
   it('laisse un petit espace devant une pointe de flèche, au dessin seulement', () => {
