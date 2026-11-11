@@ -1,3 +1,4 @@
+import { withPreviewVariant } from '@/domain'
 import type { useLibraryStore } from '@/features/library/store'
 import { newComponentId, saveComponent } from '@/io/library'
 import { askToSave } from '@/ui/dialogs'
@@ -29,7 +30,11 @@ export async function saveComponentDoc(
     store.setId(newComponentId(store.doc.name, library.ids))
   }
   try {
-    const folder = await saveComponent(library.libraryDir, store.doc)
+    // L'aperçu de la bibliothèque montrera la variante qu'on regarde en enregistrant.
+    const folder = await saveComponent(
+      library.libraryDir,
+      withPreviewVariant(store.doc, store.variantId)
+    )
     store.markSaved(folder)
     store.status = `Enregistré dans ${folder}`
     await library.refresh()

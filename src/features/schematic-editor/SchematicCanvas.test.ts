@@ -294,7 +294,7 @@ describe('canevas du montage : fils à 45° avec Alt', () => {
 })
 
 describe('canevas du montage : composants derrière les fils', () => {
-  it('dessine sous les fils le composant mis derrière eux, et au-dessus les autres', async () => {
+  it('dessine sous les fils le composant qu’on vient de poser, et au-dessus celui passé devant', async () => {
     const store = withResistor()
     const id = store.doc.components[0]?.id
     if (!id) throw new Error('composant attendu')
@@ -308,13 +308,14 @@ describe('canevas du montage : composants derrière les fils', () => {
       const b = wrapper.get(second).element
       return (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
     }
-    expect(precedes('.wires', '.instance')).toBe(true)
-    store.setInstancesBehindWires([id], true)
-    await wrapper.vm.$nextTick()
+    // Posé : derrière les fils. Il reste un composant qu'on saisit et qu'on déplace.
     expect(precedes('.instance', '.wires')).toBe(true)
-    // Il reste un composant qu'on saisit et qu'on déplace.
     await fire(wrapper.get('.instance'), 'pointerdown', at(store, 4, 3.2))
     expect(store.selection).toEqual([id])
+    await fire(wrapper.get('svg.schematic'), 'pointerup', at(store, 4, 3.2))
+    store.setInstancesBehindWires([id], false)
+    await wrapper.vm.$nextTick()
+    expect(precedes('.wires', '.instance')).toBe(true)
   })
 })
 

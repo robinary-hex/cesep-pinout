@@ -5,7 +5,7 @@ import { setBridge } from '@/io/bridge'
 import { FakeFs } from '@/io/testing/fakeFs'
 import { setDialogResponder } from '@/ui/dialogs'
 import { scriptDialogs, type DialogScript } from '@/ui/testing/dialogs'
-import { closeComponentTabAsking } from './componentActions'
+import { closeComponentTabAsking, saveComponentDoc } from './componentActions'
 import { useComponentEditorStore } from './store'
 
 let fs: FakeFs
@@ -54,5 +54,31 @@ describe('fermer un onglet de composant', () => {
     expect(await closeComponentTabAsking(store, library, store.activeTabId)).toBe(true)
     expect(fs.texts.get('C:/fake/Pinout/library/led/component.json')).toContain('"name": "LED"')
     expect(store.pristine).toBe(true)
+  })
+})
+
+describe('aperçu du composant dans la bibliothèque', () => {
+  it('prend la variante qu’on regarde en enregistrant, et la rouvre telle quelle', async () => {
+    const library = useLibraryStore()
+    await library.init()
+    const store = useComponentEditorStore()
+    store.setMeta({ name: 'LED' })
+    store.addPin({ x: 0, y: 1 })
+    const second = store.addVariant()
+    // On regarde la seconde variante : c'est elle que l'aperçu montrera.
+    expect(await saveComponentDoc(store, library)).toBe(true)
+    const saved = library.entries.find((entry) => entry.def?.name === 'LED')
+    expect(saved?.def?.previewVariant).toBe(second)
+    // Rouvert depuis la bibliothèque : on retrouve cette variante.
+    if (saved?.def) {
+      store.closeTab(store.activeTabId)
+      store.open(saved.def, saved.folder)
+    }
+    expect(store.variantId).toBe(second)
+    // Enregistré en regardant la variante d'origine : l'aperçu revient à elle.
+    store.showVariant('base')
+    expect(await saveComponentDoc(store, library)).toBe(true)
+    const again = library.entries.find((entry) => entry.def?.name === 'LED')
+    expect(again?.def && 'previewVariant' in again.def).toBe(false)
   })
 })

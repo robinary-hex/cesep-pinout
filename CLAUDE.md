@@ -484,6 +484,14 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     version. Les contrôles
     (`componentIssues`) et les images (`componentImages`, `mapComponentPrimitives` : un PNG par
     nom dans le dossier, toutes variantes confondues) couvrent toutes les variantes.
+  - Aperçu dans la bibliothèque (`ComponentThumbnail.vue`) : le dessin seul, sans les broches,
+    dans la variante qu'on regardait en enregistrant (`previewVariant`, posé par
+    `saveComponentDoc` avec `withPreviewVariant` ; rouvrir un composant le montre dans cette
+    variante). Ce champ est optionnel et ajouté sans montée de version, bien que le format soit
+    publié : ce n'est qu'une indication de présentation, qu'une version plus ancienne ignore
+    sans dommage, alors qu'une montée de version lui rendrait illisibles les composants de la
+    bibliothèque partagée. Elle ne compte pas non plus quand on compare un composant posé à
+    celui de la bibliothèque (`sameComponentContent`).
   - Domaine : `componentVariants`, `hasVariants`, `variantDefinition(def, id)` rend le composant
     tel que le dessine une variante (même identité, toujours le même objet pour un même couple) ;
     `instanceDefinition(project, instance)` fait de même pour un exemplaire posé
@@ -533,11 +541,12 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   qu'Alt ne fasse rien apparaître, et `swallowAlt` de `App.vue` neutralise la touche seule. F11
   reste le plein écran ; en développement seulement, F12
   ou Ctrl+Maj+I ouvre les outils et F5 ou Ctrl+R recharge (`before-input-event`).
-- Composants et fils, ordre d'empilement du montage : les composants se dessinent au-dessus des
-  fils, sauf ceux qu'on a mis derrière (`behindWires` de l'instance ; case « Derrière les fils »
-  du panneau, menu contextuel, Ctrl+Page bas / haut sur un composant sélectionné :
-  `setInstancesBehindWires`, `restackSelection`), pour qu'une image ne cache pas les fils qui vont
-  à ses broches. Même ordre à l'écran (`STACK` et `layers` de `SchematicCanvas.vue`) et à
+- Composants et fils, ordre d'empilement du montage : un composant se pose derrière les fils
+  (décision du 11 novembre 2026 : `behindWires` vaut vrai à la pose), pour que les fils tracés
+  sur lui restent visibles ; on le passe devant, ou derrière à nouveau, par la case « Derrière
+  les fils » du panneau, le menu contextuel ou Ctrl+Page haut / bas sur un composant sélectionné
+  (`setInstancesBehindWires`, `restackSelection`). Les composants des montages déjà enregistrés
+  gardent leur réglage. Même ordre à l'écran (`STACK` et `layers` de `SchematicCanvas.vue`) et à
   l'export (`componentLayer` de `svg.ts`) ; les textes d'un composant suivent sa couche.
 - Croisements : `src/domain/crossings.ts` (croisements stricts entre deux segments de directions
   différentes, fil du dessus redessiné dans sa direction par `crossingPieceEnds`, exceptions
@@ -609,7 +618,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé). Ces versions sont celles de la 1.4.0, publiée le 11 novembre 2026 : depuis, tout
   nouveau champ d'un fichier, même optionnel, demande une montée de version et une migration
-  (une version plus ancienne l'ignorerait, puis le perdrait en enregistrant). Les champs
+  (une version plus ancienne l'ignorerait, puis le perdrait en enregistrant) ; seule exception,
+  une indication de présentation dont la perte est sans conséquence (`previewVariant`). Les champs
   optionnels ajoutés sans montée (`group`, `pinGroup`, `pinGroups`, `variants`, `variant`,
   `baseVariantRank`…) l'ont été avant cette publication.
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.

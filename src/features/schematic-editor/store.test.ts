@@ -8,9 +8,13 @@ import {
   DEFAULT_SETTINGS,
   parseProject,
   serializeProject,
+  withPreviewVariant,
   type ComponentDefinition
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
+import { setBridge } from '@/io/bridge'
+import { saveComponent } from '@/io/library'
+import { FakeFs } from '@/io/testing/fakeFs'
 import { useSchematicStore } from './store'
 
 function resistor(): ComponentDefinition {
@@ -824,32 +828,33 @@ describe('onglets de montage', () => {
 })
 
 describe('montage : composants derrière les fils, fils à 45°', () => {
-  it('met un composant derrière les fils et le ramène devant, par commande ou Ctrl+Page', () => {
+  it('pose les composants derrière les fils ; commande ou Ctrl+Page les passe devant ou derrière', () => {
     const store = useSchematicStore()
     store.startPlacing(resistor())
     const first = store.placeAt(2, 3)
     const second = store.placeAt(10, 3)
     store.stopPlacing()
     if (!first || !second) throw new Error('composants attendus')
-    expect(store.doc.components.map((instance) => instance.behindWires)).toEqual([false, false])
-    store.setInstancesBehindWires([first], true)
-    expect(store.doc.components.map((instance) => instance.behindWires)).toEqual([true, false])
-    expect(store.undoLabel).toBe('Passer derrière les fils')
-    // Déjà derrière : rien à faire, rien de plus à annuler.
-    store.setInstancesBehindWires([first], true)
-    store.undo()
-    expect(store.doc.components[0]?.behindWires).toBe(false)
-    // Ctrl+Page bas sur la sélection, puis Ctrl+Page haut.
-    store.selection = [second]
-    store.restackSelection('down')
+    // À la pose, un composant est derrière les fils : ceux qu'on trace sur lui restent visibles.
+    expect(store.doc.components.map((instance) => instance.behindWires)).toEqual([true, true])
+    store.setInstancesBehindWires([first], false)
     expect(store.doc.components.map((instance) => instance.behindWires)).toEqual([false, true])
-    store.restackSelection('top')
-    expect(store.doc.components[1]?.behindWires).toBe(false)
     expect(store.undoLabel).toBe('Passer devant les fils')
-    // Le réglage s'enregistre avec le montage.
+    // Déjà devant : rien à faire, rien de plus à annuler.
+    store.setInstancesBehindWires([first], false)
+    store.undo()
+    expect(store.doc.components[0]?.behindWires).toBe(true)
+    // Ctrl+Page haut sur la sélection, puis Ctrl+Page bas.
+    store.selection = [second]
+    store.restackSelection('up')
+    expect(store.doc.components.map((instance) => instance.behindWires)).toEqual([true, false])
     store.restackSelection('bottom')
+    expect(store.doc.components[1]?.behindWires).toBe(true)
+    expect(store.undoLabel).toBe('Passer derrière les fils')
+    // Le réglage s'enregistre avec le montage.
+    store.restackSelection('top')
     const reread = parseProject(serializeProject(store.doc))
-    expect(reread.components[1]?.behindWires).toBe(true)
+    expect(reread.components.map((instance) => instance.behindWires)).toEqual([true, false])
   })
 
   it('accepte un fil en diagonale à 45° et refuse une autre pente', () => {
@@ -1264,5 +1269,35 @@ describe('montage : variantes d’un composant', () => {
     expect(store.undoLabel).toBe('Changer de variante')
     store.undo()
     expect(store.doc.components[0]?.variant).toBe('v1')
+  })
+})
+
+describe('montage : aperçu d’un composant de la bibliothèque', () => {
+  it('ne voit pas un composant « à mettre à jour » quand seul son aperçu a changé', async () => {
+    const fs = new FakeFs()
+    setBridge(fs)
+    const library = useLibraryStore()
+    await library.init()
+    const def = resistor()
+    def.variants = [
+      { id: 'v1', name: 'Longue', size: def.size, visual: def.visual, pins: def.pins }
+    ]
+    await saveComponent(library.libraryDir, def)
+    await library.refresh()
+    const store = useSchematicStore()
+    store.startPlacing(def)
+    store.placeAt(0, 0)
+    store.stopPlacing()
+    expect(store.newerLibraryDefinition('resistor')).toBeNull()
+    // Réenregistré en regardant l'autre variante : seul l'aperçu change.
+    await saveComponent(library.libraryDir, withPreviewVariant(def, 'v1'))
+    await library.refresh()
+    expect(store.newerLibraryDefinition('resistor')).toBeNull()
+    expect(store.staleDefIds.size).toBe(0)
+    // Un vrai changement, lui, se voit.
+    await saveComponent(library.libraryDir, { ...def, description: 'Revue' })
+    await library.refresh()
+    expect(store.newerLibraryDefinition('resistor')).not.toBeNull()
+    setBridge(null)
   })
 })

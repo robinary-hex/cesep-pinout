@@ -14,6 +14,7 @@ import {
   componentVariants,
   hasVariants,
   insertVertex,
+  sameComponentContent,
   instanceDefinition,
   nearestWirePoint,
   instanceBounds,
@@ -662,7 +663,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     // La définition posée fait foi : si la bibliothèque a changé depuis la dernière pose, la copie
     // embarquée est remplacée et tous les exemplaires du montage suivent (fils compris).
     const embedded = doc.value.embeddedDefs[def.id]
-    const refresh = !embedded || JSON.stringify(embedded) !== JSON.stringify(def)
+    const refresh = !embedded || !sameComponentContent(embedded, def)
     applyWithElasticWires(`Poser ${def.name}`, (draft) => {
       if (refresh) draft.embeddedDefs[def.id] = castDraft(structuredClone(def))
       draft.components.push({
@@ -674,7 +675,8 @@ export const useSchematicStore = defineStore('schematic', () => {
         mirror: current.mirror,
         label: '',
         fields: {},
-        behindWires: false,
+        // Un composant se pose derrière les fils : ceux qu'on trace sur lui restent visibles.
+        behindWires: true,
         ...(current.variant === null ? {} : { variant: current.variant })
       })
     })
@@ -1376,7 +1378,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     const embedded = doc.value.embeddedDefs[defId]
     const entry = library.entries.find((candidate) => candidate.def?.id === defId)
     if (!embedded || !entry?.def) return null
-    return JSON.stringify(entry.def) === JSON.stringify(embedded) ? null : entry.def
+    return sameComponentContent(entry.def, embedded) ? null : entry.def
   }
 
   /** Définitions embarquées que la bibliothèque a fait évoluer : le canevas les teinte. */

@@ -12,7 +12,10 @@ import {
   movedVariantOrder,
   nextVariantId,
   nextVariantName,
+  previewDefinition,
+  sameComponentContent,
   variantDefinition,
+  withPreviewVariant,
   type ComponentDefinition,
   type Primitive
 } from './component'
@@ -173,5 +176,24 @@ describe('ordre des variantes', () => {
     // Sur elle-même, ou une variante inconnue : rien ne bouge.
     expect(movedVariantOrder(def, 'v1', 'v1')).toEqual(['base', 'v1', 'v2'])
     expect(movedVariantOrder(def, 'disparue', null)).toEqual(['base', 'v1', 'v2'])
+  })
+})
+
+describe('variante de l’aperçu', () => {
+  it('se pose et se retire sans toucher au composant, et ne compte pas dans la comparaison', () => {
+    const def = led()
+    const withPreview = withPreviewVariant(def, 'v1')
+    expect(withPreview.previewVariant).toBe('v1')
+    expect(def.previewVariant).toBeUndefined()
+    expect(previewDefinition(withPreview).size.widthCells).toBe(6)
+    expect(previewDefinition(def)).toBe(def)
+    // La variante d'origine, ou une variante inconnue : pas de propriété.
+    expect('previewVariant' in withPreviewVariant(withPreview, 'base')).toBe(false)
+    expect('previewVariant' in withPreviewVariant(withPreview, 'disparue')).toBe(false)
+    expect(previewDefinition({ ...def, previewVariant: 'disparue' }).size.widthCells).toBe(4)
+    // Même composant, à l'aperçu près ; un vrai changement se voit.
+    expect(sameComponentContent(def, withPreview)).toBe(true)
+    expect(sameComponentContent(def, { ...withPreview, name: 'DEL' })).toBe(false)
+    expect(parseComponentDefinition(serializeComponentDefinition(withPreview))).toEqual(withPreview)
   })
 })

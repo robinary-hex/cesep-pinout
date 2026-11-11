@@ -314,7 +314,13 @@ const componentShape = z.object({
    * liste ne change l'identité d'aucune variante : on peut les ranger sans toucher aux composants
    * déjà posés.
    */
-  baseVariantRank: z.number().int().nonnegative().optional()
+  baseVariantRank: z.number().int().nonnegative().optional(),
+  /**
+   * Variante que montre l'aperçu du composant dans la bibliothèque : celle qu'on regardait en
+   * l'enregistrant ; absent : la variante d'origine. Une simple indication de présentation, qui
+   * ne compte pas quand on compare deux versions d'un composant (`sameComponentContent`).
+   */
+  previewVariant: z.string().min(1).optional()
 })
 export type ComponentDefinition = z.infer<typeof componentShape>
 
@@ -388,6 +394,33 @@ export function variantDefinition(
     cache.set(variant.id, resolved)
   }
   return resolved
+}
+
+/** Le composant tel que le montre son aperçu dans la bibliothèque. */
+export function previewDefinition(def: ComponentDefinition): ComponentDefinition {
+  return variantDefinition(def, def.previewVariant)
+}
+
+/** Le même composant, avec cette variante pour aperçu (celle d'origine : la propriété disparaît). */
+export function withPreviewVariant(
+  def: ComponentDefinition,
+  variantId: string | null
+): ComponentDefinition {
+  const copy = { ...def }
+  if (def.variants?.some((variant) => variant.id === variantId) && variantId !== null) {
+    copy.previewVariant = variantId
+  } else {
+    delete copy.previewVariant
+  }
+  return copy
+}
+
+/**
+ * Deux versions d'un composant disent-elles la même chose ? La variante de l'aperçu ne compte
+ * pas : la changer ne fait pas d'un composant posé un composant « à mettre à jour ».
+ */
+export function sameComponentContent(a: ComponentDefinition, b: ComponentDefinition): boolean {
+  return JSON.stringify(withPreviewVariant(a, null)) === JSON.stringify(withPreviewVariant(b, null))
 }
 
 /** Formes de toutes les variantes d'un composant, la première d'abord. */

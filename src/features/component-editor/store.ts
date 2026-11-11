@@ -292,6 +292,11 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
       }
     }
     showInTab(def, sourceFolder === null ? null : def, sourceFolder)
+    // On retrouve la variante qu'on regardait en l'enregistrant (celle de son aperçu) : un
+    // simple ouvrir-enregistrer ne change donc pas l'aperçu.
+    const preview = def.previewVariant
+    activeVariant.value =
+      preview !== undefined && def.variants?.some((entry) => entry.id === preview) ? preview : null
   }
 
   function markSaved(savedFolder: string): void {
