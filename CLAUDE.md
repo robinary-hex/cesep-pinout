@@ -575,7 +575,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   par version dans `src/domain/fixtures/`. Versions courantes : composant 15, projet 21, paramètres 12,
   diagramme 4
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
-  supprimé).
+  supprimé). Ces versions sont celles de la 1.4.0, publiée le 11 novembre 2026 : depuis, tout
+  nouveau champ d'un fichier, même optionnel, demande une montée de version et une migration
+  (une version plus ancienne l'ignorerait, puis le perdrait en enregistrant). Les champs
+  optionnels ajoutés sans montée (`group`, `pinGroup`, `pinGroups`, `variants`, `variant`,
+  `baseVariantRank`…) l'ont été avant cette publication.
 - Pas de framework de diagramme ; pas de dépendance ajoutée sans raison notée dans ARCHITECTURE.md.
 
 ## Git
