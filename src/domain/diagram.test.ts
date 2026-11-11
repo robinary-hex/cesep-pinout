@@ -556,16 +556,29 @@ describe('diagramme : accroche des liens', () => {
 })
 
 describe('diagramme : dessin des liens', () => {
-  it('dessine une pointe pleine et trapue vers l’arrivée', () => {
+  it('dessine une pointe pleine vers l’arrivée, un petit triangle équilatéral', () => {
     const head = linkArrowHead({ x: 0, y: 0 }, { x: 0, y: 5 }, 0.15)
-    // Aile, pointe, aile, creux : 0,9 de long, 0,79 de large, creux à 0,68 de la pointe.
-    expect(head).toHaveLength(4)
+    // Coin, pointe, coin : 0,7 de côté, donc 0,61 de haut.
+    expect(head).toHaveLength(3)
     expect(head?.[1]).toEqual({ x: 0, y: 5 })
-    expect(head?.[0]?.y).toBeCloseTo(4.1)
-    expect(head?.[0]?.x).toBeCloseTo(-0.396)
-    expect(head?.[2]?.x).toBeCloseTo(0.396)
-    expect(head?.[3]?.x).toBeCloseTo(0)
-    expect(head?.[3]?.y).toBeCloseTo(4.316)
+    expect(head?.[0]?.x).toBeCloseTo(-0.35)
+    expect(head?.[0]?.y).toBeCloseTo(4.394)
+    expect(head?.[2]?.x).toBeCloseTo(0.35)
+    expect(head?.[2]?.y).toBeCloseTo(4.394)
+    // Trois côtés égaux, dans n'importe quelle direction.
+    const sides = (points: readonly { x: number; y: number }[]): number[] =>
+      points.map((point, index) => {
+        const next = points[(index + 1) % points.length] ?? point
+        return Math.hypot(next.x - point.x, next.y - point.y)
+      })
+    for (const length of sides(head ?? [])) expect(length).toBeCloseTo(0.7)
+    const sideways = linkArrowHead({ x: 9, y: 2 }, { x: 3, y: 2 }, 0.15)
+    expect(sideways?.[1]).toEqual({ x: 3, y: 2 })
+    for (const length of sides(sideways ?? [])) expect(length).toBeCloseTo(0.7)
+    // Un trait épais a une pointe à sa mesure.
+    for (const length of sides(linkArrowHead({ x: 0, y: 0 }, { x: 0, y: 5 }, 0.4) ?? [])) {
+      expect(length).toBeCloseTo(1.8)
+    }
     expect(linkArrowHead({ x: 1, y: 1 }, { x: 1, y: 1 }, 0.15)).toBeNull()
   })
 
@@ -575,9 +588,9 @@ describe('diagramme : dessin des liens', () => {
       [4, 10]
     ])
     const shape = linkShape(arriving, [], 0.15)
-    // La pointe finit 0,4 avant le sommet ; le trait s'arrête 0,54 plus tôt, dans la pointe.
+    // La pointe finit 0,4 avant le sommet ; le trait s'arrête 0,35 plus tôt, dans la pointe.
     expect(shape.points.at(-1)).toEqual([4, 9.6])
-    expect(shape.stroke.at(-1)?.[1]).toBeCloseTo(9.06)
+    expect(shape.stroke.at(-1)?.[1]).toBeCloseTo(9.25)
     expect(shape.stroke[0]).toEqual([4, 4])
     expect(shape.heads).toHaveLength(1)
     expect(shape.heads[0]?.[1]).toEqual({ x: 4, y: 9.6 })

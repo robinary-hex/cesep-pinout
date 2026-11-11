@@ -465,16 +465,18 @@ export function moveLinkSegment(
 
 // Dessin
 
-/** Longueur d'une pointe de flèche, en cellules. */
+/** Côté d'une pointe de flèche, un triangle équilatéral, en cellules. */
 export function linkArrowSize(lineWidth: number): number {
-  return Math.max(0.9, lineWidth * 6)
+  return Math.max(0.7, lineWidth * 4.5)
 }
 
+/** Hauteur d'un triangle équilatéral, pour un côté de 1. */
+const EQUILATERAL_HEIGHT = Math.sqrt(3) / 2
+
 /**
- * Pointe de flèche pleine, plutôt trapue (presque aussi large que longue, décision du 11
- * novembre 2026) : la pointe en `tip`, deux ailes en arrière, et un creux
- * entre elles. Polygone aile, pointe, aile, creux, dans la direction `from` → `tip` ; null si les
- * deux points sont confondus.
+ * Pointe de flèche pleine : un petit triangle équilatéral (décision du 11 novembre 2026), un
+ * sommet en `tip`, le côté opposé en travers du lien. Polygone coin, pointe, coin, dans la
+ * direction `from` → `tip` ; null si les deux points sont confondus.
  */
 export function linkArrowHead(
   from: LocalPoint,
@@ -487,16 +489,15 @@ export function linkArrowHead(
   if (length === 0) return null
   const ux = dx / length
   const uy = dy / length
-  const size = linkArrowSize(lineWidth)
-  const half = size * 0.44
-  const notch = size * 0.76
-  const baseX = tip.x - ux * size
-  const baseY = tip.y - uy * size
+  const side = linkArrowSize(lineWidth)
+  const half = side / 2
+  const height = side * EQUILATERAL_HEIGHT
+  const baseX = tip.x - ux * height
+  const baseY = tip.y - uy * height
   return [
     { x: baseX - uy * half, y: baseY + ux * half },
     { x: tip.x, y: tip.y },
-    { x: baseX + uy * half, y: baseY - ux * half },
-    { x: tip.x - ux * notch, y: tip.y - uy * notch }
+    { x: baseX + uy * half, y: baseY - ux * half }
   ]
 }
 
@@ -573,7 +574,8 @@ export function linkShape(
   const points = linkRenderPoints(link, nodes, lineWidth)
   const stroke = points.map((point): GridPoint => [point[0], point[1]])
   const heads: LocalPoint[][] = []
-  const inset = linkArrowSize(lineWidth) * 0.6
+  // À un demi-côté du sommet, la pointe est déjà bien plus large que le trait.
+  const inset = linkArrowSize(lineWidth) / 2
   const arrow = (tipIndex: number, fromIndex: number): void => {
     const tip = points[tipIndex]
     const from = points[fromIndex]

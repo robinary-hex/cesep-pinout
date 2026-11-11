@@ -800,7 +800,11 @@ export const useDiagramStore = defineStore('diagram', () => {
     })
   }
 
-  /** Inverse le sens d'un lien : ses sommets et ses pointes changent de bout. */
+  /**
+   * Inverse le sens d'un lien : son départ devient son arrivée. « Flèche au départ » et « Flèche
+   * à l'arrivée » gardent leur réglage : la pointe qui était à un bout se retrouve donc à
+   * l'autre, le lien de A vers B devient un lien de B vers A (décision du 11 novembre 2026).
+   */
   function reverseLinks(ids: readonly string[]): void {
     if (ids.length === 0) return
     apply('Inverser le sens du lien', (draft) => {
@@ -809,9 +813,6 @@ export const useDiagramStore = defineStore('diagram', () => {
         link.points.reverse()
         // L'étiquette reste au même endroit du tracé.
         link.labelAt = 1 - link.labelAt
-        const start = link.startArrow
-        link.startArrow = link.endArrow
-        link.endArrow = start
       }
     })
   }

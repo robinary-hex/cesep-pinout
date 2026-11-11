@@ -329,9 +329,13 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     à l'autre du même côté, jusqu'au bout du côté, au lieu de laisser un coude qui longe la
     forme (`moveLinkSegment` ; une accroche déjà prise par un autre lien reste permise). Un
     lien dont un bout est sur une note se trace en pointillés, sans changer le style des
-    prochains liens (`touchesNote`, dans `addLink`). Pointe pleine et plutôt trapue (deux
-    ailes, un creux, presque aussi large que longue : `linkArrowHead`) au départ
-    et/ou à l'arrivée, trait plein ou pointillé, couleur. Au dessin seulement (`linkShape`,
+    prochains liens (`touchesNote`, dans `addLink`). Pointe pleine, un petit triangle
+    équilatéral (0,7 cellule de côté, plus pour un trait épais : `linkArrowHead`,
+    `linkArrowSize` ; décision du 11 novembre 2026) au départ
+    et/ou à l'arrivée, trait plein ou pointillé, couleur. Inverser le sens d'un lien
+    (`reverseLinks`) retourne ses sommets et rien d'autre : « Flèche à l'arrivée » reste
+    cochée, la pointe passe donc à l'autre bout (le lien de A vers B va de B vers A) ;
+    l'étiquette reste où elle est. Au dessin seulement (`linkShape`,
     écran et export), une extrémité qui porte une pointe s'arrête un peu avant son point
     d'arrivée (`linkArrowGap`, 0,4 cellule) : la pointe ne touche pas la forme, et le trait
     s'arrête dans la pointe ; les sommets enregistrés ne changent pas. Étiquette (`label`) :

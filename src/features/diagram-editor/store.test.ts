@@ -1,6 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { DEFAULT_DIAGRAM_STYLE, parseDiagram, serializeDiagram } from '@/domain'
+import { DEFAULT_DIAGRAM_STYLE, linkShape, parseDiagram, serializeDiagram } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import { readDiagramAutosaves, syncDiagramAutosaves } from '@/io/autosave'
 import { setBridge } from '@/io/bridge'
@@ -322,7 +322,32 @@ describe('diagramme : liens', () => {
     store.setLinkLabelPlacement(id, 1.4, -1)
     expect(store.doc.links[0]?.labelAt).toBe(1)
     store.setLinkLabelPlacement(id, 0.2, -1)
-    // Inverser le sens : l'étiquette reste au même endroit du tracé.
+    // Inverser le sens : le départ devient l'arrivée, l'étiquette reste au même endroit du tracé.
+    // La flèche reste « à l'arrivée » : sa pointe passe donc à l'autre bout du lien.
+    expect(store.doc.links[0]).toMatchObject({ startArrow: false, endArrow: true })
+    const tipOf = (): number | undefined => {
+      const shown = store.doc.links[0]
+      return shown ? linkShape(shown, [], 0.15).heads[0]?.[1]?.y : undefined
+    }
+    expect(tipOf()).toBeCloseTo(9.6)
+    store.reverseLinks([id])
+    expect(store.doc.links[0]).toMatchObject({
+      points: [
+        [0, 10],
+        [0, 0]
+      ],
+      startArrow: false,
+      endArrow: true,
+      labelAt: 0.8,
+      labelSide: -1
+    })
+    expect(tipOf()).toBeCloseTo(0.4)
+    expect(store.undoLabel).toBe('Inverser le sens du lien')
+    // Une flèche au départ seulement change de bout elle aussi ; deux inversions ramènent tout.
+    store.setLinksStyle([id], { startArrow: true, endArrow: false })
+    expect(tipOf()).toBeCloseTo(9.6)
+    store.reverseLinks([id])
+    expect(tipOf()).toBeCloseTo(0.4)
     store.reverseLinks([id])
     expect(store.doc.links[0]).toMatchObject({
       points: [
@@ -331,9 +356,9 @@ describe('diagramme : liens', () => {
       ],
       startArrow: true,
       endArrow: false,
-      labelAt: 0.8,
-      labelSide: -1
+      labelAt: 0.8
     })
+    store.setLinksStyle([id], { startArrow: false, endArrow: true })
     store.setLinkLabel(id, '')
     expect(store.doc.links[0]?.label).toBe('')
   })
