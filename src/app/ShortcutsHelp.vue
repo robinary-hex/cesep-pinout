@@ -173,6 +173,10 @@ const sections: { title: string; rows: Row[] }[] = [
       ['Ctrl+glisser sur une forme', 'Saisir sa poignée la plus proche'],
       ['Ctrl (sans sélection)', 'Poignées de la boîte du composant : glisser un coin ou un côté'],
       [
+        'Glisser une image PNG dans la fenêtre',
+        'L’ajouter au composant affiché, comme par le bouton Image de la barre d’outils'
+      ],
+      [
         'Variantes',
         'Le même composant dessiné autrement : le bouton de la barre en crée une par copie, la liste choisit celle qu’on modifie ; dans le panneau, le point devant un nom la choisit aussi, glisser une ligne change l’ordre'
       ],

@@ -2,6 +2,9 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { dataUrlToBase64 } from '@/domain'
+import { pngHeaderDataUrl } from '@/domain/testing/pngHeader'
+import { useComponentEditorStore } from '@/features/component-editor/store'
 import { useDiagramStore } from '@/features/diagram-editor/store'
 import { useSchematicStore } from '@/features/schematic-editor/store'
 import { setBridge } from '@/io/bridge'
@@ -167,5 +170,38 @@ describe('coque de l’application', () => {
     expect(wrapper.findAll('.doc-tab')).toHaveLength(1)
     expect(schematic.filePath).toBe('C:/Docs/essai.pinout')
     wrapper.unmount()
+  })
+})
+
+describe('image déposée dans la fenêtre', () => {
+  /** Dépose des fichiers dans la fenêtre : ici, des objets qui portent leur chemin. */
+  function drop(...paths: string[]): void {
+    const event = new Event('drop', { bubbles: true, cancelable: true })
+    Object.defineProperty(event, 'dataTransfer', {
+      value: { files: paths.map((path) => ({ path })), types: ['Files'] }
+    })
+    window.dispatchEvent(event)
+  }
+
+  it('en mode Composants, s’ajoute au composant affiché ; ailleurs, dit où la déposer', async () => {
+    fs.binaries.set('C:/images/led.png', dataUrlToBase64(pngHeaderDataUrl(160, 240)))
+    const wrapper = mount(App, { attachTo: document.body })
+    await flushPromises()
+    const editor = useComponentEditorStore()
+    const schematic = useSchematicStore()
+    // Dans le montage : rien n'est ajouté, la barre d'état explique.
+    drop('C:/images/led.png')
+    await flushPromises()
+    expect(editor.doc.visual.primitives).toHaveLength(0)
+    expect(schematic.status).toContain('éditeur de composants')
+    expect(wrapper.find('.schematic-wrap').exists()).toBe(true)
+
+    await wrapper.findAll('.modes button')[0]?.trigger('click')
+    drop('C:/images/led.png')
+    await flushPromises()
+    expect(editor.doc.visual.primitives[0]).toMatchObject({ kind: 'image', w: 8, h: 12 })
+    expect(editor.status).toContain('160 × 240 px')
+    wrapper.unmount()
+    document.body.innerHTML = ''
   })
 })

@@ -5,6 +5,7 @@ import {
   closeComponentTabAsking,
   saveComponentDoc
 } from '@/features/component-editor/componentActions'
+import { importImageFile, isImagePath } from '@/features/component-editor/pngImport'
 import { useComponentEditorStore } from '@/features/component-editor/store'
 import { closeDiagramTabAsking, saveDiagram } from '@/features/diagram-editor/diagramActions'
 import DiagramEditor from '@/features/diagram-editor/DiagramEditor.vue'
@@ -598,8 +599,17 @@ function onWindowDrop(event: DragEvent): void {
     .map((file) => bridge().pathForFile(file))
     .filter((path) => path.length > 0)
   void (async () => {
-    for (const path of paths) await openExternal(path)
+    for (const path of paths) await (isImagePath(path) ? dropImage(path) : openExternal(path))
   })()
+}
+
+/**
+ * Image déposée dans la fenêtre : en mode Composants, elle s'ajoute au composant affiché, comme
+ * par le bouton Image de sa barre d'outils. Ailleurs, la barre d'état dit où la déposer.
+ */
+async function dropImage(path: string): Promise<void> {
+  if (mode.value === 'components') await importImageFile(editor, path)
+  else current.value.setStatus('Une image se dépose dans l’éditeur de composants.')
 }
 
 /** Enregistre tous les documents modifiés, mode par mode ; faux dès qu'un enregistrement échoue. */

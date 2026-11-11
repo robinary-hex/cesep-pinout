@@ -7,6 +7,7 @@ import { pngHeaderDataUrl } from '@/domain/testing/pngHeader'
 import { setBridge } from '@/io/bridge'
 import { FakeFs } from '@/io/testing/fakeFs'
 import EditorToolbar from './EditorToolbar.vue'
+import { importImageFile, isImagePath } from './pngImport'
 import { useComponentEditorStore } from './store'
 
 let fs: FakeFs
@@ -51,5 +52,33 @@ describe('barre d’outils de l’éditeur de composants', () => {
     await flushPromises()
     expect(store.doc.visual.primitives).toHaveLength(0)
     expect(store.status).toMatch(/Import impossible.*PNG/)
+  })
+})
+
+describe('image déposée dans l’éditeur de composants', () => {
+  it('importe le PNG du fichier donné, comme le bouton Image', async () => {
+    fs.binaries.set('C:/images/led.png', dataUrlToBase64(pngHeaderDataUrl(160, 240)))
+    const store = useComponentEditorStore()
+    await importImageFile(store, 'C:/images/led.png')
+    expect(store.doc.visual.primitives[0]).toMatchObject({ kind: 'image', w: 8, h: 12 })
+    expect(store.doc.size).toEqual({ widthCells: 2, heightCells: 3 })
+    expect(store.status).toContain('160 × 240 px')
+    // Une seconde image : par-dessus le dessin, sans changer la taille du composant.
+    await importImageFile(store, 'C:/images/led.png')
+    expect(store.doc.visual.primitives).toHaveLength(2)
+    expect(store.doc.size).toEqual({ widthCells: 2, heightCells: 3 })
+  })
+
+  it('refuse une image qui n’est pas un PNG, ou un fichier illisible, sans rien ajouter', async () => {
+    const store = useComponentEditorStore()
+    expect(isImagePath('C:/images/Photo.JPG')).toBe(true)
+    expect(isImagePath('C:/images/led.png')).toBe(true)
+    expect(isImagePath('C:/Docs/essai.pinout')).toBe(false)
+    await importImageFile(store, 'C:/images/Photo.JPG')
+    expect(store.status).toContain('seules les images PNG')
+    expect(store.status).toContain('Photo.JPG')
+    await importImageFile(store, 'C:/images/absent.png')
+    expect(store.status).toMatch(/Import impossible/)
+    expect(store.doc.visual.primitives).toHaveLength(0)
   })
 })
