@@ -773,8 +773,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   diagramme 5 (paramètres 15 et diagramme 5 sont ceux de la 1.6.0, publiée le 11 novembre
   2026 : palette des diagrammes et dossier de Pinout dans les paramètres, couleur du texte
   d'un nœud dans le diagramme ; un diagramme enregistré par la 1.6.0 ne s'ouvre plus dans une
-  version antérieure ; le projet 22, depuis la 1.6.0, ajoute les styles propres : un montage
-  enregistré ensuite ne s'ouvre plus dans la 1.6.0)
+  version antérieure ; le projet 22 est celui de la 1.7.0, publiée le 12 novembre 2026, avec
+  les styles propres : un montage qu'elle enregistre ne s'ouvre plus dans une version
+  antérieure)
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
   supprimé). Composant 15 est celui de la 1.4.0, publiée le 11 novembre 2026, comme le projet 21 : depuis, tout
   nouveau champ d'un fichier, même optionnel, demande une montée de version et une migration
