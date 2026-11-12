@@ -681,3 +681,209 @@ describe('canevas du montage : styles propres', () => {
     wrapper.unmount()
   })
 })
+
+describe('canevas du montage : saisir le bout d’un fil', () => {
+  /** Un fil en L, de (2, 2) à (8, 6) par (8, 2), rien de sélectionné. */
+  function withElbow(): { store: ReturnType<typeof useSchematicStore>; id: string } {
+    const store = useSchematicStore()
+    const id = store.addWire([
+      [2, 2],
+      [8, 2],
+      [8, 6]
+    ])
+    if (!id) throw new Error('fil refusé')
+    store.clearSelection()
+    return { store, id }
+  }
+
+  it('un appui près du bout le saisit, sans viser sa poignée ni sélectionner le fil d’abord', async () => {
+    const { store, id } = withElbow()
+    const wrapper = mount(SchematicCanvas)
+    const svg = wrapper.get('svg.schematic')
+    // À 100 %, la saisie porte à 12 px du bout : sa poignée s'annonce, le curseur aussi.
+    await fire(svg, 'pointermove', at(store, 8.3, 5.7))
+    const mark = wrapper.get('.end-grab')
+    expect([mark.attributes('cx'), mark.attributes('cy')]).toEqual(['8', '6'])
+    expect(svg.classes()).toContain('end-near')
+    // Plus loin du bout : rien ne s'annonce.
+    await fire(svg, 'pointermove', at(store, 8.2, 4.5))
+    expect(wrapper.find('.end-grab').exists()).toBe(false)
+    expect(svg.classes()).not.toContain('end-near')
+
+    // Appui sur le fil, à côté du bout, puis glisser : le bout suit, le tronçon reste vertical.
+    await fire(wrapper.get('.wire-hit'), 'pointerdown', at(store, 8.1, 5.6))
+    expect(store.selectedWires).toEqual([id])
+    await fire(svg, 'pointermove', at(store, 10, 7))
+    expect(wrapper.find('.end-drop').exists()).toBe(true)
+    expect(wrapper.find('.end-grab').exists()).toBe(false)
+    await fire(svg, 'pointerup', at(store, 10, 7))
+    expect(store.doc.wires[0]?.points).toEqual([
+      [2, 2],
+      [10, 2],
+      [10, 7]
+    ])
+    expect(store.undoLabel).toBe('Modifier le fil')
+    expect(wrapper.find('.end-drop').exists()).toBe(false)
+
+    // Au milieu d'un tronçon, rien ne change : on glisse le tronçon, les bouts restent en place.
+    await fire(wrapper.get('.wire-hit'), 'pointerdown', at(store, 6, 2.1))
+    await fire(svg, 'pointermove', at(store, 6, 4))
+    await fire(svg, 'pointerup', at(store, 6, 4))
+    const points = store.doc.wires[0]?.points ?? []
+    expect(points[0]).toEqual([2, 2])
+    expect(points.at(-1)).toEqual([10, 7])
+    expect(points).toHaveLength(4)
+  })
+
+  it('juste à côté du bout, dans le vide : c’est le bout qu’on prend, pas un lasso', async () => {
+    const store = useSchematicStore()
+    const id = store.addWire([
+      [2, 2],
+      [8, 2]
+    ])
+    store.clearSelection()
+    const wrapper = mount(SchematicCanvas)
+    const svg = wrapper.get('svg.schematic')
+    await fire(svg, 'pointerdown', at(store, 8.4, 2.3))
+    await fire(svg, 'pointermove', at(store, 11, 2))
+    expect(wrapper.find('.band').exists()).toBe(false)
+    await fire(svg, 'pointerup', at(store, 11, 2))
+    expect(store.doc.wires[0]?.points).toEqual([
+      [2, 2],
+      [11, 2]
+    ])
+    expect(store.selectedWires).toEqual([id])
+    // Un simple clic à côté du bout sélectionne le fil, sans rien changer.
+    store.clearSelection()
+    await fire(svg, 'pointerdown', at(store, 2.2, 1.7))
+    await fire(svg, 'pointerup', at(store, 2.2, 1.7))
+    expect(store.selectedWires).toEqual([id])
+    expect(store.doc.wires[0]?.points).toHaveLength(2)
+    // Loin de tout bout : le lasso, comme avant. Avec Maj aussi, même près d'un bout.
+    await fire(svg, 'pointerdown', at(store, 14, 8))
+    await fire(svg, 'pointermove', at(store, 16, 10))
+    expect(wrapper.find('.band').exists()).toBe(true)
+    await fire(svg, 'pointerup', at(store, 16, 10))
+    await fire(svg, 'pointerdown', at(store, 11.3, 2.2), { shiftKey: true })
+    await fire(svg, 'pointermove', at(store, 13, 4), { shiftKey: true })
+    expect(wrapper.find('.band').exists()).toBe(true)
+    await fire(svg, 'pointerup', at(store, 13, 4), { shiftKey: true })
+    expect(store.doc.wires[0]?.points).toEqual([
+      [2, 2],
+      [11, 2]
+    ])
+  })
+
+  it('laisse le milieu d’un fil court au tronçon : la saisie ne prend pas plus de 45 % du bout', async () => {
+    const store = useSchematicStore()
+    store.addWire([
+      [2, 2],
+      [3, 2]
+    ])
+    store.clearSelection()
+    const wrapper = mount(SchematicCanvas)
+    const svg = wrapper.get('svg.schematic')
+    await fire(svg, 'pointermove', at(store, 2.5, 2))
+    expect(wrapper.find('.end-grab').exists()).toBe(false)
+    await fire(svg, 'pointermove', at(store, 2.8, 2))
+    expect(wrapper.get('.end-grab').attributes('cx')).toBe('3')
+    await fire(svg, 'pointermove', at(store, 2.2, 2))
+    expect(wrapper.get('.end-grab').attributes('cx')).toBe('2')
+  })
+
+  it('un fil pris avec d’autres se déplace d’un bloc, même saisi par son bout', async () => {
+    const store = useSchematicStore()
+    const a = store.addWire([
+      [2, 2],
+      [8, 2]
+    ])
+    const b = store.addWire([
+      [2, 6],
+      [8, 6]
+    ])
+    if (!a || !b) throw new Error('fils refusés')
+    store.clearSelection()
+    store.selectedWires = [a, b]
+    const wrapper = mount(SchematicCanvas)
+    const svg = wrapper.get('svg.schematic')
+    await fire(svg, 'pointermove', at(store, 7.8, 2))
+    expect(wrapper.find('.end-grab').exists()).toBe(false)
+    await fire(wrapper.get('.wire-hit'), 'pointerdown', at(store, 7.8, 2))
+    await fire(svg, 'pointermove', at(store, 7.8, 4))
+    await fire(svg, 'pointerup', at(store, 7.8, 4))
+    expect(store.doc.wires.map((wire) => wire.points)).toEqual([
+      [
+        [2, 4],
+        [8, 4]
+      ],
+      [
+        [2, 8],
+        [8, 8]
+      ]
+    ])
+  })
+
+  it('sur un composant, c’est lui qu’on déplace ; sur le fil qui arrive à sa broche, le bout', async () => {
+    const store = withResistor()
+    // Un fil part de la broche de droite, en (6, 4).
+    const lead = store.addWire([
+      [6, 4],
+      [10, 4]
+    ])
+    store.clearSelection()
+    const wrapper = mount(SchematicCanvas)
+    const svg = wrapper.get('svg.schematic')
+    // Au-dessus du composant, tout près de la broche : rien ne s'annonce, et il se déplace.
+    await fire(wrapper.get('.instance .hit'), 'pointermove', at(store, 5.8, 4.2))
+    expect(wrapper.find('.end-grab').exists()).toBe(false)
+    await fire(wrapper.get('.instance .hit'), 'pointerdown', at(store, 5.8, 4.2))
+    await fire(svg, 'pointermove', at(store, 5.8, 6.2))
+    await fire(svg, 'pointerup', at(store, 5.8, 6.2))
+    expect(store.doc.components[0]).toMatchObject({ x: 2, y: 5 })
+    expect(store.doc.wires[0]?.points[0]).toEqual([6, 6])
+    store.undo()
+    store.clearSelection()
+    // Sur le fil, près de la broche : le bout se détache et va ailleurs ; le composant reste.
+    await fire(wrapper.get('.wire-hit'), 'pointerdown', at(store, 6.3, 4))
+    await fire(svg, 'pointermove', at(store, 6, 8))
+    // Posé sur une broche, la cible le dirait ; ici, il n'y en a pas.
+    expect(wrapper.get('.end-drop').classes()).not.toContain('on-pin')
+    await fire(svg, 'pointerup', at(store, 6, 8))
+    expect(store.selectedWires).toEqual([lead])
+    expect(store.doc.wires[0]?.points[0]).toEqual([6, 8])
+    expect(store.doc.wires[0]?.points.at(-1)).toEqual([10, 4])
+    expect(store.doc.components[0]).toMatchObject({ x: 2, y: 3 })
+    // Ramené sur l'autre broche : la cible passe au vert.
+    await fire(svg, 'pointerdown', at(store, 6.1, 8.2))
+    await fire(svg, 'pointermove', at(store, 2, 4))
+    expect(wrapper.get('.end-drop').classes()).toContain('on-pin')
+    await fire(svg, 'pointerup', at(store, 2, 4))
+    expect(store.doc.wires[0]?.points[0]).toEqual([2, 4])
+  })
+
+  it('un double-clic sur un bout posé sur un autre fil ne tire pas de nouveau fil', async () => {
+    const store = useSchematicStore()
+    store.addWire([
+      [2, 2],
+      [10, 2]
+    ])
+    // Une branche qui part du milieu du premier fil : une jonction en (6, 2), un bout libre en (6, 6).
+    const branch = store.addWire([
+      [6, 2],
+      [6, 6]
+    ])
+    store.clearSelection()
+    const wrapper = mount(SchematicCanvas)
+    const svg = wrapper.get('svg.schematic')
+    await fire(svg, 'dblclick', at(store, 6.2, 2.1))
+    expect(store.tool).toBe('select')
+    expect(store.drawing).toBeNull()
+    // Sur son bout libre : son étiquette, comme avant.
+    await fire(svg, 'dblclick', at(store, 6.1, 5.8))
+    expect(wrapper.emitted('editWireEnd')).toEqual([[branch, 1]])
+    // Ailleurs sur un fil : un nouveau fil part de là.
+    await fire(svg, 'dblclick', at(store, 8.1, 2.1))
+    expect(store.tool).toBe('wire')
+    expect(store.drawing?.points).toEqual([[8, 2]])
+  })
+})

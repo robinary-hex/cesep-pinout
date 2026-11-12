@@ -93,6 +93,15 @@ const PIN_GRAB_CELLS = 0.4
 /** Déplacement du pointeur, en pixels, à partir duquel un appui sur une broche devient un fil. */
 const PIN_DRAG_PX = 4
 const END_PICK_CELLS = 0.5
+/**
+ * Saisie du bout d'un fil (décision du 12 novembre 2026) : un appui dans la dernière
+ * demi-cellule d'un fil, ou à moins de 12 px de son bout, saisit ce bout, sans avoir à viser sa
+ * poignée ni à sélectionner le fil d'abord. Jamais plus de 45 % du dernier tronçon : le reste
+ * du tronçon se glisse toujours.
+ */
+const END_GRAB_PX = 12
+const END_GRAB_CELLS = 0.5
+const END_GRAB_SHARE = 0.45
 const NO_FREE_ENDS: WireEndFlags = { start: false, end: false }
 
 const cell = computed(() => store.cellPx)
@@ -148,6 +157,11 @@ type Drag =
 const drag = ref<Drag | null>(null)
 /** Pointeur en cellules (flottant), null hors du canevas. */
 const hover = ref<LocalPoint | null>(null)
+/**
+ * Le pointeur survole un élément qui prend l'appui pour lui (composant, étiquette, poignée) : le
+ * bout d'un fil tout proche ne s'y saisit pas.
+ */
+const hoverBlocked = ref(false)
 /** Instant du dernier appui du bouton du milieu : deux appuis rapprochés ajustent la vue au contenu. */
 let lastMiddleDown = 0
 const DOUBLE_CLICK_MS = 400
@@ -661,6 +675,90 @@ const vertexHandles = computed(() =>
     )
 )
 
+// Bouts de fil
+
+/** Bout d'un fil : son premier ou son dernier sommet. */
+interface WireEnd {
+  wireId: string
+  index: number
+  point: GridPoint
+}
+
+/** Ce fil est-il, seul, toute la sélection ? */
+function selectedAlone(wireId: string): boolean {
+  return (
+    store.selectedWires.length === 1 &&
+    store.selectedWires[0] === wireId &&
+    store.selection.length === 0 &&
+    store.selectedLabels.length === 0
+  )
+}
+
+/**
+ * Le bout de ce fil se saisit-il ? Pas celui d'un fil pris avec d'autres éléments (sélection à
+ * plusieurs, groupe) : ceux-là se déplacent d'un bloc, comme avant.
+ */
+function endGrabbable(wire: Wire): boolean {
+  if (selectedAlone(wire.id)) return true
+  if (selectedWireSet.value.has(wire.id)) return false
+  return !store.groups.some((group) => group.members.wire.includes(wire.id))
+}
+
+/**
+ * Bout de fil à portée d'un point : le plus proche ; à distance égale, celui du fil sélectionné
+ * seul, puis du fil du dessus. `over` est le fil sous le pointeur : seuls comptent alors ses
+ * bouts et ceux des fils posés sur lui (une jonction), pas ceux d'un fil voisin ; et rien du
+ * tout s'il se déplace d'un bloc avec d'autres éléments. `any` regarde aussi les fils dont le
+ * bout ne se saisit pas.
+ */
+function wireEndAt(point: LocalPoint, over: Wire | null, any = false): WireEnd | null {
+  if (over && !any && !endGrabbable(over)) return null
+  const reach = Math.max(END_GRAB_PX / cell.value, END_GRAB_CELLS)
+  const ordered = [...store.sortedWires].reverse()
+  ordered.sort((a, b) => Number(selectedAlone(b.id)) - Number(selectedAlone(a.id)))
+  let best: WireEnd | null = null
+  let bestDistance = Infinity
+  for (const wire of ordered) {
+    if (!any && !endGrabbable(wire)) continue
+    const last = wire.points.length - 1
+    for (const index of [0, last]) {
+      const end = wire.points[index]
+      const neighbor = wire.points[index === 0 ? 1 : last - 1]
+      if (!end || !neighbor) continue
+      if (over && over.id !== wire.id && locateOnWire(over.points, end) === null) continue
+      const length = Math.hypot(neighbor[0] - end[0], neighbor[1] - end[1])
+      const distance = Math.hypot(point.x - end[0], point.y - end[1])
+      if (distance <= Math.min(reach, length * END_GRAB_SHARE) && distance < bestDistance) {
+        best = { wireId: wire.id, index, point: end }
+        bestDistance = distance
+      }
+    }
+  }
+  return best
+}
+
+/** Bout de fil qu'un appui saisirait, là où est le pointeur : sa poignée s'annonce. */
+const endGrab = computed<WireEnd | null>(() => {
+  const point = hover.value
+  if (store.tool !== 'select' || drag.value || !point || hoverBlocked.value) return null
+  if (store.panKeyHeld || store.ctrlHeld || store.shiftHeld || store.altHeld) return null
+  const over = store.hoverWireId === null ? null : wireById.value.get(store.hoverWireId)
+  return wireEndAt(point, over ?? null)
+})
+
+/** Bout de fil qu'on déplace : où il se poserait, et s'il y trouve une broche. */
+const endDrop = computed(() => {
+  const current = drag.value
+  if (current?.kind !== 'wire-vertex') return null
+  const atStart = current.index === 0
+  if (!atStart && current.index !== current.original.length - 1) return null
+  if (samePoints(current.original, current.preview)) return null
+  const point = atStart ? current.preview[0] : current.preview.at(-1)
+  if (!point) return null
+  const onPin = store.pinRefs.some((pin) => pin.point[0] === point[0] && pin.point[1] === point[1])
+  return { x: point[0], y: point[1], onPin }
+})
+
 /** Rayon de l'anneau montré sur la broche saisie, en cellules. */
 const pinGrabReach = computed(() => Math.min(PIN_GRAB_CELLS, PIN_GRAB_PX / cell.value))
 
@@ -929,6 +1027,28 @@ function toggleVertexAt(wireId: string, point: LocalPoint): void {
   store.revealInspector()
 }
 
+/**
+ * Saisit le bout d'un fil : le fil devient la sélection, et glisser déplace ce bout (le tronçon
+ * qui y mène garde sa direction, comme pour tout sommet).
+ */
+function grabWireEnd(end: WireEnd, event: PointerEvent): void {
+  const wire = wireById.value.get(end.wireId)
+  if (!wire) return
+  if (!selectedAlone(end.wireId)) {
+    store.clearSelection()
+    store.selectedWires = [end.wireId]
+  }
+  store.revealInspector()
+  drag.value = {
+    kind: 'wire-vertex',
+    wireId: end.wireId,
+    index: end.index,
+    original: wire.points,
+    preview: [...wire.points]
+  }
+  capture(event)
+}
+
 function onWireDown(wireId: string, event: PointerEvent): void {
   if (event.button !== 0 || store.panKeyHeld || store.tool !== 'select') return
   event.stopPropagation()
@@ -944,6 +1064,13 @@ function onWireDown(wireId: string, event: PointerEvent): void {
       ? store.selectedWires.filter((selected) => selected !== wireId)
       : [...store.selectedWires, wireId]
     store.syncGroupSelection('wire', wireId)
+    return
+  }
+  // Près d'un bout de fil : c'est lui qu'on saisit, pour le poser ailleurs.
+  const pressed = wireById.value.get(wireId)
+  const end = pressed && !event.altKey ? wireEndAt(world, pressed) : null
+  if (end) {
+    grabWireEnd(end, event)
     return
   }
   if (!selectedWireSet.value.has(wireId)) {
@@ -1059,6 +1186,12 @@ function onPointerDown(event: PointerEvent): void {
     return
   }
 
+  // Juste à côté d'un bout de fil : on le saisit, plutôt que d'ouvrir un lasso.
+  const end = event.shiftKey || event.ctrlKey || event.altKey ? null : wireEndAt(world, null)
+  if (end) {
+    grabWireEnd(end, event)
+    return
+  }
   if (!event.shiftKey) store.clearSelection()
   drag.value = { kind: 'band', start: world, current: world, additive: event.shiftKey }
   capture(event)
@@ -1068,6 +1201,9 @@ function onPointerMove(event: PointerEvent): void {
   captureOnceMoved(event)
   const world = toWorld(screenPoint(event))
   hover.value = world
+  hoverBlocked.value =
+    event.target instanceof Element &&
+    event.target.closest('.instance, .text-label, .box-handle, .vertex-handle') !== null
   // Ctrl a pu être enfoncée ou relâchée hors de la fenêtre : l'événement fait foi.
   if (store.ctrlHeld !== event.ctrlKey) store.ctrlHeld = event.ctrlKey
   if (store.altHeld !== event.altKey) store.altHeld = event.altKey
@@ -1241,7 +1377,9 @@ function onDoubleClick(event: MouseEvent): void {
     return
   }
   // Sur un fil, hors de ses extrémités : un nouveau fil part de ce point, raccordé au premier.
+  // Près d'un bout, quel que soit le fil dessous : on voulait le saisir, pas en tirer un autre.
   if (event.ctrlKey || event.shiftKey || event.altKey) return
+  if (wireEndAt(world, null, true)) return
   const start = wireSpotAt(world)
   if (start) {
     drag.value = null
@@ -1352,7 +1490,9 @@ const cursorClass = computed(() => {
   if (store.tool === 'place') return 'placing'
   if (store.tool === 'text') return 'texting'
   // Ctrl sur une broche saisissable : le curseur annonce le fil.
-  return store.tool === 'wire' || drag.value?.kind === 'pin-wire' || pinGrab.value ? 'wiring' : ''
+  if (store.tool === 'wire' || drag.value?.kind === 'pin-wire' || pinGrab.value) return 'wiring'
+  // Près d'un bout de fil : le curseur annonce qu'on le déplacerait.
+  return endGrab.value ? 'end-near' : ''
 })
 </script>
 
@@ -1732,6 +1872,16 @@ const cursorClass = computed(() => {
             />
           </g>
 
+          <!-- Au-dessus des marques d'édition : la poignée annoncée couvre le carré d'un bout libre. -->
+          <circle
+            v-if="endGrab"
+            class="end-grab"
+            :cx="endGrab.point[0]"
+            :cy="endGrab.point[1]"
+            :r="6.5 / cell"
+            vector-effect="non-scaling-stroke"
+          />
+
           <g v-if="ghostCopies" class="ghost" :transform="ghostCopies.transform">
             <path
               v-for="wire in ghostCopies.wires"
@@ -1813,6 +1963,16 @@ const cursorClass = computed(() => {
             :cx="wireStartTarget.point[0]"
             :cy="wireStartTarget.point[1]"
             :r="5 / cell"
+            vector-effect="non-scaling-stroke"
+          />
+
+          <circle
+            v-if="endDrop"
+            class="end-drop"
+            :class="{ 'on-pin': endDrop.onPin }"
+            :cx="endDrop.x"
+            :cy="endDrop.y"
+            :r="7 / cell"
             vector-effect="non-scaling-stroke"
           />
 
@@ -2023,6 +2183,19 @@ const cursorClass = computed(() => {
   cursor: move;
 }
 
+/* Bout de fil qu'un appui saisirait : sa poignée s'annonce, que le fil soit sélectionné ou non. */
+.end-grab {
+  fill: #ffffff;
+  stroke: var(--selection);
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.schematic.end-near,
+.schematic.end-near .wire-hit {
+  cursor: move;
+}
+
 .box-handle {
   fill: #ffffff;
   stroke: var(--selection);
@@ -2061,6 +2234,7 @@ const cursorClass = computed(() => {
 }
 
 .drawing .end,
+.end-drop,
 .wire-start {
   fill: rgba(31, 111, 235, 0.15);
   stroke: var(--selection);
@@ -2069,6 +2243,7 @@ const cursorClass = computed(() => {
 }
 
 .drawing .end.on-pin,
+.end-drop.on-pin,
 .wire-start.on-pin {
   fill: rgba(26, 127, 55, 0.25);
   stroke: #1a7f37;

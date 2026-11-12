@@ -143,7 +143,16 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     de la sélection (Alt+clic sur un croisement garde son rôle) ; double-clic sur l'extrémité
     libre d'un fil saisit son étiquette d'extrémité ; double-clic ailleurs sur un fil (sans
     touche) démarre un nouveau fil à cet endroit, raccordé au premier par une jonction
-    (`wireSpotAt`, `startWireFrom` ; décision du 11 novembre 2026). Les canevas du montage et
+    (`wireSpotAt`, `startWireFrom` ; décision du 11 novembre 2026). Le bout d'un fil se saisit
+    de près, sans viser sa poignée ni sélectionner le fil d'abord (décision du 12 novembre
+    2026 ; `wireEndAt`, `grabWireEnd`) : un appui dans la dernière demi-cellule du fil ou à
+    moins de 12 px de son bout (45 % du dernier tronçon au plus : le reste glisse le tronçon),
+    sur le fil ou juste à côté dans le vide, glisse ce bout comme un sommet (`dragVertex`). Sa
+    poignée s'annonce au survol (`endGrab`, `.end-grab`) et, pendant le geste, un anneau montre
+    où il se pose, vert sur une broche (`endDrop`). Sur un composant ou une étiquette, c'est eux
+    qu'on déplace ; un fil pris avec d'autres (sélection à plusieurs, groupe) se déplace d'un
+    bloc ; un double-clic près d'un bout, même posé sur un autre fil, ne tire pas de nouveau
+    fil. Les canevas du montage et
     du diagramme ne capturent le pointeur qu'une fois le geste commencé (`captureOnceMoved`,
     3 px) : capturé dès l'appui, il ferait arriver le clic et le double-clic au canevas au lieu
     de l'élément visé, et les double-clics des composants, étiquettes et nœuds ne feraient

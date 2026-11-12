@@ -229,6 +229,7 @@ export const SHORTCUT_SECTIONS: ShortcutSection[] = [
       {
         title: 'Retoucher un fil',
         rows: [
+          k('glisser', 'Déplacer un bout ou un tronçon'),
           k('Ctrl+clic', 'Ajouter ou retirer un coude'),
           k('Alt+clic', 'Inverser un croisement'),
           k('double-clic', 'Étiqueter un bout libre', { icon: 'tag' })
