@@ -16,6 +16,7 @@ import {
   QUARTERS_PER_CELL
 } from './grid'
 import { instanceDefinition, type ComponentInstance, type Project, type TextLabel } from './project'
+import { projectStyleSheet, styleOf } from './styles'
 import { wireEndLabelBounds, wireEndLabelPlacement } from './wireEnds'
 
 /** Rectangle en cellules, coin supérieur gauche + taille. */
@@ -82,8 +83,10 @@ export function projectBounds(project: Project): GridRect | null {
     const def = instanceDefinition(project, instance)
     if (def) include(instanceBounds(instance, def))
   }
-  const fontCells = project.profile.endLabelFont.size / project.profile.cellPx
+  const sheet = projectStyleSheet(project)
   for (const wire of project.wires) {
+    const style = styleOf(sheet, wire)
+    const fontCells = style.endLabelFont.size / style.cellPx
     for (const [x, y] of wire.points) include({ x, y, width: 0, height: 0 })
     for (const endIndex of [0, wire.points.length - 1]) {
       const text = endIndex === 0 ? wire.endLabels.start : wire.endLabels.end

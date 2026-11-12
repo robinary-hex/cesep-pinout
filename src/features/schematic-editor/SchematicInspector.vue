@@ -25,7 +25,9 @@ import { useSchematicStore } from './store'
 // et le bouton d'export. Sans sélection : le profil et le contenu du montage. Avec une
 // sélection : seulement les propriétés de l'élément (composant, fil(s), étiquette, groupe). Le
 // bloc « Profil de style » décrit le style propre à ce montage, modifiable d'ici ; les réglages
-// où il s'écarte du profil général sont surlignés, avec un bouton pour l'y aligner.
+// où il s'écarte du profil général sont surlignés, avec un bouton pour l'y aligner. Une
+// sélection, quelle qu'elle soit, a aussi son bloc « Profil de style » : la liste des profils
+// enregistrés, pour la dessiner avec un autre style que celui du montage.
 
 const emit = defineEmits<{ editProfile: []; exportImage: [] }>()
 const store = useSchematicStore()
@@ -133,6 +135,39 @@ const inventory = computed(() => {
 
 const swatches = computed(() => store.colorChoices)
 
+// Profil de style de la sélection
+
+/**
+ * Valeurs de la liste qui ne sont pas un nom de profil : le style du montage (un nom n'est jamais
+ * vide) et l'entrée, qu'on ne peut pas choisir, d'une sélection qui mêle plusieurs styles.
+ */
+const MONTAGE_STYLE = ''
+const MIXED_STYLES = '::plusieurs'
+
+/** Les éléments sélectionnés n'ont pas tous le même style. */
+const mixedStyles = computed(() => store.selectionStyles.length > 1)
+
+const selectionStyle = computed(() => {
+  if (store.selectionStyles.length !== 1) return MIXED_STYLES
+  return store.selectionStyles[0] ?? MONTAGE_STYLE
+})
+
+function setSelectionStyle(event: Event): void {
+  const name = inputValue(event)
+  if (name === MONTAGE_STYLE) {
+    store.setSelectionStyle(null)
+    return
+  }
+  const profile = store.styleChoices.find((choice) => choice.name === name)
+  if (profile) store.setSelectionStyle(profile)
+}
+
+/** Profil enregistré qui a changé depuis que le montage en a pris une copie pour la sélection. */
+const styleUpdate = computed(() => {
+  const name = store.selectionStyles.length === 1 ? store.selectionStyles[0] : null
+  return name ? store.newerSavedStyle(name) : null
+})
+
 function inputValue(event: Event): string {
   return (event.target as HTMLInputElement).value
 }
@@ -232,9 +267,13 @@ function setLabelBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
   store.setLabelBox(label.id, { x: label.x, y: label.y, w: label.w, h: label.h, [key]: value })
 }
 
-/** Tailles proposées : multiples de la taille des repères du profil, plus la taille actuelle. */
+/**
+ * Tailles proposées : multiples de la taille des repères du style de l'étiquette (le sien, sinon
+ * celui du montage), plus la taille actuelle.
+ */
 const labelSizeChoices = computed(() => {
-  const base = profile.value.labelFont.size
+  const style = singleLabel.value ? store.styleFor(singleLabel.value) : profile.value
+  const base = style.labelFont.size
   const list: { scale: number; size: number }[] = TEXT_SCALES.map((scale) => ({
     scale,
     size: base * scale
@@ -357,6 +396,24 @@ function setLabelVertical(event: Event): void {
             <Icon name="refresh" :size="13" /> Réinitialiser
           </button>
         </div>
+      </section>
+
+      <section v-if="store.styleUsage.length > 0" class="block">
+        <h3>Styles propres</h3>
+        <ul class="own-styles">
+          <li v-for="usage in store.styleUsage" :key="usage.name">
+            <span class="own-name">{{ usage.name }}</span>
+            <span class="own-count">{{ usage.count }} élément(s)</span>
+            <button
+              type="button"
+              class="small"
+              title="Sélectionner les éléments dessinés avec ce style"
+              @click="store.selectStyled(usage.name)"
+            >
+              Sélectionner
+            </button>
+          </li>
+        </ul>
       </section>
 
       <section class="block">
@@ -604,6 +661,40 @@ function setLabelVertical(event: Event): void {
         </button>
       </div>
     </section>
+
+    <section v-if="store.hasSelection" class="block">
+      <h3>Profil de style</h3>
+      <label
+        class="field"
+        title="Traits, coins, jonctions et polices de ce profil ; la taille de cellule reste celle du montage"
+      >
+        <select
+          class="style-choice"
+          aria-label="Profil de style de la sélection"
+          :value="selectionStyle"
+          @change="setSelectionStyle"
+        >
+          <option v-if="mixedStyles" :value="MIXED_STYLES" disabled>Plusieurs styles</option>
+          <option :value="MONTAGE_STYLE">Celui du montage ({{ doc.profile.name }})</option>
+          <option v-for="choice in store.styleChoices" :key="choice.name" :value="choice.name">
+            {{ choice.name }}
+          </option>
+        </select>
+      </label>
+      <div v-if="styleUpdate" class="notice">
+        <Icon name="refresh" :size="16" class="notice-icon" />
+        <div class="notice-body">
+          <strong>Le profil « {{ styleUpdate.name }} » a changé</strong>
+          <button
+            type="button"
+            class="primary small with-icon"
+            @click="store.updateStyle(styleUpdate)"
+          >
+            <Icon name="refresh" :size="13" /> Mettre à jour dans ce montage
+          </button>
+        </div>
+      </div>
+    </section>
   </aside>
 </template>
 
@@ -746,6 +837,36 @@ function setLabelVertical(event: Event): void {
 
 .path {
   word-break: break-all;
+}
+
+/* Styles propres du montage : nom, nombre d'éléments, bouton pour les sélectionner. */
+.own-styles {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+
+.own-styles li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.own-name {
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.own-count {
+  flex: 1;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .notice {

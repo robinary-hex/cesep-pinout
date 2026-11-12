@@ -117,6 +117,8 @@ onUnmounted(() => {
 async function refresh(): Promise<void> {
   try {
     saved.value = await listProfiles(library.dataRoot)
+    // La liste que les montages proposent pour une sélection suit.
+    await library.refreshProfiles()
   } catch (error) {
     report(error instanceof Error ? error.message : String(error), true)
   }

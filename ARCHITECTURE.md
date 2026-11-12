@@ -100,6 +100,16 @@ s'écarte du profil général garde le sien ; ses écarts (`profileDifferences`)
 panneau, où un bouton l'aligne ; le style d'un montage se modifie depuis ce panneau, avec la même
 boîte ouverte en mode `montage`.
 
+Une partie d'un montage peut avoir un autre style (`src/domain/styles.ts`) : un composant posé,
+un fil ou une étiquette porte alors le nom (`style`) d'un des `styles` du montage, copies de
+profils enregistrés. Le dessin ne lit plus le profil du montage qu'à travers une feuille de
+styles (`styleSheet`, `styleOf` ; `styles` et `styleFor` du store), qui rend à chaque élément
+son style ramené à la cellule du montage : la grille est la seule chose qu'un style propre ne
+change pas. L'écran (`SchematicCanvas.vue`) et l'export (`buildProjectSvg`) suivent la même
+règle, jonctions (`junctionDot`) et croisements compris. Les profils enregistrés proposés sont
+ceux du store de la bibliothèque (`savedProfiles`) ; le montage oublie un style que plus rien ne
+porte (`prunedStyles`, à chaque commande).
+
 ## Interface partagée (`src/ui/`)
 
 `dialogs.ts` et `DialogHost.vue` posent les questions de l'application (enregistrer avant de
@@ -210,7 +220,7 @@ un arrêt brutal : c'est alors qu'elles sont proposées.
 Tous en JSON indenté, avec `schemaVersion`, validés par Zod à l'ouverture, migrés étape par étape
 (`src/domain/migrations.ts`). Un fichier d'exemple par version dans `src/domain/fixtures/`.
 Versions courantes : composant 15 (image en forme du dessin, textes verticaux, angles arrondis des polylignes, forme point, opacité du remplissage, italique, souligné et barré des textes, orientation réglée texte par texte, textes droits sur le montage, boîtes de texte multilignes, flèche au milieu, graisse des textes, épaisseur en multiplicateur, flèches, textes variables avec
-unité, plus de `labelPrefix`), projet 21 (composants derrière les fils, fils en diagonale à 45°, fond optionnel des étiquettes texte, styles, sens et couleur des étiquettes texte, couleurs de fil propres au montage, étiquettes texte en boîte, police des étiquettes d'extrémité dans le profil, graisse des étiquettes, étiquettes d'extrémité des fils, `componentStroke` dans le profil, `fields` par instance,
+unité, plus de `labelPrefix`), projet 22 (styles propres à des éléments : `styles` et `style`, composants derrière les fils, fils en diagonale à 45°, fond optionnel des étiquettes texte, styles, sens et couleur des étiquettes texte, couleurs de fil propres au montage, étiquettes texte en boîte, police des étiquettes d'extrémité dans le profil, graisse des étiquettes, étiquettes d'extrémité des fils, `componentStroke` dans le profil, `fields` par instance,
 définitions embarquées migrées à chaque version des composants), diagramme 5 (couleur du texte d'un nœud, fond optionnel des étiquettes de lien et des textes, étiquette d'un lien tenue le long du tracé, style de texte par nœud ; nœuds, liens, textes libres, style et couleurs du diagramme), paramètres 15 (un seul dossier, celui de Pinout : `dataDir` remplace `libraryDir` et `settingsDir` ; palette des diagrammes à part de celle des fils, moins pâle qu'à la v13, cases d'affichage des barres d'outils, style général des diagrammes, `componentStroke`
 et `endLabelFont` du profil par défaut, thème sombre par défaut, ouverture du panneau, affichage de
 la bibliothèque).

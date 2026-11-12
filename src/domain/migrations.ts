@@ -516,7 +516,10 @@ export const projectMigrations: MigrationTable = {
           isRecord(instance) ? { behindWires: false, ...instance } : instance
         )
       }
-    }
+    },
+    // Projet v21 → v22 : styles propres à certains éléments ; aucun au départ, tout suit le style
+    // du montage.
+    21: (raw) => ({ styles: [], ...raw })
   }
 }
 

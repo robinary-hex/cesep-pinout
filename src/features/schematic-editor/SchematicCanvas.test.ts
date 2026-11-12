@@ -3,7 +3,12 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
-import { createEmptyComponent, type ComponentDefinition, type Primitive } from '@/domain'
+import {
+  createEmptyComponent,
+  DEFAULT_PROFILE,
+  type ComponentDefinition,
+  type Primitive
+} from '@/domain'
 import SchematicCanvas from './SchematicCanvas.vue'
 import { useSchematicStore } from './store'
 
@@ -571,6 +576,108 @@ describe('canevas du montage : ordre des composants', () => {
     store.reorderInstances('top')
     await nextTick()
     expect(drawn()).toEqual([above, below])
+    wrapper.unmount()
+  })
+})
+
+describe('canevas du montage : styles propres', () => {
+  /** Fils deux fois plus épais, sans coins arrondis ; libellés en Consolas, deux fois plus grands. */
+  const THICK = {
+    ...DEFAULT_PROFILE,
+    name: 'Épais',
+    cellPx: 40,
+    wireWidth: 0.3,
+    cornerRadius: 0,
+    componentStroke: 0.2,
+    labelFont: { family: 'Consolas', size: 22 },
+    endLabelFont: { family: 'Consolas', size: 28 }
+  }
+
+  it('dessine chaque élément avec son style, sur la grille du montage', async () => {
+    const store = withResistor()
+    const part = store.doc.components[0]?.id
+    const plain = store.addWire([
+      [0, 8],
+      [8, 8]
+    ])
+    // Un fil coudé, libre à l'arrivée, qui part du milieu du premier : une jonction.
+    const styled = store.addWire([
+      [4, 8],
+      [4, 12],
+      [8, 12]
+    ])
+    const text = store.addLabelBox({ x: 0, y: 14, w: 4, h: 1 })
+    if (!part || !plain || !styled) throw new Error('montage incomplet')
+    store.setInstanceLabel(part, 'R1')
+    store.setWireEndLabel(styled, 2, 'VCC')
+    const wrapper = mount(SchematicCanvas)
+    const widths = (): number[] =>
+      wrapper.findAll('.wires .wire').map((wire) => Number(wire.attributes('stroke-width')))
+    const corner = (): boolean =>
+      (wrapper.findAll('.wires .wire')[1]?.attributes('d') ?? '').includes('A')
+    expect(widths()).toEqual([0.15, 0.15])
+    expect(corner()).toBe(true)
+    const zoomed = store.cellPx
+
+    store.clearSelection()
+    store.selection = [part]
+    store.selectedWires = [styled]
+    store.selectedLabels = [text]
+    store.setSelectionStyle(THICK)
+    await nextTick()
+    // La cellule ne bouge pas : le profil épais en demandait 40 px, le montage reste à 20.
+    expect(store.cellPx).toBe(zoomed)
+    // Fils : épaisseur et coins de chacun ; le liseré de sélection suit l'épaisseur du fil.
+    expect(widths()).toEqual([0.15, 0.3])
+    expect(corner()).toBe(false)
+    const ring = Number(wrapper.get('.wire-selections .ring').attributes('stroke-width'))
+    expect(ring - 0.3).toBeCloseTo(9 / store.cellPx)
+    // Jonction : le point du plus épais des deux fils (0,3 × 2 / 2).
+    expect(Number(wrapper.get('.junctions circle').attributes('r'))).toBeCloseTo(0.3)
+    // Étiquette d'extrémité : police du profil, 28 points sur une cellule de 20.
+    const end = wrapper.get('.end-label text')
+    expect(end.attributes('font-family')).toBe('Consolas')
+    expect(Number(end.attributes('font-size'))).toBeCloseTo(1.4)
+    expect(Number(wrapper.get('.end-label circle').attributes('r'))).toBe(0.3)
+    // Libellé du composant et étiquette texte : police des libellés du profil.
+    const label = wrapper.get('.labels text')
+    expect(label.text()).toBe('R1')
+    expect(label.attributes('font-family')).toBe('Consolas')
+    expect(Number(label.attributes('font-size'))).toBeCloseTo(1.1)
+    const free = wrapper.get('.text-label text')
+    expect(free.attributes('font-family')).toBe('Consolas')
+    expect(Number(free.attributes('font-size'))).toBeCloseTo(1.1)
+
+    // Retour au style du montage : tout redevient comme avant.
+    store.setSelectionStyle(null)
+    await nextTick()
+    expect(widths()).toEqual([0.15, 0.15])
+    expect(wrapper.get('.labels text').attributes('font-family')).toBe('Segoe UI')
+    expect(Number(wrapper.get('.text-label text').attributes('font-size'))).toBeCloseTo(0.55)
+    wrapper.unmount()
+  })
+
+  it('redessine le fil du dessus d’un croisement dans son épaisseur à lui', async () => {
+    const store = useSchematicStore()
+    store.addWire([
+      [0, 2],
+      [8, 2]
+    ])
+    const top = store.addWire([
+      [4, 0],
+      [4, 4]
+    ])
+    if (!top) throw new Error('fil refusé')
+    const wrapper = mount(SchematicCanvas)
+    const marks = (): number[] =>
+      wrapper.findAll('.crossings line').map((line) => Number(line.attributes('stroke-width')))
+    expect(marks()[1]).toBe(0.15)
+    store.clearSelection()
+    store.selectedWires = [top]
+    store.setSelectionStyle(THICK)
+    await nextTick()
+    expect(marks()[0]).toBeCloseTo(0.66)
+    expect(marks()[1]).toBe(0.3)
     wrapper.unmount()
   })
 })

@@ -261,7 +261,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   ramène son onglet. Un montage n'est « modifié » que s'il a quelque chose à enregistrer : pas
   s'il est intact, ni s'il n'a jamais eu de fichier et qu'il est vide (`needsSaving`) ; de même un
   composant jamais enregistré et vierge. L'application se quitte alors sans question. Le presse-papiers est commun :
-  coller dans un autre montage y embarque les définitions qui manquent.
+  coller dans un autre montage y embarque les définitions et les styles propres qui manquent.
 - Onglets de composants : en mode Composants, la rangée d'onglets de la barre d'application montre
   les composants ouverts (même mécanique que les montages, dans le store de l'éditeur de
   composants : `useDocumentTabs`, `activateTab`, `newComponent`, `open` qui ramène l'onglet d'un
@@ -435,6 +435,35 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   ou met à jour celui du même nom. Piège : `structuredClone` refuse les objets que Vue a
   rendus réactifs ; ce qu'on copie tel quel se garde en `shallowRef` (les profils enregistrés
   étaient dans un `ref`, et « Charger » ne faisait rien).
+- Styles propres (décision du 12 novembre 2026 ; `src/domain/styles.ts`) : dans un même montage,
+  une sélection peut se dessiner avec un autre profil que celui du montage. Un élément
+  (composant posé, fil, étiquette) porte alors `style`, le nom d'un des `styles` du montage ;
+  sans `style`, il suit le style du montage. `styles` tient une copie de chaque profil utilisé,
+  une par nom, comme les définitions embarquées : le montage se suffit à lui-même. D'un style
+  propre tout sert (traits, coins, jonctions, polices) sauf la taille de cellule : la grille
+  est commune (`styleSheet` ramène chaque style à la cellule du montage, `styleOf` rend le
+  style d'un élément ; `styles` et `styleFor` du store). Tout ce qui dessine un élément passe
+  par là, à l'écran comme à l'export, jamais par `doc.profile` directement, qui ne reste que
+  pour la grille, le tracé en cours et les éléments sans style.
+  - On le donne par le sous-menu « Profil de style » du clic droit ou la liste du même nom du
+    panneau, pour toute la sélection (`setSelectionStyle`, une commande) : « Celui du
+    montage », puis les profils enregistrés (`savedProfiles` du store de la bibliothèque, relus
+    au lancement, quand la fenêtre reprend la main et après chaque changement dans la boîte des
+    profils), puis les styles que le montage porte sans profil enregistré de ce nom
+    (`styleChoices` ; le profil enregistré qui est déjà le style du montage n'y est pas). Un
+    nouvel élément suit le style du montage ; copies, doublons et morceaux d'un fil coupé
+    gardent le leur.
+  - Même nom, même style : redonner un profil qui a changé remplace la copie du montage, et
+    tous les éléments qui la portent suivent (comme une définition qu'on repose). Le panneau
+    signale la copie d'un profil qui a changé depuis (`newerSavedStyle`, comparé sans la
+    cellule : `sameLook`) et la met à jour d'un bouton (`updateStyle`). Un style que plus
+    aucun élément ne porte quitte le montage (`prunedStyles`, dans `apply`).
+  - Une étiquette qui change de style garde sa taille en multiples de la police des libellés
+    (`restyledLabelSize` : ×1 reste ×1). Le point d'une jonction prend le plus grand des
+    rayons que demandent les fils qui s'y rejoignent, et la couleur que veut le style du fil
+    porteur (`junctionDot`) ; à un croisement, le fil du dessus se redessine dans son épaisseur.
+  - Sans sélection, le panneau liste les « Styles propres » du montage, avec le nombre
+    d'éléments de chacun et un bouton qui les sélectionne (`styleUsage`, `selectStyled`).
 - Dossier de Pinout (décision du 11 novembre 2026 ; `src/io/dataFolder.ts`) : un seul dossier
   pour tout, le seul chemin que les paramètres pointent (`dataDir`, réglage local, noté
   `${OneDrive}…` s'il est dans OneDrive : `portableDir`, `resolveDataRoot`). Il contient
@@ -550,8 +579,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   Grouper / Dégrouper quand la sélection s'y prête (`groupItems`), Dupliquer / Copier /
   Propriétés, et Supprimer en dernier ; rien n'existe que dans un menu. Une
   famille de choix se range dans un sous-menu (`submenu` de `contextMenu.ts`, un seul niveau,
-  ouvert au survol ou au clic) : Ordre, Style, Alignement, Forme, Texte, Fond, Type,
-  Extrémités libres. Un texte se saisit dans `PromptDialog` avec `multiline` (Maj+Entrée va à
+  ouvert au survol ou au clic) : Ordre, Style, Profil de style, Alignement, Forme, Texte, Fond,
+  Type, Extrémités libres. Un texte se saisit dans `PromptDialog` avec `multiline` (Maj+Entrée va à
   la ligne).
   - Éditeur de composants (`openMenu` de `ComponentEditor.vue`, demande émise par
     `EditorCanvas`, types dans `menu.ts`) : forme (texte, flèches, fermeture, taille d'origine
@@ -569,7 +598,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     Sur un composant : la valeur de son texte variable s'il n'en a qu'un (plusieurs : dans le
     panneau, pas une entrée par champ ; décision du 11 novembre 2026), modifier dans l'éditeur
     de composants (`editComponent`, traité par
-    `App.vue`), sélectionner les fils reliés. Sur une étiquette : style, alignement.
+    `App.vue`), sélectionner les fils reliés. Sur une étiquette : style, alignement. Sur les
+    trois, avant l'ordre : « Profil de style », pour toute la sélection (`profileItems`).
   - Diagramme : nœud (forme, texte, fond, ordre), lien (étiquette : côté, fond, retrait ;
     sommets, sans diagonale), texte (style, alignement), vide (poser une forme du catalogue à
     l'endroit du clic).
@@ -730,13 +760,14 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     composant posé s'appelle « libellé » dans l'interface.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 15, projet 21, paramètres 15,
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 15, projet 22, paramètres 15,
   diagramme 5 (paramètres 15 et diagramme 5 sont ceux de la 1.6.0, publiée le 11 novembre
   2026 : palette des diagrammes et dossier de Pinout dans les paramètres, couleur du texte
   d'un nœud dans le diagramme ; un diagramme enregistré par la 1.6.0 ne s'ouvre plus dans une
-  version antérieure)
+  version antérieure ; le projet 22, depuis la 1.6.0, ajoute les styles propres : un montage
+  enregistré ensuite ne s'ouvre plus dans la 1.6.0)
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
-  supprimé). Composant 15 et projet 21 sont ceux de la 1.4.0, publiée le 11 novembre 2026 : depuis, tout
+  supprimé). Composant 15 est celui de la 1.4.0, publiée le 11 novembre 2026, comme le projet 21 : depuis, tout
   nouveau champ d'un fichier, même optionnel, demande une montée de version et une migration
   (une version plus ancienne l'ignorerait, puis le perdrait en enregistrant) ; seule exception,
   une indication de présentation dont la perte est sans conséquence (`previewVariant`). Les champs

@@ -1,0 +1,220 @@
+{
+  "schemaVersion": 21,
+  "name": "Avant les styles propres",
+  "profile": {
+    "name": "Standard",
+    "cellPx": 20,
+    "wireWidth": 0.15,
+    "cornerRadius": 0.4,
+    "componentStroke": 0.1,
+    "junctionScale": 2,
+    "junctionColor": "wire",
+    "labelFont": {
+      "family": "Segoe UI",
+      "size": 11
+    },
+    "endLabelFont": {
+      "family": "Segoe UI",
+      "size": 14
+    }
+  },
+  "components": [
+    {
+      "id": "c1",
+      "defId": "motor",
+      "x": 0,
+      "y": 0,
+      "rotation": 90,
+      "mirror": true,
+      "label": "M1",
+      "fields": {},
+      "behindWires": true
+    },
+    {
+      "id": "c2",
+      "defId": "led",
+      "x": 8,
+      "y": 0,
+      "rotation": 0,
+      "mirror": false,
+      "label": "D1",
+      "fields": {},
+      "behindWires": false
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "color": "#d62828",
+      "points": [
+        [9, 0],
+        [9, -2],
+        [14, -2]
+      ],
+      "stack": 0,
+      "freeEnds": "flat",
+      "endLabels": {
+        "start": "",
+        "end": "VCC"
+      }
+    }
+  ],
+  "crossingOverrides": [],
+  "labels": [
+    {
+      "id": "t1",
+      "x": 0,
+      "y": 5,
+      "w": 4,
+      "h": 1,
+      "anchor": "middle",
+      "text": "Pompe",
+      "size": 11,
+      "bold": true,
+      "italic": false,
+      "underline": true,
+      "strike": false,
+      "vertical": false,
+      "color": "#d62828",
+      "background": true
+    }
+  ],
+  "embeddedDefs": {
+    "motor": {
+      "schemaVersion": 15,
+      "id": "motor",
+      "name": "Moteur",
+      "category": "Divers",
+      "description": "",
+      "size": {
+        "widthCells": 4,
+        "heightCells": 2
+      },
+      "visual": {
+        "kind": "drawing",
+        "primitives": [
+          {
+            "kind": "rect",
+            "x": 0,
+            "y": 0,
+            "w": 16,
+            "h": 8,
+            "rx": 1,
+            "style": {
+              "stroke": "#000000",
+              "weight": 1,
+              "fill": "#ffffff",
+              "fillOpacity": 0.5
+            }
+          },
+          {
+            "kind": "text",
+            "x": 4,
+            "y": 2,
+            "w": 8,
+            "h": 4,
+            "text": "M",
+            "size": 1,
+            "anchor": "middle",
+            "color": "#000000",
+            "variable": false,
+            "defaultValue": "",
+            "unit": "",
+            "bold": true,
+            "followsRotation": true,
+            "italic": true,
+            "underline": false,
+            "strike": false,
+            "vertical": false
+          },
+          {
+            "kind": "polyline",
+            "points": [
+              [0, 0],
+              [8, 0],
+              [8, 8]
+            ],
+            "closed": true,
+            "arrows": {
+              "start": false,
+              "middle": false,
+              "end": false
+            },
+            "style": {
+              "stroke": "#000000",
+              "weight": 1,
+              "fill": "none",
+              "fillOpacity": 1
+            },
+            "radius": 0
+          },
+          {
+            "kind": "dot",
+            "x": 8,
+            "y": 4,
+            "scale": 1.5,
+            "color": "#000000"
+          }
+        ]
+      },
+      "pins": [
+        {
+          "id": "a",
+          "name": "1",
+          "kind": "io",
+          "x": 0,
+          "y": 1
+        },
+        {
+          "id": "b",
+          "name": "2",
+          "kind": "io",
+          "x": 4,
+          "y": 1
+        }
+      ]
+    },
+    "led": {
+      "schemaVersion": 15,
+      "id": "led",
+      "name": "LED",
+      "category": "Opto",
+      "description": "LED vue de face, image PNG à 80 px par cellule",
+      "size": {
+        "widthCells": 2,
+        "heightCells": 3
+      },
+      "visual": {
+        "kind": "drawing",
+        "primitives": [
+          {
+            "kind": "image",
+            "x": 0,
+            "y": 0,
+            "w": 8,
+            "h": 12,
+            "file": "image.png",
+            "dataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      "pins": [
+        {
+          "id": "a",
+          "name": "A",
+          "kind": "io",
+          "x": 1,
+          "y": 0
+        },
+        {
+          "id": "k",
+          "name": "K",
+          "kind": "io",
+          "x": 1,
+          "y": 3
+        }
+      ]
+    }
+  },
+  "customColors": ["#ff00aa"]
+}

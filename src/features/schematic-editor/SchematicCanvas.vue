@@ -12,6 +12,7 @@ import {
   instanceBounds,
   instanceMatrix,
   instanceTextPlacements,
+  junctionDot,
   textPlacementTransform,
   layoutLabel,
   layoutTextBox,
@@ -96,11 +97,11 @@ const NO_FREE_ENDS: WireEndFlags = { start: false, end: false }
 
 const cell = computed(() => store.cellPx)
 const view = computed(() => store.view)
+// Le style du montage : celui du tracé en cours et de tout élément qui n'a pas le sien. Un
+// élément qui a son style (`store.styleFor`) se dessine avec lui.
 const profile = computed(() => store.profile)
 const wireWidth = computed(() => profile.value.wireWidth)
 const cornerRadius = computed(() => profile.value.cornerRadius)
-const labelFontCells = computed(() => profile.value.labelFont.size / profile.value.cellPx)
-const endLabelFontCells = computed(() => profile.value.endLabelFont.size / profile.value.cellPx)
 
 type Drag =
   | { kind: 'pan'; lastX: number; lastY: number }
@@ -301,15 +302,20 @@ const ghostCopies = computed(() => {
     instances: store.placed.filter((item) => ids.has(item.instance.id)),
     wires: store.doc.wires
       .filter((wire) => wireIds.has(wire.id))
-      .map((wire) => ({
-        id: wire.id,
-        color: wire.color,
-        d: wirePathData(wire.points, cornerRadius.value)
-      })),
+      .map((wire) => {
+        const style = store.styleFor(wire)
+        return {
+          id: wire.id,
+          color: wire.color,
+          width: style.wireWidth,
+          d: wirePathData(wire.points, style.cornerRadius)
+        }
+      }),
     labels: store.doc.labels
       .filter((label) => labelIds.has(label.id))
       .map((label) => ({
         label,
+        family: store.styleFor(label).labelFont.family,
         transform: textTransform(label),
         layout: layoutLabel(label, profile.value.cellPx)
       }))
@@ -329,6 +335,24 @@ function boundsOf(item: PlacedInstance): GridRect {
   const { dx, dy } = offsetOf(item.instance.id)
   return { ...bounds, x: bounds.x + dx, y: bounds.y + dy }
 }
+
+/** Libellés (R1, U2) : au-dessus de la boîte, dans la police des libellés du style du composant. */
+const instanceLabels = computed(() =>
+  store.placed
+    .filter((item) => item.instance.label.length > 0)
+    .map((item) => {
+      const bounds = boundsOf(item)
+      const font = store.styleFor(item.instance).labelFont
+      return {
+        id: item.instance.id,
+        text: item.instance.label,
+        x: bounds.x,
+        y: bounds.y - 0.25,
+        fontCells: font.size / profile.value.cellPx,
+        family: font.family
+      }
+    })
+)
 
 const selectedBoxes = computed(() =>
   store.placed
@@ -427,6 +451,7 @@ const labels = computed(() =>
     return {
       label,
       fontCells,
+      family: store.styleFor(label).labelFont.family,
       box,
       transform: textTransform({ ...box, vertical: label.vertical }),
       layout: layoutLabel(label, profile.value.cellPx, box),
@@ -507,12 +532,18 @@ const renderedWires = computed(() =>
   store.sortedWires.map((wire) => {
     const points = wirePoints(wire)
     const flags = freeEndFlags.value.get(wire.id) ?? NO_FREE_ENDS
-    const shown = wireRenderParts(points, wire.freeEnds, flags, wireWidth.value)
+    // Épaisseur et coins : ceux du style du fil.
+    const style = store.styleFor(wire)
+    const width = style.wireWidth
+    const radius = style.cornerRadius
+    const shown = wireRenderParts(points, wire.freeEnds, flags, width)
     return {
       wire,
-      d: wirePathData(points, cornerRadius.value),
-      body: shown.body.length >= 2 ? wirePathData(shown.body, cornerRadius.value) : '',
-      dotted: shown.dotted.map((tail) => wirePathData(tail, cornerRadius.value)),
+      width,
+      hitWidth: hitWidthOf(width),
+      d: wirePathData(points, radius),
+      body: shown.body.length >= 2 ? wirePathData(shown.body, radius) : '',
+      dotted: shown.dotted.map((tail) => wirePathData(tail, radius)),
       heads: shown.heads.map((head) => pointsAttribute(head)),
       selected: selectedWireSet.value.has(wire.id),
       inHoverNet:
@@ -521,7 +552,10 @@ const renderedWires = computed(() =>
   })
 )
 
-const hitWidth = computed(() => Math.max(wireWidth.value, 10 / cell.value))
+/** Largeur de la zone où un fil de cette épaisseur se saisit : 10 px d'écran au moins. */
+function hitWidthOf(width: number): number {
+  return Math.max(width, 10 / cell.value)
+}
 
 /**
  * Fil sélectionné : un liseré bleu l'entoure, détaché de lui par un filet de la couleur du
@@ -531,35 +565,42 @@ const hitWidth = computed(() => Math.max(wireWidth.value, 10 / cell.value))
 const SELECTION_RING_PX = 9
 const SELECTION_GAP_PX = 4
 
-const wireColorById = computed(() => new Map(store.doc.wires.map((wire) => [wire.id, wire.color])))
+const wireById = computed(() => new Map(store.doc.wires.map((wire) => [wire.id, wire])))
 
-/** Croisements : le fil du dessus, redessiné sur une demi-cellule avec un liseré couleur papier. */
+/**
+ * Croisements : le fil du dessus, redessiné sur une demi-cellule, dans son épaisseur à lui, avec
+ * un liseré couleur papier.
+ */
 const crossingMarks = computed(() =>
   store.pieces.map((piece) => {
     const [[x1, y1], [x2, y2]] = crossingPieceEnds(piece)
+    const top = wireById.value.get(piece.topWireId)
     return {
       key: `${piece.point[0]},${piece.point[1]}`,
       x1,
       y1,
       x2,
       y2,
-      color: wireColorById.value.get(piece.topWireId) ?? '#000000'
+      width: (top ? store.styleFor(top) : profile.value).wireWidth,
+      color: top?.color ?? '#000000'
     }
   })
 )
 
 const junctions = computed(() => {
-  const radius = (wireWidth.value * profile.value.junctionScale) / 2
-  const fixed = profile.value.junctionColor
-  // Pendant un geste, les points de jonction sont ceux de l'aperçu.
+  // Pendant un geste, les points de jonction sont ceux de l'aperçu, les fils aussi.
   const list = dragPreview.value?.junctions ?? store.connectivity.junctions
-  return list.map((junction) => ({
-    key: `${junction.point[0]},${junction.point[1]}`,
-    x: junction.point[0],
-    y: junction.point[1],
-    r: radius,
-    fill: fixed === 'wire' ? (wireColorById.value.get(junction.carrierWireId) ?? '#000000') : fixed
-  }))
+  const wires = store.doc.wires.map((wire) => ({ ...wire, points: wirePoints(wire) }))
+  return list.map((junction) => {
+    const dot = junctionDot(junction, wires, store.styles)
+    return {
+      key: `${junction.point[0]},${junction.point[1]}`,
+      x: junction.point[0],
+      y: junction.point[1],
+      r: dot.radius,
+      fill: dot.color
+    }
+  })
 })
 
 function endLabelText(wire: Wire, endIndex: number): string {
@@ -577,6 +618,7 @@ const endLabels = computed(() =>
     const placement = wireEndLabelPlacement(points, end.endIndex)
     const dot = points[end.endIndex]
     if (!placement || !dot) return []
+    const style = store.styleFor(wire)
     return [
       {
         key: `${wire.id}:${end.endIndex}`,
@@ -584,6 +626,9 @@ const endLabels = computed(() =>
         endIndex: end.endIndex,
         text,
         color: wire.color,
+        dotRadius: style.wireWidth,
+        fontCells: style.endLabelFont.size / style.cellPx,
+        family: style.endLabelFont.family,
         dotX: dot[0],
         dotY: dot[1],
         ...placement
@@ -1210,10 +1255,10 @@ function onDoubleClick(event: MouseEvent): void {
  * a capturé le pointeur, le double-clic arrive au canevas, pas au fil.
  */
 function wireSpotAt(point: LocalPoint): GridPoint | null {
-  const reach = hitWidth.value / 2
   for (let index = store.sortedWires.length - 1; index >= 0; index--) {
     const wire = store.sortedWires[index]
     if (!wire) continue
+    const reach = hitWidthOf(store.styleFor(wire).wireWidth) / 2
     const at = nearestSegmentIndex(wire.points, point)
     const a = wire.points[at]
     const b = wire.points[at + 1]
@@ -1358,7 +1403,7 @@ const cursorClass = computed(() => {
             <template v-if="layer === 'wires'">
               <g class="net-glows">
                 <template v-for="item in renderedWires" :key="item.wire.id">
-                  <path v-if="item.inHoverNet" :d="item.d" :stroke-width="wireWidth * 3" />
+                  <path v-if="item.inHoverNet" :d="item.d" :stroke-width="item.width * 3" />
                 </template>
               </g>
               <g class="wire-selections">
@@ -1367,7 +1412,7 @@ const cursorClass = computed(() => {
                     v-if="item.selected"
                     class="ring"
                     :d="item.d"
-                    :stroke-width="wireWidth + SELECTION_RING_PX / cell"
+                    :stroke-width="item.width + SELECTION_RING_PX / cell"
                   />
                 </template>
                 <template v-for="item in renderedWires" :key="`gap:${item.wire.id}`">
@@ -1375,7 +1420,7 @@ const cursorClass = computed(() => {
                     v-if="item.selected"
                     class="gap"
                     :d="item.d"
-                    :stroke-width="wireWidth + SELECTION_GAP_PX / cell"
+                    :stroke-width="item.width + SELECTION_GAP_PX / cell"
                   />
                 </template>
               </g>
@@ -1387,7 +1432,7 @@ const cursorClass = computed(() => {
                     class="wire"
                     :d="item.body"
                     :stroke="screenColor(item.wire.color)"
-                    :stroke-width="wireWidth"
+                    :stroke-width="item.width"
                   />
                   <path
                     v-for="(tail, t) in item.dotted"
@@ -1395,8 +1440,8 @@ const cursorClass = computed(() => {
                     class="wire wire-dotted"
                     :d="tail"
                     :stroke="screenColor(item.wire.color)"
-                    :stroke-width="wireWidth"
-                    :stroke-dasharray="`0 ${wireWidth * 2}`"
+                    :stroke-width="item.width"
+                    :stroke-dasharray="`0 ${item.width * 2}`"
                   />
                   <polygon
                     v-for="(head, h) in item.heads"
@@ -1408,7 +1453,7 @@ const cursorClass = computed(() => {
                   <path
                     class="wire-hit"
                     :d="item.d"
-                    :stroke-width="hitWidth"
+                    :stroke-width="item.hitWidth"
                     @pointerdown="onWireDown(item.wire.id, $event)"
                     @pointerenter="store.hoverWireId = item.wire.id"
                     @pointerleave="store.hoverWireId = null"
@@ -1425,7 +1470,7 @@ const cursorClass = computed(() => {
                     :y1="mark.y1"
                     :x2="mark.x2"
                     :y2="mark.y2"
-                    :stroke-width="wireWidth * 2.2"
+                    :stroke-width="mark.width * 2.2"
                   />
                   <line
                     :x1="mark.x1"
@@ -1433,7 +1478,7 @@ const cursorClass = computed(() => {
                     :x2="mark.x2"
                     :y2="mark.y2"
                     :stroke="screenColor(mark.color)"
-                    :stroke-width="wireWidth"
+                    :stroke-width="mark.width"
                   />
                 </template>
               </g>
@@ -1462,7 +1507,7 @@ const cursorClass = computed(() => {
                   <ComponentGraphic
                     :def="item.def"
                     :cell-px="1"
-                    :stroke-base="profile.componentStroke"
+                    :stroke-base="store.styleFor(item.instance).componentStroke"
                     :fields="item.instance.fields"
                     :ink="store.staleDefIds.has(item.def.id) ? 'var(--stale)' : null"
                     skip-texts
@@ -1508,14 +1553,14 @@ const cursorClass = computed(() => {
 
           <g class="labels">
             <text
-              v-for="item in store.placed"
-              :key="item.instance.id"
-              :x="boundsOf(item).x"
-              :y="boundsOf(item).y - 0.25"
-              :font-size="labelFontCells"
-              :font-family="profile.labelFont.family"
+              v-for="entry in instanceLabels"
+              :key="entry.id"
+              :x="entry.x"
+              :y="entry.y"
+              :font-size="entry.fontCells"
+              :font-family="entry.family"
             >
-              {{ item.instance.label }}
+              {{ entry.text }}
             </text>
           </g>
 
@@ -1539,7 +1584,7 @@ const cursorClass = computed(() => {
               <text
                 :transform="entry.transform"
                 :font-size="entry.fontCells"
-                :font-family="profile.labelFont.family"
+                :font-family="entry.family"
                 :text-anchor="entry.label.anchor"
                 :fill="screenColor(entry.label.color)"
                 v-bind="textEmphasisAttrs(entry.label)"
@@ -1583,14 +1628,14 @@ const cursorClass = computed(() => {
               <circle
                 :cx="entry.dotX"
                 :cy="entry.dotY"
-                :r="wireWidth"
+                :r="entry.dotRadius"
                 :fill="screenColor(entry.color)"
               />
               <text
                 :x="entry.x"
                 :y="entry.y"
-                :font-size="endLabelFontCells"
-                :font-family="profile.endLabelFont.family"
+                :font-size="entry.fontCells"
+                :font-family="entry.family"
                 font-weight="bold"
                 :text-anchor="entry.anchor"
                 :dominant-baseline="entry.baseline"
@@ -1694,7 +1739,7 @@ const cursorClass = computed(() => {
               class="ghost-wire"
               :d="wire.d"
               :stroke="screenColor(wire.color)"
-              :stroke-width="wireWidth"
+              :stroke-width="wire.width"
             />
             <g
               v-for="item in ghostCopies.instances"
@@ -1704,7 +1749,7 @@ const cursorClass = computed(() => {
               <ComponentGraphic
                 :def="item.def"
                 :cell-px="1"
-                :stroke-base="profile.componentStroke"
+                :stroke-base="store.styleFor(item.instance).componentStroke"
                 :fields="item.instance.fields"
               />
             </g>
@@ -1713,7 +1758,7 @@ const cursorClass = computed(() => {
               :key="entry.label.id"
               :transform="entry.transform"
               :font-size="entry.label.size / profile.cellPx"
-              :font-family="profile.labelFont.family"
+              :font-family="entry.family"
               :text-anchor="entry.label.anchor"
               :fill="screenColor(entry.label.color)"
               v-bind="textEmphasisAttrs(entry.label)"

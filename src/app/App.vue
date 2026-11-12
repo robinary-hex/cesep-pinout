@@ -604,6 +604,8 @@ async function openExternal(path: string): Promise<void> {
  */
 async function onWindowFocus(): Promise<void> {
   if (openModals.value > 0) return
+  // Les profils enregistrés ont pu changer sur une autre machine, comme les réglages.
+  void library.refreshProfiles()
   const previous = library.defaultProfile
   const previousStyle = library.diagramDefaults.style
   if (await library.reloadSharedSettings()) {

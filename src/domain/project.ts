@@ -19,12 +19,19 @@ import {
 import { styleProfileSchema, type StyleProfile } from './profile'
 import { isUTurn, segmentStep } from './wires'
 
-export const PROJECT_SCHEMA_VERSION = 21
+export const PROJECT_SCHEMA_VERSION = 22
+
+/**
+ * Style propre à un élément du montage (voir styles.ts) : le nom d'un des `styles` du montage ;
+ * absent, l'élément se dessine avec le style du montage.
+ */
+export const elementStyleSchema = z.string().min(1).optional()
 
 /** Composant posé sur le montage ; (x, y) = coin supérieur gauche de sa boîte, en grille. */
 export const componentInstanceSchema = z.object({
   id: z.string().min(1),
   group: groupSchema,
+  style: elementStyleSchema,
   /** Variante du composant que cet exemplaire montre ; absent : la première. */
   variant: z.string().min(1).optional(),
   defId: z.string().min(1),
@@ -83,6 +90,7 @@ export const wireSchema = z
   .object({
     id: z.string().min(1),
     group: groupSchema,
+    style: elementStyleSchema,
     color: hexColorSchema,
     points: z.array(gridPointSchema).min(2),
     /** Rang d'empilement : un fil de rang supérieur passe au-dessus aux croisements. */
@@ -115,6 +123,7 @@ export type CrossingOverride = z.infer<typeof crossingOverrideSchema>
 export const textLabelSchema = z.object({
   id: z.string().min(1),
   group: groupSchema,
+  style: elementStyleSchema,
   x: gridCoordSchema,
   y: gridCoordSchema,
   w: z.number().int().positive(),
@@ -142,6 +151,12 @@ const projectShape = z.object({
   name: z.string(),
   /** Copie du profil de style au moment de la création (ou du dernier changement de profil). */
   profile: styleProfileSchema,
+  /**
+   * Styles propres à certains éléments : des copies de profils, une par nom, que les éléments
+   * désignent par `style`. Comme les définitions embarquées, elles font que le montage se suffit
+   * à lui-même. De chacune tout sert sauf la taille de cellule : la grille est celle du montage.
+   */
+  styles: z.array(styleProfileSchema),
   components: z.array(componentInstanceSchema),
   wires: z.array(wireSchema),
   crossingOverrides: z.array(crossingOverrideSchema),
@@ -161,8 +176,21 @@ export const projectSchema = projectShape.superRefine((project, ctx) => {
     ctx.addIssue({ code: 'custom', message, path })
   }
 
+  const styleNames = new Set<string>()
+  project.styles.forEach((style, i) => {
+    if (styleNames.has(style.name))
+      addIssue(`Style en double : ${style.name}`, ['styles', i, 'name'])
+    styleNames.add(style.name)
+  })
+  const checkStyle = (what: string, style: string | undefined, path: (string | number)[]): void => {
+    if (style !== undefined && !styleNames.has(style)) {
+      addIssue(`${what} : style ${style} absent de styles`, [...path, 'style'])
+    }
+  }
+
   const instanceIds = new Set<string>()
   project.components.forEach((instance, i) => {
+    checkStyle(`Composant ${instance.id}`, instance.style, ['components', i])
     if (instanceIds.has(instance.id)) {
       addIssue(`Identifiant de composant en double : ${instance.id}`, ['components', i, 'id'])
     }
@@ -181,6 +209,10 @@ export const projectSchema = projectShape.superRefine((project, ctx) => {
     if (wireIds.has(wire.id))
       addIssue(`Identifiant de fil en double : ${wire.id}`, ['wires', i, 'id'])
     wireIds.add(wire.id)
+    checkStyle(`Fil ${wire.id}`, wire.style, ['wires', i])
+  })
+  project.labels.forEach((label, i) => {
+    checkStyle(`Étiquette ${label.id}`, label.style, ['labels', i])
   })
 
   project.crossingOverrides.forEach((override, i) => {
@@ -214,6 +246,7 @@ export function createEmptyProject(name: string, profile: StyleProfile): Project
     schemaVersion: PROJECT_SCHEMA_VERSION,
     name,
     profile: structuredClone(profile),
+    styles: [],
     components: [],
     wires: [],
     crossingOverrides: [],

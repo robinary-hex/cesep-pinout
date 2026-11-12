@@ -2,7 +2,8 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createEmptyComponent, type Primitive } from '@/domain'
+import { createEmptyComponent, DEFAULT_PROFILE, type Primitive } from '@/domain'
+import { useLibraryStore } from '@/features/library/store'
 import { setBridge } from '@/io/bridge'
 import { FakeFs } from '@/io/testing/fakeFs'
 import { menuEntry, menuLabels, rightClick, subMenuLabels } from '@/ui/testing/menus'
@@ -52,6 +53,7 @@ describe('menu contextuel du montage', () => {
       'Couper le fil ici',
       'Extrémités libres',
       'Sélectionner tout le net',
+      'Profil de style',
       'Ordre',
       'Dupliquer',
       'Copier',
@@ -310,6 +312,135 @@ describe('montage : ordre des composants', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageDown', ctrlKey: true }))
     expect(order()).toEqual([a, b])
     expect(store.doc.components.every((instance) => instance.behindWires)).toBe(true)
+    wrapper.unmount()
+  })
+})
+
+describe('montage : profil de style d’une sélection', () => {
+  const THICK = { ...DEFAULT_PROFILE, name: 'Épais', wireWidth: 0.3 }
+  const FINE = { ...DEFAULT_PROFILE, name: 'Fin', wireWidth: 0.08 }
+
+  /** Deux fils et les profils enregistrés Épais, Fin et Standard (celui du montage). */
+  function twoWires(): { store: Store; a: string; b: string } {
+    const store = useSchematicStore()
+    useLibraryStore().savedProfiles = [THICK, FINE, DEFAULT_PROFILE]
+    const a = store.addWire([
+      [0, 0],
+      [6, 0]
+    ])
+    const b = store.addWire([
+      [0, 4],
+      [6, 4]
+    ])
+    if (!a || !b) throw new Error('fils refusés')
+    store.clearSelection()
+    return { store, a, b }
+  }
+
+  it('se choisit par le clic droit, pour toute la sélection', async () => {
+    const { store, a, b } = twoWires()
+    const wrapper = mount(SchematicEditor, { attachTo: document.body })
+    const hit = (index: number): Element =>
+      wrapper.findAll('.wire-hit')[index]?.element ?? document.body
+    /** Entrées cochées du sous-menu ouvert. */
+    const checked = (): string[] =>
+      [...document.body.querySelectorAll('.context-menu.sub-menu .entry')]
+        .filter((entry) => entry.querySelector('.checked') !== null)
+        .map((entry) => entry.querySelector('.label')?.textContent?.trim() ?? '')
+    store.selectedWires = [a, b]
+    await flushPromises()
+    rightClick(hit(0), ...at(store, 3, 0))
+    await flushPromises()
+    // Le sous-menu vient avec le style, avant l'ordre d'empilement.
+    const labels = menuLabels()
+    expect(labels.indexOf('Profil de style')).toBe(labels.indexOf('Ordre') - 1)
+    menuEntry('Profil de style').click()
+    await flushPromises()
+    // Le style du montage d'abord, puis les profils enregistrés qui ne sont pas le sien.
+    expect(subMenuLabels()).toEqual(['Celui du montage (Standard)', 'Épais', 'Fin'])
+    expect(checked()).toEqual(['Celui du montage (Standard)'])
+    menuEntry('Épais').click()
+    await flushPromises()
+    expect(store.doc.wires.map((wire) => wire.style)).toEqual(['Épais', 'Épais'])
+    expect(store.doc.styles).toEqual([THICK])
+    expect(wrapper.findAll('.wires .wire').map((wire) => wire.attributes('stroke-width'))).toEqual([
+      '0.3',
+      '0.3'
+    ])
+    // Retour au style du montage pour un seul des deux.
+    store.clearSelection()
+    rightClick(hit(1), ...at(store, 3, 4))
+    await flushPromises()
+    menuEntry('Profil de style').click()
+    await flushPromises()
+    expect(checked()).toEqual(['Épais'])
+    menuEntry('Celui du montage (Standard)').click()
+    await flushPromises()
+    expect(store.doc.wires.map((wire) => wire.style)).toEqual(['Épais', undefined])
+    // Deux styles dans la sélection : aucun n'est coché.
+    store.selectedWires = [a, b]
+    await flushPromises()
+    rightClick(hit(0), ...at(store, 3, 0))
+    await flushPromises()
+    menuEntry('Profil de style').click()
+    await flushPromises()
+    expect(checked()).toEqual([])
+    wrapper.unmount()
+  })
+
+  it('se choisit dans le panneau, qui dit quand la sélection mêle plusieurs styles', async () => {
+    const { store, a, b } = twoWires()
+    const wrapper = mount(SchematicEditor, { attachTo: document.body })
+    store.inspectorOpen = true
+    store.selectedWires = [a]
+    await flushPromises()
+    const choice = (): HTMLSelectElement =>
+      wrapper.get('.inspector select.style-choice').element as HTMLSelectElement
+    const options = (): string[] => [...choice().options].map((option) => option.text.trim())
+    expect(options()).toEqual(['Celui du montage (Standard)', 'Épais', 'Fin'])
+    expect(choice().value).toBe('')
+    await wrapper.get('.inspector select.style-choice').setValue('Fin')
+    expect(store.doc.wires.map((wire) => wire.style)).toEqual(['Fin', undefined])
+    expect(choice().value).toBe('Fin')
+    // Deux fils de styles différents : la liste le dit, sans rien cocher d'applicable.
+    store.selectedWires = [a, b]
+    await flushPromises()
+    expect(options()[0]).toBe('Plusieurs styles')
+    expect(choice().selectedOptions[0]?.text.trim()).toBe('Plusieurs styles')
+    await wrapper.get('.inspector select.style-choice').setValue('Épais')
+    expect(store.doc.wires.map((wire) => wire.style)).toEqual(['Épais', 'Épais'])
+    // « Fin » ne sert plus : le montage ne le garde pas.
+    expect(store.doc.styles.map((style) => style.name)).toEqual(['Épais'])
+    // Sans sélection, le panneau liste les styles propres et sélectionne leurs éléments.
+    store.clearSelection()
+    await flushPromises()
+    const usage = wrapper.get('.inspector .own-styles li')
+    expect(usage.text()).toContain('Épais')
+    expect(usage.text()).toContain('2 élément(s)')
+    await usage.get('button').trigger('click')
+    expect([...store.selectedWires].sort()).toEqual([a, b].sort())
+    await wrapper.get('.inspector select.style-choice').setValue('')
+    expect(store.doc.styles).toEqual([])
+    expect(wrapper.find('.inspector .own-styles').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('signale un profil enregistré qui a changé, et le reprend d’un bouton', async () => {
+    const { store, a } = twoWires()
+    const library = useLibraryStore()
+    const wrapper = mount(SchematicEditor, { attachTo: document.body })
+    store.inspectorOpen = true
+    store.selectedWires = [a]
+    store.setSelectionStyle(THICK)
+    await flushPromises()
+    expect(wrapper.find('.inspector .notice').exists()).toBe(false)
+    library.savedProfiles = [{ ...THICK, wireWidth: 0.4 }, FINE, DEFAULT_PROFILE]
+    await flushPromises()
+    const notice = wrapper.get('.inspector .notice')
+    expect(notice.text()).toContain('Le profil « Épais » a changé')
+    await notice.get('button').trigger('click')
+    expect(store.doc.styles[0]?.wireWidth).toBe(0.4)
+    expect(wrapper.find('.inspector .notice').exists()).toBe(false)
     wrapper.unmount()
   })
 })

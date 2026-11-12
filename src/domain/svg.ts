@@ -30,6 +30,7 @@ import {
 import { instanceDefinition, type Project } from './project'
 import { roundedPathData } from './roundedPath'
 import type { ExportSettings } from './settings'
+import { junctionDot, projectStyleSheet, styleOf } from './styles'
 import { wirePathData } from './wires'
 
 /**
@@ -241,6 +242,11 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
   const widthCells = bounds.width + 2 * margin
   const heightCells = bounds.height + 2 * margin
   const profile = project.profile
+  // Un élément qui a son propre style se dessine avec lui ; les autres, avec celui du montage.
+  const sheet = projectStyleSheet(project)
+  /** Police à écrire sur un texte : rien si c'est celle du montage, que porte la racine du SVG. */
+  const ownFamily = (family: string): { 'font-family'?: string } =>
+    family === profile.labelFont.family ? {} : { 'font-family': `${family}, sans-serif` }
   const cellPx = profile.cellPx * options.scale
   const parts: string[] = []
 
@@ -264,7 +270,6 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
   // Composants : dans l'ordre du montage, ceux qu'on a mis derrière les fils avant les fils, les
   // autres après. Leurs textes les suivent ; les libellés (R1, U2) restent au-dessus de tout.
   const labelParts: string[] = []
-  const labelSize = profile.labelFont.size / profile.cellPx
   const componentLayer = (behind: boolean): string[] => {
     // Chaque composant puis ses textes, dans l'ordre du montage : le dernier est au-dessus, et
     // un composant posé sur un autre cache aussi ses textes.
@@ -272,8 +277,9 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
     for (const instance of project.components) {
       const def = instanceDefinition(project, instance)
       if (!def || instance.behindWires !== behind) continue
+      const style = styleOf(sheet, instance)
       instanceParts.push(
-        `<g ${attrs({ transform: matrixToSvg(instanceMatrix(instance, def)) })}>${componentSvg(def, profile.componentStroke, instance.fields, { skipTexts: true })}</g>`
+        `<g ${attrs({ transform: matrixToSvg(instanceMatrix(instance, def)) })}>${componentSvg(def, style.componentStroke, instance.fields, { skipTexts: true })}</g>`
       )
       // Textes : hors de la transformation, droits ou tournés avec le composant, jamais en miroir.
       for (const placement of instanceTextPlacements(instance, def)) {
@@ -296,7 +302,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
       if (options.labels && instance.label.length > 0) {
         const box = instanceBounds(instance, def)
         labelParts.push(
-          `<text ${attrs({ x: box.x, y: box.y - 0.25, 'font-size': labelSize, fill: '#1f2328' })}>${escapeXml(instance.label)}</text>`
+          `<text ${attrs({ x: box.x, y: box.y - 0.25, 'font-size': style.labelFont.size / style.cellPx, ...ownFamily(style.labelFont.family), fill: '#1f2328' })}>${escapeXml(instance.label)}</text>`
         )
       }
     }
@@ -320,21 +326,22 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
   const wires = [...project.wires].sort((a, b) => a.stack - b.stack)
   const wireParts: string[] = []
   const endLabelParts: string[] = []
-  const endFontCells = profile.endLabelFont.size / profile.cellPx
   for (const wire of wires) {
+    const style = styleOf(sheet, wire)
+    const width = style.wireWidth
     const free = freeEndsByWire.get(wire.id) ?? []
     const flags = {
       start: free.some((end) => end.endIndex === 0),
       end: free.some((end) => end.endIndex === wire.points.length - 1)
     }
-    const shown = wireRenderParts(wire.points, wire.freeEnds, flags, profile.wireWidth)
+    const shown = wireRenderParts(wire.points, wire.freeEnds, flags, width)
     if (shown.body.length >= 2) {
       wireParts.push(
         `<path ${attrs({
-          d: wirePathData(shown.body, profile.cornerRadius),
+          d: wirePathData(shown.body, style.cornerRadius),
           fill: 'none',
           stroke: wire.color,
-          'stroke-width': profile.wireWidth,
+          'stroke-width': width,
           'stroke-linecap': 'butt',
           'stroke-linejoin': 'round'
         })}/>`
@@ -343,12 +350,12 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
     for (const tail of shown.dotted) {
       wireParts.push(
         `<path ${attrs({
-          d: wirePathData(tail, profile.cornerRadius),
+          d: wirePathData(tail, style.cornerRadius),
           fill: 'none',
           stroke: wire.color,
-          'stroke-width': profile.wireWidth,
+          'stroke-width': width,
           'stroke-linecap': 'round',
-          'stroke-dasharray': `0 ${fmt(profile.wireWidth * 2)}`
+          'stroke-dasharray': `0 ${fmt(width * 2)}`
         })}/>`
       )
     }
@@ -361,14 +368,14 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
       const placement = text.length > 0 ? wireEndLabelPlacement(wire.points, end.endIndex) : null
       if (!placement) continue
       endLabelParts.push(
-        `<circle ${attrs({ cx: end.point[0], cy: end.point[1], r: profile.wireWidth, fill: wire.color })}/>`
+        `<circle ${attrs({ cx: end.point[0], cy: end.point[1], r: width, fill: wire.color })}/>`
       )
       endLabelParts.push(
         `<text ${attrs({
           x: placement.x,
           y: placement.y,
-          'font-family': profile.endLabelFont.family,
-          'font-size': endFontCells,
+          'font-family': style.endLabelFont.family,
+          'font-size': style.endLabelFont.size / style.cellPx,
           'font-weight': 'bold',
           'text-anchor': placement.anchor,
           'dominant-baseline': placement.baseline,
@@ -382,39 +389,36 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
 
   // Croisements : le fil du dessus est redessiné sur une demi-cellule de part et d'autre, avec un
   // liseré couleur de fond qui rend l'ordre lisible même entre deux fils de même couleur.
-  const colorOfWire = new Map(project.wires.map((wire) => [wire.id, wire.color]))
+  const wireById = new Map(project.wires.map((wire) => [wire.id, wire]))
   const haloColor =
     options.background === 'transparent'
       ? null
       : options.background === 'white'
         ? '#ffffff'
         : options.background
-  const haloWidth = profile.wireWidth * 2.2
   const crossingParts = crossingPieces(project.wires, project.crossingOverrides).map((piece) => {
     const [[x1, y1], [x2, y2]] = crossingPieceEnds(piece)
+    // Le fil du dessus se redessine dans son épaisseur à lui.
+    const top = wireById.get(piece.topWireId)
+    const width = (top ? styleOf(sheet, top) : profile).wireWidth
     const halo = haloColor
-      ? `<line ${attrs({ x1, y1, x2, y2, stroke: haloColor, 'stroke-width': haloWidth })}/>`
+      ? `<line ${attrs({ x1, y1, x2, y2, stroke: haloColor, 'stroke-width': width * 2.2 })}/>`
       : ''
-    const top = `<line ${attrs({
+    const line = `<line ${attrs({
       x1,
       y1,
       x2,
       y2,
-      stroke: colorOfWire.get(piece.topWireId) ?? '#000000',
-      'stroke-width': profile.wireWidth
+      stroke: top?.color ?? '#000000',
+      'stroke-width': width
     })}/>`
-    return halo + top
+    return halo + line
   })
   if (crossingParts.length > 0) parts.push(`<g class="crossings">${crossingParts.join('')}</g>`)
 
-  const colorById = new Map(project.wires.map((wire) => [wire.id, wire.color]))
-  const radius = (profile.wireWidth * profile.junctionScale) / 2
   const junctionParts = connectivity.junctions.map((junction) => {
-    const fill =
-      profile.junctionColor === 'wire'
-        ? (colorById.get(junction.carrierWireId) ?? '#000000')
-        : profile.junctionColor
-    return `<circle ${attrs({ cx: junction.point[0], cy: junction.point[1], r: radius, fill })}/>`
+    const dot = junctionDot(junction, project.wires, sheet)
+    return `<circle ${attrs({ cx: junction.point[0], cy: junction.point[1], r: dot.radius, fill: dot.color })}/>`
   })
   parts.push(`<g class="junctions">${junctionParts.join('')}</g>`)
 
@@ -438,7 +442,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
       const back = label.background
         ? `<rect ${attrs({ x: label.x, y: label.y, width: label.w, height: label.h, fill: paper })}/>`
         : ''
-      return `${back}<text ${attrs({ 'font-size': label.size / profile.cellPx, 'text-anchor': label.anchor, fill: label.color, ...textEmphasisAttrs(label), transform: textTransform(label) })}>${spans}</text>`
+      return `${back}<text ${attrs({ 'font-size': label.size / profile.cellPx, ...ownFamily(styleOf(sheet, label).labelFont.family), 'text-anchor': label.anchor, fill: label.color, ...textEmphasisAttrs(label), transform: textTransform(label) })}>${spans}</text>`
     })
     parts.push(`<g class="texts">${textParts.join('')}</g>`)
   }

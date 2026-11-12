@@ -77,6 +77,12 @@ export const useLibraryStore = defineStore('library', () => {
   /** Les deux dossiers de l'ancienne organisation, repris au premier choix du dossier. */
   let legacy: LegacyFolders = { settingsDir: '', libraryDir: '' }
   const entries = shallowRef<LibraryEntry[]>([])
+  /**
+   * Profils de style enregistrés (profils.json du dossier de Pinout), par ordre alphabétique : ce
+   * qu'un montage propose de donner à une sélection. Hors de la réactivité profonde, pour être
+   * copiés tels quels.
+   */
+  const savedProfiles = shallowRef<readonly StyleProfile[]>([])
   const loading = ref(false)
   const problem = ref('')
   const search = ref('')
@@ -161,6 +167,15 @@ export const useLibraryStore = defineStore('library', () => {
     }
   }
 
+  /** Relit les profils de style enregistrés ; en cas d'échec, la liste reste ce qu'elle était. */
+  async function refreshProfiles(): Promise<void> {
+    try {
+      savedProfiles.value = (await listProfiles(dataRoot.value)).map((saved) => saved.profile)
+    } catch {
+      // Fichier illisible : la boîte des profils le dit quand on l'ouvre.
+    }
+  }
+
   async function init(): Promise<void> {
     try {
       const loaded = await loadSettings()
@@ -176,6 +191,7 @@ export const useLibraryStore = defineStore('library', () => {
       }
       await prepare(dataRoot.value)
       await refresh()
+      await refreshProfiles()
     } catch (error) {
       problem.value = `Démarrage incomplet : ${describe(error)}`
     }
@@ -301,6 +317,7 @@ export const useLibraryStore = defineStore('library', () => {
       firstRun.value = null
       problem.value = ''
       await refresh()
+      await refreshProfiles()
       return moved.adopted ? 'adopted' : 'moved'
     } catch (error) {
       problem.value = `Dossier de Pinout inchangé : ${describe(error)}`
@@ -359,6 +376,8 @@ export const useLibraryStore = defineStore('library', () => {
     firstRun,
     libraryDir,
     entries,
+    savedProfiles,
+    refreshProfiles,
     filtered,
     groups,
     ids,

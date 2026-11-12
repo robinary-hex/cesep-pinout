@@ -26,14 +26,21 @@ import {
   projectBounds,
   profileDifferences,
   projectPins,
+  projectStyleSheet,
   pruneCrossingOverrides,
+  prunedStyles,
   regroupedCopies,
   removeVertex,
   restackedIds,
+  restyledLabelSize,
   rotatedInstance,
+  sameLook,
   sameProfile,
   simplifyPoints,
   splitPoints,
+  styleCounts,
+  styleOf,
+  styleSheet,
   textLabelBounds,
   toggledOverrides,
   translatePoints,
@@ -42,6 +49,7 @@ import {
   wireBounds,
   wireGeometryProblem,
   withGroup,
+  withStyle,
   wiresFollowingJunctions,
   wiresFollowingPins,
   zoomedView,
@@ -56,6 +64,8 @@ import {
   type RotateDirection,
   type Rotation,
   type StyleProfile,
+  type StyleSheet,
+  type Styled,
   type TextAnchor,
   type TextLabel,
   type ViewState,
@@ -91,6 +101,8 @@ export interface ClipboardData {
   items: ClipboardItem[]
   wires: Wire[]
   labels: TextLabel[]
+  /** Les styles propres que portent les éléments copiés : ils les suivent dans un autre montage. */
+  styles: StyleProfile[]
 }
 
 export interface PlacedInstance {
@@ -161,7 +173,7 @@ export const useSchematicStore = defineStore('schematic', () => {
   const placement = shallowRef<Placement | null>(null)
   const drawing = shallowRef<WireDrawing | null>(null)
   const currentColor = ref(library.defaultWireColor)
-  const clipboard = shallowRef<ClipboardData>({ items: [], wires: [], labels: [] })
+  const clipboard = shallowRef<ClipboardData>({ items: [], wires: [], labels: [], styles: [] })
   const view = ref<ViewState>({ ...DEFAULT_VIEW })
   const viewport = ref({ width: 1200, height: 800 })
   /** Broches des composants visibles. Gardé dans les paramètres, d'un lancement à l'autre. */
@@ -249,6 +261,13 @@ export const useSchematicStore = defineStore('schematic', () => {
   /** Profil effectif pour l'affichage : l'aperçu de la boîte de dialogue, sinon celui du projet. */
   const profile = computed<StyleProfile>(() => profilePreview.value ?? doc.value.profile)
   const cellPx = computed(() => profile.value.cellPx * view.value.zoom)
+  /** Les styles du dessin : celui du montage (ou son aperçu) et ceux propres à des éléments. */
+  const styles = computed<StyleSheet>(() => styleSheet(profile.value, doc.value.styles))
+
+  /** Le style avec lequel un élément se dessine : le sien, sinon celui du montage. */
+  function styleFor(element: Styled): StyleProfile {
+    return styleOf(styles.value, element)
+  }
   /** Réglages où le style de ce montage s'écarte du profil général de l'application. */
   const profileDiffs = computed(() => profileDifferences(doc.value.profile, library.defaultProfile))
   const followsGeneralProfile = computed(() => profileDiffs.value.length === 0)
@@ -342,8 +361,9 @@ export const useSchematicStore = defineStore('schematic', () => {
   }
 
   /**
-   * Toute commande passe ici ; au passage, les jonctions suivent les fils déplacés et les
-   * exceptions de croisement orphelines sont élaguées.
+   * Toute commande passe ici ; au passage, les jonctions suivent les fils déplacés, les
+   * exceptions de croisement orphelines sont élaguées et les styles propres que plus aucun
+   * élément ne porte quittent le montage.
    */
   function apply(label: string, recipe: (draft: Draft<Project>) => void): boolean {
     const wiresBefore = doc.value.wires
@@ -361,6 +381,8 @@ export const useSchematicStore = defineStore('schematic', () => {
       if (pruned.length !== draft.crossingOverrides.length) {
         draft.crossingOverrides = castDraft(pruned)
       }
+      const kept = prunedStyles(now)
+      if (kept !== now.styles) draft.styles = castDraft([...kept])
     })
   }
 
@@ -578,6 +600,124 @@ export const useSchematicStore = defineStore('schematic', () => {
     applyWithElasticWires(`Mettre à jour ${def.name}`, (draft) => {
       draft.embeddedDefs[def.id] = castDraft(structuredClone(def))
     })
+  }
+
+  // Styles propres : une partie du montage dessinée avec un autre profil que le sien.
+
+  function byName(a: StyleProfile, b: StyleProfile): number {
+    return a.name.localeCompare(b.name, 'fr')
+  }
+
+  /**
+   * Styles qu'on peut donner à une sélection : les profils enregistrés, puis ceux que le montage
+   * porte sans qu'un profil enregistré ait leur nom (montage venu d'ailleurs, profil supprimé
+   * depuis). Le profil enregistré qui est déjà le style du montage n'y figure pas : « celui du
+   * montage » le propose.
+   */
+  const styleChoices = computed<StyleProfile[]>(() => {
+    const base = doc.value.profile
+    const embedded = new Set(doc.value.styles.map((style) => style.name))
+    const saved = library.savedProfiles.filter(
+      (candidate) =>
+        embedded.has(candidate.name) || candidate.name !== base.name || !sameLook(candidate, base)
+    )
+    const names = new Set(saved.map((candidate) => candidate.name))
+    return [...saved, ...doc.value.styles.filter((style) => !names.has(style.name))].sort(byName)
+  })
+
+  /** Styles que portent les éléments sélectionnés, sans doublon ; null : celui du montage. */
+  const selectionStyles = computed<(string | null)[]>(() => {
+    const names = new Set<string | null>()
+    const add = (elements: readonly (Styled & { id: string })[], ids: readonly string[]): void => {
+      for (const element of elements) if (ids.includes(element.id)) names.add(element.style ?? null)
+    }
+    add(doc.value.components, selection.value)
+    add(doc.value.wires, selectedWires.value)
+    add(doc.value.labels, selectedLabels.value)
+    return [...names]
+  })
+
+  /** Les styles propres du montage et le nombre d'éléments qui portent chacun. */
+  const styleUsage = computed(() => {
+    const counts = styleCounts(doc.value)
+    return doc.value.styles.map((style) => ({
+      name: style.name,
+      count: counts.get(style.name) ?? 0
+    }))
+  })
+
+  /** Profil enregistré qui ne dessine plus comme la copie que le montage a sous ce nom. */
+  function newerSavedStyle(name: string): StyleProfile | null {
+    const embedded = doc.value.styles.find((style) => style.name === name)
+    const saved = library.savedProfiles.find((candidate) => candidate.name === name)
+    return embedded && saved && !sameLook(embedded, saved) ? saved : null
+  }
+
+  /**
+   * Donne un profil de style à la sélection, ou la rend au style du montage (`null`). Le montage
+   * garde une copie du profil sous son nom ; s'il en avait une qui n'est plus la même, elle est
+   * remplacée et tous les éléments qui la portent suivent, comme la définition d'un composant
+   * qu'on repose. Une étiquette garde sa taille en multiples de la police des libellés.
+   */
+  function setSelectionStyle(profile: StyleProfile | null): void {
+    if (!hasSelection.value) return
+    const before = projectStyleSheet(doc.value)
+    const name = profile?.name
+    const embedded = doc.value.styles.find((style) => style.name === name)
+    const refresh = profile !== null && (!embedded || !sameProfile(embedded, profile))
+    const instanceIds = new Set(selection.value)
+    const wireIds = new Set(selectedWires.value)
+    const labelIds = new Set(selectedLabels.value)
+    const restyle = (element: Draft<Styled>): void => {
+      if (name === undefined) delete element.style
+      else element.style = name
+    }
+    apply(profile ? `Style « ${profile.name} »` : 'Style du montage', (draft) => {
+      if (profile && refresh) {
+        const copy = castDraft(structuredClone(profile))
+        const index = draft.styles.findIndex((style) => style.name === profile.name)
+        if (index >= 0) draft.styles[index] = copy
+        else draft.styles.push(copy)
+      }
+      for (const instance of draft.components) if (instanceIds.has(instance.id)) restyle(instance)
+      for (const wire of draft.wires) if (wireIds.has(wire.id)) restyle(wire)
+      for (const label of draft.labels) {
+        const old = styleOf(before, label)
+        if (labelIds.has(label.id)) restyle(label)
+        const next =
+          label.style === undefined ? before.base : label.style === name && profile ? profile : old
+        label.size = restyledLabelSize(label.size, old, next)
+      }
+    })
+    // La grille est commune : d'un profil dont la cellule diffère, on prend tout sauf elle.
+    const cellKept = profile !== null && profile.cellPx !== before.base.cellPx
+    status.value = profile
+      ? `Style « ${profile.name} » donné à la sélection${cellKept ? ' ; la taille de cellule reste celle du montage' : ''}.`
+      : 'La sélection reprend le style du montage.'
+  }
+
+  /** Remplace la copie d'un style par le profil enregistré du même nom : ses éléments suivent. */
+  function updateStyle(profile: StyleProfile): void {
+    const embedded = doc.value.styles.find((style) => style.name === profile.name)
+    if (!embedded || sameProfile(embedded, profile)) return
+    apply(`Mettre à jour le style « ${profile.name} »`, (draft) => {
+      const index = draft.styles.findIndex((style) => style.name === profile.name)
+      if (index >= 0) draft.styles[index] = castDraft(structuredClone(profile))
+      for (const label of draft.labels) {
+        if (label.style === profile.name) {
+          label.size = restyledLabelSize(label.size, embedded, profile)
+        }
+      }
+    })
+  }
+
+  /** Sélectionne tous les éléments qui portent ce style propre. */
+  function selectStyled(name: string): void {
+    const ids = (elements: readonly (Styled & { id: string })[]): string[] =>
+      elements.filter((element) => element.style === name).map((element) => element.id)
+    selection.value = ids(doc.value.components)
+    selectedWires.value = ids(doc.value.wires)
+    selectedLabels.value = ids(doc.value.labels)
   }
 
   // Outils
@@ -940,8 +1080,9 @@ export const useSchematicStore = defineStore('schematic', () => {
         stack: wire.stack + 1,
         freeEnds: wire.freeEnds,
         endLabels: { start: '', end: wire.endLabels.end },
-        // Le second morceau reste dans le groupe du fil coupé.
-        ...(wire.group === undefined ? {} : { group: wire.group })
+        // Le second morceau reste dans le groupe du fil coupé, et garde son style.
+        ...(wire.group === undefined ? {} : { group: wire.group }),
+        ...(wire.style === undefined ? {} : { style: wire.style })
       })
       for (const override of draft.crossingOverrides) {
         if (override.topWireId !== id) continue
@@ -1231,18 +1372,30 @@ export const useSchematicStore = defineStore('schematic', () => {
   }
 
   function selectionData(): ClipboardData {
-    return {
-      items: selectedInstances.value.flatMap((instance) => {
-        const def = doc.value.embeddedDefs[instance.defId]
-        return def ? [{ instance, def }] : []
-      }),
-      wires: doc.value.wires.filter((wire) => selectedWires.value.includes(wire.id)),
-      labels: doc.value.labels.filter((label) => selectedLabels.value.includes(label.id))
-    }
+    const items = selectedInstances.value.flatMap((instance) => {
+      const def = doc.value.embeddedDefs[instance.defId]
+      return def ? [{ instance, def }] : []
+    })
+    const wires = doc.value.wires.filter((wire) => selectedWires.value.includes(wire.id))
+    const labels = doc.value.labels.filter((label) => selectedLabels.value.includes(label.id))
+    // Les styles propres des éléments copiés les accompagnent.
+    const used = styleCounts({ components: items.map((item) => item.instance), wires, labels })
+    const styles = doc.value.styles.filter((style) => used.has(style.name))
+    return { items, wires, labels, styles }
   }
 
   function insertCopies(data: ClipboardData, dx: number, dy: number, label: string): void {
     if (data.items.length === 0 && data.wires.length === 0 && data.labels.length === 0) return
+    // Styles propres : ceux qui manquent à ce montage arrivent avec les copies ; un style du
+    // même nom déjà là est gardé, les copies le prennent. Une copie dont le style n'est nulle
+    // part suit le style du montage.
+    const known = new Set(doc.value.styles.map((style) => style.name))
+    const newStyles = data.styles.filter((style) => !known.has(style.name))
+    for (const style of newStyles) known.add(style.name)
+    const styled = <T extends Styled>(element: T): T =>
+      element.style !== undefined && !known.has(element.style)
+        ? withStyle(element, undefined)
+        : element
     const instanceIds = doc.value.components.map((instance) => instance.id)
     const copies: ClipboardItem[] = []
     for (const item of data.items) {
@@ -1250,7 +1403,7 @@ export const useSchematicStore = defineStore('schematic', () => {
       copies.push({
         def: item.def,
         instance: {
-          ...item.instance,
+          ...styled(item.instance),
           id,
           x: item.instance.x + dx,
           y: item.instance.y + dy
@@ -1262,13 +1415,18 @@ export const useSchematicStore = defineStore('schematic', () => {
     const wireCopies: Wire[] = []
     for (const wire of data.wires) {
       const id = nextNumberedId('w', [...wireIds, ...wireCopies.map((copy) => copy.id)])
-      wireCopies.push({ ...wire, id, stack: stack++, points: translatePoints(wire.points, dx, dy) })
+      wireCopies.push({
+        ...styled(wire),
+        id,
+        stack: stack++,
+        points: translatePoints(wire.points, dx, dy)
+      })
     }
     const labelIds = doc.value.labels.map((entry) => entry.id)
     const labelCopies: TextLabel[] = []
     for (const entry of data.labels) {
       const id = nextNumberedId('t', [...labelIds, ...labelCopies.map((copy) => copy.id)])
-      labelCopies.push({ ...entry, id, x: entry.x + dx, y: entry.y + dy })
+      labelCopies.push({ ...styled(entry), id, x: entry.x + dx, y: entry.y + dy })
     }
     // Un groupe copié devient un nouveau groupe : les copies ne rejoignent pas leurs originaux.
     const regrouped = regroupedCopies(
@@ -1288,6 +1446,7 @@ export const useSchematicStore = defineStore('schematic', () => {
       )
     })
     apply(label, (draft) => {
+      for (const style of newStyles) draft.styles.push(castDraft(structuredClone(style)))
       for (const copy of copies) {
         if (!Object.hasOwn(draft.embeddedDefs, copy.def.id)) {
           draft.embeddedDefs[copy.def.id] = castDraft(structuredClone(copy.def))
@@ -1476,6 +1635,15 @@ export const useSchematicStore = defineStore('schematic', () => {
     dirty,
     profile,
     cellPx,
+    styles,
+    styleFor,
+    styleChoices,
+    selectionStyles,
+    styleUsage,
+    newerSavedStyle,
+    setSelectionStyle,
+    updateStyle,
+    selectStyled,
     placed,
     selectedInstances,
     sortedWires,

@@ -1370,3 +1370,178 @@ describe('montage : ordre des composants entre eux', () => {
     expect(store.sortedWires.map((wire) => wire.id)).toEqual([second, first])
   })
 })
+
+describe('montage : styles propres à une sélection', () => {
+  /** Un profil enregistré qui s'écarte du Standard : fils épais, libellés deux fois plus grands. */
+  const THICK = {
+    ...DEFAULT_PROFILE,
+    name: 'Épais',
+    cellPx: 40,
+    wireWidth: 0.3,
+    componentStroke: 0.2,
+    labelFont: { family: 'Consolas', size: 22 }
+  }
+
+  /** Un composant, deux fils et une étiquette, tous au style du montage. */
+  function sample(): {
+    store: ReturnType<typeof useSchematicStore>
+    part: string
+    first: string
+    second: string
+    text: string
+  } {
+    const store = useSchematicStore()
+    store.startPlacing(resistor())
+    const part = store.placeAt(0, 0)
+    store.stopPlacing()
+    const first = store.addWire([
+      [0, 6],
+      [8, 6]
+    ])
+    const second = store.addWire([
+      [0, 8],
+      [8, 8]
+    ])
+    const text = store.addLabelBox({ x: 0, y: 10, w: 4, h: 1 })
+    if (!part || !first || !second) throw new Error('éléments attendus')
+    store.clearSelection()
+    return { store, part, first, second, text }
+  }
+
+  it('donne un profil à la sélection, sans toucher au reste ni à la cellule du montage', () => {
+    const { store, part, first, second, text } = sample()
+    store.selection = [part]
+    store.selectedWires = [first]
+    store.selectedLabels = [text]
+    store.setSelectionStyle(THICK)
+    expect(store.undoLabel).toBe('Style « Épais »')
+    // Le montage garde une copie fidèle du profil, sous son nom.
+    expect(store.doc.styles).toEqual([THICK])
+    expect(store.doc.components[0]?.style).toBe('Épais')
+    expect(store.doc.wires.map((wire) => wire.style)).toEqual(['Épais', undefined])
+    // L'étiquette était ×1 des libellés du montage (11) : elle reste ×1, des libellés du profil.
+    expect(store.doc.labels[0]).toMatchObject({ style: 'Épais', size: 22 })
+    // Au dessin : chacun son style, sur la grille du montage.
+    const wires = store.doc.wires
+    expect(wires.map((wire) => store.styleFor(wire).wireWidth)).toEqual([0.3, 0.15])
+    expect(wires.map((wire) => store.styleFor(wire).cellPx)).toEqual([20, 20])
+    expect(store.doc.profile).toEqual(DEFAULT_PROFILE)
+    expect(store.selectionStyles).toEqual(['Épais'])
+    expect(store.styleUsage).toEqual([{ name: 'Épais', count: 3 }])
+    // Le fichier garde le tout.
+    expect(parseProject(serializeProject(store.doc)).styles).toEqual([THICK])
+    store.selectedWires = [first, second]
+    expect(store.selectionStyles).toEqual(['Épais', null])
+    // Une seule commande : tout revient d'un coup.
+    store.undo()
+    expect(store.doc.styles).toEqual([])
+    expect(store.doc.labels[0]?.size).toBe(11)
+    expect(store.doc.wires.every((wire) => wire.style === undefined)).toBe(true)
+  })
+
+  it('rend la sélection au style du montage, et oublie un style que plus rien ne porte', () => {
+    const { store, first, second, text } = sample()
+    store.selectedWires = [first, second]
+    store.selectedLabels = [text]
+    store.setSelectionStyle(THICK)
+    store.selectedWires = [first]
+    store.selectedLabels = [text]
+    store.setSelectionStyle(null)
+    expect(store.undoLabel).toBe('Style du montage')
+    expect(store.doc.wires.map((wire) => wire.style)).toEqual([undefined, 'Épais'])
+    expect(store.doc.labels[0]?.size).toBe(11)
+    expect('style' in (store.doc.labels[0] ?? {})).toBe(false)
+    expect(store.doc.styles).toHaveLength(1)
+    // Supprimer le dernier fil qui le portait retire le style du montage ; annuler le ramène.
+    store.removeWires([second])
+    expect(store.doc.styles).toEqual([])
+    store.undo()
+    expect(store.doc.styles.map((style) => style.name)).toEqual(['Épais'])
+  })
+
+  it('propose les profils enregistrés, sauf celui qui est déjà le style du montage', () => {
+    const { store, first } = sample()
+    const library = useLibraryStore()
+    const fine = { ...DEFAULT_PROFILE, name: 'Fin', wireWidth: 0.08 }
+    library.savedProfiles = [THICK, fine, { ...DEFAULT_PROFILE, cellPx: 30 }]
+    // « Standard » enregistré ne diffère du montage que par la cellule : c'est le même style.
+    expect(store.styleChoices.map((choice) => choice.name)).toEqual(['Épais', 'Fin'])
+    // Un style que le montage porte sans profil enregistré de ce nom reste proposé.
+    store.selectedWires = [first]
+    store.setSelectionStyle({ ...THICK, name: 'Ailleurs' })
+    expect(store.styleChoices.map((choice) => choice.name)).toEqual(['Ailleurs', 'Épais', 'Fin'])
+    store.clearSelection()
+    store.selectStyled('Ailleurs')
+    expect([store.selection, store.selectedWires, store.selectedLabels]).toEqual([[], [first], []])
+  })
+
+  it('suit un profil enregistré qui a changé, pour tous les éléments qui le portent', () => {
+    const { store, first, second, text } = sample()
+    const library = useLibraryStore()
+    library.savedProfiles = [THICK]
+    store.selectedWires = [first, second]
+    store.selectedLabels = [text]
+    store.setSelectionStyle(THICK)
+    expect(store.newerSavedStyle('Épais')).toBeNull()
+    // Le profil change dans la bibliothèque : le montage garde sa copie, et le signale.
+    const thicker = { ...THICK, wireWidth: 0.4, labelFont: { family: 'Consolas', size: 33 } }
+    library.savedProfiles = [thicker]
+    expect(store.styleFor(store.doc.wires[0] ?? {}).wireWidth).toBe(0.3)
+    expect(store.newerSavedStyle('Épais')).toEqual(thicker)
+    store.updateStyle(thicker)
+    expect(store.undoLabel).toBe('Mettre à jour le style « Épais »')
+    expect(store.doc.wires.map((wire) => store.styleFor(wire).wireWidth)).toEqual([0.4, 0.4])
+    expect(store.doc.labels[0]?.size).toBe(33)
+    expect(store.newerSavedStyle('Épais')).toBeNull()
+    // Le redonner à un seul élément après un autre changement vaut aussi pour les autres.
+    library.savedProfiles = [THICK]
+    store.selectedWires = [first]
+    store.selectedLabels = []
+    store.setSelectionStyle(THICK)
+    expect(store.doc.styles).toEqual([THICK])
+    expect(store.doc.wires.map((wire) => store.styleFor(wire).wireWidth)).toEqual([0.3, 0.3])
+    expect(store.doc.labels[0]?.size).toBe(22)
+  })
+
+  it('garde le style des copies, des morceaux d’un fil coupé, et l’emmène dans un autre montage', () => {
+    const { store, first, text } = sample()
+    store.selectedWires = [first]
+    store.selectedLabels = [text]
+    store.setSelectionStyle(THICK)
+    store.splitWire(first, [4, 6])
+    expect(store.doc.wires.map((wire) => wire.style)).toEqual(['Épais', undefined, 'Épais'])
+    store.selectedLabels = []
+    store.selectedWires = [first]
+    store.duplicateSelection()
+    expect(store.doc.wires.at(-1)?.style).toBe('Épais')
+    store.copySelection()
+    // Dans un montage qui n'a pas ce style : il arrive avec la copie.
+    store.newProject()
+    expect(store.doc.styles).toEqual([])
+    store.pasteClipboard()
+    expect(store.doc.styles).toEqual([THICK])
+    expect(store.doc.wires[0]?.style).toBe('Épais')
+    // Dans un montage qui a déjà un style de ce nom : c'est le sien que la copie prend.
+    store.newProject()
+    const lead = store.addWire([
+      [0, 0],
+      [4, 0]
+    ])
+    store.selectedWires = lead ? [lead] : []
+    store.setSelectionStyle({ ...THICK, wireWidth: 0.5 })
+    store.pasteClipboard()
+    expect(store.doc.styles.map((style) => style.wireWidth)).toEqual([0.5])
+    expect(store.doc.wires.map((wire) => wire.style)).toEqual(['Épais', 'Épais'])
+  })
+
+  it('montre l’aperçu du style du montage sans changer les styles propres', () => {
+    const { store, first } = sample()
+    store.selectedWires = [first]
+    store.setSelectionStyle(THICK)
+    store.profilePreview = { ...DEFAULT_PROFILE, cellPx: 30, wireWidth: 0.2 }
+    const [styled, plain] = store.doc.wires
+    if (!styled || !plain) throw new Error('fils attendus')
+    expect(store.styleFor(plain).wireWidth).toBe(0.2)
+    expect(store.styleFor(styled)).toMatchObject({ wireWidth: 0.3, cellPx: 30 })
+  })
+})

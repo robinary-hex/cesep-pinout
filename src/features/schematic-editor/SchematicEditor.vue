@@ -206,6 +206,35 @@ function groupItems(): MenuItem[] {
   return items
 }
 
+/**
+ * Sous-menu « Profil de style » : celui avec lequel la sélection se dessine, à choisir parmi les
+ * profils enregistrés ; par défaut, celui du montage.
+ */
+function profileItems(): MenuItem[] {
+  const styles = store.selectionStyles
+  const current = styles.length === 1 ? styles[0] : undefined
+  const choices = store.styleChoices
+  return [
+    submenu(
+      'Profil de style',
+      [
+        item(`Celui du montage (${store.doc.profile.name})`, () => store.setSelectionStyle(null), {
+          checked: current === null
+        }),
+        SEPARATOR,
+        ...(choices.length > 0
+          ? choices.map((choice) =>
+              item(choice.name, () => store.setSelectionStyle(choice), {
+                checked: current === choice.name
+              })
+            )
+          : [item('Aucun autre profil enregistré', () => undefined, { disabled: true })])
+      ],
+      { icon: 'brush' }
+    )
+  ]
+}
+
 function commonItems(): MenuItem[] {
   return [
     ...groupItems(),
@@ -343,6 +372,7 @@ function openMenu(request: MenuRequest): void {
         () => store.setInstancesBehindWires(store.selection, !instance.behindWires),
         { checked: instance.behindWires }
       ),
+      ...profileItems(),
       submenu(
         'Ordre',
         [
@@ -404,6 +434,7 @@ function openMenu(request: MenuRequest): void {
       )
     }
     items.push(
+      ...profileItems(),
       submenu(
         'Ordre',
         [
@@ -481,11 +512,10 @@ function openMenu(request: MenuRequest): void {
             })
           ),
           { icon: 'type' }
-        ),
-        SEPARATOR
+        )
       )
     }
-    items.push(...commonItems())
+    items.push(...profileItems(), SEPARATOR, ...commonItems())
   } else {
     const [x, y] = request.cell
     items.push(
