@@ -97,7 +97,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   de la même façon dans l'aide (`SELECT`, `EDIT` et `VIEW` de `src/app/shortcuts.ts`).
   - Maj : ajoute à la sélection ou en retire (Maj+clic, Maj+lasso) ; pendant un tracé, le
     contraint ou le varie (carré ou cercle dans l'éditeur de composants, L inversé d'un fil ou
-    d'un lien). Jamais autre chose.
+    d'un lien). Jamais autre chose à la souris. Au clavier, Maj donne la variante d'un raccourci
+    (sens inverse d'une rotation, premier plan, dégrouper, cinq pas pour les flèches).
   - Alt : copie (Alt+glisser dépose une copie de la sélection). Deux exceptions, dans le montage :
     Alt+clic sur un croisement inverse l'ordre des deux fils ; pendant le tracé d'un fil, Alt
     maintenue trace à 45° (décision du 10 novembre 2026 : Maj y inverse déjà l'ordre, et Ctrl
@@ -114,7 +115,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     un fil ou un lien groupé est d'abord pris seul, le Ctrl+clic suivant touche à ses sommets.
   - Molette = zoom autour du curseur ; Espace + glisser ou bouton du milieu = déplacer la vue ;
     double-clic du bouton du milieu ou 0 = ajuster la vue.
-  - Flèches = déplacer la sélection d'un pas de grille ; Ctrl+A / D / C / V / Z / Y ; Ctrl+G /
+  - Flèches = déplacer la sélection d'un pas de grille, de cinq pas avec Maj (décision du 14
+    novembre 2026 ; `arrowNudge` de `src/ui/arrowKeys.ts`, la même règle pour les trois
+    éditeurs ; le pas est celui de l'éditeur) ; Ctrl+A / D / C / V / Z / Y ; Ctrl+G /
     Ctrl+Maj+G = grouper / dégrouper ; Suppr ;
     Entrée termine un tracé, Retour arrière retire son dernier point ; Échap annule le geste, puis
     la sélection, puis revient à l'outil Sélection.
@@ -125,7 +128,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     Alt maintenue trace à 45° : une diagonale puis un segment droit, l'inverse avec Maj ;
     double-clic ou Entrée termine, Retour arrière retire le dernier sommet, Échap termine aussi
     dès deux sommets),
-    R / Maj+R rotation, T / Maj+T miroir, Suppr, Échap, flèches = déplacer d'une cellule,
+    R / Maj+R rotation, T / Maj+T miroir, Suppr, Échap, flèches = déplacer d'une cellule
+    (de cinq avec Maj),
     Ctrl+A / D / C / V, Ctrl+Z / Y, Ctrl+S, Ctrl+Maj+S, Ctrl+O, Ctrl+N, Ctrl+E export, F1 aide,
     Ctrl+Page haut/bas
     (Maj pour premier/arrière-plan) = ordre des fils entre eux et des composants entre eux,
@@ -731,7 +735,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     molette = zoom centré sur le curseur (boutons −/+/Ajuster dans la barre), bouton du milieu
     maintenu ou Espace + glisser = déplacer la vue, double-clic du bouton du milieu ou 0 =
     ajuster à la fenêtre, flèches = déplacer la sélection (d'un quart de cellule, d'une cellule
-    avec une broche), Ctrl+A = tout sélectionner, Retour arrière = retirer le dernier point
+    avec une broche ; cinq pas avec Maj), Ctrl+A = tout sélectionner, Retour arrière = retirer le dernier point
     d'une polyligne en cours. Le composant est centré dans la zone et ajusté à la fenêtre à
     l'ouverture (premier affichage, nouveau composant, composant chargé), sans ascenseur. La forme
     sélectionnée montre ses poignées (`src/domain/handles.ts`, curseurs en double flèche selon le

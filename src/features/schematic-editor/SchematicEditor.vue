@@ -23,6 +23,7 @@ import ExportDialog from '@/features/export/ExportDialog.vue'
 import { useLibraryStore } from '@/features/library/store'
 import ProfileDialog from '@/features/settings/ProfileDialog.vue'
 import { chooseProjectToOpen } from '@/io/projectFiles'
+import { arrowNudge } from '@/ui/arrowKeys'
 import ContextMenu from '@/ui/ContextMenu.vue'
 import { heading, item, SEPARATOR, submenu, type MenuItem } from '@/ui/contextMenu'
 import type { IconName } from '@/ui/icons'
@@ -644,6 +645,13 @@ function onKeyDown(event: KeyboardEvent): void {
     event.preventDefault()
     return
   }
+  // Flèches : la sélection se déplace d'une cellule, de cinq avec Maj.
+  const nudge = arrowNudge(event)
+  if (nudge) {
+    store.moveSelection(nudge[0], nudge[1])
+    event.preventDefault()
+    return
+  }
 
   switch (key) {
     case 'v':
@@ -686,18 +694,6 @@ function onKeyDown(event: KeyboardEvent): void {
         break
       }
       store.selectTool()
-      break
-    case 'arrowleft':
-      store.moveSelection(-1, 0)
-      break
-    case 'arrowright':
-      store.moveSelection(1, 0)
-      break
-    case 'arrowup':
-      store.moveSelection(0, -1)
-      break
-    case 'arrowdown':
-      store.moveSelection(0, 1)
       break
     default:
       return

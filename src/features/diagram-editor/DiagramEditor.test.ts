@@ -273,3 +273,28 @@ describe('panneau du diagramme', () => {
     wrapper.unmount()
   })
 })
+
+describe('diagramme : flèches du clavier', () => {
+  it('déplacent la sélection d’une cellule, de cinq avec Maj', async () => {
+    const store = useDiagramStore()
+    const id = store.addNode('rounded', 10, 10)
+    const wrapper = mount(DiagramEditor, { attachTo: document.body })
+    const press = (key: string, shiftKey = false): void => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey }))
+    }
+    const where = (): number[] => {
+      const node = store.doc.nodes.find((candidate) => candidate.id === id)
+      return [node?.x ?? 0, node?.y ?? 0]
+    }
+    expect(store.selectedNodes).toEqual([id])
+    press('ArrowRight')
+    expect(where()).toEqual([11, 10])
+    press('ArrowRight', true)
+    expect(where()).toEqual([16, 10])
+    press('ArrowUp', true)
+    expect(where()).toEqual([16, 5])
+    press('ArrowDown')
+    expect(where()).toEqual([16, 6])
+    wrapper.unmount()
+  })
+})

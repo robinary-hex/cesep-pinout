@@ -585,3 +585,51 @@ describe('éditeur de composants : outil Broche', () => {
     wrapper.unmount()
   })
 })
+
+describe('éditeur de composants : flèches du clavier', () => {
+  it('déplacent une forme d’un quart de cellule, de cinq quarts avec Maj', async () => {
+    const store = withRectangle()
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    const press = (name: string, shiftKey = false): void => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: name, shiftKey }))
+    }
+    const where = (): unknown => {
+      const shape = store.shown.visual.primitives[0]
+      return shape?.kind === 'rect' ? [shape.x, shape.y] : null
+    }
+    store.selectPrimitives([0])
+    press('ArrowRight')
+    expect(where()).toEqual([5, 2])
+    press('ArrowDown', true)
+    expect(where()).toEqual([5, 7])
+    press('ArrowLeft', true)
+    expect(where()).toEqual([0, 7])
+    wrapper.unmount()
+  })
+
+  it('déplacent une broche d’une cellule, de cinq avec Maj, sans la sortir du composant', async () => {
+    const store = useComponentEditorStore()
+    store.setSize({ widthCells: 8, heightCells: 6 })
+    const id = store.addPin({ x: 0, y: 1 })
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    const press = (name: string, shiftKey = false): void => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: name, shiftKey }))
+    }
+    const where = (): number[] => {
+      const pin = store.shown.pins.find((candidate) => candidate.id === id)
+      return [pin?.x ?? -1, pin?.y ?? -1]
+    }
+    store.selectPin(id)
+    press('ArrowRight')
+    expect(where()).toEqual([1, 1])
+    press('ArrowRight', true)
+    expect(where()).toEqual([6, 1])
+    press('ArrowDown', true)
+    expect(where()).toEqual([6, 6])
+    // Cinq cellules de plus la sortiraient de la boîte : refusé, comme à la souris.
+    press('ArrowRight', true)
+    expect(where()).toEqual([6, 6])
+    expect(store.status).toContain('Déplacement refusé')
+    wrapper.unmount()
+  })
+})

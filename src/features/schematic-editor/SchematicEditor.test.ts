@@ -444,3 +444,46 @@ describe('montage : profil de style d’une sélection', () => {
     wrapper.unmount()
   })
 })
+
+describe('montage : flèches du clavier', () => {
+  it('déplacent la sélection d’une cellule, de cinq avec Maj, fils accrochés compris', async () => {
+    const store = useSchematicStore()
+    const def = createEmptyComponent('resistor', 'Résistance')
+    def.pins = [
+      { id: 'a', name: '1', kind: 'io', x: 0, y: 1 },
+      { id: 'b', name: '2', kind: 'io', x: 4, y: 1 }
+    ]
+    store.startPlacing(def)
+    const part = store.placeAt(2, 3)
+    store.stopPlacing()
+    // Un fil part de la broche de droite, en (6, 4).
+    store.addWire([
+      [6, 4],
+      [12, 4]
+    ])
+    if (!part) throw new Error('composant attendu')
+    store.clearSelection()
+    store.selection = [part]
+    const wrapper = mount(SchematicEditor, { attachTo: document.body })
+    const press = (key: string, shiftKey = false): void => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey }))
+    }
+    const where = (): number[] => [store.doc.components[0]?.x ?? 0, store.doc.components[0]?.y ?? 0]
+    press('ArrowRight')
+    expect(where()).toEqual([3, 3])
+    press('ArrowDown', true)
+    expect(where()).toEqual([3, 8])
+    // Le bout du fil posé sur la broche a suivi.
+    expect(store.doc.wires[0]?.points[0]).toEqual([7, 9])
+    press('ArrowLeft', true)
+    expect(where()).toEqual([-2, 8])
+    press('ArrowUp')
+    expect(where()).toEqual([-2, 7])
+    // Chaque appui est une commande : Ctrl+Z défait le dernier, d'une cellule.
+    store.undo()
+    expect(where()).toEqual([-2, 8])
+    store.undo()
+    expect(where()).toEqual([3, 8])
+    wrapper.unmount()
+  })
+})

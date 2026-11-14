@@ -85,7 +85,9 @@ diagramme, ce Ctrl+glisser est pris en phase de capture sur le SVG (`onGrabDown`
 gestes propres aux éléments ; l'anneau qui l'annonce n'apparaît que Ctrl enfoncée (`ctrlHeld` du
 store, tenu par le clavier et recalé sur chaque mouvement du pointeur). Sans touche, dans le
 montage, le bout d'un fil se saisit de près (`wireEndAt` : un appui sur le fil ou dans le vide à
-portée d'un bout devient le glisser de ce sommet), et sa poignée s'annonce au survol. CLAUDE.md tient le
+portée d'un bout devient le glisser de ce sommet), et sa poignée s'annonce au survol. Les flèches
+du clavier passent par `arrowNudge` (`src/ui/arrowKeys.ts`) dans les trois éditeurs : un pas de
+grille, cinq avec Maj. CLAUDE.md tient le
 tableau de ces gestes ; l'aide F1 les dit de la même façon dans chaque section (son contenu est
 dans `src/app/shortcuts.ts`, des données que `ShortcutsHelp.vue` dessine : thèmes, capuchons de
 touches, pictogrammes de souris).

@@ -10,6 +10,7 @@ import {
   type Primitive
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
+import { arrowNudge } from '@/ui/arrowKeys'
 import ContextMenu from '@/ui/ContextMenu.vue'
 import { heading, item, SEPARATOR, submenu, type MenuItem } from '@/ui/contextMenu'
 import type { IconName } from '@/ui/icons'
@@ -281,13 +282,6 @@ function openMenu(request: EditorMenuRequest): void {
   menu.value = { x: request.x, y: request.y, items }
 }
 
-const ARROWS: Record<string, readonly [number, number]> = {
-  arrowleft: [-1, 0],
-  arrowright: [1, 0],
-  arrowup: [0, -1],
-  arrowdown: [0, 1]
-}
-
 function isEditable(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLElement &&
@@ -335,15 +329,16 @@ function onKeyDown(event: KeyboardEvent): void {
     event.preventDefault()
     return
   }
-  const arrow = ARROWS[key]
-  if (arrow) {
+  const nudge = arrowNudge(event)
+  if (nudge) {
     // D'un quart de cellule, le pas des formes ; d'une cellule dès qu'une broche est du voyage.
+    // Cinq pas avec Maj.
     const step = store.selectedPinIds.length > 0 ? QUARTERS_PER_CELL : 1
     store.moveSelection(
       store.selectedIndexes,
       store.selectedPinIds,
-      arrow[0] * step,
-      arrow[1] * step
+      nudge[0] * step,
+      nudge[1] * step
     )
     event.preventDefault()
     return
