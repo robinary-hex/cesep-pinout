@@ -13,6 +13,7 @@ import {
 import { pngHeaderDataUrl } from '@/domain/testing/pngHeader'
 import { useComponentEditorStore } from '@/features/component-editor/store'
 import { useDiagramStore } from '@/features/diagram-editor/store'
+import { useLibraryStore } from '@/features/library/store'
 import { useSchematicStore } from '@/features/schematic-editor/store'
 import { setBridge } from '@/io/bridge'
 import { FakeFs } from '@/io/testing/fakeFs'
@@ -346,6 +347,67 @@ describe('session : ce qui était ouvert revient au lancement suivant', () => {
       'C:/fake/Donnees/Montages/nouveau-montage.pinout'
     )
     expect(await fs.pathExists('C:/fake/Donnees/Montages/essai.pinout')).toBe(true)
+    wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+})
+
+describe('menu Fichier : fichiers récents', () => {
+  it('retire un fichier de la liste par sa croix, sans fermer le menu ni toucher au fichier', async () => {
+    const wrapper = mount(App, { attachTo: document.body })
+    await flushPromises()
+    const library = useLibraryStore()
+    const files = [
+      'C:/fake/Donnees/Montages/pompe.pinout',
+      'C:/fake/Donnees/Diagrammes/sonos.pinuml',
+      'C:/fake/Donnees/Montages/alarme.pinout'
+    ]
+    for (const file of files) {
+      await fs.writeTextFile(file, '{}')
+      await library.addRecentFile(file)
+    }
+    const crosses = (): HTMLButtonElement[] => [
+      ...document.body.querySelectorAll<HTMLButtonElement>('.context-menu .remove')
+    ]
+    /** Fichiers récents du menu ouvert : les entrées qui portent une croix. */
+    const recents = (): string[] =>
+      crosses().map((cross) => cross.parentElement?.querySelector('.label')?.textContent ?? '')
+    const burger = wrapper.get('button.menu-button')
+    await burger.trigger('click')
+    await flushPromises()
+    // En montage : les montages récents, le dernier ouvert d'abord, une croix chacun.
+    expect(recents()).toEqual(['alarme.pinout', 'pompe.pinout'])
+    expect(crosses()[0]?.title).toBe('Retirer de la liste des fichiers récents')
+    crosses()[0]?.click()
+    await flushPromises()
+    // Le menu reste ouvert, sans l'entrée ; le fichier existe toujours, le diagramme reste listé.
+    expect(recents()).toEqual(['pompe.pinout'])
+    expect(menuLabels()).toContain('Quitter')
+    expect(library.recentFiles).toEqual([files[1], files[0]])
+    expect(await fs.pathExists(files[2] ?? '')).toBe(true)
+    crosses()[0]?.click()
+    await flushPromises()
+    expect(recents()).toEqual([])
+    expect(menuLabels()).toContain('Aucun projet récent')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+
+    // En diagramme : les siens. En composants : pas de liste de récents, donc pas de croix.
+    await wrapper.get('.modes button[title="Diagramme"]').trigger('click')
+    await burger.trigger('click')
+    await flushPromises()
+    expect(recents()).toEqual(['sonos.pinuml'])
+    crosses()[0]?.click()
+    await flushPromises()
+    expect(library.recentFiles).toEqual([])
+    expect(menuLabels()).toContain('Aucun diagramme récent')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+    await wrapper.get('.modes button[title="Composants"]').trigger('click')
+    await burger.trigger('click')
+    await flushPromises()
+    expect(menuLabels()).toContain('Nouveau composant')
+    expect(crosses()).toEqual([])
     wrapper.unmount()
     document.body.innerHTML = ''
   })

@@ -65,7 +65,8 @@ const schematicEditor = useTemplateRef<InstanceType<typeof SchematicEditor>>('sc
 const componentEditor = useTemplateRef<InstanceType<typeof ComponentEditor>>('componentEditor')
 const diagramEditor = useTemplateRef<InstanceType<typeof DiagramEditor>>('diagramEditor')
 const fileButton = ref<HTMLButtonElement | null>(null)
-const fileMenu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
+/** Menu Fichier ouvert : sa place. Ses entrées se recalculent, la liste des récents peut changer. */
+const fileMenu = ref<{ x: number; y: number } | null>(null)
 
 const MAX_RECENT_IN_MENU = 8
 
@@ -369,6 +370,20 @@ function onTabsWheel(event: WheelEvent): void {
 
 // Menu Fichier
 
+/**
+ * Entrée d'un fichier récent : l'ouvrir, ou le retirer de la liste par sa croix (le fichier
+ * lui-même n'est pas touché, et le menu reste ouvert).
+ */
+function recentItem(file: string, open: (file: string) => void): MenuItem {
+  return item(baseName(file), () => open(file), {
+    icon: 'clock',
+    remove: {
+      title: 'Retirer de la liste des fichiers récents',
+      action: () => void library.removeRecentFile(file)
+    }
+  })
+}
+
 function fileMenuItems(): MenuItem[] {
   const common: MenuItem[] = [
     SEPARATOR,
@@ -424,10 +439,8 @@ function fileMenuItems(): MenuItem[] {
       heading('Récents'),
       ...(recentDiagrams.length === 0
         ? [item('Aucun diagramme récent', () => undefined, { disabled: true })]
-        : recentDiagrams.map((path) =>
-            item(baseName(path), () => void diagramEditor.value?.openRecent(path), {
-              icon: 'clock'
-            })
+        : recentDiagrams.map((file) =>
+            recentItem(file, (chosen) => void diagramEditor.value?.openRecent(chosen))
           )),
       SEPARATOR,
       item('Enregistrer', () => void diagramEditor.value?.save(false), {
@@ -461,10 +474,8 @@ function fileMenuItems(): MenuItem[] {
     heading('Récents'),
     ...(recents.length === 0
       ? [item('Aucun projet récent', () => undefined, { disabled: true })]
-      : recents.map((path) =>
-          item(baseName(path), () => void schematicEditor.value?.openRecent(path), {
-            icon: 'clock'
-          })
+      : recents.map((file) =>
+          recentItem(file, (chosen) => void schematicEditor.value?.openRecent(chosen))
         )),
     SEPARATOR,
     item('Enregistrer', () => void schematicEditor.value?.save(false), {
@@ -485,11 +496,7 @@ function fileMenuItems(): MenuItem[] {
 
 function openFileMenu(): void {
   const rect = fileButton.value?.getBoundingClientRect()
-  fileMenu.value = {
-    x: rect ? rect.left : 8,
-    y: rect ? rect.bottom + 4 : 40,
-    items: fileMenuItems()
-  }
+  fileMenu.value = { x: rect ? rect.left : 8, y: rect ? rect.bottom + 4 : 40 }
 }
 
 // Copies de secours, à intervalle régulier : une par montage modifié, les autres sont effacées.
@@ -925,7 +932,7 @@ onUnmounted(() => {
       v-if="fileMenu"
       :x="fileMenu.x"
       :y="fileMenu.y"
-      :items="fileMenu.items"
+      :items="fileMenuItems()"
       @close="fileMenu = null"
     />
     <ContextMenu

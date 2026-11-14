@@ -25,6 +25,11 @@ const menu = ref<HTMLDivElement | null>(null)
 const subMenu = ref<HTMLDivElement | null>(null)
 const left = ref(props.x)
 const top = ref(props.y)
+/**
+ * Largeur du menu à l'ouverture : il ne rétrécit plus ensuite. Quand une croix retire son entrée,
+ * les croix des autres restent sous le pointeur.
+ */
+const width = ref<number | null>(null)
 /** Sous-menu ouvert : l'entrée qui l'ouvre, ses entrées, sa place à l'écran. */
 const sub = ref<{ index: number; items: MenuItem[]; left: number; top: number } | null>(null)
 let closing: ReturnType<typeof setTimeout> | null = null
@@ -38,6 +43,11 @@ function run(entry: Entry): void {
 function pick(entry: Swatches, hex: string): void {
   emit('close')
   entry.pick(hex)
+}
+
+/** La croix d'une entrée : le menu reste ouvert, pour en retirer plusieurs à la suite. */
+function remove(entry: Entry): void {
+  entry.remove?.action()
 }
 
 function keepSub(): void {
@@ -118,6 +128,7 @@ onMounted(async () => {
   const element = menu.value
   if (!element) return
   const rect = element.getBoundingClientRect()
+  width.value = rect.width
   left.value = Math.max(4, Math.min(props.x, window.innerWidth - rect.width - 4))
   top.value = Math.max(4, Math.min(props.y, window.innerHeight - rect.height - 4))
 })
@@ -140,13 +151,18 @@ onUnmounted(() => {
         ref="menu"
         class="context-menu"
         role="menu"
-        :style="{ left: `${left}px`, top: `${top}px` }"
+        :style="{
+          left: `${left}px`,
+          top: `${top}px`,
+          minWidth: width === null ? undefined : `${width}px`
+        }"
       >
         <MenuList
           :items="items"
           :open-index="sub?.index ?? null"
           @run="run"
           @pick="pick"
+          @remove="remove"
           @enter="onEnter"
         />
       </div>
@@ -158,7 +174,7 @@ onUnmounted(() => {
         :style="{ left: `${sub.left}px`, top: `${sub.top}px` }"
         @pointerenter="keepSub"
       >
-        <MenuList :items="sub.items" @run="run" @pick="pick" />
+        <MenuList :items="sub.items" @run="run" @pick="pick" @remove="remove" />
       </div>
     </div>
   </Teleport>

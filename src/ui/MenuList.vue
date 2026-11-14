@@ -4,6 +4,7 @@ import Icon from './Icon.vue'
 
 // Entrées d'un menu (ou d'un sous-menu) : titres, séparateurs, pastilles de couleur, actions et
 // entrées qui ouvrent un sous-menu. `ContextMenu` place les panneaux ; ici, seulement la liste.
+// Une action peut porter une croix à sa droite (`remove`) : un second bouton, à côté du premier.
 
 type Entry = Extract<MenuItem, { kind: 'item' }>
 type Swatches = Extract<MenuItem, { kind: 'swatches' }>
@@ -16,6 +17,8 @@ defineProps<{
 const emit = defineEmits<{
   run: [entry: Entry]
   pick: [entry: Swatches, hex: string]
+  /** La croix d'une entrée. */
+  remove: [entry: Entry]
   /** Le pointeur entre sur une entrée (ou on clique une entrée à sous-menu). */
   enter: [index: number, element: HTMLElement | null]
 }>()
@@ -59,6 +62,32 @@ function elementOf(event: Event): HTMLElement | null {
       <span class="label">{{ entry.label }}</span>
       <Icon name="chevron-down" :size="12" class="more" />
     </button>
+    <div v-else-if="entry.remove" class="removable" @pointerenter="emit('enter', index, null)">
+      <button
+        type="button"
+        class="entry"
+        :class="{ danger: entry.danger }"
+        :disabled="entry.disabled"
+        role="menuitem"
+        @click="emit('run', entry)"
+      >
+        <span class="check">
+          <Icon v-if="entry.checked" name="check" :size="13" class="checked" />
+          <Icon v-else-if="entry.icon" :name="entry.icon" :size="15" />
+        </span>
+        <span class="label">{{ entry.label }}</span>
+        <kbd v-if="entry.hint">{{ entry.hint }}</kbd>
+      </button>
+      <button
+        type="button"
+        class="remove"
+        :title="entry.remove.title"
+        :aria-label="`${entry.remove.title} : ${entry.label}`"
+        @click="emit('remove', entry)"
+      >
+        ✕
+      </button>
+    </div>
     <button
       v-else
       type="button"
@@ -120,6 +149,42 @@ function elementOf(event: Event): HTMLElement | null {
 .entry:disabled {
   color: var(--text-faint);
   cursor: default;
+}
+
+/* Entrée à croix : la ligne entière s'allume, l'entrée prend la place, la croix reste à droite. */
+.removable {
+  display: flex;
+  align-items: center;
+}
+
+.removable:hover {
+  background: var(--surface-3);
+}
+
+.removable .entry {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  padding-right: 6px;
+}
+
+.remove {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.remove:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .entry.danger:not(:disabled) {

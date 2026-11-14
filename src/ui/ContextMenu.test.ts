@@ -87,4 +87,32 @@ describe('menu contextuel', () => {
     expect(wrapper.emitted('close')).toHaveLength(2)
     wrapper.unmount()
   })
+
+  it('une entrée à croix : la croix agit sans lancer l’entrée ni fermer le menu', async () => {
+    const calls: string[] = []
+    const items: MenuItem[] = [
+      heading('Récents'),
+      item('pompe.pinout', () => calls.push('ouvrir'), {
+        remove: { title: 'Retirer de la liste', action: () => calls.push('retirer') }
+      }),
+      item('Quitter', () => calls.push('quitter'))
+    ]
+    const wrapper = mount(ContextMenu, { props: { x: 10, y: 10, items }, attachTo: document.body })
+    await flushPromises()
+    // La croix est un bouton à part, à côté de l'entrée : seules les entrées qui en veulent en ont.
+    expect(menuLabels()).toEqual(['pompe.pinout', 'Quitter'])
+    const crosses = [...document.body.querySelectorAll<HTMLButtonElement>('.context-menu .remove')]
+    expect(crosses).toHaveLength(1)
+    expect(crosses[0]?.title).toBe('Retirer de la liste')
+    expect(crosses[0]?.getAttribute('aria-label')).toBe('Retirer de la liste : pompe.pinout')
+    expect(crosses[0]?.parentElement).toBe(menuEntry('pompe.pinout').parentElement)
+    crosses[0]?.click()
+    expect(calls).toEqual(['retirer'])
+    expect(wrapper.emitted('close')).toBeUndefined()
+    // L'entrée elle-même garde son rôle.
+    menuEntry('pompe.pinout').click()
+    expect(calls).toEqual(['retirer', 'ouvrir'])
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    wrapper.unmount()
+  })
 })

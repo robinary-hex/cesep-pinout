@@ -15,6 +15,11 @@ export interface MenuItemOptions {
   disabled?: boolean
   danger?: boolean
   checked?: boolean
+  /**
+   * Petite croix à droite de l'entrée : elle retire ce que l'entrée propose (un fichier de la
+   * liste des récents), sans lancer l'entrée ni fermer le menu. `title` est son infobulle.
+   */
+  remove?: { title: string; action: () => void }
 }
 
 export type MenuItem =

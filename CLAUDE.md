@@ -247,7 +247,14 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   que `SchematicEditor` / `ComponentEditor` exposent par `defineExpose` selon le mode. Enregistrer
   sous propose le dossier du document, sinon le dernier dossier qui a servi pour ce genre de
   document, sinon son dossier dans le dossier de Pinout (`documentDir` du store de la
-  bibliothèque, voir « Dossier de Pinout ») ; Ouvrir s'ouvre dans ce même dossier. Les barres
+  bibliothèque, voir « Dossier de Pinout ») ; Ouvrir s'ouvre dans ce même dossier. Chaque
+  fichier récent du menu (montages en mode Montage, diagrammes en mode Diagramme ; le mode
+  Composants n'a pas de récents, ses composants sont dans la bibliothèque) porte une petite
+  croix qui le retire de la liste (décision du 14 novembre 2026 ; `recentItem`, option `remove`
+  d'une entrée de menu, dessinée par `MenuList.vue` en second bouton à côté de l'entrée ;
+  `removeRecentFile`) : le fichier lui-même n'est pas touché, et le menu reste ouvert, à sa
+  largeur d'ouverture, pour en retirer plusieurs à la suite. Ses entrées se recalculent à
+  chaque rendu (`fileMenuItems()` dans le gabarit), donc la liste suit. Les barres
   d'outils ne portent plus d'actions de fichier ; dans le montage, rotation, miroir, duplication,
   suppression et ordre des fils ne sont accessibles que par le menu contextuel et le clavier. Les outils des deux barres sont des
   boutons à pictogramme seul (raccourci dans l'infobulle) ; quand la place manque, la partie gauche
