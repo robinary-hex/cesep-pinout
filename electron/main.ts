@@ -1,6 +1,16 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import { autoUpdater } from 'electron-updater'
-import { access, mkdir, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises'
+import {
+  access,
+  appendFile,
+  mkdir,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  unlink,
+  writeFile
+} from 'node:fs/promises'
 import { dirname, join, normalize } from 'node:path'
 import {
   IPC,
@@ -11,8 +21,10 @@ import {
   type SaveDialogOptions,
   type UpdateStatus
 } from './api'
+import { launchInstaller } from './installer'
 
-// Seul code du projet qui touche Node : fenêtre, fichiers, dialogues, garde à la fermeture.
+// Seul code du projet qui touche Node, avec `installer.ts` : fenêtre, fichiers, dialogues, garde
+// à la fermeture, mise à jour.
 
 app.setName('Pinout')
 
@@ -57,6 +69,12 @@ let quitting = false
 let quitFallback: ReturnType<typeof setTimeout> | null = null
 /** Dialogue de Windows si le rendu n'accuse pas réception de la demande de fermeture. */
 let quitAskFallback: ReturnType<typeof setTimeout> | null = null
+/** Mise à jour téléchargée, prête à installer : sa version et le fichier de son installeur. */
+let downloadedUpdate: { version: string; installer: string } | null = null
+/** Vrai tant qu'on attend que l'installeur démarre (la question de Windows est posée). */
+let installingUpdate = false
+/** Au-delà, le journal des mises à jour repart de zéro. */
+const UPDATE_LOG_MAX_BYTES = 256 * 1024
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -65,6 +83,60 @@ async function exists(path: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/** État de la mise à jour, pour le bouton de la barre d'application. */
+function sendUpdateStatus(status: UpdateStatus): void {
+  const window = mainWindowRef
+  if (window && !window.isDestroyed()) window.webContents.send(IPC.updateStatus, status)
+}
+
+/**
+ * Journal des mises à jour, `update.log` dans le dossier de l'application : ce qu'electron-updater
+ * fait et ce que donne le lancement de l'installeur. C'est la seule trace d'une installation qui
+ * tourne mal, puisque l'application installée n'a pas de console.
+ */
+function logUpdate(line: string): void {
+  const file = join(app.getPath('userData'), 'update.log')
+  void appendFile(file, `${new Date().toISOString()} ${line}\n`, 'utf8').catch(() => undefined)
+}
+
+/**
+ * Lance l'installeur de la mise à jour téléchargée, et ne ferme l'application qu'une fois qu'il
+ * tourne (voir `installer.ts`). Un refus à la question de Windows rend le bouton « Installer » ;
+ * un échec se dit, et l'application reste ouverte dans les deux cas.
+ */
+async function installUpdate(): Promise<void> {
+  if (!app.isPackaged || installingUpdate) return
+  const ready = downloadedUpdate
+  const helper = join(process.resourcesPath, 'elevate.exe')
+  if (ready === null || !(await exists(helper)) || !(await exists(ready.installer))) {
+    // Rien que nous sachions lancer nous-mêmes : la voie d'electron-updater, qui quitte aussitôt.
+    logUpdate('installeur ou elevate.exe introuvable : quitAndInstall')
+    quitting = true
+    autoUpdater.quitAndInstall()
+    return
+  }
+  installingUpdate = true
+  sendUpdateStatus({ state: 'installing', version: ready.version })
+  const result = await launchInstaller({
+    helper,
+    installer: ready.installer,
+    log: logUpdate
+  }).finally(() => {
+    installingUpdate = false
+  })
+  if (result.outcome === 'started') {
+    // L'installeur tourne : il attend que l'application se ferme pour remplacer ses fichiers.
+    quitting = true
+    app.quit()
+    return
+  }
+  sendUpdateStatus(
+    result.outcome === 'cancelled'
+      ? { state: 'downloaded', version: ready.version }
+      : { state: 'error', message: result.message }
+  )
 }
 
 function registerIpc(): void {
@@ -175,24 +247,31 @@ function registerIpc(): void {
     if (app.isPackaged) await autoUpdater.downloadUpdate()
   })
 
-  ipcMain.handle(IPC.installUpdate, () => {
-    if (!app.isPackaged) return
-    quitting = true
-    autoUpdater.quitAndInstall()
-  })
+  ipcMain.handle(IPC.installUpdate, () => installUpdate())
 }
 
 /**
  * Mise à jour automatique depuis les releases GitHub : vérification au lancement, téléchargement
- * quand l'utilisateur le demande, installation au clic. La version portable ne peut pas se
- * réinstaller : elle est renvoyée vers la page de la release. Rien en développement.
+ * quand l'utilisateur le demande, installation au clic (`installUpdate`). La version portable ne
+ * peut pas se réinstaller : elle est renvoyée vers la page de la release. Rien en développement.
  */
-function setupUpdater(mainWindow: BrowserWindow): void {
+function setupUpdater(): void {
   if (!app.isPackaged) return
   const portable = process.env['PORTABLE_EXECUTABLE_DIR'] !== undefined
-  const send = (status: UpdateStatus): void => {
-    if (!mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.updateStatus, status)
-  }
+  const send = sendUpdateStatus
+  // Journal : remis à zéro quand il a grossi, puis tout ce que dit electron-updater.
+  const logFile = join(app.getPath('userData'), 'update.log')
+  void stat(logFile)
+    .then((info) => (info.size > UPDATE_LOG_MAX_BYTES ? rm(logFile, { force: true }) : undefined))
+    .catch(() => undefined)
+  const say =
+    (level: string) =>
+    (message?: unknown): void =>
+      logUpdate(
+        `${level} ${message instanceof Error ? (message.stack ?? message.message) : String(message)}`
+      )
+  autoUpdater.logger = { info: say('info'), warn: say('attention'), error: say('erreur') }
+  logUpdate(`Pinout ${app.getVersion()} : recherche d'une mise à jour`)
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = false
   autoUpdater.setFeedURL({ provider: 'github', owner: 'robinary-hex', repo: 'cesep-pinout' })
@@ -206,9 +285,10 @@ function setupUpdater(mainWindow: BrowserWindow): void {
   autoUpdater.on('download-progress', (progress) => {
     send({ state: 'downloading', percent: Math.round(progress.percent) })
   })
-  autoUpdater.on('update-downloaded', (info) =>
+  autoUpdater.on('update-downloaded', (info) => {
+    downloadedUpdate = { version: info.version, installer: info.downloadedFile }
     send({ state: 'downloaded', version: info.version })
-  )
+  })
   autoUpdater.on('error', (error) => send({ state: 'error', message: error.message }))
   // Hors ligne ou GitHub injoignable : on se tait, l'application démarre normalement.
   autoUpdater.checkForUpdates().catch(() => undefined)
@@ -264,7 +344,7 @@ function createWindow(): void {
     mainWindowRef = null
   })
   mainWindow.on('ready-to-show', () => mainWindow.show())
-  setupUpdater(mainWindow)
+  setupUpdater()
 
   // Un fichier déposé dans la fenêtre ne doit pas remplacer l'application : toute navigation vers
   // une autre adresse est refusée (le rendu ouvre lui-même les fichiers déposés). Le rechargement

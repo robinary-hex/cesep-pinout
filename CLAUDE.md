@@ -19,7 +19,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   features et app ; le domaine n'importe rien d'autre.
 - Toute modification d'un document passe par une commande nommée du store de l'éditeur, qui
   produit des patches Immer via `src/state/history.ts` : c'est ce qui donne undo/redo.
-- `electron/main.ts` est le seul code qui touche Node. Le rendu passe par le pont IPC typé
+- `electron/main.ts` est le seul code qui touche Node (avec `electron/installer.ts`, qui lance
+  l'installeur d'une mise à jour). Le rendu passe par le pont IPC typé
   (`electron/api.ts`, exposé par `electron/preload.ts`), contextIsolation activé, sandbox activé.
   Dans les tests, `setBridge()` de `src/io/bridge.ts` remplace le pont par `src/io/testing/fakeFs.ts`.
 
@@ -820,7 +821,19 @@ release/latest.yml release/pinout-X.Y.Z-portable.exe --latest` avec des notes qu
 - Mise à jour automatique (`electron-updater`, `setupUpdater` dans `electron/main.ts`) : au
   lancement d'une version installée, vérification de la dernière release GitHub ; si elle est plus
   récente, un bouton apparaît en haut à droite (`App.vue`, libellés dans `src/app/update.ts`) :
-  télécharger en arrière-plan, puis installer et relancer. La version portable ne peut pas se
+  télécharger en arrière-plan, puis installer et relancer. Installer (décision du 14 novembre
+  2026 ; `installUpdate` de `main.ts`, `launchInstaller` d'`electron/installer.ts`) :
+  l'application lance elle-même l'installeur par `elevate.exe` et attend qu'il tourne (`elevate`
+  rend 0 une fois la question de Windows acceptée) avant de se fermer ; pendant ce temps le
+  bouton dit « Installation de X… » (état `installing`). `autoUpdater.quitAndInstall()` fermait
+  l'application aussitôt : sur un installeur tout juste téléchargé, Windows met plusieurs
+  secondes à poser sa question, la fenêtre avait disparu, la question n'arrivait plus au
+  premier plan, et il fallait relancer Pinout puis recommencer. Un refus rend le bouton
+  « Installer » ; un échec se retente trois fois puis se dit, l'application restant ouverte.
+  Journal : `update.log` dans `userData` (ce que fait electron-updater, chaque essai de
+  lancement). La question de Windows ne se joue pas dans les tests : la logique est testée avec
+  un faux `elevate.exe` (`electron/installer.test.ts`, que Vitest inclut), le vrai essai est la
+  mise à jour suivante d'une version installée. La version portable ne peut pas se
   réinstaller : son bouton ouvre la page de la release. Rien en développement ni hors ligne.
   L'installeur d'une mise à jour se lance avec les droits d'administrateur (décision du 11
   novembre 2026) : sans eux l'installation s'arrêtait en route quand Pinout est installé dans
@@ -830,7 +843,9 @@ release/latest.yml release/pinout-X.Y.Z-portable.exe --latest` avec des notes qu
   drapeau que pour un installeur `perMachine`, ce que le nôtre n'est pas (on y choisit « pour
   moi » ou « pour tous ») : `scripts/admin-update.mjs`, dernière étape de `pnpm build:win`,
   le pose, et arrête le build si `latest.yml` n'a pas la forme attendue. Ne jamais publier un
-  `latest.yml` sans ce drapeau (un build lancé par `electron-builder` seul n'en a pas).
+  `latest.yml` sans ce drapeau (un build lancé par `electron-builder` seul n'en a pas) : les
+  versions installées jusqu'à la 1.8.0 s'en remettent à lui ; les suivantes lancent toujours
+  l'installeur par `elevate.exe` elles-mêmes.
 
 - Un commit par phase de la feuille de route (accordé par Robin le 8 novembre 2026), après
   `pnpm check` vert. Message en français, trailer `Co-Authored-By` conservé.

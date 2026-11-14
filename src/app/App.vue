@@ -875,7 +875,7 @@ onUnmounted(() => {
         type="button"
         class="with-icon update"
         :class="update.state"
-        :disabled="update.state === 'downloading'"
+        :disabled="update.state === 'downloading' || update.state === 'installing'"
         :title="updateButtonTitle(update)"
         @click="onUpdateClick"
       >

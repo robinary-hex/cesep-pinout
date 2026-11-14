@@ -11,6 +11,8 @@ export function updateButtonLabel(status: UpdateStatus): string {
       return `Téléchargement ${status.percent} %`
     case 'downloaded':
       return `Installer ${status.version} et relancer`
+    case 'installing':
+      return `Installation de ${status.version}…`
     case 'manual':
       return `Nouvelle version ${status.version} : télécharger`
     case 'error':
@@ -26,6 +28,8 @@ export function updateButtonTitle(status: UpdateStatus): string {
       return 'Téléchargement en cours ; tu peux continuer à travailler.'
     case 'downloaded':
       return 'La mise à jour est prête : clic pour l’installer et relancer Pinout.'
+    case 'installing':
+      return 'Windows demande l’autorisation d’installer : réponds à sa question. Pinout se ferme dès que l’installation démarre.'
     case 'manual':
       return 'Version portable : ouvre la page de la release pour télécharger le nouvel exécutable.'
     case 'error':

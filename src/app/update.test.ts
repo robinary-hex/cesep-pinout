@@ -10,6 +10,13 @@ describe('bouton de mise à jour', () => {
     expect(updateButtonLabel({ state: 'downloaded', version: '1.2.0' })).toBe(
       'Installer 1.2.0 et relancer'
     )
+    // Installeur demandé : le bouton le dit, et renvoie à la question de Windows.
+    expect(updateButtonLabel({ state: 'installing', version: '1.2.0' })).toBe(
+      'Installation de 1.2.0…'
+    )
+    expect(updateButtonTitle({ state: 'installing', version: '1.2.0' })).toContain(
+      'Windows demande l’autorisation'
+    )
     expect(updateButtonLabel({ state: 'manual', version: '1.2.0', url: 'https://x' })).toBe(
       'Nouvelle version 1.2.0 : télécharger'
     )

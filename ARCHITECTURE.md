@@ -20,7 +20,10 @@ La règle ESLint `no-restricted-imports` sur `src/domain/**` rend la ligne du do
 ## Processus
 
 - **Principal** (`electron/main.ts`) : crée la fenêtre, répond aux appels IPC (fichiers texte et
-  binaires, dossiers, suppression d'un dossier de composant, dialogues, chemins). Rien d'autre.
+  binaires, dossiers, suppression d'un dossier de composant, dialogues, chemins), garde la
+  fermeture, tient la mise à jour. `electron/installer.ts` lance l'installeur d'une mise à jour
+  avec les droits d'administrateur (`elevate.exe`) et dit s'il tourne : l'application ne se ferme
+  qu'alors.
 - **Preload** (`electron/preload.ts`) : expose `window.pinout`, implémentation typée de
   `PinoutApi` (`electron/api.ts`). contextIsolation et sandbox activés, nodeIntegration désactivé.
 - **Rendu** (`src/`) : Vue 3, Pinia, SVG. N'accède à Node que via `window.pinout`, lui-même

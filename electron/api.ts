@@ -57,6 +57,8 @@ export type UpdateStatus =
   | { state: 'available'; version: string }
   | { state: 'downloading'; percent: number }
   | { state: 'downloaded'; version: string }
+  /** Installeur demandé : Windows pose sa question, l'application se ferme dès qu'il tourne. */
+  | { state: 'installing'; version: string }
   /** Version portable : pas d'installation possible, on renvoie vers la page de la release. */
   | { state: 'manual'; version: string; url: string }
   | { state: 'error'; message: string }
@@ -106,7 +108,10 @@ export interface PinoutApi {
   onUpdateStatus(handler: (status: UpdateStatus) => void): () => void
   /** Télécharge la mise à jour disponible en arrière-plan. */
   downloadUpdate(): Promise<void>
-  /** Installe la mise à jour téléchargée et relance l'application. */
+  /**
+   * Installe la mise à jour téléchargée et relance l'application. La promesse est tenue quand
+   * l'installeur tourne (l'application se ferme alors) ou qu'il n'a pas démarré (refus, échec).
+   */
   installUpdate(): Promise<void>
 }
 
