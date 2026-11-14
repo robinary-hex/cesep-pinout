@@ -23,6 +23,7 @@ import {
   nextNumberedId,
   normalizePoints,
   pannedView,
+  placeReadout,
   projectBounds,
   profileDifferences,
   projectPins,
@@ -37,6 +38,7 @@ import {
   sameLook,
   sameProfile,
   simplifyPoints,
+  spanReadout,
   splitPoints,
   styleCounts,
   styleOf,
@@ -61,6 +63,7 @@ import {
   type LocalPoint,
   type GridRect,
   type Project,
+  type Readout,
   type RotateDirection,
   type Rotation,
   type StyleProfile,
@@ -300,6 +303,22 @@ export const useSchematicStore = defineStore('schematic', () => {
       selectedWires.value.length > 0 ||
       selectedLabels.value.length > 0
   )
+
+  /**
+   * Ce que la barre d'état dit de la sélection : la place d'un composant ou d'une étiquette (le
+   * coin supérieur gauche de sa boîte), le départ et l'arrivée d'un fil ; à plusieurs, leur nombre.
+   */
+  const selectionReadout = computed<Readout | null>(() => {
+    const count = selection.value.length + selectedWires.value.length + selectedLabels.value.length
+    if (count === 0) return null
+    if (count > 1) return { kind: 'many', count }
+    const instance = doc.value.components.find((entry) => entry.id === selection.value[0])
+    if (instance) return placeReadout(instance.x, instance.y)
+    const wire = doc.value.wires.find((entry) => entry.id === selectedWires.value[0])
+    if (wire) return spanReadout(wire.points)
+    const label = doc.value.labels.find((entry) => entry.id === selectedLabels.value[0])
+    return label ? placeReadout(label.x, label.y) : null
+  })
 
   // Groupes : composants, fils et étiquettes qu'on sélectionne et déplace d'un bloc.
   const grouping = useGroups({
@@ -1653,6 +1672,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     pieces,
     hoverNet,
     hasSelection,
+    selectionReadout,
     clipboardEmpty,
     undo,
     redo,

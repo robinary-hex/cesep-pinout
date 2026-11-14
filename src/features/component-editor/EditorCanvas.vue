@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   DEFAULT_SHAPE_STYLE,
   dragHandle,
+  formatReadout,
   groupOutline,
   nearestInsidePoint,
   nearestHandle,
@@ -551,9 +552,15 @@ const band = computed(() => {
   }
 })
 
-const hoverText = computed(() =>
-  hover.value ? `x ${hover.value.x.toFixed(2)}   y ${hover.value.y.toFixed(2)}` : ''
-)
+/** Position du pointeur, en cellules : deux décimales fixes, pour que la barre ne danse pas. */
+const hoverText = computed(() => {
+  const point = hover.value
+  const cells = (value: number): string => value.toFixed(2).replace('.', ',')
+  return point ? `x ${cells(point.x)}   y ${cells(point.y)}` : ''
+})
+
+/** Coordonnées de la sélection, pour la barre d'état. */
+const selectionText = computed(() => formatReadout(store.selectionReadout))
 
 // Interactions
 
@@ -1291,6 +1298,7 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
     </div>
     <footer class="canvas-status">
       <span class="coords">{{ hoverText }}</span>
+      <span v-if="selectionText" class="selected">Sélection : {{ selectionText }}</span>
       <span class="message">{{ store.status }}</span>
     </footer>
   </div>
@@ -1415,7 +1423,6 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
   min-height: var(--status-height);
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 16px;
   padding: 4px 12px;
   font-size: 12px;
@@ -1424,8 +1431,26 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
   border-top: 1px solid var(--border);
 }
 
+/* Largeur gardée même sans pointeur : les coordonnées de la sélection ne bougent pas. */
 .coords {
+  min-width: 110px;
   font-variant-numeric: tabular-nums;
   white-space: pre;
+}
+
+/* Coordonnées de la sélection : chiffres alignés, espaces gardés, comme celles du pointeur. */
+.selected {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+  color: var(--text);
+}
+
+.message {
+  flex: 1;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

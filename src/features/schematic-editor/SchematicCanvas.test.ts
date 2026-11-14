@@ -887,3 +887,49 @@ describe('canevas du montage : saisir le bout d’un fil', () => {
     expect(store.drawing?.points).toEqual([[8, 2]])
   })
 })
+
+describe('canevas du montage : barre d’état', () => {
+  it('dit où est l’élément sélectionné ; pour un fil, son départ, son arrivée et l’écart', async () => {
+    const store = withResistor()
+    const part = store.doc.components[0]?.id
+    // Un fil coudé de (6, 4) à (12, 9).
+    const wire = store.addWire([
+      [6, 4],
+      [12, 4],
+      [12, 9]
+    ])
+    const text = store.addLabelBox({ x: 1, y: 12, w: 4, h: 1 })
+    if (!part || !wire) throw new Error('montage incomplet')
+    store.clearSelection()
+    const wrapper = mount(SchematicCanvas)
+    const readout = (): string | null => {
+      const found = wrapper.find('.canvas-status .selected')
+      return found.exists() ? found.text() : null
+    }
+    // Rien de sélectionné : rien à dire.
+    expect(readout()).toBeNull()
+    store.selection = [part]
+    await nextTick()
+    expect(readout()).toBe('Sélection : x 2   y 3')
+    // La sélection se déplace : la barre suit.
+    store.moveSelection(5, -4)
+    await nextTick()
+    expect(readout()).toBe('Sélection : x 7   y −1')
+    store.undo()
+    store.clearSelection()
+    store.selectedWires = [wire]
+    await nextTick()
+    // L'écart entre les deux bouts, sur chaque axe : pas la longueur du fil (11 cellules ici).
+    expect(readout()).toBe('Sélection : départ (6 ; 4)   arrivée (12 ; 9)   Δx 6   Δy 5')
+    store.clearSelection()
+    store.selectedLabels = [text]
+    await nextTick()
+    expect(readout()).toBe('Sélection : x 1   y 12')
+    // À plusieurs : leur nombre.
+    store.selection = [part]
+    store.selectedWires = [wire]
+    await nextTick()
+    expect(readout()).toBe('Sélection : 3 éléments')
+    wrapper.unmount()
+  })
+})

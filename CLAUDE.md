@@ -553,6 +553,17 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   composants ne glisse pas sous le pointeur. Sans sélection, il montre le document (montage,
   diagramme, composant). Pas de croix à côté du nom d'un élément : la seule croix du panneau le
   masque.
+- Barre d'état des trois canevas (`.canvas-status`), de gauche à droite : la position du
+  pointeur, le zoom (montage et diagramme), les coordonnées de la sélection, puis le message de
+  l'éditeur, à droite. Coordonnées de la sélection (décision du 14 novembre 2026 ;
+  `src/domain/readout.ts`, `selectionReadout` de chaque store, `formatReadout`) : toujours en
+  cellules. Un élément donne « x » et « y » : le coin supérieur gauche de sa boîte (le centre
+  d'un point, la place d'une broche). Une ligne, une polyligne ouverte, un fil ou un lien donne
+  son départ, son arrivée et l'écart « Δx », « Δy » de l'arrivée au départ, avec son signe : pas
+  la longueur du tracé. À plusieurs, leur nombre. Les nombres s'écrivent à la française
+  (`formatCells` : virgule, deux décimales au plus, vrai signe moins) ; le pointeur de l'éditeur
+  de composants aussi. La barre dit ce qui est enregistré : elle suit chaque commande (un
+  déplacement aux flèches, une annulation), pas l'aperçu d'un glisser en cours.
 - Champs des panneaux : ils valident au `change`. Un clic hors du champ en cours de saisie le
   valide d'abord (`commitFocusedField` dans `App.vue`, en phase de capture), pour que la saisie ne
   soit pas perdue quand le clic retire le champ. Hors des champs, le texte de l'interface ne se

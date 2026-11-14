@@ -7,6 +7,7 @@ import {
   crossingPieceEnds,
   distanceToSegment,
   dragVertex,
+  formatReadout,
   gridLines,
   groupOutline,
   instanceBounds,
@@ -1485,6 +1486,9 @@ const hoverText = computed(() =>
   hover.value ? `x ${Math.round(hover.value.x)}   y ${Math.round(hover.value.y)}` : ''
 )
 
+/** Coordonnées de la sélection, pour la barre d'état. */
+const selectionText = computed(() => formatReadout(store.selectionReadout))
+
 const cursorClass = computed(() => {
   if (store.panKeyHeld || drag.value?.kind === 'pan') return 'panning'
   if (store.tool === 'place') return 'placing'
@@ -1984,6 +1988,7 @@ const cursorClass = computed(() => {
     <footer class="canvas-status">
       <span class="coords">{{ hoverText }}</span>
       <span class="zoom">{{ Math.round(view.zoom * 100) }} %</span>
+      <span v-if="selectionText" class="selected">Sélection : {{ selectionText }}</span>
       <span class="message">{{ store.status }}</span>
     </footer>
   </div>
@@ -2279,6 +2284,14 @@ const cursorClass = computed(() => {
 
 .zoom {
   min-width: 48px;
+}
+
+/* Coordonnées de la sélection : chiffres alignés, espaces gardés, comme celles du pointeur. */
+.selected {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+  color: var(--text);
 }
 
 .message {

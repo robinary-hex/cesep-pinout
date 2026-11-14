@@ -633,3 +633,44 @@ describe('éditeur de composants : flèches du clavier', () => {
     wrapper.unmount()
   })
 })
+
+describe('éditeur de composants : barre d’état', () => {
+  it('dit où est la forme ou la broche sélectionnée, en cellules ; une ligne donne ses deux bouts', async () => {
+    // Un rectangle en (4, 2) quarts : une cellule à droite, une demi-cellule en bas.
+    const store = withRectangle()
+    store.addPrimitive(
+      {
+        kind: 'line',
+        x1: 0,
+        y1: 4,
+        x2: 10,
+        y2: 2,
+        arrows: { start: false, middle: false, end: false },
+        style: DEFAULT_SHAPE_STYLE
+      },
+      'Ajouter une ligne'
+    )
+    const pin = store.addPin({ x: 4, y: 1 })
+    store.selection = null
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    const readout = (): string | null => {
+      const found = wrapper.find('.canvas-status .selected')
+      return found.exists() ? found.text() : null
+    }
+    await nextTick()
+    expect(readout()).toBeNull()
+    store.selectPrimitives([0])
+    await nextTick()
+    expect(readout()).toBe('Sélection : x 1   y 0,5')
+    store.selectPrimitives([1])
+    await nextTick()
+    expect(readout()).toBe('Sélection : départ (0 ; 1)   arrivée (2,5 ; 0,5)   Δx 2,5   Δy −0,5')
+    store.selectPin(pin)
+    await nextTick()
+    expect(readout()).toBe('Sélection : x 4   y 1')
+    store.selectPrimitives([0, 1])
+    await nextTick()
+    expect(readout()).toBe('Sélection : 2 éléments')
+    wrapper.unmount()
+  })
+})

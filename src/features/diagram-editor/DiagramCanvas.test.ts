@@ -376,3 +376,36 @@ describe('canevas du diagramme : liens de face', () => {
     ])
   })
 })
+
+describe('canevas du diagramme : barre d’état', () => {
+  it('dit où est le nœud sélectionné ; pour un lien, son départ, son arrivée et l’écart', async () => {
+    const store = useDiagramStore()
+    const node = store.addNode('rounded', 10, 4)
+    // Un lien qui part du bas du nœud et revient vers la gauche.
+    const link = store.addLink([
+      [18, 10],
+      [18, 16],
+      [6, 16]
+    ])
+    if (!link) throw new Error('lien refusé')
+    const wrapper = mount(DiagramCanvas)
+    const readout = (): string | null => {
+      const found = wrapper.find('.canvas-status .selected')
+      return found.exists() ? found.text() : null
+    }
+    await nextTick()
+    // Le nœud qu'on vient de poser est sélectionné.
+    expect(readout()).toBe('Sélection : x 10   y 4')
+    store.clearSelection()
+    store.selectedLinks = [link]
+    await nextTick()
+    expect(readout()).toBe('Sélection : départ (18 ; 10)   arrivée (6 ; 16)   Δx −12   Δy 6')
+    store.selectedNodes = [node]
+    await nextTick()
+    expect(readout()).toBe('Sélection : 2 éléments')
+    store.clearSelection()
+    await nextTick()
+    expect(readout()).toBeNull()
+    wrapper.unmount()
+  })
+})

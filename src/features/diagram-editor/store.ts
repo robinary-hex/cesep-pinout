@@ -18,8 +18,10 @@ import {
   nodeBoxForText,
   normalizePoints,
   pannedView,
+  placeReadout,
   sameDiagramStyle,
   simplifyPoints,
+  spanReadout,
   textLabelBounds,
   translatePoints,
   turnedTextBox,
@@ -47,6 +49,7 @@ import {
   type LocalPoint,
   type NodeShape,
   type NodeTextStyle,
+  type Readout,
   type StackMove,
   type TextAnchor,
   type TextLabel,
@@ -219,6 +222,23 @@ export const useDiagramStore = defineStore('diagram', () => {
       selectedLinks.value.length > 0 ||
       selectedTexts.value.length > 0
   )
+  /**
+   * Ce que la barre d'état dit de la sélection : la place d'un nœud ou d'un texte (le coin
+   * supérieur gauche de sa boîte), le départ et l'arrivée d'un lien ; à plusieurs, leur nombre.
+   */
+  const selectionReadout = computed<Readout | null>(() => {
+    const count =
+      selectedNodes.value.length + selectedLinks.value.length + selectedTexts.value.length
+    if (count === 0) return null
+    if (count > 1) return { kind: 'many', count }
+    const node = doc.value.nodes.find((entry) => entry.id === selectedNodes.value[0])
+    if (node) return placeReadout(node.x, node.y)
+    const link = doc.value.links.find((entry) => entry.id === selectedLinks.value[0])
+    if (link) return spanReadout(link.points)
+    const text = doc.value.texts.find((entry) => entry.id === selectedTexts.value[0])
+    return text ? placeReadout(text.x, text.y) : null
+  })
+
   // Groupes : nœuds, liens et textes qu'on sélectionne et déplace d'un bloc.
   const grouping = useGroups({
     kinds: {
@@ -1135,6 +1155,7 @@ export const useDiagramStore = defineStore('diagram', () => {
     anchors,
     colorChoices,
     hasSelection,
+    selectionReadout,
     showGroups,
     groups,
     hasGroups,

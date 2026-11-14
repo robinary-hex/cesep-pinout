@@ -22,7 +22,9 @@ import {
   nextPinGroupName,
   pinsInside,
   placedPin,
+  placeReadout,
   primitiveBounds,
+  primitiveReadout,
   QUARTERS_PER_CELL,
   regroupedCopies,
   renumberPins,
@@ -36,6 +38,7 @@ import {
   type LocalPoint,
   type Pin,
   type Primitive,
+  type Readout,
   type ShapeStyle,
   type Size,
   type StackMove
@@ -216,6 +219,23 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
       return null
     }
     return shown.value.visual.primitives[index] ?? null
+  })
+  /**
+   * Ce que la barre d'état dit de la sélection, en cellules : la place d'une forme (le coin
+   * supérieur gauche de sa boîte, le centre d'un point) ou d'une broche, le départ et l'arrivée
+   * d'une ligne ; à plusieurs, leur nombre.
+   */
+  const selectionReadout = computed<Readout | null>(() => {
+    const indexes = selectedIndexes.value
+    const pinIds = selectedPinIds.value
+    const count = indexes.length + pinIds.length
+    if (count === 0) return null
+    if (count > 1) return { kind: 'many', count }
+    const index = indexes[0]
+    const primitive = index === undefined ? undefined : shown.value.visual.primitives[index]
+    if (primitive) return primitiveReadout(primitive)
+    const pin = shown.value.pins.find((entry) => entry.id === pinIds[0])
+    return pin ? placeReadout(pin.x, pin.y) : null
   })
   /** La broche sélectionnée quand la sélection se réduit à elle. */
   const selectedPin = computed<Pin | null>(() => {
@@ -1148,6 +1168,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     selectedIndexes,
     selectedPinIds,
     selectedPrimitive,
+    selectionReadout,
     selectedPin,
     undo,
     redo,
