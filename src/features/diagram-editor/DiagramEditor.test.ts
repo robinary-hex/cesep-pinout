@@ -344,6 +344,41 @@ describe('panneau du diagramme', () => {
     wrapper.unmount()
   })
 
+  it('panneau d’un nœud : le texte dans sa section, puis la forme (fond, couleur, bordure)', async () => {
+    const store = useDiagramStore()
+    const id = store.addNode('rounded', 0, 0)
+    store.setNodeText(id, { title: 'Titre' })
+    store.setNodesStyle([id], { fill: 'solid' })
+    store.inspectorOpen = true
+    const wrapper = mount(DiagramEditor, { attachTo: document.body })
+    await flushPromises()
+    const sections = (): string[] =>
+      wrapper.findAll('.inspector .block h3').map((heading) => heading.text())
+    const fields = (section: string): string[] =>
+      wrapper.findAll(`.inspector ${section} .field span`).map((span) => span.text())
+    // Trois sections pour un nœud : son texte, sa forme, sa position et sa taille.
+    expect(sections()).toEqual(['Diagramme', 'Texte', 'Action', 'Position et taille'])
+    // La couleur du texte reste avec le texte.
+    expect(fields('.node-text')).toEqual([
+      'Titre',
+      'Sous-titre',
+      'Style du texte',
+      'Taille (pt)',
+      'Couleur du texte'
+    ])
+    // Le fond, puis la couleur de la forme, puis celle de la bordure d'un fond plein.
+    expect(fields('.node-shape')).toEqual(['Forme', 'Fond', 'Couleur', 'Couleur de la bordure'])
+    store.setNodesStyle([id], { fill: 'tint' })
+    await flushPromises()
+    expect(fields('.node-shape')).toEqual(['Forme', 'Fond', 'Couleur'])
+    // Une forme sans texte n'a pas de section « Texte ».
+    store.addNode('start', 0, 20)
+    await flushPromises()
+    expect(sections()).toEqual(['Diagramme', 'Départ', 'Position et taille'])
+    expect(wrapper.find('.inspector .node-text').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('panneau : ni chemin du fichier ni mention sous le nom du diagramme', async () => {
     const store = useDiagramStore()
     store.inspectorOpen = true

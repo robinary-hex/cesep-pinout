@@ -150,6 +150,10 @@ function toggleEndArrow(): void {
         >
           <Icon name="type" :size="18" />
         </button>
+      </div>
+
+      <!-- La copie de style, un peu à part : elle ne pose rien, elle retouche ce qui est là. -->
+      <div class="group">
         <button
           type="button"
           class="tool icon-only style-copy"
@@ -298,8 +302,8 @@ function toggleEndArrow(): void {
   border-color: var(--accent-border);
 }
 
-/* Pastilles serrées : avec l'outil de copie de style, la barre tient encore sur une ligne dans
-   la fenêtre de départ (1400 px). */
+/* Pastilles et fonds serrés : avec l'outil de copie de style, à part des autres, la barre tient
+   encore sur une ligne dans la fenêtre de départ (1400 px). */
 .palette {
   gap: 2px;
 }
@@ -319,13 +323,13 @@ function toggleEndArrow(): void {
 
 /* Pastilles de fond : un petit nœud dessiné sur la couleur du papier, comme sur le diagramme. */
 .fills {
-  gap: 2px;
+  gap: 1px;
 }
 
 .fill-choice {
   display: inline-flex;
   align-items: center;
-  padding: 4px 3px;
+  padding: 4px 2px;
   background: var(--paper);
 }
 

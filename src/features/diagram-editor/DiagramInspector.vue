@@ -23,7 +23,9 @@ import { useDiagramStore } from './store'
 
 // Panneau de droite du diagramme (replié par défaut, touche I). Toujours : le diagramme, avec son
 // nom et sa police. Avec une sélection : seulement les propriétés de l'élément (nœud, lien, texte
-// libre, groupe).
+// libre, groupe). Un nœud a trois sections (décision du 16 novembre 2026) : son texte (titre,
+// sous-titre, style, taille, couleur du texte), sa forme (fond, puis couleur, puis bordure d'un
+// fond plein), sa position et sa taille.
 
 const emit = defineEmits<{ exportImage: [] }>()
 const store = useDiagramStore()
@@ -368,7 +370,90 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
     </section>
 
     <template v-else-if="singleNode">
-      <section class="block">
+      <!-- Le texte d'abord, dans sa section ; puis la forme : son fond, sa couleur, sa bordure. -->
+      <section v-if="NODE_SPECS[singleNode.shape].text" class="block node-text">
+        <h3>Texte</h3>
+        <label class="field">
+          <span>Titre</span>
+          <textarea rows="2" :value="singleNode.title" @change="setNodeTitle" />
+        </label>
+        <label class="field">
+          <span>Sous-titre</span>
+          <textarea rows="2" :value="singleNode.subtitle" @change="setNodeSubtitle" />
+        </label>
+        <div class="row">
+          <div class="field">
+            <span title="Gras, italique, souligné et barré stylent le titre">Style du texte</span>
+            <div class="toggles">
+              <button
+                v-for="option in NODE_TEXT_OPTIONS"
+                :key="option.key"
+                type="button"
+                class="toggle"
+                :class="{ active: singleNode[option.key] }"
+                :title="`${option.label} (titre)`"
+                @click="toggleNodeText(option)"
+              >
+                <Icon :name="option.icon" />
+              </button>
+              <button
+                type="button"
+                class="toggle"
+                :class="{ active: nodeIsMono }"
+                title="Chasse fixe, pour du code (titre et sous-titre)"
+                @click="toggleNodeMono"
+              >
+                <Icon name="code" />
+              </button>
+            </div>
+          </div>
+          <label class="field scale">
+            <span
+              title="Taille du titre dans une image exportée à ×1 (le double à ×2, le quadruple à ×4) ; le sous-titre suit dans la même proportion"
+            >
+              Taille (pt)
+            </span>
+            <input
+              type="number"
+              step="1"
+              :min="TEXT_SIZE_LIMITS.min"
+              :max="TEXT_SIZE_LIMITS.max"
+              :value="nodeTextSize"
+              @change="setNodeTextSize"
+            />
+          </label>
+        </div>
+        <div class="field">
+          <div class="field-head">
+            <span>Couleur du texte</span>
+            <button
+              type="button"
+              class="auto"
+              :class="{ current: singleNode.textColor === null }"
+              title="D’après la couleur de la forme, foncée ou éclaircie pour se lire"
+              @click="setNodeTextColor(null)"
+            >
+              Auto
+            </button>
+          </div>
+          <div class="swatches">
+            <button
+              v-for="choice in store.colorChoices"
+              :key="choice.hex"
+              type="button"
+              class="swatch"
+              :class="{
+                current:
+                  singleNode.textColor !== null && sameColor(choice.hex, singleNode.textColor)
+              }"
+              :style="{ background: choice.hex }"
+              :title="choice.name"
+              @click="setNodeTextColor(choice.hex)"
+            />
+          </div>
+        </div>
+      </section>
+      <section class="block node-shape">
         <h3>{{ NODE_SPECS[singleNode.shape].label }}</h3>
         <label class="field">
           <span>Forme</span>
@@ -380,87 +465,14 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
             </optgroup>
           </select>
         </label>
-        <template v-if="NODE_SPECS[singleNode.shape].text">
-          <label class="field">
-            <span>Titre</span>
-            <textarea rows="2" :value="singleNode.title" @change="setNodeTitle" />
-          </label>
-          <label class="field">
-            <span>Sous-titre</span>
-            <textarea rows="2" :value="singleNode.subtitle" @change="setNodeSubtitle" />
-          </label>
-          <div class="row">
-            <div class="field">
-              <span title="Gras, italique, souligné et barré stylent le titre">Style du texte</span>
-              <div class="toggles">
-                <button
-                  v-for="option in NODE_TEXT_OPTIONS"
-                  :key="option.key"
-                  type="button"
-                  class="toggle"
-                  :class="{ active: singleNode[option.key] }"
-                  :title="`${option.label} (titre)`"
-                  @click="toggleNodeText(option)"
-                >
-                  <Icon :name="option.icon" />
-                </button>
-                <button
-                  type="button"
-                  class="toggle"
-                  :class="{ active: nodeIsMono }"
-                  title="Chasse fixe, pour du code (titre et sous-titre)"
-                  @click="toggleNodeMono"
-                >
-                  <Icon name="code" />
-                </button>
-              </div>
-            </div>
-            <label class="field scale">
-              <span
-                title="Taille du titre dans une image exportée à ×1 (le double à ×2, le quadruple à ×4) ; le sous-titre suit dans la même proportion"
-              >
-                Taille (pt)
-              </span>
-              <input
-                type="number"
-                step="1"
-                :min="TEXT_SIZE_LIMITS.min"
-                :max="TEXT_SIZE_LIMITS.max"
-                :value="nodeTextSize"
-                @change="setNodeTextSize"
-              />
-            </label>
-          </div>
-          <div class="field">
-            <div class="field-head">
-              <span>Couleur du texte</span>
-              <button
-                type="button"
-                class="auto"
-                :class="{ current: singleNode.textColor === null }"
-                title="D’après la couleur de la forme, foncée ou éclaircie pour se lire"
-                @click="setNodeTextColor(null)"
-              >
-                Auto
-              </button>
-            </div>
-            <div class="swatches">
-              <button
-                v-for="choice in store.colorChoices"
-                :key="choice.hex"
-                type="button"
-                class="swatch"
-                :class="{
-                  current:
-                    singleNode.textColor !== null && sameColor(choice.hex, singleNode.textColor)
-                }"
-                :style="{ background: choice.hex }"
-                :title="choice.name"
-                @click="setNodeTextColor(choice.hex)"
-              />
-            </div>
-          </div>
-        </template>
+        <label class="field">
+          <span>Fond</span>
+          <select :value="singleNode.fill" @change="setNodeFill">
+            <option v-for="fill in FILLS" :key="fill.value" :value="fill.value">
+              {{ fill.label }}
+            </option>
+          </select>
+        </label>
         <div class="field">
           <span>Couleur</span>
           <div class="swatches">
@@ -476,14 +488,6 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
             />
           </div>
         </div>
-        <label class="field">
-          <span>Fond</span>
-          <select :value="singleNode.fill" @change="setNodeFill">
-            <option v-for="fill in FILLS" :key="fill.value" :value="fill.value">
-              {{ fill.label }}
-            </option>
-          </select>
-        </label>
         <div v-if="singleNode.fill === 'solid'" class="field border-color">
           <div class="field-head">
             <span>Couleur de la bordure</span>

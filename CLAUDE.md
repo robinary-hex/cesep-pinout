@@ -235,7 +235,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   dans cet ordre (décision du 10 novembre 2026) : zoom arrière, valeur du zoom (un clic ou la
   touche 1 revient à 100 %), zoom avant, ajuster ; séparateur vertical ; annuler, rétablir,
   corbeille (grisée sans sélection) ; séparateur ; puis les outils propres à l'éditeur. Dans le
-  diagramme, les fonds des nœuds et le style des liens viennent avant la palette, qui ferme la
+  diagramme, la copie de style a son groupe à elle, un peu à part des outils qui posent quelque
+  chose (décision du 16 novembre 2026) ; les fonds des nœuds et le style des liens viennent
+  avant la palette, qui ferme la
   barre. Les cases d'affichage viennent en dernier (« Broches » et « Non reliées » dans le
   montage, « Groupes » dans les trois éditeurs dès que le document a des groupes) ; leur état
   est gardé dans les paramètres (`showPins`, `showUnconnected`, `showGroups`, `VIEW_OPTIONS`) :
@@ -252,7 +254,12 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   souple, le quatrième passait dessous dès que le panneau prenait son ascenseur. Sous le nom
   du document, un panneau ne montre ni le chemin du fichier ni « Pas encore enregistré »
   (même décision, pour gagner de la hauteur) : le chemin est dans l'infobulle de l'onglet et
-  du nom, à droite de la barre d'outils.
+  du nom, à droite de la barre d'outils. Le panneau d'un nœud du diagramme a trois sections
+  (décision du 16 novembre 2026 ; `.node-text`, `.node-shape` de `DiagramInspector.vue`) :
+  « Texte » d'abord (titre, sous-titre, style, taille, couleur du texte ; absente pour une
+  forme sans texte), puis la forme, sous son nom (« Forme », « Fond », puis juste dessous la
+  couleur de la forme, puis celle de la bordure quand le fond est plein), enfin « Position et
+  taille ».
 - Barre d'application (`src/app/App.vue`) : tout à gauche, un bouton à trois barres ouvre le menu
   Fichier (nouveau, ouvrir, récents, enregistrer,
   exporter, paramètres, raccourcis, quitter) construit avec `ContextMenu` et appelant les actions
