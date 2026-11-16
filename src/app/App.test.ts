@@ -7,8 +7,10 @@ import {
   createEmptyProject,
   dataUrlToBase64,
   DEFAULT_PROFILE,
+  DEFAULT_SETTINGS,
   serializeDiagram,
-  serializeProject
+  serializeProject,
+  serializeSettings
 } from '@/domain'
 import { pngHeaderDataUrl } from '@/domain/testing/pngHeader'
 import { useComponentEditorStore } from '@/features/component-editor/store'
@@ -280,6 +282,74 @@ describe('session : ce qui était ouvert revient au lancement suivant', () => {
     expect(wrapper.findAll('.doc-tab').map((tab) => tab.text())).toEqual(['Nouveau montage ✕'])
     expect(wrapper.find('.schematic-wrap').exists()).toBe(true)
     wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+
+  it('le dossier par défaut a changé de place : l’annonce, puis la session rouverte de là', async () => {
+    fs.presetDataDir = null
+    fs.oneDrive = 'D:/OneDrive'
+    const course = 'D:/OneDrive/(Cours)/Robotique/(Ressources)/Pinout'
+    const target = 'D:/OneDrive/(Pinout)'
+    const montage = serializeProject(createEmptyProject('Feu', DEFAULT_PROFILE))
+    // La machine est réglée sur l'ancien dossier par défaut ; tout a été copié dans le nouveau.
+    await fs.writeTextFile(
+      'C:/fake/Pinout/settings.json',
+      serializeSettings({
+        ...DEFAULT_SETTINGS,
+        dataDir: '${OneDrive}/(Cours)/Robotique/(Ressources)/Pinout'
+      })
+    )
+    for (const root of [course, target]) {
+      await fs.writeTextFile(
+        `${root}/Applications/parametres.json`,
+        serializeSettings(DEFAULT_SETTINGS)
+      )
+      await fs.writeTextFile(`${root}/Montages/feu.pinout`, montage)
+    }
+    await fs.writeTextFile(A, serializeProject(createEmptyProject('A', DEFAULT_PROFILE)))
+    // La dernière fois, on regardait un montage de l'ancien dossier et un autre, d'ailleurs.
+    localStorage.setItem(
+      'pinout.session',
+      JSON.stringify({
+        mode: 'schematic',
+        schematic: { paths: [`${course}/Montages/feu.pinout`, A], active: A },
+        diagram: { paths: [], active: null },
+        components: { paths: [], active: null }
+      })
+    )
+    const dialog = (): Element | null => document.body.querySelector('[role="dialog"]')
+    const wrapper = mount(App, { attachTo: document.body })
+    await flushPromises()
+    // L'application le dit une fois, avant de rouvrir quoi que ce soit.
+    expect(dialog()?.getAttribute('aria-label')).toBe('Dossier de Pinout')
+    expect(dialog()?.textContent).toContain('Pinout range maintenant ses fichiers dans un autre')
+    expect(dialog()?.textContent).toContain(target)
+    expect(dialog()?.textContent).toContain(course)
+    expect(useSchematicStore().tabs.map((tab) => tab.filePath)).toEqual([null])
+    const ok = [...document.body.querySelectorAll('button')].find(
+      (candidate) => candidate.textContent?.trim() === 'OK'
+    )
+    ok?.click()
+    await flushPromises()
+    expect(dialog()).toBeNull()
+    // Le montage de l'ancien dossier se rouvre depuis le nouveau ; l'autre, de là où il est.
+    const schematic = useSchematicStore()
+    expect(schematic.tabs.map((tab) => tab.filePath)).toEqual([`${target}/Montages/feu.pinout`, A])
+    expect(schematic.filePath).toBe(A)
+    expect(useLibraryStore().dataRoot).toBe(target)
+    wrapper.unmount()
+    document.body.innerHTML = ''
+
+    // Lancement suivant : plus d'annonce.
+    setActivePinia(createPinia())
+    const second = mount(App, { attachTo: document.body })
+    await flushPromises()
+    expect(dialog()).toBeNull()
+    expect(useSchematicStore().tabs.map((tab) => tab.filePath)).toEqual([
+      `${target}/Montages/feu.pinout`,
+      A
+    ])
+    second.unmount()
     document.body.innerHTML = ''
   })
 

@@ -46,6 +46,10 @@ if (!fs.existsSync(mainJs)) {
 for (const name of Object.keys(process.env)) {
   if (/^onedrive/i.test(name)) delete process.env[name]
 }
+// APPSHOT_ONEDRIVE=<dossier> donne à l'application un faux OneDrive (à mettre dans le dossier de
+// sortie), pour voir ce qu'elle fait d'un dossier de Pinout rangé dans OneDrive ; à combiner avec
+// APPSHOT_FIRST_RUN=1, sans quoi le dossier de Pinout reste imposé.
+if (process.env.APPSHOT_ONEDRIVE) process.env.OneDrive = path.resolve(process.env.APPSHOT_ONEDRIVE)
 fs.mkdirSync(outDir, { recursive: true })
 // Le profil repart de zéro à chaque lancement, sauf si APPSHOT_KEEP_PROFILE=1 : pour voir ce que
 // l'application retrouve d'un lancement à l'autre.

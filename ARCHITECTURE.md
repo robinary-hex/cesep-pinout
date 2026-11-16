@@ -248,6 +248,9 @@ Tout vit dans un seul dossier, le dossier de Pinout (`src/io/dataFolder.ts`), qu
 demande au premier lancement (`src/app/DataFolderDialog.vue`, boîte `persistent` : rien ne
 s'ouvre avant le choix) et que les paramètres pointent seul (`dataDir`, enregistré relativement à
 la racine OneDrive quand il s'y trouve) : `Composants`, `Montages`, `Diagrammes`, `Applications`.
+Le dossier proposé est `(Pinout)` à la racine de OneDrive ; une machine restée sur l'ancien dossier
+par défaut (celui du cours) y passe d'elle-même au lancement, quand il est là avec ses réglages
+(`defaultDirSuccessor`), et ses fichiers récents et sa session suivent.
 Le processus principal ne fait que créer les dossiers (`ensureDir` du pont) ; ce qu'on y range se
 décide dans `src/io/`. Choisir un dossier qui a déjà ses réglages les reprend ; un dossier neuf
 reçoit une copie des réglages, des profils et des composants qu'on avait (de l'ancienne

@@ -22,10 +22,12 @@ import { listComponents, type LibraryEntry } from '@/io/library'
 import {
   copyComponents,
   dataFolder,
+  defaultDirSuccessor,
   legacyLibraryDir,
   portableDir,
   prepareDataFolder,
   proposedDataDir,
+  relocatedPath,
   resolveDataRoot,
   type LegacyFolders
 } from '@/io/dataFolder'
@@ -74,6 +76,11 @@ export const useLibraryStore = defineStore('library', () => {
   )
   /** Non nul au premier lancement : l'application demande où mettre le dossier de Pinout. */
   const firstRun = ref<FirstRun | null>(null)
+  /**
+   * Non nul quand, à ce lancement, le dossier de Pinout a suivi le dossier par défaut à sa
+   * nouvelle place (`followDefaultFolder`) : d'où il vient, où il est maintenant.
+   */
+  const relocation = ref<{ from: string; to: string } | null>(null)
   /** Les deux dossiers de l'ancienne organisation, repris au premier choix du dossier. */
   let legacy: LegacyFolders = { settingsDir: '', libraryDir: '' }
   const entries = shallowRef<LibraryEntry[]>([])
@@ -189,11 +196,53 @@ export const useLibraryStore = defineStore('library', () => {
         firstRun.value = { proposal: await proposedDataDir(legacy) }
         return
       }
+      if (await followDefaultFolder()) return
       await prepare(dataRoot.value)
       await refresh()
       await refreshProfiles()
     } catch (error) {
       problem.value = `Démarrage incomplet : ${describe(error)}`
+    }
+  }
+
+  /**
+   * Le dossier par défaut a changé de place (décision du 16 novembre 2026) : une machine encore
+   * réglée sur l'ancien passe au nouveau s'il est là avec ses réglages (`defaultDirSuccessor`).
+   * Il est repris tel quel, comme un dossier déjà rempli qu'on choisirait dans les paramètres ;
+   * rien n'est touché dans l'ancien. Les fichiers récents qui étaient dans l'ancien dossier sont
+   * désormais ceux du nouveau. Vrai si le dossier a changé.
+   */
+  async function followDefaultFolder(): Promise<boolean> {
+    const from = dataRoot.value
+    if (from === null) return false
+    const to = await defaultDirSuccessor(from)
+    if (to === null || (await setDataDir(to)) === 'failed') return false
+    relocation.value = { from, to }
+    const recents: string[] = []
+    for (const file of recentFiles.value) {
+      const moved = await followRelocation(file)
+      if (!recents.includes(moved)) recents.push(moved)
+    }
+    const before = recentFiles.value
+    const same = recents.length === before.length && recents.every((file, i) => file === before[i])
+    if (!same && settings.value) await persist({ ...settings.value, recentFiles: recents })
+    return true
+  }
+
+  /**
+   * Un chemin retenu avant que le dossier de Pinout ne suive le dossier par défaut (fichier
+   * récent, document de la session) : celui du même fichier dans le nouveau dossier, s'il y est ;
+   * le chemin tel quel sinon, et pour tout ce qui n'était pas dans l'ancien dossier.
+   */
+  async function followRelocation(path: string): Promise<string> {
+    const moved = relocation.value
+    if (moved === null) return path
+    const next = relocatedPath(path, moved.from, moved.to)
+    if (next === path) return path
+    try {
+      return (await bridge().pathExists(next)) ? next : path
+    } catch {
+      return path
     }
   }
 
@@ -374,6 +423,8 @@ export const useLibraryStore = defineStore('library', () => {
     sharedSettingsPath,
     dataRoot,
     firstRun,
+    relocation,
+    followRelocation,
     libraryDir,
     entries,
     savedProfiles,

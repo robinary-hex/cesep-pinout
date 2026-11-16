@@ -537,8 +537,22 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     machine), `init` ne lit ni n'écrit rien et pose `firstRun` ; `App.vue` montre alors
     `src/app/DataFolderDialog.vue`, une `ModalDialog` `persistent` (pas de croix, Échap et un
     clic à côté sans effet), et n'ouvre rien d'autre avant le choix. Dossier proposé
-    (`proposedDataDir`) : l'ancien dossier des paramètres s'il y en avait un, sinon
-    `<OneDrive>\Pinout`, sinon `<Documents>\Pinout`.
+    (`proposedDataDir` ; décision du 16 novembre 2026) : `<OneDrive>\(Pinout)`, à la racine de
+    OneDrive (`DEFAULT_ONEDRIVE_FOLDER`) ; sans OneDrive, l'ancien dossier des paramètres s'il
+    avait été choisi, sinon `<Documents>\Pinout`. Jusqu'à la 1.8.0 c'était le dossier du cours,
+    `<OneDrive>\(Cours)\Robotique\(Ressources)\Pinout` : il n'est plus proposé que s'il a déjà
+    ses données alors que `(Pinout)` n'en a pas encore.
+  - Le dossier par défaut a changé de place (même décision ; `defaultDirSuccessor`,
+    `followDefaultFolder` du store de la bibliothèque) : au lancement, une machine dont le
+    dossier de Pinout est encore l'ancien dossier par défaut passe à `<OneDrive>\(Pinout)` dès
+    qu'il s'y trouve avec ses réglages (`Applications/parametres.json` : Robin l'y a copié,
+    OneDrive l'apporte aux autres machines). Il est repris tel quel (`setDataDir`, comme un
+    dossier déjà rempli choisi dans les paramètres) ; rien n'est touché dans l'ancien. Un
+    dossier qu'on a choisi soi-même ne bouge jamais. Ce qui pointait dans l'ancien dossier
+    suit, quand le fichier existe dans le nouveau (`relocatedPath`, `followRelocation`) : les
+    fichiers récents, donc les dossiers d'« Ouvrir » et d'« Enregistrer sous », et les
+    documents de la session (`relocatedSession`). `App.vue` l'annonce une fois, dans une
+    boîte (`relocation` du store, non nul à ce lancement-là seulement).
   - Choisir un dossier (`setDataDir`, `chooseDataDir` ; au premier lancement et dans la boîte
     des paramètres, où il change tout de suite) : un dossier qui a déjà ses réglages est
     repris tel quel, avec ses composants et ses profils (`adopted`) ; un dossier neuf reçoit
@@ -912,7 +926,9 @@ release/latest.yml release/pinout-X.Y.Z-portable.exe --latest` avec des notes qu
   l'application y est recréé à chaque fois (`profile/`, Documents compris), son dossier de
   Pinout y est imposé (`profile/Pinout`, par `PINOUT_DATA_DIR`) et les variables OneDrive sont
   retirées : ni la bibliothèque ni les paramètres de Robin ne sont lus. `APPSHOT_FIRST_RUN=1`
-  n'impose pas le dossier, pour voir la question du premier lancement. Le scénario exporte une
+  n'impose pas le dossier, pour voir la question du premier lancement ; `APPSHOT_ONEDRIVE=<dossier>`
+  donne en plus un faux OneDrive (un dossier du dossier de sortie), pour voir ce que l'application
+  fait d'un dossier de Pinout rangé dans OneDrive. Le scénario exporte une
   fonction qui
   reçoit `click`, `rightClick`, `drag`, `key`, `js`, `fill`, `theme`, `shot`, `wait` ; la
   fenêtre n'a pas le focus du système, donc le texte d'un champ se pose avec `fill`. Un fichier

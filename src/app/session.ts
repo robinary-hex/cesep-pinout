@@ -86,6 +86,26 @@ export function savedSession(): Session | null {
 }
 
 /**
+ * Une session dont chaque chemin est passé par `move` : quand le dossier de Pinout a changé de
+ * place, les documents qui y étaient se rouvrent depuis le nouveau dossier.
+ */
+export async function relocatedSession(
+  session: Session,
+  move: (path: string) => Promise<string>
+): Promise<Session> {
+  const moved = async (open: Session['schematic']): Promise<Session['schematic']> => ({
+    paths: await Promise.all(open.paths.map(move)),
+    active: open.active === null ? null : await move(open.active)
+  })
+  return {
+    mode: session.mode,
+    schematic: await moved(session.schematic),
+    diagram: await moved(session.diagram),
+    components: await moved(session.components)
+  }
+}
+
+/**
  * Rouvre les documents d'une session, chacun dans un onglet de son éditeur. Un fichier qui n'est
  * plus là est passé sans rien dire. `activate` remet aussi devant l'onglet qu'on regardait dans
  * chaque éditeur. Retourne le mode à afficher, ou null si rien n'a été rouvert.

@@ -23,6 +23,17 @@ export const PROFILES_FILE = 'profils.json'
 /** Préfixe d'un dossier enregistré relativement à OneDrive, résolu sur chaque machine. */
 export const ONEDRIVE_TOKEN = '${OneDrive}'
 
+/**
+ * Nom du dossier de Pinout proposé dans OneDrive, à sa racine (décision du 16 novembre 2026) :
+ * `<OneDrive>\(Pinout)`. Jusqu'à la 1.8.0 c'était le dossier du cours de robotique,
+ * `FORMER_ONEDRIVE_SUBPATH`.
+ */
+export const DEFAULT_ONEDRIVE_FOLDER = '(Pinout)'
+/** Son nom dans Documents, sur une machine sans OneDrive. */
+const DEFAULT_DOCUMENTS_FOLDER = 'Pinout'
+/** L'ancien dossier par défaut, dans OneDrive : celui du cours de robotique. */
+const FORMER_ONEDRIVE_SUBPATH = ['(Cours)', 'Robotique', '(Ressources)', 'Pinout']
+
 /** Les emplacements d'un dossier de Pinout. */
 export interface DataFolder {
   root: string
@@ -134,8 +145,8 @@ export async function copyComponents(from: string, to: string): Promise<number> 
 const LEGACY_SETTINGS_FILE = 'settings.json'
 const LEGACY_LIBRARY_FOLDER = 'library'
 const LEGACY_PROFILES_FOLDER = 'profiles'
-/** Dossier par défaut d'avant, dans OneDrive : celui du cours de robotique. */
-const LEGACY_ONEDRIVE_SUBPATH = ['(Cours)', 'Robotique', '(Ressources)', 'Pinout']
+/** Dossier par défaut d'alors, dans OneDrive : celui du cours de robotique. */
+const LEGACY_ONEDRIVE_SUBPATH = FORMER_ONEDRIVE_SUBPATH
 /** Dernière version des paramètres à deux dossiers. */
 const LAST_LEGACY_VERSION = 14
 
@@ -204,15 +215,56 @@ export async function legacyProfilesDir(): Promise<string> {
   return joinPath(userData, LEGACY_PROFILES_FOLDER)
 }
 
+/** Ce dossier de Pinout a-t-il déjà ses réglages (`Applications/parametres.json`) ? */
+async function hasSettings(root: string): Promise<boolean> {
+  return bridge().pathExists(dataFolder(root).settingsFile)
+}
+
 /**
- * Dossier proposé au premier lancement. Celui qui tenait déjà les paramètres partagés, s'il y en
- * avait un (les nouvelles données s'y rangent à côté des anciennes) ; sinon un dossier Pinout dans
- * OneDrive, pour qu'il suive d'une machine à l'autre ; sinon dans Documents.
+ * Dossier proposé au premier lancement : `(Pinout)` à la racine de OneDrive, pour qu'il suive
+ * d'une machine à l'autre. Si ce dossier n'a pas encore de données alors que l'ancien dossier
+ * par défaut en a, c'est l'ancien qui est proposé, pour ne rien laisser derrière ; l'application
+ * passera au nouveau quand il sera là (`defaultDirSuccessor`). Sans OneDrive : le dossier qui
+ * tenait les anciens paramètres partagés s'il avait été choisi, sinon `Pinout` dans Documents.
  */
 export async function proposedDataDir(legacy: LegacyFolders): Promise<string> {
   const { documents, oneDrive } = await bridge().getAppPaths()
-  const dir = await legacySettingsDir(legacy)
-  const chosen = legacy.settingsDir.length > 0
-  if (dir !== null && (chosen || (await bridge().pathExists(dir)))) return dir
-  return joinPath(oneDrive ?? documents, 'Pinout')
+  if (oneDrive) {
+    const wanted = joinPath(oneDrive, DEFAULT_ONEDRIVE_FOLDER)
+    const former = joinPath(oneDrive, ...FORMER_ONEDRIVE_SUBPATH)
+    return !(await hasSettings(wanted)) && (await hasSettings(former)) ? former : wanted
+  }
+  if (legacy.settingsDir.length > 0 && !legacy.settingsDir.startsWith(ONEDRIVE_TOKEN)) {
+    return legacy.settingsDir
+  }
+  return joinPath(documents, DEFAULT_DOCUMENTS_FOLDER)
+}
+
+/**
+ * Le dossier par défaut a changé de place (décision du 16 novembre 2026). Une machine dont le
+ * dossier de Pinout est encore l'ancien dossier par défaut passe au nouveau, `<OneDrive>\(Pinout)`,
+ * dès qu'il s'y trouve avec ses réglages : on l'y a copié, ou OneDrive l'a apporté d'une autre
+ * machine. Retourne ce nouveau dossier, ou null s'il n'y a pas lieu de changer : un autre dossier
+ * a été choisi, la machine n'a pas OneDrive, ou le nouveau dossier n'est pas encore là.
+ */
+export async function defaultDirSuccessor(root: string): Promise<string | null> {
+  const { oneDrive, presetDataDir } = await bridge().getAppPaths()
+  if (presetDataDir || !oneDrive) return null
+  const former = joinPath(oneDrive, ...FORMER_ONEDRIVE_SUBPATH)
+  if (normalized(root) !== normalized(former)) return null
+  const next = joinPath(oneDrive, DEFAULT_ONEDRIVE_FOLDER)
+  return (await hasSettings(next)) ? next : null
+}
+
+/**
+ * Un chemin tel qu'il devient quand le dossier de Pinout passe de `from` à `to` : ce qui était
+ * dans l'ancien dossier se cherche au même endroit du nouveau. Tout autre chemin ne change pas.
+ */
+export function relocatedPath(path: string, from: string, to: string): string {
+  const base = trimSeparators(from)
+  const root = normalized(base)
+  const rest = path.slice(base.length)
+  if (normalized(path.slice(0, base.length)) !== root) return path
+  if (rest.length > 0 && !/^[\\/]/.test(rest)) return path
+  return trimSeparators(to) + rest
 }

@@ -144,20 +144,20 @@ describe('dossier de Pinout', () => {
     fs.oneDrive = 'D:/OneDrive'
     const library = useLibraryStore()
     await library.init()
-    expect(library.firstRun?.proposal).toBe('D:/OneDrive/Pinout')
-    expect(await library.setDataDir('D:/OneDrive/Pinout')).toBe('moved')
+    expect(library.firstRun?.proposal).toBe('D:/OneDrive/(Pinout)')
+    expect(await library.setDataDir('D:/OneDrive/(Pinout)')).toBe('moved')
     expect(library.firstRun).toBeNull()
-    expect(library.dataRoot).toBe('D:/OneDrive/Pinout')
-    expect(library.libraryDir).toBe('D:/OneDrive/Pinout/Composants')
-    expect(library.sharedSettingsPath).toBe('D:/OneDrive/Pinout/Applications/parametres.json')
-    expect((await fs.readDir('D:/OneDrive/Pinout')).map((entry) => entry.name).sort()).toEqual([
+    expect(library.dataRoot).toBe('D:/OneDrive/(Pinout)')
+    expect(library.libraryDir).toBe('D:/OneDrive/(Pinout)/Composants')
+    expect(library.sharedSettingsPath).toBe('D:/OneDrive/(Pinout)/Applications/parametres.json')
+    expect((await fs.readDir('D:/OneDrive/(Pinout)')).map((entry) => entry.name).sort()).toEqual([
       'Applications',
       'Composants',
       'Diagrammes',
       'Montages'
     ])
     // Dans OneDrive, il se note relativement à sa racine : valable quel que soit le disque.
-    expect(parseSettings(await fs.readTextFile(LOCAL)).dataDir).toBe('${OneDrive}/Pinout')
+    expect(parseSettings(await fs.readTextFile(LOCAL)).dataDir).toBe('${OneDrive}/(Pinout)')
     // Le fichier partagé ne dit pas où il est rangé.
     const shared = parseSettings(await fs.readTextFile(library.sharedSettingsPath ?? ''))
     expect(shared.dataDir).toBe('')
@@ -167,7 +167,9 @@ describe('dossier de Pinout', () => {
     const next = useLibraryStore()
     await next.init()
     expect(next.firstRun).toBeNull()
-    expect(next.dataRoot).toBe('D:/OneDrive/Pinout')
+    expect(next.dataRoot).toBe('D:/OneDrive/(Pinout)')
+    // Rien n'a changé de place : pas d'annonce.
+    expect(next.relocation).toBeNull()
   })
 
   it('reprend ce que l’ancienne organisation avait : réglages, composants, profils', async () => {
@@ -183,21 +185,22 @@ describe('dossier de Pinout', () => {
 
     const library = useLibraryStore()
     await library.init()
-    // Le dossier qui servait déjà est proposé : les nouvelles données s'y rangent à côté.
-    expect(library.firstRun).toEqual({ proposal: course })
-    expect(await library.setDataDir(course)).toBe('moved')
+    // Le nouveau dossier par défaut est proposé : ce que l'ancienne organisation avait y est copié.
+    const target = 'D:/OneDrive/(Pinout)'
+    expect(library.firstRun).toEqual({ proposal: target })
+    expect(await library.setDataDir(target)).toBe('moved')
     // Les réglages partagés d'avant, avec ce qui est propre à cette machine.
     expect(library.theme).toBe('light')
     expect(library.autosaveSeconds).toBe(90)
     expect(library.recentFiles).toEqual(['C:/Docs/a.pinout'])
     expect(
-      parseSettings(await fs.readTextFile(`${course}/Applications/parametres.json`))
+      parseSettings(await fs.readTextFile(`${target}/Applications/parametres.json`))
     ).toMatchObject({ theme: 'light', autosaveSeconds: 90, recentFiles: [] })
     // Les composants, images comprises.
     expect(library.entries.map((entry) => entry.def?.id)).toEqual(['led'])
-    expect(await fs.readBinaryFile(`${course}/Composants/led/boitier.png`)).toBe('QUJD')
+    expect(await fs.readBinaryFile(`${target}/Composants/led/boitier.png`)).toBe('QUJD')
     // Les profils enregistrés, réunis dans un fichier.
-    const profiles = JSON.parse(await fs.readTextFile(`${course}/Applications/profils.json`)) as {
+    const profiles = JSON.parse(await fs.readTextFile(`${target}/Applications/profils.json`)) as {
       profiles: { name: string }[]
     }
     expect(profiles.profiles.map((saved) => saved.name)).toEqual(['Compact'])
@@ -206,6 +209,108 @@ describe('dossier de Pinout', () => {
       if (file !== LOCAL) expect(fs.texts.get(file), file).toBe(text)
     }
     expect(await fs.pathExists(`${course}/library/led/boitier.png`)).toBe(true)
+  })
+
+  it('suit le dossier par défaut à sa nouvelle place, avec ses fichiers récents', async () => {
+    fs.presetDataDir = null
+    fs.oneDrive = 'D:/OneDrive'
+    const course = 'D:/OneDrive/(Cours)/Robotique/(Ressources)/Pinout'
+    const target = 'D:/OneDrive/(Pinout)'
+    const shared = (theme: 'light' | 'dark'): string =>
+      serializeSettings({ ...DEFAULT_SETTINGS, theme })
+    // La machine est réglée sur l'ancien dossier par défaut, qui a ses données…
+    await fs.writeTextFile(
+      LOCAL,
+      serializeSettings({
+        ...DEFAULT_SETTINGS,
+        dataDir: '${OneDrive}/(Cours)/Robotique/(Ressources)/Pinout',
+        recentFiles: [
+          `${course}/Montages/feu.pinout`,
+          'C:/Docs/a.pinout',
+          `${course}/Montages/reste.pinout`,
+          `${course}/Diagrammes/tri.pinuml`
+        ]
+      })
+    )
+    await fs.writeTextFile(`${course}/Applications/parametres.json`, shared('dark'))
+    await fs.writeTextFile(`${course}/Composants/led/component.json`, component('led'))
+    await fs.writeTextFile(`${course}/Montages/feu.pinout`, '{}')
+    await fs.writeTextFile(`${course}/Montages/reste.pinout`, '{}')
+    await fs.writeTextFile(`${course}/Diagrammes/tri.pinuml`, '{}')
+
+    // … et le nouveau n'existe pas encore : rien ne bouge.
+    const before = useLibraryStore()
+    await before.init()
+    expect(before.dataRoot).toBe(course)
+    expect(before.relocation).toBeNull()
+
+    // On y copie tout (sauf un montage, oublié) ; un réglage y a changé depuis.
+    await fs.writeTextFile(`${target}/Applications/parametres.json`, shared('light'))
+    await fs.writeTextFile(`${target}/Composants/led/component.json`, component('led'))
+    await fs.writeTextFile(`${target}/Composants/bouton/component.json`, component('bouton'))
+    await fs.writeTextFile(`${target}/Montages/feu.pinout`, '{}')
+    await fs.writeTextFile(`${target}/Diagrammes/tri.pinuml`, '{}')
+    const old = new Map([...fs.texts].filter(([file]) => file.startsWith(course)))
+
+    // Lancement suivant : l'application passe au nouveau dossier, repris tel quel.
+    setActivePinia(createPinia())
+    const library = useLibraryStore()
+    await library.init()
+    expect(library.firstRun).toBeNull()
+    expect(library.problem).toBe('')
+    expect(library.dataRoot).toBe(target)
+    expect(library.relocation).toEqual({ from: course, to: target })
+    expect(library.libraryDir).toBe(`${target}/Composants`)
+    expect(library.sharedSettingsPath).toBe(`${target}/Applications/parametres.json`)
+    expect(library.theme).toBe('light')
+    expect(library.entries.map((entry) => entry.def?.id).sort()).toEqual(['bouton', 'led'])
+    expect(parseSettings(await fs.readTextFile(LOCAL)).dataDir).toBe('${OneDrive}/(Pinout)')
+    // Les fichiers récents de l'ancien dossier sont ceux du nouveau, quand ils y sont ; celui qui
+    // n'a pas été copié et ceux d'ailleurs gardent leur chemin.
+    expect(library.recentFiles).toEqual([
+      `${target}/Montages/feu.pinout`,
+      'C:/Docs/a.pinout',
+      `${course}/Montages/reste.pinout`,
+      `${target}/Diagrammes/tri.pinuml`
+    ])
+    expect(parseSettings(await fs.readTextFile(LOCAL)).recentFiles).toEqual(library.recentFiles)
+    expect(await library.followRelocation(`${course}/Composants/led`)).toBe(
+      `${target}/Composants/led`
+    )
+    expect(await library.followRelocation('C:/Docs/a.pinout')).toBe('C:/Docs/a.pinout')
+    // « Ouvrir » et « Enregistrer sous » partent du nouveau dossier.
+    expect(await library.documentDir('montage')).toBe(`${target}/Montages`)
+    expect(await library.documentDir('diagram')).toBe(`${target}/Diagrammes`)
+    // Rien n'est touché dans l'ancien dossier.
+    for (const [file, text] of old) expect(fs.texts.get(file), file).toBe(text)
+
+    // Lancement d'après : c'est fait, plus d'annonce.
+    setActivePinia(createPinia())
+    const later = useLibraryStore()
+    await later.init()
+    expect(later.dataRoot).toBe(target)
+    expect(later.relocation).toBeNull()
+  })
+
+  it('ne quitte pas un dossier qu’on a choisi soi-même', async () => {
+    fs.presetDataDir = null
+    fs.oneDrive = 'D:/OneDrive'
+    await fs.writeTextFile(LOCAL, serializeSettings({ ...DEFAULT_SETTINGS, dataDir: 'F:/Pinout' }))
+    await fs.writeTextFile(
+      'F:/Pinout/Applications/parametres.json',
+      serializeSettings(DEFAULT_SETTINGS)
+    )
+    await fs.writeTextFile(
+      'D:/OneDrive/(Pinout)/Applications/parametres.json',
+      serializeSettings(DEFAULT_SETTINGS)
+    )
+    const library = useLibraryStore()
+    await library.init()
+    expect(library.dataRoot).toBe('F:/Pinout')
+    expect(library.relocation).toBeNull()
+    expect(await library.followRelocation('F:/Pinout/Montages/a.pinout')).toBe(
+      'F:/Pinout/Montages/a.pinout'
+    )
   })
 
   it('sur une autre machine, prend ce que le dossier contient déjà', async () => {

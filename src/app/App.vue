@@ -39,7 +39,13 @@ import { wheelOnNumberField } from '@/ui/numberWheel'
 import { applyTheme } from '@/ui/theme'
 import type { UpdateStatus } from '../../electron/api'
 import { openExternalFile } from './externalFiles'
-import { currentSession, restoreSession, savedSession, saveSession } from './session'
+import {
+  currentSession,
+  relocatedSession,
+  restoreSession,
+  savedSession,
+  saveSession
+} from './session'
 import DataFolderDialog from './DataFolderDialog.vue'
 import ShortcutsHelp from './ShortcutsHelp.vue'
 import { updateButtonLabel, updateButtonTitle } from './update'
@@ -580,8 +586,13 @@ watch(
  * secours, les documents récupérés restent devant ; les autres reviennent derrière eux.
  */
 async function reopenLastSession(recovered: boolean): Promise<void> {
-  const previous = savedSession()
+  const saved = savedSession()
   try {
+    // Le dossier de Pinout a changé de place à ce lancement : ses documents se rouvrent de là.
+    const previous =
+      saved && library.relocation
+        ? await relocatedSession(saved, (path) => library.followRelocation(path))
+        : saved
     if (previous) {
       const stores = { schematic, diagram, editor, library }
       const shown = await restoreSession(previous, stores, !recovered)
@@ -723,6 +734,17 @@ onMounted(async () => {
   await library.init()
   // Premier lancement : rien ne continue tant que le dossier de Pinout n'est pas choisi.
   if (library.firstRun !== null) await new Promise<void>((resolve) => (dataFolderChosen = resolve))
+  // Le dossier de Pinout a suivi le dossier par défaut à sa nouvelle place : on le dit, une fois.
+  if (library.relocation !== null) {
+    await ask({
+      title: 'Dossier de Pinout',
+      message: 'Pinout range maintenant ses fichiers dans un autre dossier.',
+      // Les chemins vont dans la précision, qui passe à la ligne où il faut.
+      detail: `Nouveau dossier :\n${library.relocation.to}\n\nAncien dossier, laissé tel quel :\n${library.relocation.from}`,
+      buttons: [{ label: 'OK', value: true, kind: 'primary' }],
+      cancel: true
+    })
+  }
   // Les paramètres sont lus : le montage vierge du lancement repart du profil et de la couleur
   // par défaut.
   if (schematic.pristine) schematic.newProject()

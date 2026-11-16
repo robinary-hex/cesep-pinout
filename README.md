@@ -24,8 +24,9 @@ La version installée vérifie au lancement si une release plus récente existe 
 alors, par un bouton en haut à droite, de la télécharger puis de l'installer. La version portable
 signale la nouvelle version et renvoie vers la page de la release.
 
-La bibliothèque de composants vit par défaut dans OneDrive, sous `(Cours)\Robotique\(Ressources)\Pinout\library`, résolu
-sur chaque machine à partir de la racine OneDrive ; sans OneDrive, dans `%APPDATA%\Pinout\library`.
+Tout est rangé dans un seul dossier, le dossier de Pinout, demandé au premier lancement : par défaut
+`(Pinout)` à la racine de OneDrive (résolu sur chaque machine), sinon `Pinout` dans Documents. Il contient
+`Composants` (la bibliothèque), `Montages`, `Diagrammes` et `Applications` (réglages et profils de style).
 
 ## Installer sur le PC et le portable
 
