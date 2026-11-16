@@ -23,9 +23,9 @@ import { useDiagramStore } from './store'
 
 // Panneau de droite du diagramme (replié par défaut, touche I). Toujours : le diagramme, avec son
 // nom et sa police. Avec une sélection : seulement les propriétés de l'élément (nœud, lien, texte
-// libre, groupe). Un nœud a trois sections (décision du 16 novembre 2026) : son texte (titre,
-// sous-titre, style, taille, couleur du texte), sa forme (fond, puis couleur, puis bordure d'un
-// fond plein), sa position et sa taille.
+// libre, groupe). Un nœud a trois sections (décision du 16 novembre 2026) : « Forme » (son type,
+// son fond, puis sa couleur, puis la bordure d'un fond plein), « Texte » (titre, sous-titre, style,
+// taille, couleur du texte), « Position et taille ».
 
 const emit = defineEmits<{ exportImage: [] }>()
 const store = useDiagramStore()
@@ -370,7 +370,91 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
     </section>
 
     <template v-else-if="singleNode">
-      <!-- Le texte d'abord, dans sa section ; puis la forme : son fond, sa couleur, sa bordure. -->
+      <!-- La forme d'abord (son type, son fond, sa couleur, sa bordure), puis son texte. -->
+      <section class="block node-shape">
+        <h3>Forme</h3>
+        <label class="field">
+          <span>Type</span>
+          <select :value="singleNode.shape" @change="setNodeShape">
+            <optgroup v-for="family in NODE_FAMILIES" :key="family.label" :label="family.label">
+              <option v-for="shape in family.shapes" :key="shape" :value="shape">
+                {{ NODE_SPECS[shape].label }}
+              </option>
+            </optgroup>
+          </select>
+        </label>
+        <label class="field">
+          <span>Fond</span>
+          <select :value="singleNode.fill" @change="setNodeFill">
+            <option v-for="fill in FILLS" :key="fill.value" :value="fill.value">
+              {{ fill.label }}
+            </option>
+          </select>
+        </label>
+        <div class="field">
+          <span>Couleur</span>
+          <div class="swatches">
+            <button
+              v-for="choice in store.colorChoices"
+              :key="choice.hex"
+              type="button"
+              class="swatch"
+              :class="{ current: sameColor(choice.hex, singleNode.color) }"
+              :style="{ background: choice.hex }"
+              :title="choice.name"
+              @click="store.setCurrentColor(choice.hex)"
+            />
+          </div>
+        </div>
+        <div v-if="singleNode.fill === 'solid'" class="field border-color">
+          <div class="field-head">
+            <span>Couleur de la bordure</span>
+            <button
+              type="button"
+              class="auto"
+              :class="{ current: singleNode.borderColor === null }"
+              title="D’après la couleur du fond, éclaircie ou foncée pour s’en détacher"
+              @click="setNodeBorder(null)"
+            >
+              Auto
+            </button>
+          </div>
+          <div class="swatches">
+            <button
+              v-for="choice in store.colorChoices"
+              :key="choice.hex"
+              type="button"
+              class="swatch"
+              :class="{
+                current:
+                  singleNode.borderColor !== null && sameColor(choice.hex, singleNode.borderColor)
+              }"
+              :style="{ background: choice.hex }"
+              :title="choice.name"
+              @click="setNodeBorder(choice.hex)"
+            />
+            <ColorAdder
+              :value="singleNode.borderColor ?? singleNode.color"
+              title="Couleur personnalisée, gardée dans ce diagramme"
+              @pick="setCustomNodeBorder"
+            />
+          </div>
+        </div>
+        <div class="row">
+          <button
+            v-if="NODE_SPECS[singleNode.shape].text"
+            type="button"
+            class="with-icon"
+            title="Ajuste la taille du nœud à son texte, au plus près"
+            @click="store.fitNodeToText(singleNode.id)"
+          >
+            <Icon name="fit" /> Ajuster
+          </button>
+          <button type="button" class="with-icon" @click="store.duplicateSelection()">
+            <Icon name="duplicate" /> Dupliquer
+          </button>
+        </div>
+      </section>
       <section v-if="NODE_SPECS[singleNode.shape].text" class="block node-text">
         <h3>Texte</h3>
         <label class="field">
@@ -451,90 +535,6 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
               @click="setNodeTextColor(choice.hex)"
             />
           </div>
-        </div>
-      </section>
-      <section class="block node-shape">
-        <h3>{{ NODE_SPECS[singleNode.shape].label }}</h3>
-        <label class="field">
-          <span>Forme</span>
-          <select :value="singleNode.shape" @change="setNodeShape">
-            <optgroup v-for="family in NODE_FAMILIES" :key="family.label" :label="family.label">
-              <option v-for="shape in family.shapes" :key="shape" :value="shape">
-                {{ NODE_SPECS[shape].label }}
-              </option>
-            </optgroup>
-          </select>
-        </label>
-        <label class="field">
-          <span>Fond</span>
-          <select :value="singleNode.fill" @change="setNodeFill">
-            <option v-for="fill in FILLS" :key="fill.value" :value="fill.value">
-              {{ fill.label }}
-            </option>
-          </select>
-        </label>
-        <div class="field">
-          <span>Couleur</span>
-          <div class="swatches">
-            <button
-              v-for="choice in store.colorChoices"
-              :key="choice.hex"
-              type="button"
-              class="swatch"
-              :class="{ current: sameColor(choice.hex, singleNode.color) }"
-              :style="{ background: choice.hex }"
-              :title="choice.name"
-              @click="store.setCurrentColor(choice.hex)"
-            />
-          </div>
-        </div>
-        <div v-if="singleNode.fill === 'solid'" class="field border-color">
-          <div class="field-head">
-            <span>Couleur de la bordure</span>
-            <button
-              type="button"
-              class="auto"
-              :class="{ current: singleNode.borderColor === null }"
-              title="D’après la couleur du fond, éclaircie ou foncée pour s’en détacher"
-              @click="setNodeBorder(null)"
-            >
-              Auto
-            </button>
-          </div>
-          <div class="swatches">
-            <button
-              v-for="choice in store.colorChoices"
-              :key="choice.hex"
-              type="button"
-              class="swatch"
-              :class="{
-                current:
-                  singleNode.borderColor !== null && sameColor(choice.hex, singleNode.borderColor)
-              }"
-              :style="{ background: choice.hex }"
-              :title="choice.name"
-              @click="setNodeBorder(choice.hex)"
-            />
-            <ColorAdder
-              :value="singleNode.borderColor ?? singleNode.color"
-              title="Couleur personnalisée, gardée dans ce diagramme"
-              @pick="setCustomNodeBorder"
-            />
-          </div>
-        </div>
-        <div class="row">
-          <button
-            v-if="NODE_SPECS[singleNode.shape].text"
-            type="button"
-            class="with-icon"
-            title="Ajuste la taille du nœud à son texte, au plus près"
-            @click="store.fitNodeToText(singleNode.id)"
-          >
-            <Icon name="fit" /> Ajuster
-          </button>
-          <button type="button" class="with-icon" @click="store.duplicateSelection()">
-            <Icon name="duplicate" /> Dupliquer
-          </button>
         </div>
       </section>
       <section class="block">

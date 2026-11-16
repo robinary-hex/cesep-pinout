@@ -256,10 +256,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   (même décision, pour gagner de la hauteur) : le chemin est dans l'infobulle de l'onglet et
   du nom, à droite de la barre d'outils. Le panneau d'un nœud du diagramme a trois sections
   (décision du 16 novembre 2026 ; `.node-text`, `.node-shape` de `DiagramInspector.vue`) :
-  « Texte » d'abord (titre, sous-titre, style, taille, couleur du texte ; absente pour une
-  forme sans texte), puis la forme, sous son nom (« Forme », « Fond », puis juste dessous la
-  couleur de la forme, puis celle de la bordure quand le fond est plein), enfin « Position et
-  taille ».
+  « Forme » d'abord (« Type », la liste des formes ; « Fond », puis juste dessous la couleur
+  de la forme, puis celle de la bordure quand le fond est plein), puis « Texte » (titre,
+  sous-titre, style, taille, couleur du texte ; absente pour une forme sans texte), enfin
+  « Position et taille ». La section s'appelle « Forme », pas du nom de la forme choisie.
 - Barre d'application (`src/app/App.vue`) : tout à gauche, un bouton à trois barres ouvre le menu
   Fichier (nouveau, ouvrir, récents, enregistrer,
   exporter, paramètres, raccourcis, quitter) construit avec `ContextMenu` et appelant les actions
