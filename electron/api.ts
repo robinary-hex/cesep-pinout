@@ -61,7 +61,19 @@ export type UpdateStatus =
   | { state: 'installing'; version: string }
   /** Version portable : pas d'installation possible, on renvoie vers la page de la release. */
   | { state: 'manual'; version: string; url: string }
+  /** Un téléchargement ou une installation a échoué ; une recherche qui échoue ne se dit pas. */
   | { state: 'error'; message: string }
+
+/** Ce que donne une recherche de mise à jour demandée par l'utilisateur. */
+export type UpdateCheckResult =
+  /** Une version plus récente est publiée : le bouton de la barre d'application s'en occupe. */
+  | { outcome: 'available'; version: string }
+  /** L'application est à jour ; `version` est celle qui tourne. */
+  | { outcome: 'none'; version: string }
+  /** La recherche n'a pas abouti (hors ligne, GitHub injoignable). */
+  | { outcome: 'failed'; message: string }
+  /** Pas de mise à jour automatique ici (en développement). */
+  | { outcome: 'unsupported' }
 
 export interface PinoutApi {
   readTextFile(path: string): Promise<string>
@@ -104,8 +116,17 @@ export interface PinoutApi {
   cancelQuit(): Promise<void>
   /** Écoute les demandes du principal ; retourne la fonction qui désabonne. */
   onAppRequest(handler: (request: AppRequest) => void): () => void
+  /** Version de l'application qui tourne. */
+  getAppVersion(): Promise<string>
   /** Écoute l'état de la mise à jour automatique ; retourne la fonction qui désabonne. */
   onUpdateStatus(handler: (status: UpdateStatus) => void): () => void
+  /**
+   * Dernier état de la mise à jour, ou null s'il n'y a rien à faire. À demander une fois à
+   * l'écoute : l'état a pu être envoyé avant que le rendu ne soit prêt à le recevoir.
+   */
+  getUpdateStatus(): Promise<UpdateStatus | null>
+  /** Cherche une mise à jour maintenant, à la demande, et dit ce qu'il en est. */
+  checkForUpdate(): Promise<UpdateCheckResult>
   /** Télécharge la mise à jour disponible en arrière-plan. */
   downloadUpdate(): Promise<void>
   /**
@@ -136,7 +157,10 @@ export const IPC = {
   confirmQuit: 'app:confirm-quit',
   cancelQuit: 'app:cancel-quit',
   appRequest: 'app:request',
+  appVersion: 'app:version',
   updateStatus: 'update:status',
+  getUpdateStatus: 'update:get-status',
+  checkForUpdate: 'update:check',
   downloadUpdate: 'update:download',
   installUpdate: 'update:install'
 } as const

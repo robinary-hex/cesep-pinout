@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { updateButtonLabel, updateButtonTitle } from './update'
+import { updateButtonLabel, updateButtonTitle, updateCheckMessage } from './update'
 
 describe('bouton de mise à jour', () => {
   it('dit quoi faire à chaque étape', () => {
@@ -21,5 +21,24 @@ describe('bouton de mise à jour', () => {
       'Nouvelle version 1.2.0 : télécharger'
     )
     expect(updateButtonTitle({ state: 'error', message: 'Pas de réseau' })).toBe('Pas de réseau')
+  })
+})
+
+describe('recherche d’une mise à jour demandée par le menu', () => {
+  it('dit ce qu’il en est : disponible, à jour, ou recherche sans résultat', () => {
+    expect(updateCheckMessage({ outcome: 'available', version: '1.9.1' })).toEqual({
+      message: 'La version 1.9.1 est disponible.',
+      detail: 'Le bouton en haut à droite s’en occupe.'
+    })
+    expect(updateCheckMessage({ outcome: 'none', version: '1.9.0' })).toEqual({
+      message: 'Pinout 1.9.0 est à jour.',
+      detail: ''
+    })
+    // L'échec donne sa raison, et dit que Pinout réessaiera.
+    const failed = updateCheckMessage({ outcome: 'failed', message: 'net::ERR_NAME_NOT_RESOLVED' })
+    expect(failed.message).toBe('La recherche d’une mise à jour n’a pas abouti.')
+    expect(failed.detail).toContain('net::ERR_NAME_NOT_RESOLVED')
+    expect(failed.detail).toContain('réessaiera')
+    expect(updateCheckMessage({ outcome: 'unsupported' }).message).toContain('Pas de mise à jour')
   })
 })

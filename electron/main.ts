@@ -19,9 +19,11 @@ import {
   type DirEntry,
   type OpenDialogOptions,
   type SaveDialogOptions,
+  type UpdateCheckResult,
   type UpdateStatus
 } from './api'
 import { launchInstaller } from './installer'
+import { watchForUpdates, type UpdateWatch } from './updateWatch'
 
 // Seul code du projet qui touche Node, avec `installer.ts` : fenêtre, fichiers, dialogues, garde
 // à la fermeture, mise à jour.
@@ -73,6 +75,17 @@ let quitAskFallback: ReturnType<typeof setTimeout> | null = null
 let downloadedUpdate: { version: string; installer: string } | null = null
 /** Vrai tant qu'on attend que l'installeur démarre (la question de Windows est posée). */
 let installingUpdate = false
+/**
+ * Dernier état de mise à jour envoyé au rendu, qu'il redemande quand il se met à l'écoute : envoyé
+ * une seule fois, il se perdait quand GitHub répondait avant que la fenêtre ne soit prête.
+ */
+let updateStatus: UpdateStatus | null = null
+/** Version trouvée par la dernière recherche qui a abouti à une mise à jour. */
+let foundUpdate: string | null = null
+/** Pourquoi la dernière recherche n'a pas abouti. */
+let lastCheckError = ''
+/** La recherche des mises à jour : au lancement, puis de loin en loin (`updateWatch.ts`). */
+let updateWatch: UpdateWatch | null = null
 /** Au-delà, le journal des mises à jour repart de zéro. */
 const UPDATE_LOG_MAX_BYTES = 256 * 1024
 
@@ -87,6 +100,7 @@ async function exists(path: string): Promise<boolean> {
 
 /** État de la mise à jour, pour le bouton de la barre d'application. */
 function sendUpdateStatus(status: UpdateStatus): void {
+  updateStatus = status
   const window = mainWindowRef
   if (window && !window.isDestroyed()) window.webContents.send(IPC.updateStatus, status)
 }
@@ -137,6 +151,21 @@ async function installUpdate(): Promise<void> {
       ? { state: 'downloaded', version: ready.version }
       : { state: 'error', message: result.message }
   )
+}
+
+/**
+ * Recherche demandée par l'utilisateur (menu Fichier) : cherche maintenant, et dit ce qu'il en
+ * est. Une mise à jour déjà trouvée n'est pas recherchée de nouveau.
+ */
+async function checkForUpdate(): Promise<UpdateCheckResult> {
+  if (!app.isPackaged || updateWatch === null) return { outcome: 'unsupported' }
+  const outcome = await updateWatch.checkNow()
+  if (foundUpdate !== null && updateStatus !== null && updateStatus.state !== 'error') {
+    return { outcome: 'available', version: foundUpdate }
+  }
+  return outcome === 'failed'
+    ? { outcome: 'failed', message: lastCheckError }
+    : { outcome: 'none', version: app.getVersion() }
 }
 
 function registerIpc(): void {
@@ -243,6 +272,12 @@ function registerIpc(): void {
     quitFallback = null
   })
 
+  ipcMain.handle(IPC.appVersion, () => app.getVersion())
+
+  ipcMain.handle(IPC.getUpdateStatus, () => updateStatus)
+
+  ipcMain.handle(IPC.checkForUpdate, () => checkForUpdate())
+
   ipcMain.handle(IPC.downloadUpdate, async () => {
     if (app.isPackaged) await autoUpdater.downloadUpdate()
   })
@@ -251,9 +286,10 @@ function registerIpc(): void {
 }
 
 /**
- * Mise à jour automatique depuis les releases GitHub : vérification au lancement, téléchargement
- * quand l'utilisateur le demande, installation au clic (`installUpdate`). La version portable ne
- * peut pas se réinstaller : elle est renvoyée vers la page de la release. Rien en développement.
+ * Mise à jour automatique depuis les releases GitHub : recherche au lancement puis de loin en loin
+ * (`updateWatch.ts`), téléchargement quand l'utilisateur le demande, installation au clic
+ * (`installUpdate`). La version portable ne peut pas se réinstaller : elle est renvoyée vers la
+ * page de la release. Rien en développement.
  */
 function setupUpdater(): void {
   if (!app.isPackaged) return
@@ -276,6 +312,7 @@ function setupUpdater(): void {
   autoUpdater.autoInstallOnAppQuit = false
   autoUpdater.setFeedURL({ provider: 'github', owner: 'robinary-hex', repo: 'cesep-pinout' })
   autoUpdater.on('update-available', (info) => {
+    foundUpdate = info.version
     send(
       portable
         ? { state: 'manual', version: info.version, url: RELEASES_URL }
@@ -289,9 +326,29 @@ function setupUpdater(): void {
     downloadedUpdate = { version: info.version, installer: info.downloadedFile }
     send({ state: 'downloaded', version: info.version })
   })
-  autoUpdater.on('error', (error) => send({ state: 'error', message: error.message }))
-  // Hors ligne ou GitHub injoignable : on se tait, l'application démarre normalement.
-  autoUpdater.checkForUpdates().catch(() => undefined)
+  autoUpdater.on('error', (error) => {
+    // Une recherche qui n'aboutit pas (hors ligne, GitHub injoignable) ne se dit pas : elle est
+    // notée au journal et retentée plus tard. Seul un téléchargement raté s'affiche.
+    if (updateWatch?.checking) return
+    send({ state: 'error', message: error.message })
+  })
+  updateWatch = watchForUpdates({
+    check: async () => {
+      try {
+        await autoUpdater.checkForUpdates()
+        lastCheckError = ''
+      } catch (error) {
+        // La première ligne suffit à la boîte ; le journal a déjà le détail.
+        const reason = error instanceof Error ? error.message : String(error)
+        lastCheckError = (reason.split('\n')[0] ?? reason).slice(0, 300)
+        throw error
+      }
+    },
+    // Une mise à jour trouvée, en téléchargement ou prête : inutile d'en chercher une autre.
+    settled: () => updateStatus !== null && updateStatus.state !== 'error',
+    log: logUpdate
+  })
+  void updateWatch.checkNow()
 }
 
 /**

@@ -1,4 +1,11 @@
-import type { AppPaths, AppRequest, DirEntry, PinoutApi } from '../../../electron/api'
+import type {
+  AppPaths,
+  AppRequest,
+  DirEntry,
+  PinoutApi,
+  UpdateCheckResult,
+  UpdateStatus
+} from '../../../electron/api'
 
 /**
  * Système de fichiers en mémoire qui imite le pont Electron, pour les tests.
@@ -162,9 +169,35 @@ export class FakeFs implements PinoutApi {
     return () => this.requestHandlers.delete(handler)
   }
 
-  /** Pas de mise à jour dans les tests : l'abonnement ne reçoit jamais rien. */
-  onUpdateStatus(): () => void {
-    return () => undefined
+  /** Version que l'application dit être. */
+  appVersion = '1.2.3'
+  /** État de mise à jour que le principal tient en réserve ; null : rien à faire. */
+  updateStatus: UpdateStatus | null = null
+  /** Ce que répond une recherche de mise à jour demandée par l'utilisateur. */
+  updateCheck: UpdateCheckResult = { outcome: 'unsupported' }
+  private updateHandlers = new Set<(status: UpdateStatus) => void>()
+
+  getAppVersion(): Promise<string> {
+    return Promise.resolve(this.appVersion)
+  }
+
+  onUpdateStatus(handler: (status: UpdateStatus) => void): () => void {
+    this.updateHandlers.add(handler)
+    return () => this.updateHandlers.delete(handler)
+  }
+
+  getUpdateStatus(): Promise<UpdateStatus | null> {
+    return Promise.resolve(this.updateStatus)
+  }
+
+  checkForUpdate(): Promise<UpdateCheckResult> {
+    return Promise.resolve(this.updateCheck)
+  }
+
+  /** Le principal annonce un état de mise à jour au rendu. */
+  sendUpdateStatus(status: UpdateStatus): void {
+    this.updateStatus = status
+    for (const handler of this.updateHandlers) handler(status)
   }
 
   downloadUpdate(): Promise<void> {

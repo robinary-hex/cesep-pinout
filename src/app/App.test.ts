@@ -422,6 +422,97 @@ describe('session : ce qui était ouvert revient au lancement suivant', () => {
   })
 })
 
+describe('mise à jour : le bouton et la recherche à la demande', () => {
+  const button = (wrapper: ReturnType<typeof mount>): string | null => {
+    const found = wrapper.find('button.update')
+    return found.exists() ? found.text() : null
+  }
+
+  it('montre la mise à jour annoncée avant que la fenêtre n’écoute, puis suit les annonces', async () => {
+    // GitHub a répondu pendant que la fenêtre s'ouvrait : l'annonce est partie dans le vide, mais
+    // le principal l'a gardée, et la fenêtre la redemande en se mettant à l'écoute.
+    fs.updateStatus = { state: 'available', version: '9.9.9' }
+    const wrapper = mount(App, { attachTo: document.body })
+    await flushPromises()
+    expect(button(wrapper)).toBe('Mise à jour 9.9.9 : télécharger')
+    fs.sendUpdateStatus({ state: 'downloading', percent: 40 })
+    await flushPromises()
+    expect(button(wrapper)).toBe('Téléchargement 40 %')
+    fs.sendUpdateStatus({ state: 'downloaded', version: '9.9.9' })
+    await flushPromises()
+    expect(button(wrapper)).toBe('Installer 9.9.9 et relancer')
+    wrapper.unmount()
+    document.body.innerHTML = ''
+
+    // Rien à faire : pas de bouton.
+    setActivePinia(createPinia())
+    fs.updateStatus = null
+    const idle = mount(App, { attachTo: document.body })
+    await flushPromises()
+    expect(button(idle)).toBeNull()
+    idle.unmount()
+    document.body.innerHTML = ''
+  })
+
+  it('menu Fichier : la version qui tourne, et « Rechercher une mise à jour »', async () => {
+    const wrapper = mount(App, { attachTo: document.body })
+    await flushPromises()
+    const dialog = (): Element | null => document.body.querySelector('[role="dialog"]')
+    const ok = (): void => {
+      const found = [...document.body.querySelectorAll('button')].find(
+        (candidate) => candidate.textContent?.trim() === 'OK'
+      )
+      found?.click()
+    }
+    const search = async (): Promise<void> => {
+      await wrapper.get('button.menu-button').trigger('click')
+      await flushPromises()
+      menuEntry('Rechercher une mise à jour').click()
+      await flushPromises()
+    }
+    await wrapper.get('button.menu-button').trigger('click')
+    await flushPromises()
+    // La version de l'application est dite au-dessus de l'entrée.
+    const headings = [...document.body.querySelectorAll('.context-menu .heading')].map((heading) =>
+      heading.textContent?.trim()
+    )
+    expect(headings).toContain('Pinout 1.2.3')
+    expect(menuLabels()).toContain('Rechercher une mise à jour')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+
+    // À jour : la boîte le dit, pas de bouton.
+    fs.updateCheck = { outcome: 'none', version: '1.2.3' }
+    await search()
+    expect(dialog()?.getAttribute('aria-label')).toBe('Mise à jour')
+    expect(dialog()?.textContent).toContain('Pinout 1.2.3 est à jour.')
+    ok()
+    await flushPromises()
+    expect(dialog()).toBeNull()
+    expect(button(wrapper)).toBeNull()
+
+    // Une version plus récente : la boîte le dit et le bouton apparaît, même si son annonce
+    // s'était perdue.
+    fs.updateCheck = { outcome: 'available', version: '1.3.0' }
+    fs.updateStatus = { state: 'available', version: '1.3.0' }
+    await search()
+    expect(dialog()?.textContent).toContain('La version 1.3.0 est disponible.')
+    ok()
+    await flushPromises()
+    expect(button(wrapper)).toBe('Mise à jour 1.3.0 : télécharger')
+
+    // Hors ligne : la raison, et la promesse de réessayer.
+    fs.updateCheck = { outcome: 'failed', message: 'net::ERR_INTERNET_DISCONNECTED' }
+    await search()
+    expect(dialog()?.textContent).toContain('n’a pas abouti')
+    expect(dialog()?.textContent).toContain('net::ERR_INTERNET_DISCONNECTED')
+    ok()
+    await flushPromises()
+    wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+})
+
 describe('menu Fichier : fichiers récents', () => {
   it('retire un fichier de la liste par sa croix, sans fermer le menu ni toucher au fichier', async () => {
     const wrapper = mount(App, { attachTo: document.body })

@@ -19,7 +19,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   features et app ; le domaine n'importe rien d'autre.
 - Toute modification d'un document passe par une commande nommée du store de l'éditeur, qui
   produit des patches Immer via `src/state/history.ts` : c'est ce qui donne undo/redo.
-- `electron/main.ts` est le seul code qui touche Node (avec `electron/installer.ts`, qui lance
+- `electron/main.ts` est le seul code qui touche Node (avec `electron/updateWatch.ts`, qui
+  décide quand chercher une mise à jour, et `electron/installer.ts`, qui lance
   l'installeur d'une mise à jour). Le rendu passe par le pont IPC typé
   (`electron/api.ts`, exposé par `electron/preload.ts`), contextIsolation activé, sandbox activé.
   Dans les tests, `setBridge()` de `src/io/bridge.ts` remplace le pont par `src/io/testing/fakeFs.ts`.
@@ -262,7 +263,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   « Position et taille ». La section s'appelle « Forme », pas du nom de la forme choisie.
 - Barre d'application (`src/app/App.vue`) : tout à gauche, un bouton à trois barres ouvre le menu
   Fichier (nouveau, ouvrir, récents, enregistrer,
-  exporter, paramètres, raccourcis, quitter) construit avec `ContextMenu` et appelant les actions
+  exporter, paramètres, raccourcis, version et recherche d'une mise à jour, quitter) construit
+  avec `ContextMenu` et appelant les actions
   que `SchematicEditor` / `ComponentEditor` exposent par `defineExpose` selon le mode. Enregistrer
   sous propose le dossier du document, sinon le dernier dossier qui a servi pour ce genre de
   document, sinon son dossier dans le dossier de Pinout (`documentDir` du store de la
@@ -894,7 +896,20 @@ release/latest.yml release/pinout-X.Y.Z-portable.exe --latest` avec des notes qu
 - Mise à jour automatique (`electron-updater`, `setupUpdater` dans `electron/main.ts`) : au
   lancement d'une version installée, vérification de la dernière release GitHub ; si elle est plus
   récente, un bouton apparaît en haut à droite (`App.vue`, libellés dans `src/app/update.ts`) :
-  télécharger en arrière-plan, puis installer et relancer. Installer (décision du 14 novembre
+  télécharger en arrière-plan, puis installer et relancer. Le bouton ne tient pas à un seul
+  message (décision du 16 novembre 2026, après une 1.8.0 qui n'annonçait pas la 1.9.0) :
+  le principal garde le dernier état (`updateStatus`) et le rendu le redemande en se mettant
+  à l'écoute (`getUpdateStatus`, `recoverUpdateStatus` d'`App.vue`), car GitHub peut
+  répondre avant que la fenêtre ne soit prête, et l'annonce partait alors dans le vide pour
+  toute la séance. La recherche se refait de loin en loin tant que l'application reste
+  ouverte, et peu après un échec (`electron/updateWatch.ts` : toutes les trois heures, cinq
+  minutes après une recherche ratée ; jamais pendant qu'une mise à jour est en main). Une
+  recherche qui n'aboutit pas (hors ligne, GitHub injoignable) ne s'affiche pas : elle est
+  notée dans `update.log` et retentée ; seul un téléchargement ou une installation ratés
+  donnent le bouton « Mise à jour impossible ». Le menu Fichier dit la version qui tourne
+  (`getAppVersion`) et propose « Rechercher une mise à jour » (`checkForUpdate`), qui
+  répond dans une boîte : disponible, à jour, ou recherche sans résultat et pourquoi
+  (`updateCheckMessage`). Installer (décision du 14 novembre
   2026 ; `installUpdate` de `main.ts`, `launchInstaller` d'`electron/installer.ts`) :
   l'application lance elle-même l'installeur par `elevate.exe` et attend qu'il tourne (`elevate`
   rend 0 une fois la question de Windows acceptée) avant de se fermer ; pendant ce temps le

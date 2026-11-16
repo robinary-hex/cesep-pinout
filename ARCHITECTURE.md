@@ -21,7 +21,9 @@ La règle ESLint `no-restricted-imports` sur `src/domain/**` rend la ligne du do
 
 - **Principal** (`electron/main.ts`) : crée la fenêtre, répond aux appels IPC (fichiers texte et
   binaires, dossiers, suppression d'un dossier de composant, dialogues, chemins), garde la
-  fermeture, tient la mise à jour. `electron/installer.ts` lance l'installeur d'une mise à jour
+  fermeture, tient la mise à jour : il en garde le dernier état, que le rendu redemande en se
+  mettant à l'écoute. `electron/updateWatch.ts` décide quand la chercher (au lancement, de loin
+  en loin, peu après un échec). `electron/installer.ts` lance l'installeur d'une mise à jour
   avec les droits d'administrateur (`elevate.exe`) et dit s'il tourne : l'application ne se ferme
   qu'alors.
 - **Preload** (`electron/preload.ts`) : expose `window.pinout`, implémentation typée de
@@ -271,7 +273,8 @@ pas stockées, elles se déduisent de la géométrie des fils.
 - `zod` : validation des fichiers et types dérivés.
 - `electron`, `electron-vite`, `electron-builder` : coque, build, installeur.
 - `electron-updater` : mise à jour automatique depuis les releases GitHub (vérification au
-  lancement, téléchargement à la demande, installation au clic) ; lit `latest.yml` de la release.
+  lancement puis de loin en loin, téléchargement à la demande, installation au clic) ; lit
+  `latest.yml` de la release.
   `scripts/admin-update.mjs` y pose `isAdminRightsRequired` après le build : l'installeur d'une
   mise à jour se lance alors avec les droits d'administrateur (`elevate.exe`).
 - Outillage : TypeScript strict, ESLint (configs electron-toolkit + plugin Vue), Prettier, Vitest,

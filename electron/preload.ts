@@ -40,6 +40,9 @@ const api: PinoutApi = {
     ipcRenderer.on(IPC.appRequest, listener)
     return () => ipcRenderer.removeListener(IPC.appRequest, listener)
   },
+  getAppVersion: () => ipcRenderer.invoke(IPC.appVersion),
+  getUpdateStatus: () => ipcRenderer.invoke(IPC.getUpdateStatus),
+  checkForUpdate: () => ipcRenderer.invoke(IPC.checkForUpdate),
   onUpdateStatus: (handler) => {
     const listener = (_event: IpcRendererEvent, status: UpdateStatus): void => handler(status)
     ipcRenderer.on(IPC.updateStatus, listener)

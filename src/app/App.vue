@@ -37,7 +37,7 @@ import type { IconName } from '@/ui/icons'
 import { openModals } from '@/ui/modalState'
 import { wheelOnNumberField } from '@/ui/numberWheel'
 import { applyTheme } from '@/ui/theme'
-import type { UpdateStatus } from '../../electron/api'
+import type { UpdateCheckResult, UpdateStatus } from '../../electron/api'
 import { openExternalFile } from './externalFiles'
 import {
   currentSession,
@@ -48,7 +48,7 @@ import {
 } from './session'
 import DataFolderDialog from './DataFolderDialog.vue'
 import ShortcutsHelp from './ShortcutsHelp.vue'
-import { updateButtonLabel, updateButtonTitle } from './update'
+import { updateButtonLabel, updateButtonTitle, updateCheckMessage } from './update'
 
 // Coque applicative : menu Fichier, bascule entre les modes (un pictogramme chacun), onglets des
 // documents ouverts du mode affiché, thème, paramètres, aide, copies de secours et garde à la
@@ -77,10 +77,45 @@ const fileMenu = ref<{ x: number; y: number } | null>(null)
 
 const MAX_RECENT_IN_MENU = 8
 
-// Mise à jour automatique : le principal vérifie GitHub au lancement et tient cet état à jour ;
-// le bouton en haut à droite n'apparaît que s'il y a quelque chose à faire.
+// Mise à jour automatique : le principal cherche sur GitHub au lancement, puis de loin en loin, et
+// tient cet état à jour ; le bouton en haut à droite n'apparaît que s'il y a quelque chose à faire.
 const update = ref<UpdateStatus | null>(null)
 let unsubscribeUpdate: (() => void) | null = null
+/** Version de l'application, dite dans le menu Fichier. */
+const appVersion = ref('')
+
+/**
+ * Reprend l'état que le principal tient en réserve. Il l'envoie quand il change, mais GitHub répond
+ * parfois avant que cette fenêtre n'écoute : l'annonce d'une mise à jour se perdait alors, et le
+ * bouton n'apparaissait pas de toute la séance (décision du 16 novembre 2026).
+ */
+async function recoverUpdateStatus(): Promise<void> {
+  try {
+    const status = await bridge().getUpdateStatus()
+    if (status !== null) update.value = status
+  } catch {
+    // Sans réponse, le bouton attend l'annonce suivante.
+  }
+}
+
+/** Menu Fichier : cherche une mise à jour maintenant, et dit ce qu'il en est. */
+async function checkForUpdate(): Promise<void> {
+  let result: UpdateCheckResult
+  try {
+    result = await bridge().checkForUpdate()
+  } catch (error) {
+    result = { outcome: 'failed', message: error instanceof Error ? error.message : String(error) }
+  }
+  await recoverUpdateStatus()
+  const text = updateCheckMessage(result)
+  await ask({
+    title: 'Mise à jour',
+    message: text.message,
+    ...(text.detail.length > 0 ? { detail: text.detail } : {}),
+    buttons: [{ label: 'OK', value: true, kind: 'primary' }],
+    cancel: true
+  })
+}
 
 async function onUpdateClick(): Promise<void> {
   const current = update.value
@@ -416,6 +451,10 @@ function fileMenuItems(): MenuItem[] {
       { hint: 'F1', icon: 'help' }
     ),
     SEPARATOR,
+    // La version qui tourne, et de quoi en chercher une plus récente sans attendre.
+    heading(appVersion.value ? `Pinout ${appVersion.value}` : 'Pinout'),
+    item('Rechercher une mise à jour', () => void checkForUpdate(), { icon: 'refresh' }),
+    SEPARATOR,
     item('Quitter', () => window.close(), { icon: 'power' })
   ]
   if (mode.value === 'components') {
@@ -730,6 +769,13 @@ onMounted(async () => {
   unsubscribeUpdate = bridge().onUpdateStatus((status) => {
     update.value = status
   })
+  void recoverUpdateStatus()
+  void bridge()
+    .getAppVersion()
+    .then((version) => {
+      appVersion.value = version
+    })
+    .catch(() => undefined)
   unsubscribeOpenFile = bridge().onOpenFile((path) => void openExternal(path))
   await library.init()
   // Premier lancement : rien ne continue tant que le dossier de Pinout n'est pas choisi.
