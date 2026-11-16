@@ -145,6 +145,15 @@ function commonItems(): MenuItem[] {
     ...groupItems(),
     item('Dupliquer', () => store.duplicateSelection(), { hint: 'Ctrl+D', icon: 'duplicate' }),
     item('Copier', () => store.copySelection(), { hint: 'Ctrl+C', icon: 'copy' }),
+    // Un seul élément : son style peut aller aux autres du même type.
+    ...(store.styleCandidate
+      ? [
+          item('Copier le style', () => store.startStyleCopy(), {
+            hint: 'S',
+            icon: 'paint-roller'
+          })
+        ]
+      : []),
     item(
       'Propriétés',
       () => {
@@ -650,6 +659,9 @@ function onKeyDown(event: KeyboardEvent): void {
     case 'e':
       store.startTextTool()
       break
+    case 's':
+      store.toggleStyleCopy()
+      break
     case 'i':
       store.inspectorOpen = !store.inspectorOpen
       break
@@ -681,6 +693,11 @@ function onKeyDown(event: KeyboardEvent): void {
       if (store.stopLinkDrawing()) break
       if (store.placement) {
         store.stopPlacing()
+        break
+      }
+      // La copie de style s'arrête ; l'élément dont on copiait le style reste sélectionné.
+      if (store.tool === 'style') {
+        store.selectTool()
         break
       }
       if (store.hasSelection) {
@@ -736,8 +753,10 @@ defineExpose({ createNew, open, openRecent, save, openExport })
         @edit-link="editLinkLabel"
         @edit-text="editText"
       />
+      <!-- Montré le temps d'une sélection, le panneau flotte sur le dessin : pendant la copie de
+           style il s'efface, pour ne pas cacher les éléments à qui donner le style. -->
       <DiagramInspector
-        v-if="store.inspectorOpen"
+        v-if="store.inspectorOpen && !(store.inspectorFloating && store.tool === 'style')"
         :class="{ floating: store.inspectorFloating }"
         @export-image="openExport"
       />

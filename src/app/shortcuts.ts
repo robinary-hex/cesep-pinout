@@ -261,8 +261,13 @@ export const SHORTCUT_SECTIONS: ShortcutSection[] = [
           k('V', 'Sélection', { icon: 'cursor' }),
           k('F', 'Lien', { icon: 'link' }),
           k('E', 'Texte', { icon: 'type' }),
+          k('S', 'Copie de style', { icon: 'paint-roller' }),
           k('clic / glisser', 'Poser une forme', { icon: 'square' })
         ]
+      },
+      {
+        title: 'Copier un style',
+        rows: [k('clic / glisser', 'Le donner au même type'), k('Échap', 'Arrêter la copie')]
       },
       {
         title: 'Tracer un lien',

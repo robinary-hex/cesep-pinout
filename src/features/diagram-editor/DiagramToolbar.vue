@@ -27,6 +27,14 @@ const store = useDiagramStore()
 
 const fileLabel = computed(() => (store.filePath ? baseName(store.filePath) : 'Non enregistré'))
 
+/** Infobulle du bouton de copie de style, selon qu'elle est en cours, possible ou non. */
+const styleCopyTitle = computed(() => {
+  if (store.tool === 'style') return 'Arrêter la copie de style (S ou Échap)'
+  return store.styleCandidate
+    ? 'Copier le style de la sélection : clic ou lasso sur les éléments du même type (S)'
+    : 'Copier le style (S) : sélectionne d’abord une forme, un lien ou un texte'
+})
+
 function isCurrent(hex: string): boolean {
   return hex.toLowerCase() === store.currentColor.toLowerCase()
 }
@@ -141,6 +149,16 @@ function toggleEndArrow(): void {
           @click="store.startTextTool()"
         >
           <Icon name="type" :size="18" />
+        </button>
+        <button
+          type="button"
+          class="tool icon-only style-copy"
+          :class="{ active: store.tool === 'style' }"
+          :disabled="store.tool !== 'style' && store.styleCandidate === null"
+          :title="styleCopyTitle"
+          @click="store.toggleStyleCopy()"
+        >
+          <Icon name="paint-roller" :size="18" />
         </button>
       </div>
 
@@ -280,8 +298,10 @@ function toggleEndArrow(): void {
   border-color: var(--accent-border);
 }
 
+/* Pastilles serrées : avec l'outil de copie de style, la barre tient encore sur une ligne dans
+   la fenêtre de départ (1400 px). */
 .palette {
-  gap: 3px;
+  gap: 2px;
 }
 
 .swatch {
@@ -305,7 +325,7 @@ function toggleEndArrow(): void {
 .fill-choice {
   display: inline-flex;
   align-items: center;
-  padding: 4px 5px;
+  padding: 4px 3px;
   background: var(--paper);
 }
 

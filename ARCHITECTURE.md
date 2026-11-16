@@ -69,7 +69,9 @@ les jonctions du montage, rien ne dit dans le fichier qu'un lien est accroché �
 `diagramLinks.ts` le déduit (une extrémité posée sur un point d'accroche) et, à chaque commande
 qui déplace, redimensionne ou change un nœud, `linksFollowingNodes` fait suivre les extrémités
 concernées en réutilisant `wiresFollowingPins`. Il n'y a pas de routage automatique : les coudes
-sont ceux que Robin pose. Le store (`diagram-editor/store.ts`) reprend la structure de celui du
+sont ceux que Robin pose. `diagramStyleCopy.ts` dit ce qu'est l'allure d'un élément (les listes
+`…_LOOK_KEYS`) et à qui elle peut aller (le même type, et la même forme pour un nœud) : l'outil
+de copie de style du store ne fait que l'appliquer, d'un clic ou d'un cadre. Le store (`diagram-editor/store.ts`) reprend la structure de celui du
 montage : commandes nommées, onglets de `useDocumentTabs`, vue de `view.ts`.
 
 Les couleurs d'un nœud sont une règle du domaine (`nodePaint`) : contour, fond teinté (la couleur

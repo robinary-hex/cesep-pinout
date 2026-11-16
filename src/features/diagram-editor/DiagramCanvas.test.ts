@@ -409,3 +409,116 @@ describe('canevas du diagramme : barre d’état', () => {
     wrapper.unmount()
   })
 })
+
+describe('canevas du diagramme : copie de style', () => {
+  it('un clic donne le style à une forme du même type, un glisser à tout un cadre', async () => {
+    const store = useDiagramStore()
+    const source = store.addNode('rounded', 0, 0)
+    store.setNodesStyle([source], { color: '#d62828', fill: 'solid' })
+    store.addNode('rounded', 0, 10)
+    store.addNode('rounded', 0, 20)
+    store.addNode('rect', 30, 10)
+    store.addNode('rounded', 30, 20)
+    store.clearSelection()
+    store.selectedNodes = [source]
+    const wrapper = mount(DiagramCanvas, { attachTo: document.body })
+    const svg = wrapper.get('svg.diagram')
+    const looks = (): string[] => store.doc.nodes.map((node) => `${node.shape} ${node.fill}`)
+    const first = looks()
+    store.startStyleCopy()
+    await nextTick()
+    expect(svg.classes()).toContain('styling')
+    // Les formes du même type s'annoncent (curseur) : ni la source, ni le rectangle.
+    const takers = (): boolean[] =>
+      wrapper.findAll('.node').map((node) => node.classes().includes('takes-style'))
+    expect(takers()).toEqual([false, true, true, false, true])
+    // Un clic sur une action : elle prend le style ; la sélection reste sur la source.
+    await fire(wrapper.findAll('.node .hit')[1]!, 'pointerdown', at(store, 8, 13))
+    await fire(svg, 'pointerup', at(store, 8, 13))
+    expect(store.doc.nodes[1]).toMatchObject({ color: '#d62828', fill: 'solid' })
+    expect(store.selectedNodes).toEqual([source])
+    expect(store.tool).toBe('style')
+    // Un clic sur le rectangle : rien ne change.
+    const afterClick = store.doc
+    await fire(wrapper.findAll('.node .hit')[3]!, 'pointerdown', at(store, 38, 13))
+    await fire(svg, 'pointerup', at(store, 38, 13))
+    expect(store.doc).toBe(afterClick)
+    // Un clic dans le vide non plus.
+    await fire(svg, 'pointerdown', at(store, 60, 60))
+    await fire(svg, 'pointerup', at(store, 60, 60))
+    expect(store.doc).toBe(afterClick)
+    // Un glisser trace un cadre : il prend le rectangle et deux actions, seules les actions changent.
+    await fire(svg, 'pointerdown', at(store, -2, 8))
+    await fire(svg, 'pointermove', at(store, 50, 28))
+    expect(wrapper.find('.band').exists()).toBe(true)
+    await fire(svg, 'pointerup', at(store, 50, 28))
+    expect(wrapper.find('.band').exists()).toBe(false)
+    expect(looks()).toEqual([
+      'rounded solid',
+      'rounded solid',
+      'rounded solid',
+      first[3],
+      'rounded solid'
+    ])
+    expect(store.doc.nodes.map((node) => node.color)).toEqual([
+      '#d62828',
+      '#d62828',
+      '#d62828',
+      afterClick.nodes[3]?.color,
+      '#d62828'
+    ])
+    expect(store.status).toBe('Style copié sur 2 formes « Action ».')
+    // Le cadre est une seule commande ; la sélection n'a pas bougé.
+    store.undo()
+    expect(store.doc.nodes[2]?.fill).toBe(afterClick.nodes[2]?.fill)
+    expect(store.doc.nodes[4]?.fill).toBe(afterClick.nodes[4]?.fill)
+    expect(store.selectedNodes).toEqual([source])
+    // Hors de l'outil, le curseur et les annonces s'en vont.
+    store.selectTool()
+    await nextTick()
+    expect(svg.classes()).not.toContain('styling')
+    expect(takers()).toEqual([false, false, false, false, false])
+    wrapper.unmount()
+  })
+
+  it('d’un lien à un autre : un clic sur le trait ou sur son étiquette', async () => {
+    const store = useDiagramStore()
+    const a = store.addLink([
+      [0, 0],
+      [20, 0]
+    ])
+    const b = store.addLink([
+      [0, 10],
+      [20, 10]
+    ])
+    const c = store.addLink([
+      [0, 20],
+      [20, 20]
+    ])
+    if (!a || !b || !c) throw new Error('liens attendus')
+    store.setLinksStyle([a], { color: '#d62828', dash: 'dashed' })
+    store.setLinkLabel(c, 'vrai')
+    const node = store.addNode('rounded', 40, 0)
+    store.clearSelection()
+    store.selectedLinks = [a]
+    const wrapper = mount(DiagramCanvas, { attachTo: document.body })
+    const svg = wrapper.get('svg.diagram')
+    store.startStyleCopy()
+    await nextTick()
+    await fire(wrapper.findAll('.link-hit')[1]!, 'pointerdown', at(store, 10, 10))
+    await fire(svg, 'pointerup', at(store, 10, 10))
+    expect(store.doc.links[1]).toMatchObject({ color: '#d62828', dash: 'dashed' })
+    await fire(wrapper.get('.link-label'), 'pointerdown', at(store, 10, 19))
+    await fire(svg, 'pointerup', at(store, 10, 19))
+    expect(store.doc.links[2]).toMatchObject({ color: '#d62828', dash: 'dashed', label: 'vrai' })
+    // Une forme n'est pas un lien : elle ne change pas, et ne s'annonce pas.
+    const before = store.doc
+    await fire(wrapper.get('.node .hit'), 'pointerdown', at(store, 48, 3))
+    await fire(svg, 'pointerup', at(store, 48, 3))
+    expect(store.doc).toBe(before)
+    expect(wrapper.get('.node').classes()).not.toContain('takes-style')
+    expect(store.doc.nodes.find((entry) => entry.id === node)?.fill).toBe(before.nodes[0]?.fill)
+    expect(store.selectedLinks).toEqual([a])
+    wrapper.unmount()
+  })
+})

@@ -429,10 +429,31 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   - Gestes : forme prise dans la bibliothèque (clic puis clic, ou glisser-déposer), le texte se
     tape aussitôt sur place (petit éditeur HTML par-dessus le nœud : Entrée valide, Maj+Entrée va
     à la ligne, Échap abandonne) ; double-clic ou Entrée sur un nœud pour y revenir. V sélection,
-    F lien, E texte libre (le modèle des étiquettes texte du montage), R tourne une barre, I
+    F lien, E texte libre (le modèle des étiquettes texte du montage), S copie de style, R
+    tourne une barre, I
     panneau, Ctrl+Page haut/bas ordre des nœuds, le reste comme le montage. En sélection, Ctrl
     enfoncée, un anneau montre le point d'accroche qui serait saisi (`anchorGrab` : le plus
     proche du pointeur sur le nœud survolé) : Ctrl+glisser tire un lien de ce point.
+  - Copie de style (décision du 16 novembre 2026 ; `src/domain/diagramStyleCopy.ts`, outil
+    `style` du store) : un élément seul sélectionné (`styleCandidate`), puis le bouton au
+    rouleau de la barre d'outils (grisé sans cela), la touche S ou « Copier le style » du clic
+    droit (`startStyleCopy`, `toggleStyleCopy`). Tant que l'outil est actif, un clic donne
+    l'allure de cet élément à l'élément visé, un glisser à tout ce que touche le cadre, parti
+    du vide ou d'un élément (`style-band` du canevas, `giveCopiedStyle` : une commande par
+    geste). Un autre outil ou Échap l'arrête ; Échap arrête la copie avant de vider la
+    sélection. Le style ne va qu'au même type : une forme à celles de la même espèce (une
+    action à des actions, jamais à un rectangle), un lien aux liens, un texte libre aux textes
+    (`sameTypeIds`, `styleRecipients`) ; les autres éléments visés ne changent pas, et la
+    barre d'état le dit. On copie l'allure, pas l'élément : ni son texte, ni sa place, ni la
+    taille de sa boîte (`NODE_LOOK_KEYS` : couleur, fond, bordure, police, gras, italique,
+    souligné, barré, taille et couleur du texte ; `LINK_LOOK_KEYS` : couleur, trait, pointes,
+    fond de l'étiquette ; `TEXT_LOOK_KEYS` : taille, style, couleur, fond, alignement). Tout
+    nouveau réglage d'allure s'ajoute à ces listes. La source est suivie par son identifiant
+    (`styleSource`) : la retoucher pendant la copie change ce qu'on donne ensuite, la
+    supprimer arrête l'outil (`pruneSelection`). La sélection ne bouge pas pendant la copie :
+    elle montre la source ; le panneau de propriétés, s'il flottait, s'efface le temps de la
+    copie (il cacherait des éléments à styler). Curseur : la croix, et un rouleau sur les
+    éléments du type copié (`styleTakers`, `.takes-style`).
   - Onglets, copies de secours (`diagramme-<onglet>.*`), question à la fermeture, fichiers
     récents (mêlés à ceux des montages, chaque menu ne montre que les siens), export PNG/SVG
     (`ExportDialog` reçoit de l'éditeur ce qu'il exporte) : comme le montage. À l'export d'un
@@ -661,7 +682,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     trois, avant l'ordre : « Profil de style », pour toute la sélection (`profileItems`).
   - Diagramme : nœud (forme, texte, fond, ordre), lien (étiquette : côté, fond, retrait ;
     sommets, sans diagonale), texte (style, alignement), vide (poser une forme du catalogue à
-    l'endroit du clic).
+    l'endroit du clic). Sur un élément seul, « Copier le style » après « Copier ».
     Dans les tests, `src/ui/testing/menus.ts` lit et actionne le menu ouvert.
 - Variantes d'un composant (décision du 11 novembre 2026) : le même composant dessiné autrement
   (LED rouge ou verte, pattes longues ou courtes). Une seule liste par composant, pas de

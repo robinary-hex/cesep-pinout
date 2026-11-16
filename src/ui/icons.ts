@@ -115,6 +115,12 @@ export const ICONS = {
   'arrow-left': ['M19 12H5', 'M12 5l-7 7 7 7'],
   // Diagramme : outil Lien, trait pointillé, inversion du sens d'un lien.
   link: ['M4 19h8V6h8', 'M16 2l4 4-4 4'],
+  // Rouleau de peinture : la copie de style.
+  'paint-roller': [
+    'M4 2h12a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z',
+    'M10 16v-2a2 2 0 0 1 2-2h8a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2',
+    'M9 16h2a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1z'
+  ],
   dash: ['M3 12h4', 'M10 12h4', 'M17 12h4'],
   code: ['M8 7l-5 5 5 5', 'M16 7l5 5-5 5'],
   swap: ['M4 8h14', 'M14 4l4 4-4 4', 'M20 16H6', 'M10 12l-4 4 4 4'],

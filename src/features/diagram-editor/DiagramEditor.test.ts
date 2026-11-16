@@ -88,6 +88,7 @@ describe('menu contextuel du diagramme', () => {
       'Ordre',
       'Dupliquer',
       'Copier',
+      'Copier le style',
       'Propriétés',
       'Supprimer'
     ])
@@ -409,6 +410,73 @@ describe('diagramme : flèches du clavier', () => {
     expect(where()).toEqual([16, 5])
     press('ArrowDown')
     expect(where()).toEqual([16, 6])
+    wrapper.unmount()
+  })
+})
+
+describe('diagramme : copie de style', () => {
+  it('bouton, touche S et clic droit la démarrent ; Échap l’arrête et garde la sélection', async () => {
+    const store = useDiagramStore()
+    const wrapper = mount(DiagramEditor, { attachTo: document.body })
+    const press = (key: string): void => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key }))
+    }
+    const button = (): ReturnType<typeof wrapper.get> => wrapper.get('.toolbar button.style-copy')
+    // Rien de sélectionné : pas de style à copier, le bouton est grisé et S ne fait rien.
+    expect(button().attributes('disabled')).toBeDefined()
+    press('s')
+    expect(store.tool).toBe('select')
+    expect(store.status).toContain('sélectionne d’abord')
+    const id = store.addNode('rounded', 0, 0)
+    await flushPromises()
+    expect(button().attributes('disabled')).toBeUndefined()
+    press('s')
+    await flushPromises()
+    expect(store.tool).toBe('style')
+    expect(button().classes()).toContain('active')
+    // Échap arrête la copie d'abord ; la sélection ne part qu'à l'appui suivant.
+    press('Escape')
+    await flushPromises()
+    expect(store.tool).toBe('select')
+    expect(store.selectedNodes).toEqual([id])
+    expect(button().classes()).not.toContain('active')
+    // Le bouton la démarre, puis l'arrête.
+    await button().trigger('click')
+    expect(store.tool).toBe('style')
+    await button().trigger('click')
+    expect(store.tool).toBe('select')
+    // Un autre outil l'arrête aussi.
+    press('s')
+    expect(store.tool).toBe('style')
+    press('v')
+    expect(store.tool).toBe('select')
+    // Montré par une sélection, le panneau flotte sur le dessin : il s'efface le temps de la
+    // copie, pour ne pas cacher les éléments à styler, et revient ensuite.
+    store.revealInspector()
+    await flushPromises()
+    expect(store.inspectorFloating).toBe(true)
+    expect(wrapper.find('.inspector').exists()).toBe(true)
+    press('s')
+    await flushPromises()
+    expect(wrapper.find('.inspector').exists()).toBe(false)
+    press('Escape')
+    await flushPromises()
+    expect(wrapper.find('.inspector').exists()).toBe(true)
+    // Ouvert pour de bon, il reste à sa place pendant la copie.
+    store.inspectorOpen = true
+    press('s')
+    await flushPromises()
+    expect(wrapper.find('.inspector').exists()).toBe(true)
+    press('Escape')
+    store.inspectorOpen = false
+    await flushPromises()
+    // Clic droit sur un élément : « Copier le style ».
+    rightClick(wrapper.get('.node .hit').element, ...at(store, 4, 3))
+    await flushPromises()
+    menuEntry('Copier le style').click()
+    await flushPromises()
+    expect(store.tool).toBe('style')
+    expect(store.styleSource).toEqual({ kind: 'node', id })
     wrapper.unmount()
   })
 })

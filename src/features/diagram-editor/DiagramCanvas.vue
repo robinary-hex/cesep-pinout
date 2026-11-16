@@ -41,6 +41,7 @@ import {
   type LinkLabelSide,
   type LocalPoint,
   type NodeAnchor,
+  type StyleElement,
   type TextLabel
 } from '@/domain'
 import DiagramNodeGraphic from '@/render/DiagramNodeGraphic.vue'
@@ -100,6 +101,8 @@ type Drag =
       duplicate: boolean
     }
   | { kind: 'band'; start: LocalPoint; current: LocalPoint; additive: boolean }
+  // Copie de style : un clic donne le style à l'élément pressé, un glisser à tout un cadre.
+  | { kind: 'style-band'; start: LocalPoint; current: LocalPoint; target: StyleElement | null }
   | { kind: 'text-box'; start: GridPoint; current: GridPoint }
   | { kind: 'node-handle'; id: string; handleId: string; original: Box; preview: Box }
   | { kind: 'text-handle'; id: string; handleId: string; original: Box; preview: Box }
@@ -555,8 +558,25 @@ function normalizeRect(a: LocalPoint, b: LocalPoint): GridRect {
 
 const band = computed(() => {
   const current = drag.value
-  return current?.kind === 'band' ? normalizeRect(current.start, current.current) : null
+  return current?.kind === 'band' || current?.kind === 'style-band'
+    ? normalizeRect(current.start, current.current)
+    : null
 })
+
+/** Les éléments que touche un cadre : ceux qu'un lasso prend. */
+function elementsIn(rect: GridRect): { nodes: string[]; links: string[]; texts: string[] } {
+  return {
+    nodes: store.doc.nodes
+      .filter((node) => rectsIntersect(nodeBounds(node), rect))
+      .map((node) => node.id),
+    links: store.doc.links
+      .filter((link) => wireIntersectsRect(link.points, rect))
+      .map((link) => link.id),
+    texts: store.doc.texts
+      .filter((text) => rectsIntersect(textLabelBounds(text), rect))
+      .map((text) => text.id)
+  }
+}
 
 /** Aperçu de la boîte d'un texte en cours de pose. */
 const textBox = computed(() => {
@@ -681,6 +701,16 @@ function selectTool(event: PointerEvent): boolean {
   return event.button === 0 && !store.panKeyHeld && store.tool === 'select'
 }
 
+/**
+ * Outil de copie de style : l'élément pressé, noté par lui pour le canevas, qui mène le geste
+ * (l'appui lui arrive juste après, puisque l'élément ne le retient pas).
+ */
+let pressed: StyleElement | null = null
+
+function notePressed(kind: StyleElement['kind'], id: string, event: PointerEvent): void {
+  if (store.tool === 'style' && event.button === 0 && !store.panKeyHeld) pressed = { kind, id }
+}
+
 function startMove(event: PointerEvent): void {
   drag.value = {
     kind: 'move',
@@ -708,6 +738,7 @@ function followGroup(kind: 'node' | 'link' | 'text', id: string, event: MouseEve
 }
 
 function onNodeDown(id: string, event: PointerEvent): void {
+  notePressed('node', id, event)
   if (!selectTool(event)) return
   event.stopPropagation()
   if (event.shiftKey) {
@@ -725,6 +756,7 @@ function onNodeDown(id: string, event: PointerEvent): void {
 }
 
 function onTextDown(id: string, event: PointerEvent): void {
+  notePressed('text', id, event)
   if (!selectTool(event)) return
   event.stopPropagation()
   if (event.shiftKey) {
@@ -775,6 +807,7 @@ function toggleVertexAt(id: string, point: LocalPoint): void {
 }
 
 function onLinkDown(id: string, event: PointerEvent): void {
+  notePressed('link', id, event)
   if (!selectTool(event)) return
   event.stopPropagation()
   if (event.ctrlKey) {
@@ -805,6 +838,7 @@ function onLinkDown(id: string, event: PointerEvent): void {
 }
 
 function onLabelDown(id: string, event: PointerEvent): void {
+  notePressed('link', id, event)
   if (!selectTool(event)) return
   event.stopPropagation()
   if (!selectLink(id, event)) return
@@ -883,6 +917,8 @@ function onGrabDown(event: PointerEvent): void {
 }
 
 function onPointerDown(event: PointerEvent): void {
+  const target = pressed
+  pressed = null
   if (event.button === 1) {
     if (event.timeStamp - lastMiddleDown < DOUBLE_CLICK_MS) {
       lastMiddleDown = 0
@@ -935,6 +971,13 @@ function onPointerDown(event: PointerEvent): void {
     return
   }
 
+  if (store.tool === 'style') {
+    // La sélection ne change pas : elle montre l'élément dont on donne le style.
+    drag.value = { kind: 'style-band', start: world, current: world, target }
+    capture(event)
+    return
+  }
+
   if (!event.shiftKey) store.clearSelection()
   drag.value = { kind: 'band', start: world, current: world, additive: event.shiftKey }
   capture(event)
@@ -959,6 +1002,7 @@ function onPointerMove(event: PointerEvent): void {
       current.dy = Math.round(world.y - current.start.y)
       break
     case 'band':
+    case 'style-band':
       current.current = world
       break
     case 'text-box':
@@ -1056,23 +1100,30 @@ function onPointerUp(event: PointerEvent): void {
     case 'band': {
       const rect = normalizeRect(current.start, current.current)
       if (rect.width <= 0.05 && rect.height <= 0.05) break
-      const nodes = store.doc.nodes
-        .filter((node) => rectsIntersect(nodeBounds(node), rect))
-        .map((node) => node.id)
-      const links = store.doc.links
-        .filter((link) => wireIntersectsRect(link.points, rect))
-        .map((link) => link.id)
-      const found = store.doc.texts
-        .filter((text) => rectsIntersect(textLabelBounds(text), rect))
-        .map((text) => text.id)
+      const found = elementsIn(rect)
       const merge = (before: string[], added: string[]): string[] =>
         current.additive ? [...new Set([...before, ...added])] : added
-      store.selectedNodes = merge(store.selectedNodes, nodes)
-      store.selectedLinks = merge(store.selectedLinks, links)
-      store.selectedTexts = merge(store.selectedTexts, found)
+      store.selectedNodes = merge(store.selectedNodes, found.nodes)
+      store.selectedLinks = merge(store.selectedLinks, found.links)
+      store.selectedTexts = merge(store.selectedTexts, found.texts)
       // Un groupe touché par le lasso est pris en entier.
       store.expandSelectionToGroups()
       if (store.hasSelection) store.revealInspector()
+      break
+    }
+    case 'style-band': {
+      const rect = normalizeRect(current.start, current.current)
+      // Un clic (ou presque : la main tremble) : l'élément pressé. Un glisser : tout le cadre.
+      if (Math.max(rect.width, rect.height) * cell.value < DRAG_PX) {
+        if (current.target) store.giveCopiedStyle([current.target])
+        break
+      }
+      const found = elementsIn(rect)
+      store.giveCopiedStyle([
+        ...found.nodes.map((id): StyleElement => ({ kind: 'node', id })),
+        ...found.links.map((id): StyleElement => ({ kind: 'link', id })),
+        ...found.texts.map((id): StyleElement => ({ kind: 'text', id }))
+      ])
       break
     }
     case 'node-handle':
@@ -1223,6 +1274,7 @@ const cursorClass = computed(() => {
   if (store.panKeyHeld || drag.value?.kind === 'pan') return 'panning'
   if (store.tool === 'place') return 'placing'
   if (store.tool === 'text') return 'texting'
+  if (store.tool === 'style') return 'styling'
   // Ctrl sur une accroche saisissable : le curseur annonce le lien.
   return store.tool === 'link' || drag.value?.kind === 'anchor-link' || anchorGrab.value
     ? 'linking'
@@ -1312,6 +1364,7 @@ const cursorClass = computed(() => {
               />
               <path
                 class="link-hit"
+                :class="{ 'takes-style': store.styleTakers.has(item.link.id) }"
                 :d="item.reach"
                 :stroke-width="hitWidth"
                 @pointerdown="onLinkDown(item.link.id, $event)"
@@ -1325,6 +1378,7 @@ const cursorClass = computed(() => {
             v-for="node in shown.nodes"
             :key="node.id"
             class="node"
+            :class="{ 'takes-style': store.styleTakers.has(node.id) }"
             @pointerdown="onNodeDown(node.id, $event)"
             @dblclick="onNodeDoubleClick(node.id, $event)"
             @contextmenu="onContextMenu($event, { kind: 'node', id: node.id })"
@@ -1338,6 +1392,7 @@ const cursorClass = computed(() => {
               <g
                 v-if="item.label && item.labelBox"
                 class="link-label"
+                :class="{ 'takes-style': store.styleTakers.has(item.link.id) }"
                 @pointerdown="onLabelDown(item.link.id, $event)"
                 @dblclick="onLinkDoubleClick(item.link.id, $event)"
                 @contextmenu="onContextMenu($event, { kind: 'link', id: item.link.id })"
@@ -1374,6 +1429,7 @@ const cursorClass = computed(() => {
               v-for="entry in texts"
               :key="entry.text.id"
               class="text-label"
+              :class="{ 'takes-style': store.styleTakers.has(entry.text.id) }"
               @pointerdown="onTextDown(entry.text.id, $event)"
               @dblclick="onTextDoubleClick(entry.text.id, $event)"
               @contextmenu="onContextMenu($event, { kind: 'text', id: entry.text.id })"
@@ -1628,6 +1684,26 @@ const cursorClass = computed(() => {
 .diagram.linking .link-label,
 .diagram.linking .text-label {
   cursor: crosshair;
+}
+
+/*
+ * Copie de style : la croix partout (un glisser trace un cadre), et un rouleau sur les éléments
+ * du type copié, ceux à qui un clic donne le style. Le rouleau est une image fixe, lisible sur
+ * les deux papiers ; son point actif est le coin du rouleau.
+ */
+.diagram.styling,
+.diagram.styling .node,
+.diagram.styling .link-hit,
+.diagram.styling .link-label,
+.diagram.styling .text-label {
+  cursor: crosshair;
+}
+
+.diagram.styling .takes-style {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='-1 -1 26 26' fill='none' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg stroke='white' stroke-width='4.5'%3E%3Cpath d='M4 2h12a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z'/%3E%3Cpath d='M10 16v-2a2 2 0 0 1 2-2h8a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2'/%3E%3Cpath d='M9 16h2a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1z'/%3E%3C/g%3E%3Cg stroke='%231f2937' stroke-width='2'%3E%3Cpath fill='%233b82f6' d='M4 2h12a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z'/%3E%3Cpath d='M10 16v-2a2 2 0 0 1 2-2h8a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2'/%3E%3Cpath fill='white' d='M9 16h2a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1z'/%3E%3C/g%3E%3C/svg%3E")
+      3 3,
+    copy;
 }
 
 .diagram.panning {

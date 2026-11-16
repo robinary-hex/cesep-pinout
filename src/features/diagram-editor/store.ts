@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 import {
   createEmptyDiagram,
+  copiedStyle,
   createNode,
   DEFAULT_VIEW,
   defaultLabelSide,
@@ -32,6 +33,8 @@ import {
   regroupedCopies,
   removeVertex,
   restackedIds,
+  sameTypeIds,
+  styleRecipients,
   touchesNote,
   wireGeometryProblem,
   withGroup,
@@ -51,6 +54,7 @@ import {
   type NodeTextStyle,
   type Readout,
   type StackMove,
+  type StyleElement,
   type TextAnchor,
   type TextLabel,
   type ViewState
@@ -63,7 +67,8 @@ import { useGroups } from '@/state/groups'
 import { useInspectorPanel } from '@/state/inspector'
 import { useDocumentTabs } from '@/state/tabs'
 
-export type DiagramTool = 'select' | 'place' | 'link' | 'text'
+/** Outils du canevas ; `style` donne l'allure d'un élément aux autres du même type. */
+export type DiagramTool = 'select' | 'place' | 'link' | 'text' | 'style'
 
 export interface DiagramClipboard {
   nodes: DiagramNode[]
@@ -134,6 +139,8 @@ export const useDiagramStore = defineStore('diagram', () => {
   /** Forme en cours de pose (outil `place`). */
   const placement = ref<NodeShape | null>(null)
   const drawing = shallowRef<LinkDrawing | null>(null)
+  /** Élément dont l'outil de copie de style donne l'allure, tant que l'outil est actif. */
+  const styleSource = shallowRef<StyleElement | null>(null)
   // Style des prochains éléments : celui du dernier nœud ou lien stylé.
   const nodeColor = ref(library.diagramDefaults.nodeColor)
   const nodeFill = ref<NodeFill>(library.diagramDefaults.nodeFill)
@@ -180,6 +187,7 @@ export const useDiagramStore = defineStore('diagram', () => {
       // Pose et tracé appartenaient au diagramme qu'on quitte.
       placement.value = null
       drawing.value = null
+      styleSource.value = null
       tool.value = 'select'
       stylePreview.value = null
     },
@@ -308,6 +316,12 @@ export const useDiagramStore = defineStore('diagram', () => {
     prune(selectedNodes, doc.value.nodes)
     prune(selectedLinks, doc.value.links)
     prune(selectedTexts, doc.value.texts)
+    // L'élément dont on copiait le style n'est plus là : la copie s'arrête.
+    const source = styleSource.value
+    if (source && copiedStyle(doc.value, source) === null) {
+      styleSource.value = null
+      if (tool.value === 'style') tool.value = 'select'
+    }
   }
 
   /**
@@ -482,12 +496,14 @@ export const useDiagramStore = defineStore('diagram', () => {
   function selectTool(): void {
     tool.value = 'select'
     placement.value = null
+    styleSource.value = null
     stopLinkDrawing()
   }
 
   function startPlacing(shape: NodeShape): void {
     stopLinkDrawing()
     placement.value = shape
+    styleSource.value = null
     tool.value = 'place'
     clearSelection()
     status.value = `Pose de « ${NODE_SPECS[shape].label} » : clic sur le diagramme pour poser, Échap pour arrêter.`
@@ -501,6 +517,7 @@ export const useDiagramStore = defineStore('diagram', () => {
   function startLinkTool(): void {
     tool.value = 'link'
     placement.value = null
+    styleSource.value = null
     stopLinkDrawing()
     clearSelection()
     status.value =
@@ -510,9 +527,100 @@ export const useDiagramStore = defineStore('diagram', () => {
   function startTextTool(): void {
     tool.value = 'text'
     placement.value = null
+    styleSource.value = null
     stopLinkDrawing()
     clearSelection()
     status.value = 'Texte : deux clics ou un glisser pour les deux coins de sa boîte.'
+  }
+
+  // Copie de style (décision du 16 novembre 2026) : l'allure d'un élément, donnée d'un clic ou
+  // d'un lasso aux autres éléments du même type, tant que l'outil est actif.
+
+  /** L'élément dont on peut copier le style : le seul sélectionné ; null sinon. */
+  const styleCandidate = computed<StyleElement | null>(() => {
+    const nodes = selectedNodes.value
+    const links = selectedLinks.value
+    const texts = selectedTexts.value
+    if (nodes.length + links.length + texts.length !== 1) return null
+    if (nodes[0] !== undefined) return { kind: 'node', id: nodes[0] }
+    if (links[0] !== undefined) return { kind: 'link', id: links[0] }
+    return texts[0] === undefined ? null : { kind: 'text', id: texts[0] }
+  })
+
+  /**
+   * Le style que donne l'outil : celui de sa source tel qu'il est maintenant (la retoucher
+   * pendant la copie change ce qu'on donne ensuite), et le type auquel il va.
+   */
+  const styleCopied = computed(() => {
+    const source = styleSource.value
+    return tool.value === 'style' && source ? copiedStyle(doc.value, source) : null
+  })
+
+  /** Les éléments à qui le style copié peut aller : ceux du type de la source, sauf elle. */
+  const styleTakers = computed<ReadonlySet<string>>(() => {
+    const copied = styleCopied.value
+    const source = styleSource.value
+    if (!copied || !source) return new Set<string>()
+    return new Set(sameTypeIds(doc.value, copied).filter((id) => id !== source.id))
+  })
+
+  /** Comment on nomme `count` éléments du type d'un style copié. */
+  function styleTypeName(count: number): string {
+    const copied = styleCopied.value
+    const plural = count > 1 ? 's' : ''
+    if (copied?.kind === 'node') return `forme${plural} « ${NODE_SPECS[copied.shape].label} »`
+    return copied?.kind === 'link' ? `lien${plural}` : `texte${plural}`
+  }
+
+  /** Démarre la copie du style de l'élément sélectionné ; faux s'il n'y en a pas un seul. */
+  function startStyleCopy(): boolean {
+    const source = styleCandidate.value
+    if (!source) {
+      status.value = 'Copie de style : sélectionne d’abord une forme, un lien ou un texte.'
+      return false
+    }
+    placement.value = null
+    stopLinkDrawing()
+    styleSource.value = source
+    tool.value = 'style'
+    status.value = `Copie de style : clic ou lasso sur les autres ${styleTypeName(2)}, Échap pour arrêter.`
+    return true
+  }
+
+  /** Le bouton et la touche S : démarre la copie de style, ou l'arrête si elle est en cours. */
+  function toggleStyleCopy(): void {
+    if (tool.value === 'style') selectTool()
+    else startStyleCopy()
+  }
+
+  /**
+   * Donne le style copié à ceux des éléments désignés qui sont du type de la source ; les autres
+   * ne changent pas. Une seule commande ; rend le nombre d'éléments changés.
+   */
+  function giveCopiedStyle(targets: readonly StyleElement[]): number {
+    const copied = styleCopied.value
+    if (!copied || targets.length === 0) return 0
+    const ids = new Set(styleRecipients(doc.value, copied, targets))
+    if (ids.size === 0) {
+      const sameType = targets.some(
+        (target) => target.kind === copied.kind && styleTakers.value.has(target.id)
+      )
+      status.value = sameType
+        ? 'Copie de style : déjà ce style.'
+        : `Copie de style : ce style ne va qu’aux ${styleTypeName(2)}.`
+      return 0
+    }
+    apply('Copier le style', (draft) => {
+      if (copied.kind === 'node') {
+        for (const node of draft.nodes) if (ids.has(node.id)) Object.assign(node, copied.look)
+      } else if (copied.kind === 'link') {
+        for (const link of draft.links) if (ids.has(link.id)) Object.assign(link, copied.look)
+      } else {
+        for (const text of draft.texts) if (ids.has(text.id)) Object.assign(text, copied.look)
+      }
+    })
+    status.value = `Style copié sur ${ids.size} ${styleTypeName(ids.size)}.`
+    return ids.size
   }
 
   // Nœuds
@@ -1199,6 +1307,13 @@ export const useDiagramStore = defineStore('diagram', () => {
     stopPlacing,
     startLinkTool,
     startTextTool,
+    styleSource,
+    styleCandidate,
+    styleCopied,
+    styleTakers,
+    startStyleCopy,
+    toggleStyleCopy,
+    giveCopiedStyle,
     addNode,
     placeAt,
     setNodeBox,

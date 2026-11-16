@@ -641,3 +641,186 @@ describe('diagramme : lien d’une note, sommets au Ctrl+clic', () => {
     expect(store.toggleLinkVertex(id, { x: 0, y: 20 })).toBe(false)
   })
 })
+
+describe('diagramme : copie de style', () => {
+  it('donne l’allure d’une forme aux formes du même type, jamais aux autres', () => {
+    const store = useDiagramStore()
+    const source = store.addNode('rounded', 0, 0)
+    store.setNodesStyle([source], { color: '#d62828', fill: 'solid', borderColor: '#000000' })
+    store.setNodesTextStyle([source], 'Style', { italic: true, textSize: 18 })
+    const action = store.addNode('rounded', 0, 10)
+    store.setNodeText(action, { title: 'Garde son texte' })
+    const rect = store.addNode('rect', 0, 20)
+    const plain = store.doc.nodes[1]
+    const untouched = store.doc.nodes[2]
+    // Il faut un élément, et un seul, pour savoir quel style copier.
+    store.clearSelection()
+    expect(store.styleCandidate).toBeNull()
+    expect(store.startStyleCopy()).toBe(false)
+    expect(store.tool).toBe('select')
+    store.selectedNodes = [source, action]
+    expect(store.styleCandidate).toBeNull()
+    store.selectedNodes = [source]
+    expect(store.styleCandidate).toEqual({ kind: 'node', id: source })
+    expect(store.startStyleCopy()).toBe(true)
+    expect(store.tool).toBe('style')
+    expect(store.status).toContain('formes « Action »')
+    // Le style peut aller à l'autre action ; ni à la source, ni au rectangle.
+    expect([...store.styleTakers]).toEqual([action])
+    // Un rectangle n'est pas une action : il ne change pas, et rien n'entre dans l'historique.
+    const before = store.doc
+    expect(store.giveCopiedStyle([{ kind: 'node', id: rect }])).toBe(0)
+    expect(store.doc).toBe(before)
+    expect(store.status).toContain('ne va qu’aux formes « Action »')
+    // L'autre action prend toute l'allure de la source et garde ce qui est à elle.
+    expect(
+      store.giveCopiedStyle([
+        { kind: 'node', id: action },
+        { kind: 'node', id: rect }
+      ])
+    ).toBe(1)
+    expect(store.doc.nodes[1]).toMatchObject({
+      color: '#d62828',
+      fill: 'solid',
+      borderColor: '#000000',
+      italic: true,
+      textSize: 18,
+      title: 'Garde son texte',
+      x: 0,
+      y: 10,
+      w: plain?.w,
+      h: plain?.h
+    })
+    expect(store.doc.nodes[2]).toBe(untouched)
+    expect(store.undoLabel).toBe('Copier le style')
+    expect(store.status).toBe('Style copié sur 1 forme « Action ».')
+    // L'outil reste actif, et la sélection montre toujours la source.
+    expect(store.tool).toBe('style')
+    expect(store.selectedNodes).toEqual([source])
+    // Elle a déjà ce style : pas de commande de plus.
+    const after = store.doc
+    expect(store.giveCopiedStyle([{ kind: 'node', id: action }])).toBe(0)
+    expect(store.doc).toBe(after)
+    expect(store.status).toContain('déjà ce style')
+    // Une annulation défait la copie d'un coup.
+    store.undo()
+    expect(store.doc.nodes[1]).toEqual(plain)
+    // Retoucher la source pendant la copie change ce qu'on donne ensuite.
+    store.setNodesStyle([source], { color: '#1d4ed8' })
+    expect(store.giveCopiedStyle([{ kind: 'node', id: action }])).toBe(1)
+    expect(store.doc.nodes[1]).toMatchObject({ color: '#1d4ed8', fill: 'solid' })
+    // Un autre outil arrête la copie : plus rien n'est donné.
+    store.selectTool()
+    expect(store.tool).toBe('select')
+    expect(store.styleCopied).toBeNull()
+    expect(store.styleTakers.size).toBe(0)
+    expect(store.giveCopiedStyle([{ kind: 'node', id: action }])).toBe(0)
+    // Le bouton et la touche S la démarrent et l'arrêtent.
+    store.toggleStyleCopy()
+    expect(store.tool).toBe('style')
+    store.toggleStyleCopy()
+    expect(store.tool).toBe('select')
+  })
+
+  it('va d’un lien aux liens et d’un texte aux textes', () => {
+    const store = useDiagramStore()
+    const node = store.addNode('rounded', 30, 30)
+    const a = store.addLink([
+      [0, 0],
+      [10, 0]
+    ])
+    const b = store.addLink([
+      [0, 5],
+      [10, 5],
+      [10, 9]
+    ])
+    if (!a || !b) throw new Error('liens attendus')
+    store.setLinksStyle([a], {
+      color: '#d62828',
+      dash: 'dashed',
+      startArrow: true,
+      endArrow: false
+    })
+    store.setLinkLabel(b, 'vrai')
+    store.clearSelection()
+    store.selectedLinks = [a]
+    expect(store.startStyleCopy()).toBe(true)
+    expect(store.status).toContain('les autres liens')
+    expect([...store.styleTakers]).toEqual([b])
+    expect(
+      store.giveCopiedStyle([
+        { kind: 'link', id: b },
+        { kind: 'node', id: node }
+      ])
+    ).toBe(1)
+    // Le lien prend la couleur, le trait et les pointes ; son tracé et son étiquette restent.
+    expect(store.doc.links[1]).toMatchObject({
+      color: '#d62828',
+      dash: 'dashed',
+      startArrow: true,
+      endArrow: false,
+      label: 'vrai',
+      points: [
+        [0, 5],
+        [10, 5],
+        [10, 9]
+      ]
+    })
+    expect(store.status).toBe('Style copié sur 1 lien.')
+    // Une forme n'est pas un lien.
+    expect(store.giveCopiedStyle([{ kind: 'node', id: node }])).toBe(0)
+    expect(store.status).toContain('ne va qu’aux liens')
+    store.selectTool()
+
+    const first = store.addTextBox({ x: 0, y: 20, w: 12, h: 3 })
+    store.setTextSize(first, 20)
+    store.setTextStyle(first, 'Gras', { bold: true, color: '#d62828' })
+    const second = store.addTextBox({ x: 0, y: 30, w: 8, h: 2 })
+    const third = store.addTextBox({ x: 0, y: 40, w: 8, h: 2 })
+    store.clearSelection()
+    store.selectedTexts = [first]
+    expect(store.startStyleCopy()).toBe(true)
+    expect(
+      store.giveCopiedStyle([
+        { kind: 'text', id: second },
+        { kind: 'text', id: third },
+        { kind: 'link', id: b }
+      ])
+    ).toBe(2)
+    expect(store.status).toBe('Style copié sur 2 textes.')
+    // Les textes prennent taille, graisse et couleur ; leur contenu et leur boîte restent.
+    expect(store.doc.texts[1]).toMatchObject({
+      size: 20,
+      bold: true,
+      color: '#d62828',
+      text: 'Texte',
+      x: 0,
+      y: 30,
+      w: 8,
+      h: 2
+    })
+    // Les deux d'une seule commande.
+    store.undo()
+    expect(store.doc.texts.map((text) => text.size)).toEqual([20, 12, 12])
+  })
+
+  it('s’arrête quand l’élément dont on copie le style disparaît', () => {
+    const store = useDiagramStore()
+    const source = store.addNode('rounded', 0, 0)
+    store.addNode('rounded', 0, 10)
+    store.clearSelection()
+    store.selectedNodes = [source]
+    store.startStyleCopy()
+    expect(store.styleSource).toEqual({ kind: 'node', id: source })
+    store.removeSelection()
+    expect(store.tool).toBe('select')
+    expect(store.styleSource).toBeNull()
+    // Poser une forme ou tracer un lien quitte aussi la copie.
+    const again = store.addNode('rect', 0, 20)
+    store.selectedNodes = [again]
+    store.startStyleCopy()
+    store.startLinkTool()
+    expect(store.styleSource).toBeNull()
+    expect(store.tool).toBe('link')
+  })
+})
