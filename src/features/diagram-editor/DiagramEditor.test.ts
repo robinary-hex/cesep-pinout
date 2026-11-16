@@ -356,8 +356,9 @@ describe('panneau du diagramme', () => {
       wrapper.findAll('.inspector .block h3').map((heading) => heading.text())
     const fields = (section: string): string[] =>
       wrapper.findAll(`.inspector ${section} .field span`).map((span) => span.text())
-    // Trois sections pour un nœud : sa forme, son texte, sa position et sa taille.
-    expect(sections()).toEqual(['Diagramme', 'Forme', 'Texte', 'Position et taille'])
+    // Trois sections pour un nœud : sa forme, son texte, sa position et sa taille. Le diagramme,
+    // lui, ne se montre pas tant que quelque chose est sélectionné.
+    expect(sections()).toEqual(['Forme', 'Texte', 'Position et taille'])
     // La couleur du texte reste avec le texte.
     expect(fields('.node-text')).toEqual([
       'Titre',
@@ -374,8 +375,32 @@ describe('panneau du diagramme', () => {
     // Une forme sans texte n'a pas de section « Texte ».
     store.addNode('start', 0, 20)
     await flushPromises()
-    expect(sections()).toEqual(['Diagramme', 'Forme', 'Position et taille'])
+    expect(sections()).toEqual(['Forme', 'Position et taille'])
     expect(wrapper.find('.inspector .node-text').exists()).toBe(false)
+    // Un lien, un texte libre, plusieurs éléments : eux seuls, jamais le nom du diagramme.
+    const link = store.addLink([
+      [40, 0],
+      [50, 0]
+    ])
+    if (!link) throw new Error('lien attendu')
+    store.clearSelection()
+    store.selectedLinks = [link]
+    await flushPromises()
+    expect(sections()).toEqual(['Lien'])
+    store.addTextBox({ x: 40, y: 10, w: 12, h: 3 })
+    await flushPromises()
+    expect(sections()).toEqual(['Texte', 'Position et taille'])
+    store.selectAll()
+    await flushPromises()
+    expect(sections()).toEqual(['4 éléments'])
+    expect(wrapper.find('.inspector input[type="text"]').exists()).toBe(false)
+    // Sans sélection : le diagramme, son nom et son style.
+    store.clearSelection()
+    await flushPromises()
+    expect(sections()).toEqual(['Diagramme', 'Style'])
+    expect((wrapper.get('.inspector input[type="text"]').element as HTMLInputElement).value).toBe(
+      store.doc.name
+    )
     wrapper.unmount()
   })
 

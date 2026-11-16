@@ -21,9 +21,10 @@ import Icon from '@/ui/Icon.vue'
 import type { IconName } from '@/ui/icons'
 import { useDiagramStore } from './store'
 
-// Panneau de droite du diagramme (replié par défaut, touche I). Toujours : le diagramme, avec son
-// nom et sa police. Avec une sélection : seulement les propriétés de l'élément (nœud, lien, texte
-// libre, groupe). Un nœud a trois sections (décision du 16 novembre 2026) : « Forme » (son type,
+// Panneau de droite du diagramme (replié par défaut, touche I). Sans sélection : le diagramme,
+// avec son nom, son bouton d'export et son style. Avec une sélection : les propriétés de ce qui
+// est sélectionné, et rien d'autre (nœud, lien, texte libre, plusieurs éléments ; décision du 16
+// novembre 2026, comme dans l'éditeur de composants). Un nœud a trois sections (décision du 16 novembre 2026) : « Forme » (son type,
 // son fond, puis sa couleur, puis la bordure d'un fond plein), « Texte » (titre, sous-titre, style,
 // taille, couleur du texte), « Position et taille ».
 
@@ -328,7 +329,9 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
       </button>
     </header>
 
-    <section class="block">
+    <!-- Le diagramme lui-même ne se montre que sans sélection : un élément sélectionné a le
+         panneau pour lui seul. -->
+    <section v-if="!store.hasSelection" class="block">
       <h3>Diagramme</h3>
       <div class="row name-row">
         <label class="field">

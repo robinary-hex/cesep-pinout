@@ -614,7 +614,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   sans ombre portée :
   le canevas ne change pas de taille à chaque clic et la feuille centrée de l'éditeur de
   composants ne glisse pas sous le pointeur. Sans sélection, il montre le document (montage,
-  diagramme, composant). Pas de croix à côté du nom d'un élément : la seule croix du panneau le
+  diagramme, composant) : son nom, son export, son style. Avec une sélection, il ne montre
+  qu'elle, dans les trois éditeurs (décision du 16 novembre 2026) : le bloc du document (« Projet »,
+  « Diagramme ») disparaît tant qu'un élément ou plusieurs sont sélectionnés. Pas de croix à côté du nom d'un élément : la seule croix du panneau le
   masque.
 - Barre d'état des trois canevas (`.canvas-status`), de gauche à droite : la position du
   pointeur, le zoom (montage et diagramme), les coordonnées de la sélection, puis le message de

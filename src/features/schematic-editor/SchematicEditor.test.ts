@@ -445,6 +445,50 @@ describe('montage : profil de style d’une sélection', () => {
   })
 })
 
+describe('montage : panneau de propriétés', () => {
+  it('ne montre le projet que sans sélection ; un élément sélectionné a le panneau pour lui', async () => {
+    const store = useSchematicStore()
+    store.inspectorOpen = true
+    const wrapper = mount(SchematicEditor, { attachTo: document.body })
+    await flushPromises()
+    const sections = (): string[] =>
+      wrapper.findAll('.inspector .block h3').map((heading) => heading.text())
+    const nameField = (): boolean =>
+      wrapper.findAll('.inspector .field span').some((span) => span.text() === 'Nom du montage')
+    // Rien de sélectionné : le projet, son profil, son contenu.
+    expect(sections()).toEqual(['Projet', 'Profil de style', 'Éléments'])
+    expect(nameField()).toBe(true)
+    // Une étiquette : ses propriétés, pas le nom du projet.
+    const label = store.addLabelBox({ x: 2, y: 2, w: 8, h: 2 })
+    store.clearSelection()
+    store.selectedLabels = [label]
+    await flushPromises()
+    expect(sections()).toEqual(['Étiquette', 'Position et taille', 'Profil de style'])
+    expect(nameField()).toBe(false)
+    // Un fil, puis les deux ensemble : de même.
+    const wire = store.addWire([
+      [0, 10],
+      [6, 10]
+    ])
+    if (!wire) throw new Error('fil attendu')
+    store.clearSelection()
+    store.selectedWires = [wire]
+    await flushPromises()
+    expect(sections()[0]).toBe('Fil')
+    expect(sections()).not.toContain('Projet')
+    store.selectedLabels = [label]
+    await flushPromises()
+    expect(sections()).not.toContain('Projet')
+    expect(nameField()).toBe(false)
+    // La sélection vidée, le projet revient.
+    store.clearSelection()
+    await flushPromises()
+    expect(sections()[0]).toBe('Projet')
+    expect(nameField()).toBe(true)
+    wrapper.unmount()
+  })
+})
+
 describe('montage : flèches du clavier', () => {
   it('déplacent la sélection d’une cellule, de cinq avec Maj, fils accrochés compris', async () => {
     const store = useSchematicStore()

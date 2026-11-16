@@ -21,9 +21,10 @@ import Icon from '@/ui/Icon.vue'
 import type { IconName } from '@/ui/icons'
 import { useSchematicStore } from './store'
 
-// Panneau de droite du montage (replié par défaut, touche I). Toujours : le projet, avec son nom
-// et le bouton d'export. Sans sélection : le profil et le contenu du montage. Avec une
-// sélection : seulement les propriétés de l'élément (composant, fil(s), étiquette, groupe). Le
+// Panneau de droite du montage (replié par défaut, touche I). Sans sélection : le projet, avec
+// son nom et le bouton d'export, puis le profil et le contenu du montage. Avec une sélection :
+// les propriétés de ce qui est sélectionné, et rien d'autre (composant, fil(s), étiquette,
+// plusieurs éléments ; décision du 16 novembre 2026, comme dans l'éditeur de composants). Le
 // bloc « Profil de style » décrit le style propre à ce montage, modifiable d'ici ; les réglages
 // où il s'écarte du profil général sont surlignés, avec un bouton pour l'y aligner. Une
 // sélection, quelle qu'elle soit, a aussi son bloc « Profil de style » : la liste des profils
@@ -344,7 +345,9 @@ function setLabelVertical(event: Event): void {
       </button>
     </header>
 
-    <section class="block">
+    <!-- Le montage lui-même ne se montre que sans sélection : un élément sélectionné a le
+         panneau pour lui seul. -->
+    <section v-if="!store.hasSelection" class="block">
       <h3>Projet</h3>
       <div class="row name-row">
         <label class="field">
