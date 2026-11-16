@@ -105,11 +105,14 @@ describe('menu contextuel du diagramme', () => {
       'Souligné',
       'Barré',
       'Chasse fixe',
-      '×1',
-      '×1,5',
-      '×2',
-      '×2,5',
-      '×3',
+      // Les tailles, en points : celle du diagramme (14), que le nœud suit, puis les autres.
+      'Celle du diagramme (14 pt)',
+      '10 pt',
+      '12 pt',
+      '16 pt',
+      '18 pt',
+      '24 pt',
+      '32 pt',
       'Celle de la forme'
     ])
     // La couleur du texte : une pastille de la palette, ou celle de la forme.
@@ -133,9 +136,39 @@ describe('menu contextuel du diagramme', () => {
     await open()
     menuEntry('Texte').click()
     await flushPromises()
-    menuEntry('×2').click()
+    menuEntry('24 pt').click()
     await flushPromises()
-    expect(store.doc.nodes[0]?.textScale).toBe(2)
+    expect(store.doc.nodes[0]?.textSize).toBe(24)
+    await open()
+    menuEntry('Texte').click()
+    await flushPromises()
+    menuEntry('Celle du diagramme (14 pt)').click()
+    await flushPromises()
+    expect(store.doc.nodes[0]?.textSize).toBeNull()
+    // Fond : la bordure ne se choisit que pour un fond plein.
+    await open()
+    menuEntry('Fond').click()
+    await flushPromises()
+    expect(subMenuLabels()).toEqual(['Contour', 'Teinté', 'Plein'])
+    menuEntry('Plein').click()
+    await flushPromises()
+    expect(store.doc.nodes[0]?.fill).toBe('solid')
+    await open()
+    menuEntry('Fond').click()
+    await flushPromises()
+    expect(subMenuLabels()).toEqual(['Contour', 'Teinté', 'Plein', 'Automatique'])
+    const borders = document.body.querySelectorAll<HTMLElement>('.context-menu.sub-menu .swatch')
+    expect(borders).toHaveLength(store.colorChoices.length)
+    borders[1]?.click()
+    await flushPromises()
+    expect(store.doc.nodes[0]?.borderColor).toBe(store.colorChoices[1]?.hex)
+    expect(store.undoLabel).toBe('Couleur de la bordure')
+    await open()
+    menuEntry('Fond').click()
+    await flushPromises()
+    menuEntry('Automatique').click()
+    await flushPromises()
+    expect(store.doc.nodes[0]?.borderColor).toBeNull()
     wrapper.unmount()
   })
 
@@ -250,6 +283,87 @@ describe('panneau du diagramme', () => {
     expect(wrapper.findAll('.inspector .field span').map((span) => span.text())).not.toContain(
       'Couleur du texte'
     )
+    wrapper.unmount()
+  })
+
+  it('panneau d’un nœud : taille du texte en points, bordure d’un fond plein', async () => {
+    const store = useDiagramStore()
+    const id = store.addNode('rounded', 0, 0)
+    store.setNodeText(id, { title: 'Titre' })
+    store.inspectorOpen = true
+    const wrapper = mount(DiagramEditor, { attachTo: document.body })
+    await flushPromises()
+    const names = (): string[] =>
+      wrapper.findAll('.inspector .field span').map((span) => span.text())
+    const field = (name: string): ReturnType<typeof wrapper.findAll>[number] => {
+      const found = wrapper
+        .findAll('.inspector .field')
+        .find((entry) => entry.find('span').text() === name)
+      if (!found) throw new Error(`champ « ${name} » introuvable`)
+      return found
+    }
+    const size = (): HTMLInputElement => field('Taille (pt)').get('input').element
+    const type = async (value: string): Promise<void> => {
+      size().value = value
+      await field('Taille (pt)').get('input').trigger('change')
+    }
+    // La taille est celle du diagramme tant que le nœud n'a pas la sienne.
+    expect(size().value).toBe('14')
+    await type('18')
+    expect(store.doc.nodes[0]?.textSize).toBe(18)
+    expect(store.undoLabel).toBe('Taille du texte du nœud')
+    expect(size().value).toBe('18')
+    // Hors des bornes, elle y est ramenée ; une saisie vide ne change rien.
+    await type('500')
+    expect(store.doc.nodes[0]?.textSize).toBe(96)
+    expect(size().value).toBe('96')
+    await type('')
+    expect(store.doc.nodes[0]?.textSize).toBe(96)
+    expect(size().value).toBe('96')
+    // Revenue à la taille du diagramme, le nœud la suit de nouveau.
+    await type('14')
+    expect(store.doc.nodes[0]?.textSize).toBeNull()
+    // La bordure ne se choisit que sur un fond plein ; « Auto » la déduit du fond.
+    expect(names()).not.toContain('Couleur de la bordure')
+    store.setNodesStyle([id], { fill: 'solid' })
+    await flushPromises()
+    const border = (): ReturnType<typeof field> => field('Couleur de la bordure')
+    expect(border().get('button.auto').classes()).toContain('current')
+    expect(border().findAll('button.swatch')).toHaveLength(store.colorChoices.length)
+    await border().findAll('button.swatch')[3]?.trigger('click')
+    expect(store.doc.nodes[0]?.borderColor).toBe(store.colorChoices[3]?.hex)
+    expect(store.undoLabel).toBe('Couleur de la bordure')
+    expect(border().findAll('button.swatch.current')).toHaveLength(1)
+    expect(border().get('button.auto').classes()).not.toContain('current')
+    await border().get('button.auto').trigger('click')
+    expect(store.doc.nodes[0]?.borderColor).toBeNull()
+    // X, Y, largeur et hauteur : une seule ligne de quatre champs.
+    expect(wrapper.findAll('.inspector .box-row')).toHaveLength(1)
+    expect(wrapper.findAll('.inspector .box-row input[type="number"]')).toHaveLength(4)
+    wrapper.unmount()
+  })
+
+  it('panneau : ni chemin du fichier ni mention sous le nom du diagramme', async () => {
+    const store = useDiagramStore()
+    store.inspectorOpen = true
+    const wrapper = mount(DiagramEditor, { attachTo: document.body })
+    await flushPromises()
+    const first = wrapper.get('.inspector .block')
+    expect(first.find('input[type="text"]').exists()).toBe(true)
+    expect(first.findAll('p')).toHaveLength(0)
+    expect(first.text()).not.toContain('Pas encore enregistré')
+    // Un texte libre : sa taille se tape en points.
+    const text = store.addTextBox({ x: 0, y: 0, w: 12, h: 3 })
+    await flushPromises()
+    const input = wrapper
+      .findAll('.inspector .field')
+      .find((entry) => entry.find('span').text() === 'Taille (pt)')
+      ?.get('input')
+    if (!input) throw new Error('champ « Taille (pt) » introuvable')
+    expect((input.element as HTMLInputElement).value).toBe('12')
+    ;(input.element as HTMLInputElement).value = '17'
+    await input.trigger('change')
+    expect(store.doc.texts.find((entry) => entry.id === text)?.size).toBe(17)
     wrapper.unmount()
   })
 

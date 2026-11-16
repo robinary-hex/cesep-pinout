@@ -136,17 +136,17 @@ describe('diagramme : nœuds', () => {
   it('style le texte d’un nœud sans toucher à sa taille', () => {
     const store = useDiagramStore()
     const id = store.addNode('rounded', 10, 10)
-    expect(store.doc.nodes[0]).toMatchObject({ font: null, bold: true, textScale: 1 })
+    expect(store.doc.nodes[0]).toMatchObject({ font: null, bold: true, textSize: null })
     store.setNodeText(id, { title: 'Brancher' })
     expect(store.doc.nodes[0]).toMatchObject({ w: 16, h: 6 })
     store.setNodesTextStyle([id], 'Italique activé', { italic: true, underline: true })
     expect(store.doc.nodes[0]).toMatchObject({ italic: true, underline: true, w: 16 })
     expect(store.undoLabel).toBe('Italique activé')
-    // ×3 : le texte ne tient plus, mais la boîte garde sa taille.
-    store.setNodesTextStyle([id], 'Taille du texte du nœud', { textScale: 3 })
-    expect(store.doc.nodes[0]).toMatchObject({ textScale: 3, x: 10, y: 10, w: 16, h: 6 })
+    // 42 pt, le triple : le texte ne tient plus, mais la boîte garde sa taille.
+    store.setNodesTextStyle([id], 'Taille du texte du nœud', { textSize: 42 })
+    expect(store.doc.nodes[0]).toMatchObject({ textSize: 42, x: 10, y: 10, w: 16, h: 6 })
     store.undo()
-    expect(store.doc.nodes[0]).toMatchObject({ textScale: 1, w: 16, x: 10 })
+    expect(store.doc.nodes[0]).toMatchObject({ textSize: null, w: 16, x: 10 })
     // La police propre au nœud ; null revient à celle du diagramme.
     store.setNodesTextStyle([id], 'Texte en chasse fixe', { font: 'mono' })
     expect(store.doc.nodes[0]?.font).toBe('mono')
@@ -156,6 +156,32 @@ describe('diagramme : nœuds', () => {
     store.setStyle({ font: 'mono' })
     store.addNode('rect', 0, 30)
     expect(store.doc.nodes[1]?.bold).toBe(false)
+  })
+
+  it('choisit la bordure d’un fond plein, automatique par défaut', () => {
+    const store = useDiagramStore()
+    const a = store.addNode('rounded', 0, 0)
+    expect(store.doc.nodes[0]?.borderColor).toBeNull()
+    store.setNodesStyle([a], { fill: 'solid' })
+    store.setNodesStyle([a], { borderColor: '#d62828' }, 'Couleur de la bordure')
+    expect(store.doc.nodes[0]).toMatchObject({ fill: 'solid', borderColor: '#d62828' })
+    expect(store.undoLabel).toBe('Couleur de la bordure')
+    // Recolorer la forme ou changer de fond ne touche pas à la bordure choisie.
+    store.selectedNodes = [a]
+    store.setCurrentColor('#1d4ed8')
+    store.setCurrentFill('tint')
+    expect(store.doc.nodes[0]).toMatchObject({
+      color: '#1d4ed8',
+      fill: 'tint',
+      borderColor: '#d62828'
+    })
+    // La copie la garde ; un nouveau nœud a la sienne automatique.
+    store.duplicateSelection()
+    expect(store.doc.nodes.at(-1)?.borderColor).toBe('#d62828')
+    store.addNode('rect', 0, 30)
+    expect(store.doc.nodes.at(-1)?.borderColor).toBeNull()
+    store.setNodesStyle([a], { borderColor: null }, 'Couleur de la bordure')
+    expect(store.doc.nodes[0]?.borderColor).toBeNull()
   })
 
   it('donne au texte la couleur de sa forme, ou celle qu’on lui choisit', () => {

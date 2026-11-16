@@ -48,12 +48,16 @@ import {
   nodeParts,
   nodeSizeForText,
   NODE_TEXT_SHARE,
-  nodeTextBox
+  nodeTextBox,
+  nodeTextScale,
+  nodeTitleSize,
+  ownTextSize
 } from './diagramShapes'
 import fixtureV1 from './fixtures/v1/diagram.json?raw'
 import fixtureV2 from './fixtures/v2/diagram.json?raw'
 import fixture from './fixtures/v3/diagram.json?raw'
 import fixtureV4 from './fixtures/v4/diagram.json?raw'
+import fixtureV5 from './fixtures/v5/diagram.json?raw'
 import { FileFormatError } from './migrations'
 import { parseDiagram, serializeDiagram } from './serialize'
 
@@ -76,8 +80,9 @@ function node(patch: Partial<DiagramNode> = {}): DiagramNode {
     italic: false,
     underline: false,
     strike: false,
-    textScale: 1,
+    textSize: null,
     textColor: null,
+    borderColor: null,
     ...patch
   }
 }
@@ -101,7 +106,7 @@ function link(points: [number, number][], patch: Partial<DiagramLink> = {}): Dia
 describe('diagramme : format', () => {
   it('lit et réécrit un fichier sans rien perdre', () => {
     const diagram = parseDiagram(fixture)
-    expect(diagram.schemaVersion).toBe(5)
+    expect(diagram.schemaVersion).toBe(6)
     expect(diagram.nodes.map((entry) => entry.shape)).toEqual([
       'start',
       'diamond',
@@ -142,7 +147,7 @@ describe('diagramme : format', () => {
   it('v1 → v2 : chaque nœud reçoit un style de texte qui garde son allure', () => {
     // Diagramme en chasse fixe : le titre y était maigre, il le reste.
     const mono = parseDiagram(fixtureV1)
-    expect(mono.schemaVersion).toBe(5)
+    expect(mono.schemaVersion).toBe(6)
     expect(mono.nodes[1]).toMatchObject({
       title: 'condition',
       font: null,
@@ -150,7 +155,7 @@ describe('diagramme : format', () => {
       italic: false,
       underline: false,
       strike: false,
-      textScale: 1
+      textSize: null
     })
     // En police normale, le titre était demi-gras : il devient gras.
     const raw = JSON.parse(fixtureV1) as { style: { font: string } }
@@ -160,7 +165,7 @@ describe('diagramme : format', () => {
 
   it('v2 → v3 : l’étiquette d’un lien revient au milieu du tracé, du côté où elle était', () => {
     const diagram = parseDiagram(fixtureV2)
-    expect(diagram.schemaVersion).toBe(5)
+    expect(diagram.schemaVersion).toBe(6)
     // « vrai » était décalée vers la droite d'un lien vertical : elle reste à droite.
     expect(diagram.links[1]).toMatchObject({ label: 'vrai', labelAt: 0.5, labelSide: 1 })
     expect('labelDx' in (diagram.links[1] ?? {})).toBe(false)
@@ -184,7 +189,7 @@ describe('diagramme : format', () => {
 
   it('v4 → v5 : le texte d’un nœud prend la couleur de sa forme, aucune n’est choisie', () => {
     const diagram = parseDiagram(fixtureV4)
-    expect(diagram.schemaVersion).toBe(5)
+    expect(diagram.schemaVersion).toBe(6)
     expect(diagram.nodes).toHaveLength(4)
     expect(diagram.nodes.every((entry) => entry.textColor === null)).toBe(true)
     // Le reste du fichier est repris tel quel.
@@ -196,6 +201,25 @@ describe('diagramme : format', () => {
     expect(parseDiagram(JSON.stringify(raw)).nodes[1]?.textColor).toBe('#d62828')
   })
 
+  it('v5 → v6 : la taille du texte d’un nœud passe en points, sa bordure reste automatique', () => {
+    const diagram = parseDiagram(fixtureV5)
+    expect(diagram.schemaVersion).toBe(6)
+    // Titres de 14 pt : ×1 suit le diagramme, ×2,5 et ×1,5 deviennent 35 et 21 pt.
+    expect(diagram.nodes.map((entry) => entry.textSize)).toEqual([null, 35, 21, null])
+    expect(diagram.nodes.every((entry) => entry.borderColor === null)).toBe(true)
+    // Le texte se dessine à la même taille qu'avant.
+    const second = diagram.nodes[1]
+    if (!second) throw new Error('nœud attendu')
+    expect(nodeTextScale(second, diagram.style)).toBe(2.5)
+    // Le reste du fichier est repris tel quel.
+    expect(second).toMatchObject({ fill: 'solid', textColor: '#d62828' })
+    expect(parseDiagram(serializeDiagram(diagram))).toEqual(diagram)
+    // Les tailles du diagramme comptent : des titres de 16 pt donnent 40 pt à ×2,5.
+    const raw = JSON.parse(fixtureV5) as { style: { titleSize: number } }
+    raw.style.titleSize = 16
+    expect(parseDiagram(JSON.stringify(raw)).nodes[1]?.textSize).toBe(40)
+  })
+
   it('pose un nœud neuf au style de texte par défaut du diagramme', () => {
     expect(createNode('n1', 'rounded', 3, 4)).toMatchObject({
       x: 3,
@@ -205,8 +229,9 @@ describe('diagramme : format', () => {
       fill: 'tint',
       font: null,
       bold: true,
-      textScale: 1,
-      textColor: null
+      textSize: null,
+      textColor: null,
+      borderColor: null
     })
     expect(defaultNodeTextStyle({ ...style, font: 'mono' }).bold).toBe(false)
   })
@@ -309,7 +334,7 @@ describe('diagramme : formes', () => {
       italic: true,
       underline: true,
       strike: true,
-      textScale: 2
+      textSize: 28
     })
     const layout = layoutNodeText(styled, style)
     const [title, subtitle] = layout?.lines ?? []
@@ -324,7 +349,7 @@ describe('diagramme : formes', () => {
       'font-style': undefined,
       'text-decoration': undefined
     })
-    // Taille ×2 : les deux lignes doublent.
+    // 28 pt, le double des 14 du diagramme : le sous-titre double aussi.
     expect(title.size).toBeCloseTo(2.8)
     expect(subtitle.size).toBeCloseTo(2.4)
     // Police : celle du diagramme, sauf si le nœud a la sienne ; en chasse fixe le sous-titre
@@ -345,7 +370,12 @@ describe('diagramme : formes', () => {
   })
 
   it('contour : le trait a la couleur, pas de fond, et le texte la prend, plus foncée', () => {
-    expect(nodePaint({ color: '#1d4ed8', fill: 'none', textColor: null }, LIGHT_GROUND)).toEqual({
+    expect(
+      nodePaint(
+        { color: '#1d4ed8', fill: 'none', textColor: null, borderColor: null },
+        LIGHT_GROUND
+      )
+    ).toEqual({
       stroke: '#1d4ed8',
       fill: null,
       solid: '#1d4ed8',
@@ -356,7 +386,7 @@ describe('diagramme : formes', () => {
     expect(mixColors('#1d4ed8', '#000000', NODE_TEXT_SHARE)).toBe('#0f276c')
     // Le noir pur est l'encre : claire sur un papier sombre, pour le trait comme pour le texte.
     expect(
-      nodePaint({ color: '#000000', fill: 'none', textColor: null }, DARK_GROUND)
+      nodePaint({ color: '#000000', fill: 'none', textColor: null, borderColor: null }, DARK_GROUND)
     ).toMatchObject({
       stroke: '#e6edf3',
       text: '#e6edf3'
@@ -364,12 +394,18 @@ describe('diagramme : formes', () => {
   })
 
   it('teinté : fond plus clair que le contour sur papier clair, plus sombre sur papier sombre', () => {
-    const light = nodePaint({ color: '#1d4ed8', fill: 'tint', textColor: null }, LIGHT_GROUND)
+    const light = nodePaint(
+      { color: '#1d4ed8', fill: 'tint', textColor: null, borderColor: null },
+      LIGHT_GROUND
+    )
     expect(light.stroke).toBe('#1d4ed8')
     expect(light.fill).toBe(mixColors('#1d4ed8', '#ffffff', 0.2))
     // Texte plus foncé que la forme sur un fond clair…
     expect(light.text).toBe(mixColors('#1d4ed8', '#000000', 0.5))
-    const dark = nodePaint({ color: '#7f77dd', fill: 'tint', textColor: null }, DARK_GROUND)
+    const dark = nodePaint(
+      { color: '#7f77dd', fill: 'tint', textColor: null, borderColor: null },
+      DARK_GROUND
+    )
     expect(dark.fill).toBe(mixColors('#7f77dd', '#16181d', 0.4))
     // … et plus clair sur un fond sombre, où le foncer l'effacerait.
     expect(dark.text).toBe(mixColors('#7f77dd', '#e6edf3', 0.5))
@@ -378,17 +414,26 @@ describe('diagramme : formes', () => {
 
   it('plein : le fond est la couleur, le contour s’en détache, le texte contraste', () => {
     // Couleur sombre : contour éclairci, texte blanc (la couleur de la forme ne s'y lirait pas).
-    const deep = nodePaint({ color: '#3c3489', fill: 'solid', textColor: null }, LIGHT_GROUND)
+    const deep = nodePaint(
+      { color: '#3c3489', fill: 'solid', textColor: null, borderColor: null },
+      LIGHT_GROUND
+    )
     expect(deep.fill).toBe('#3c3489')
     expect(deep.stroke).toBe(mixColors('#3c3489', '#ffffff', 0.62))
     expect(deep.text).toBe('#ffffff')
     // Couleur claire : contour foncé, texte noir.
-    const pale = nodePaint({ color: '#ffd33d', fill: 'solid', textColor: null }, DARK_GROUND)
+    const pale = nodePaint(
+      { color: '#ffd33d', fill: 'solid', textColor: null, borderColor: null },
+      DARK_GROUND
+    )
     expect(pale.stroke).toBe(mixColors('#ffd33d', '#000000', 0.62))
     expect(pale.text).toBe('#000000')
     // Plein à l'encre sur papier sombre : fond clair, texte noir.
     expect(
-      nodePaint({ color: '#000000', fill: 'solid', textColor: null }, DARK_GROUND)
+      nodePaint(
+        { color: '#000000', fill: 'solid', textColor: null, borderColor: null },
+        DARK_GROUND
+      )
     ).toMatchObject({
       fill: '#e6edf3',
       text: '#000000'
@@ -397,7 +442,7 @@ describe('diagramme : formes', () => {
 
   it('donne au texte la couleur choisie pour ce nœud, quel que soit son fond', () => {
     const own = (fill: 'none' | 'tint' | 'solid', textColor: string): string =>
-      nodePaint({ color: '#1d4ed8', fill, textColor }, DARK_GROUND).text
+      nodePaint({ color: '#1d4ed8', fill, textColor, borderColor: null }, DARK_GROUND).text
     expect(own('none', '#d62828')).toBe('#d62828')
     expect(own('tint', '#d62828')).toBe('#d62828')
     expect(own('solid', '#d62828')).toBe('#d62828')
@@ -408,11 +453,46 @@ describe('diagramme : formes', () => {
     expect(own('solid', '#000000')).toBe('#000000')
     // La forme garde ses couleurs.
     expect(
-      nodePaint({ color: '#1d4ed8', fill: 'none', textColor: '#d62828' }, LIGHT_GROUND)
+      nodePaint(
+        { color: '#1d4ed8', fill: 'none', textColor: '#d62828', borderColor: null },
+        LIGHT_GROUND
+      )
     ).toMatchObject({
       stroke: '#1d4ed8',
       solid: '#1d4ed8'
     })
+  })
+
+  it('plein : la bordure choisie remplace celle qui se déduit du fond', () => {
+    const base = { color: '#ffd33d', fill: 'solid', textColor: null } as const
+    expect(nodePaint({ ...base, borderColor: '#d62828' }, LIGHT_GROUND)).toMatchObject({
+      stroke: '#d62828',
+      fill: '#ffd33d',
+      text: '#000000'
+    })
+    // Le noir choisi reste noir sur un papier sombre : la bordure tient au fond, pas au papier.
+    expect(nodePaint({ ...base, borderColor: '#000000' }, DARK_GROUND).stroke).toBe('#000000')
+    // Sans effet sur un contour ou un fond teinté : le trait y a la couleur du nœud.
+    expect(nodePaint({ ...base, fill: 'tint', borderColor: '#d62828' }, LIGHT_GROUND).stroke).toBe(
+      '#ffd33d'
+    )
+    expect(nodePaint({ ...base, fill: 'none', borderColor: '#d62828' }, LIGHT_GROUND).stroke).toBe(
+      '#ffd33d'
+    )
+  })
+
+  it('taille du texte d’un nœud : la sienne en points, sinon celle du diagramme', () => {
+    expect(nodeTitleSize(node(), style)).toBe(14)
+    expect(nodeTextScale(node(), style)).toBe(1)
+    expect(nodeTitleSize(node({ textSize: 21 }), style)).toBe(21)
+    expect(nodeTextScale(node({ textSize: 21 }), style)).toBe(1.5)
+    // Un nœud sans taille à lui suit le diagramme ; celui qui a la sienne la garde.
+    const bigger = { ...style, titleSize: 16 }
+    expect(nodeTitleSize(node(), bigger)).toBe(16)
+    expect(nodeTitleSize(node({ textSize: 21 }), bigger)).toBe(21)
+    // Choisir la taille du diagramme, c'est le suivre de nouveau.
+    expect(ownTextSize(14, style)).toBeNull()
+    expect(ownTextSize(18, style)).toBe(18)
   })
 
   it('calcule la taille qu’il faut à un nœud pour son texte, selon sa forme', () => {

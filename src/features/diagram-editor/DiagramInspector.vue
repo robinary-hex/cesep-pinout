@@ -3,9 +3,10 @@ import { computed } from 'vue'
 import {
   NODE_FAMILIES,
   NODE_SPECS,
-  NODE_TEXT_SCALES,
   nodeFont,
-  TEXT_SCALES,
+  nodeTitleSize,
+  ownTextSize,
+  TEXT_SIZE_LIMITS,
   type DiagramStyle,
   type LinkDash,
   type NodeFill,
@@ -14,6 +15,7 @@ import {
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import DiagramStyleFields from '@/features/settings/DiagramStyleFields.vue'
+import ColorAdder from '@/ui/ColorAdder.vue'
 import ColorField from '@/ui/ColorField.vue'
 import Icon from '@/ui/Icon.vue'
 import type { IconName } from '@/ui/icons'
@@ -135,20 +137,40 @@ function toggleNodeMono(): void {
   )
 }
 
-/** Tailles proposées pour le texte d'un nœud, plus la sienne si elle n'en fait pas partie. */
-const nodeScaleChoices = computed(() => {
-  const list: number[] = [...NODE_TEXT_SCALES]
-  const current = singleNode.value?.textScale
-  if (current !== undefined && !list.includes(current)) list.push(current)
-  return list.sort((a, b) => a - b)
-})
+/** Une taille de texte telle qu'on la montre : en points, deux décimales au plus. */
+function shownSize(size: number): number {
+  return Math.round(size * 100) / 100
+}
 
-function setNodeScale(event: Event): void {
+/**
+ * La taille tapée dans un champ, ramenée entre les bornes ; null si ce n'est pas une taille. Le
+ * champ montre aussitôt ce qui est retenu : `fallback` quand la saisie ne vaut rien.
+ */
+function typedSize(event: Event, fallback: number): number | null {
+  const field = event.target as HTMLInputElement
+  const raw = field.value.trim() === '' ? NaN : Number(field.value)
+  const size =
+    Number.isFinite(raw) && raw > 0
+      ? Math.min(TEXT_SIZE_LIMITS.max, Math.max(TEXT_SIZE_LIMITS.min, raw))
+      : null
+  field.value = String(shownSize(size ?? fallback))
+  return size
+}
+
+/** Taille du titre du nœud, en points : la sienne, sinon celle du diagramme. */
+const nodeTextSize = computed(() =>
+  singleNode.value ? shownSize(nodeTitleSize(singleNode.value, doc.value.style)) : 0
+)
+
+/** Taille du texte du nœud ; revenue à celle du diagramme, le nœud la suit de nouveau. */
+function setNodeTextSize(event: Event): void {
   const node = singleNode.value
-  const scale = Number(inputValue(event))
-  if (node && Number.isFinite(scale) && scale > 0) {
-    store.setNodesTextStyle([node.id], 'Taille du texte du nœud', { textScale: scale })
-  }
+  if (!node) return
+  const size = typedSize(event, nodeTextSize.value)
+  if (size === null) return
+  store.setNodesTextStyle([node.id], 'Taille du texte du nœud', {
+    textSize: ownTextSize(size, doc.value.style)
+  })
 }
 
 /** Couleur du texte du nœud ; null : il reprend celle de la forme. */
@@ -160,6 +182,18 @@ function setNodeTextColor(color: string | null): void {
 function setNodeFill(event: Event): void {
   const node = singleNode.value
   if (node) store.setNodesStyle([node.id], { fill: inputValue(event) as NodeFill })
+}
+
+/** Couleur de la bordure d'un fond plein ; null : déduite du fond. */
+function setNodeBorder(color: string | null): void {
+  const node = singleNode.value
+  if (node) store.setNodesStyle([node.id], { borderColor: color }, 'Couleur de la bordure')
+}
+
+/** Couleur choisie par le « + » : gardée dans le diagramme, puis donnée à la bordure. */
+function setCustomNodeBorder(hex: string): void {
+  store.addCustomColor(hex)
+  setNodeBorder(hex)
 }
 
 function setNodeBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
@@ -223,24 +257,12 @@ function setTextAnchor(event: Event): void {
   if (text) store.setTextAnchor(text.id, inputValue(event) as TextAnchor)
 }
 
-/** Tailles proposées : multiples de la taille des étiquettes du diagramme, plus la taille actuelle. */
-const textSizeChoices = computed(() => {
-  const base = doc.value.style.labelSize
-  const list: { scale: number; size: number }[] = TEXT_SCALES.map((scale) => ({
-    scale,
-    size: base * scale
-  }))
-  const current = singleText.value?.size
-  if (current !== undefined && !list.some((choice) => Math.abs(choice.size - current) < 1e-6)) {
-    list.push({ scale: Math.round((current / base) * 100) / 100, size: current })
-  }
-  return list.sort((a, b) => a.size - b.size)
-})
-
+/** Taille d'un texte libre, en points. */
 function setTextSize(event: Event): void {
   const text = singleText.value
-  const size = Number(inputValue(event))
-  if (text && Number.isFinite(size)) store.setTextSize(text.id, Math.max(4, size))
+  if (!text) return
+  const size = typedSize(event, text.size)
+  if (size !== null) store.setTextSize(text.id, size)
 }
 
 type TextStyleKey = 'bold' | 'italic' | 'underline' | 'strike'
@@ -320,8 +342,6 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
           <Icon name="export" />
         </button>
       </div>
-      <p v-if="store.filePath" class="hint path">{{ store.filePath }}</p>
-      <p v-else class="hint">Pas encore enregistré.</p>
     </section>
 
     <section v-if="!store.hasSelection" class="block">
@@ -396,12 +416,19 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
               </div>
             </div>
             <label class="field scale">
-              <span>Taille</span>
-              <select :value="singleNode.textScale" @change="setNodeScale">
-                <option v-for="scale in nodeScaleChoices" :key="scale" :value="scale">
-                  ×{{ scale }}
-                </option>
-              </select>
+              <span
+                title="Taille du titre dans une image exportée à ×1 (le double à ×2, le quadruple à ×4) ; le sous-titre suit dans la même proportion"
+              >
+                Taille (pt)
+              </span>
+              <input
+                type="number"
+                step="1"
+                :min="TEXT_SIZE_LIMITS.min"
+                :max="TEXT_SIZE_LIMITS.max"
+                :value="nodeTextSize"
+                @change="setNodeTextSize"
+              />
             </label>
           </div>
           <div class="field">
@@ -457,6 +484,40 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
             </option>
           </select>
         </label>
+        <div v-if="singleNode.fill === 'solid'" class="field border-color">
+          <div class="field-head">
+            <span>Couleur de la bordure</span>
+            <button
+              type="button"
+              class="auto"
+              :class="{ current: singleNode.borderColor === null }"
+              title="D’après la couleur du fond, éclaircie ou foncée pour s’en détacher"
+              @click="setNodeBorder(null)"
+            >
+              Auto
+            </button>
+          </div>
+          <div class="swatches">
+            <button
+              v-for="choice in store.colorChoices"
+              :key="choice.hex"
+              type="button"
+              class="swatch"
+              :class="{
+                current:
+                  singleNode.borderColor !== null && sameColor(choice.hex, singleNode.borderColor)
+              }"
+              :style="{ background: choice.hex }"
+              :title="choice.name"
+              @click="setNodeBorder(choice.hex)"
+            />
+            <ColorAdder
+              :value="singleNode.borderColor ?? singleNode.color"
+              title="Couleur personnalisée, gardée dans ce diagramme"
+              @pick="setCustomNodeBorder"
+            />
+          </div>
+        </div>
         <div class="row">
           <button
             v-if="NODE_SPECS[singleNode.shape].text"
@@ -474,7 +535,7 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
       </section>
       <section class="block">
         <h3>Position et taille</h3>
-        <div class="row">
+        <div class="box-row">
           <label v-for="side in BOX_FIELDS" :key="side.key" class="field">
             <span>{{ side.label }}</span>
             <input
@@ -599,12 +660,19 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
             </select>
           </label>
           <label class="field">
-            <span>Taille</span>
-            <select :value="singleText.size" @change="setTextSize">
-              <option v-for="choice in textSizeChoices" :key="choice.size" :value="choice.size">
-                ×{{ choice.scale }}
-              </option>
-            </select>
+            <span
+              title="Taille du texte dans une image exportée à ×1 (le double à ×2, le quadruple à ×4)"
+            >
+              Taille (pt)
+            </span>
+            <input
+              type="number"
+              step="1"
+              :min="TEXT_SIZE_LIMITS.min"
+              :max="TEXT_SIZE_LIMITS.max"
+              :value="shownSize(singleText.size)"
+              @change="setTextSize"
+            />
           </label>
         </div>
         <div class="row">
@@ -645,7 +713,7 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
       </section>
       <section class="block">
         <h3>Position et taille</h3>
-        <div class="row">
+        <div class="box-row">
           <label v-for="side in BOX_FIELDS" :key="side.key" class="field">
             <span>{{ side.label }}</span>
             <input
@@ -809,13 +877,11 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
   word-break: break-word;
 }
 
-.path {
-  word-break: break-all;
-}
-
 .swatches {
+  --color-adder-size: 20px;
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 4px;
   padding-top: 2px;
 }

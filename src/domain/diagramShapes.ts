@@ -367,6 +367,27 @@ export function nodeFont(node: Pick<DiagramNode, 'font'>, style: DiagramStyle): 
   return node.font ?? style.font
 }
 
+/**
+ * Rapport entre la taille du texte d'un nœud et celle du diagramme : 1 tant qu'il n'a pas la
+ * sienne. Titre et sous-titre grandissent ensemble.
+ */
+export function nodeTextScale(node: Pick<DiagramNode, 'textSize'>, style: DiagramStyle): number {
+  return node.textSize === null ? 1 : node.textSize / style.titleSize
+}
+
+/** Taille du titre d'un nœud, en points : la sienne, sinon celle du diagramme. */
+export function nodeTitleSize(node: Pick<DiagramNode, 'textSize'>, style: DiagramStyle): number {
+  return node.textSize ?? style.titleSize
+}
+
+/**
+ * Ce qu'on garde dans un nœud pour une taille choisie : null quand c'est celle du diagramme, que
+ * le nœud suit alors de nouveau (comme sa police).
+ */
+export function ownTextSize(size: number, style: DiagramStyle): number | null {
+  return size === style.titleSize ? null : size
+}
+
 export interface NodeTextLine {
   text: string
   /** Ligne de base, en cellules. */
@@ -392,14 +413,15 @@ export interface NodeTextLayout {
  * Titre puis sous-titre d'un nœud, en un bloc centré dans sa boîte de texte (capitales centrées
  * sur chaque ligne) ; null pour une forme sans texte ou un nœud sans rien d'écrit. Le style du
  * nœud (gras, italique, souligné, barré) est celui de son titre ; le sous-titre reste une ligne
- * secondaire, maigre, en italique quand la police est à chasse fixe. La police et le
- * multiplicateur de taille du nœud valent pour les deux.
+ * secondaire, maigre, en italique quand la police est à chasse fixe. La police et la taille du
+ * nœud valent pour les deux : le sous-titre grandit dans la même proportion que le titre.
  */
 export function layoutNodeText(node: DiagramNode, style: DiagramStyle): NodeTextLayout | null {
   if (!NODE_SPECS[node.shape].text) return null
   const font = nodeFont(node, style)
-  const titleSize = (style.titleSize * node.textScale) / style.cellPx
-  const subtitleSize = (style.subtitleSize * node.textScale) / style.cellPx
+  const scale = nodeTextScale(node, style)
+  const titleSize = (style.titleSize * scale) / style.cellPx
+  const subtitleSize = (style.subtitleSize * scale) / style.cellPx
   const decorations: string[] = []
   if (node.underline) decorations.push('underline')
   if (node.strike) decorations.push('line-through')
@@ -526,15 +548,18 @@ export interface NodePaint {
  * lirait pas sur elle-même : le texte y contraste avec le fond, noir ou blanc. Un nœud peut avoir
  * sa propre couleur de texte (`textColor`), reprise telle quelle ; son noir pur est l'encre du
  * papier, sauf sur un fond plein, où il reste noir.
+ *
+ * Sur un fond plein, le contour peut être choisi (`borderColor`, décision du 16 novembre 2026) :
+ * il est alors repris tel quel, noir compris, comme le texte.
  */
 export function nodePaint(
-  node: Pick<DiagramNode, 'color' | 'fill' | 'textColor'>,
+  node: Pick<DiagramNode, 'color' | 'fill' | 'textColor' | 'borderColor'>,
   ground: DiagramGround
 ): NodePaint {
   const color = inkColor(node.color, ground)
   if (node.fill === 'solid') {
     return {
-      stroke: mixColors(color, solidBorderToward(color), SOLID_BORDER_SHARE),
+      stroke: node.borderColor ?? mixColors(color, solidBorderToward(color), SOLID_BORDER_SHARE),
       fill: color,
       solid: color,
       text: node.textColor ?? (isDarkColor(color) ? '#ffffff' : '#000000')

@@ -471,6 +471,30 @@ input[type='radio'] {
   background-color: var(--scrollbar-hover);
 }
 
+/*
+ * X, Y, largeur et hauteur d'un panneau de propriétés : quatre champs toujours côte à côte, que
+ * le panneau ait son ascenseur ou non (une ligne souple laissait le quatrième passer dessous).
+ */
+.inspector .box-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.inspector .box-row .field {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.inspector .box-row .field input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding-left: 5px;
+  padding-right: 2px;
+}
+
 /* Panneau de propriétés des trois éditeurs. Ouvert à la main, il prend sa place à droite du
    canevas. Montré par une sélection (`floating`), il flotte sur le bord droit de la zone de dessin,
    au-dessus de la barre d'état : rien ne bouge dessous, et il repart avec la sélection. Pas

@@ -21,7 +21,8 @@ import { screenColor } from './ink'
 // état ; le canevas, la bibliothèque et les aperçus s'en servent. Mêmes règles de couleur que
 // `nodePaint` du domaine (ce que l'export écrit), mais avec les variables du thème : le noir pur
 // prend l'encre, un fond teinté mêle la couleur au papier (`--node-tint`), un fond plein garde la
-// couleur et son contour s'en détache ; le texte prend la couleur de la forme, tirée vers l'encre.
+// couleur et son contour s'en détache, ou prend la couleur choisie pour lui (`borderColor`) ; le
+// texte prend la couleur de la forme, tirée vers l'encre.
 
 const props = defineProps<{ node: DiagramNode; look: DiagramStyle }>()
 
@@ -32,6 +33,8 @@ const color = computed(() => screenColor(props.node.color))
 
 const stroke = computed(() => {
   if (props.node.fill !== 'solid') return color.value
+  // Contour choisi : tel quel, noir compris, comme le texte posé sur un fond plein.
+  if (props.node.borderColor !== null) return props.node.borderColor
   if (isInk.value) {
     return `color-mix(in srgb, var(--ink) ${SOLID_BORDER_SHARE * 100}%, var(--paper))`
   }

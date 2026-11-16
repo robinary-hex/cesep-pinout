@@ -104,6 +104,7 @@ const EDIT: ShortcutCategory = {
   rows: [
     k('glisser', 'Déplacer'),
     k('Flèches', 'Déplacer d’un pas', { withShift: 'de cinq' }),
+    k('Maj+molette', 'Régler un champ numérique'),
     k('Alt+glisser', 'Déposer une copie'),
     k('Ctrl+D', 'Dupliquer', { icon: 'duplicate' }),
     k('Ctrl+C', 'Copier', { icon: 'copy' }),

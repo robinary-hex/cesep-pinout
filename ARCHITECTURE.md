@@ -90,7 +90,10 @@ store, tenu par le clavier et recalé sur chaque mouvement du pointeur). Sans to
 montage, le bout d'un fil se saisit de près (`wireEndAt` : un appui sur le fil ou dans le vide à
 portée d'un bout devient le glisser de ce sommet), et sa poignée s'annonce au survol. Les flèches
 du clavier passent par `arrowNudge` (`src/ui/arrowKeys.ts`) dans les trois éditeurs : un pas de
-grille, cinq avec Maj. CLAUDE.md tient le
+grille, cinq avec Maj. Maj+molette sur un champ numérique le règle d'un pas
+(`wheelOnNumberField` de `src/ui/numberWheel.ts`) : une seule écoute, posée par `App.vue` sur
+la fenêtre, vaut pour tous les champs, qui n'en savent rien (le champ reçoit `input` et
+`change`, comme d'une saisie). CLAUDE.md tient le
 tableau de ces gestes ; l'aide F1 les dit de la même façon dans chaque section (son contenu est
 dans `src/app/shortcuts.ts`, des données que `ShortcutsHelp.vue` dessine : thèmes, capuchons de
 touches, pictogrammes de souris).
@@ -228,7 +231,7 @@ Tous en JSON indenté, avec `schemaVersion`, validés par Zod à l'ouverture, mi
 (`src/domain/migrations.ts`). Un fichier d'exemple par version dans `src/domain/fixtures/`.
 Versions courantes : composant 15 (image en forme du dessin, textes verticaux, angles arrondis des polylignes, forme point, opacité du remplissage, italique, souligné et barré des textes, orientation réglée texte par texte, textes droits sur le montage, boîtes de texte multilignes, flèche au milieu, graisse des textes, épaisseur en multiplicateur, flèches, textes variables avec
 unité, plus de `labelPrefix`), projet 22 (styles propres à des éléments : `styles` et `style`, composants derrière les fils, fils en diagonale à 45°, fond optionnel des étiquettes texte, styles, sens et couleur des étiquettes texte, couleurs de fil propres au montage, étiquettes texte en boîte, police des étiquettes d'extrémité dans le profil, graisse des étiquettes, étiquettes d'extrémité des fils, `componentStroke` dans le profil, `fields` par instance,
-définitions embarquées migrées à chaque version des composants), diagramme 5 (couleur du texte d'un nœud, fond optionnel des étiquettes de lien et des textes, étiquette d'un lien tenue le long du tracé, style de texte par nœud ; nœuds, liens, textes libres, style et couleurs du diagramme), paramètres 15 (un seul dossier, celui de Pinout : `dataDir` remplace `libraryDir` et `settingsDir` ; palette des diagrammes à part de celle des fils, moins pâle qu'à la v13, cases d'affichage des barres d'outils, style général des diagrammes, `componentStroke`
+définitions embarquées migrées à chaque version des composants), diagramme 6 (taille du texte d'un nœud en points, `textSize`, à la place du multiplicateur `textScale` ; couleur de la bordure d'un fond plein, `borderColor` ; couleur du texte d'un nœud, fond optionnel des étiquettes de lien et des textes, étiquette d'un lien tenue le long du tracé, style de texte par nœud ; nœuds, liens, textes libres, style et couleurs du diagramme), paramètres 15 (un seul dossier, celui de Pinout : `dataDir` remplace `libraryDir` et `settingsDir` ; palette des diagrammes à part de celle des fils, moins pâle qu'à la v13, cases d'affichage des barres d'outils, style général des diagrammes, `componentStroke`
 et `endLabelFont` du profil par défaut, thème sombre par défaut, ouverture du panneau, affichage de
 la bibliothèque).
 

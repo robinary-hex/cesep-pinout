@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
-import { createEmptyDiagram } from './diagram'
+import { createEmptyDiagram, createNode } from './diagram'
 import { DARK_GROUND, LIGHT_GROUND, mixColors } from './diagramShapes'
 import { buildDiagramSvg, exportGround } from './diagramSvg'
 import fixture from './fixtures/v1/diagram.json?raw'
 import styledFixture from './fixtures/v2/diagram.json?raw'
 import { parseDiagram } from './serialize'
-import { DEFAULT_EXPORT } from './settings'
+import { DEFAULT_EXPORT, type ExportScale } from './settings'
 
 describe('export SVG d’un diagramme', () => {
   const diagram = parseDiagram(fixture)
@@ -112,6 +112,43 @@ describe('export SVG d’un diagramme', () => {
     // Un nœud qui suit le diagramme ne redit pas la police.
     const plain = parsed.querySelectorAll('g.nodes > g')[1]?.querySelector('text')
     expect(plain?.getAttribute('font-family')).toBeNull()
+  })
+
+  it('une taille de texte vaut pour l’image à ×1 : elle double à ×2, quadruple à ×4', () => {
+    const doc = createEmptyDiagram('Tailles')
+    doc.nodes.push({ ...createNode('n1', 'rect', 0, 0), title: 'Titre', textSize: 20 })
+    doc.texts.push({
+      id: 't1',
+      x: 0,
+      y: 10,
+      w: 16,
+      h: 4,
+      anchor: 'middle',
+      text: 'Texte',
+      size: 17,
+      bold: false,
+      italic: false,
+      underline: false,
+      strike: false,
+      vertical: false,
+      color: '#000000',
+      background: false
+    })
+    /** Taille du titre du nœud et du texte libre, en pixels de l'image exportée. */
+    const pixels = (scale: ExportScale): number[] => {
+      const result = buildDiagramSvg(doc, { ...DEFAULT_EXPORT, scale, marginCells: 2 })
+      if (!result) throw new Error('export vide')
+      const parsed = new DOMParser().parseFromString(result.svg, 'image/svg+xml')
+      // Le dessin est en cellules : autant de pixels par unité que l'image en donne à une cellule.
+      const unit = result.widthPx / result.widthCells
+      const size = (selector: string): number =>
+        Number(parsed.querySelector(selector)?.getAttribute('font-size')) * unit
+      return [size('g.nodes tspan'), size('g.texts text')]
+    }
+    // 20 pt et 17 pt : autant de pixels à ×1, le double à ×2, le quadruple à ×4.
+    expect(pixels(1)).toEqual([20, 17])
+    expect(pixels(2)).toEqual([40, 34])
+    expect(pixels(4)).toEqual([80, 68])
   })
 
   it('arrête le trait d’un lien un peu avant le nœud quand il porte une pointe', () => {

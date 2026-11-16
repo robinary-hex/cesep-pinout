@@ -1,5 +1,5 @@
 import { COMPONENT_SCHEMA_VERSION, IMAGE_FILE_PATTERN } from './component'
-import { DIAGRAM_SCHEMA_VERSION } from './diagram'
+import { DEFAULT_DIAGRAM_STYLE, DIAGRAM_SCHEMA_VERSION } from './diagram'
 import { pathPointAt } from './diagramLinks'
 import {
   DEFAULT_COMPONENT_STROKE,
@@ -596,9 +596,40 @@ function migrateDiagramV4(raw: RawRecord): RawRecord {
   }
 }
 
+// Diagramme v5 → v6 : le texte d'un nœud a sa taille en points, et non plus un multiplicateur des
+// tailles du diagramme (aucune au départ pour un nœud resté à ×1 : il suit le diagramme) ; et un
+// fond plein peut choisir la couleur de son contour, déduite du fond tant qu'on n'en choisit pas.
+
+function migrateDiagramV5(raw: RawRecord): RawRecord {
+  const style = isRecord(raw['style']) ? raw['style'] : {}
+  const titleSize = style['titleSize']
+  const base =
+    typeof titleSize === 'number' && titleSize > 0 ? titleSize : DEFAULT_DIAGRAM_STYLE.titleSize
+  const nodes = Array.isArray(raw['nodes']) ? raw['nodes'] : []
+  return {
+    ...raw,
+    nodes: nodes.map((node) => {
+      if (!isRecord(node)) return node
+      const { textScale, ...rest } = node
+      const scale = typeof textScale === 'number' && textScale > 0 ? textScale : 1
+      return {
+        textSize: scale === 1 ? null : Math.round(base * scale * 100) / 100,
+        borderColor: null,
+        ...rest
+      }
+    })
+  }
+}
+
 export const diagramMigrations: MigrationTable = {
   current: DIAGRAM_SCHEMA_VERSION,
-  steps: { 1: migrateDiagramV1, 2: migrateDiagramV2, 3: migrateDiagramV3, 4: migrateDiagramV4 }
+  steps: {
+    1: migrateDiagramV1,
+    2: migrateDiagramV2,
+    3: migrateDiagramV3,
+    4: migrateDiagramV4,
+    5: migrateDiagramV5
+  }
 }
 
 // Paramètres v1 → v2 : export et copie de secours ; v2 → v3 : trait des composants du profil ;

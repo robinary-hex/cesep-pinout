@@ -35,6 +35,7 @@ import { heading, item, SEPARATOR, type MenuItem } from '@/ui/contextMenu'
 import Icon from '@/ui/Icon.vue'
 import type { IconName } from '@/ui/icons'
 import { openModals } from '@/ui/modalState'
+import { wheelOnNumberField } from '@/ui/numberWheel'
 import { applyTheme } from '@/ui/theme'
 import type { UpdateStatus } from '../../electron/api'
 import { openExternalFile } from './externalFiles'
@@ -778,6 +779,9 @@ onMounted(() => {
   window.addEventListener('keydown', swallowAlt)
   window.addEventListener('keyup', swallowAlt)
   window.addEventListener('pointerdown', commitFocusedField, true)
+  // Maj+molette sur un champ numérique le règle d'un pas : écoute non passive, pour retenir la
+  // molette, et en capture, avant tout ce qui défile.
+  window.addEventListener('wheel', wheelOnNumberField, { capture: true, passive: false })
   window.addEventListener('focus', onWindowFocus)
   window.addEventListener('dragover', onWindowDragOver)
   window.addEventListener('drop', onWindowDrop)
@@ -787,6 +791,7 @@ onUnmounted(() => {
   window.removeEventListener('keydown', swallowAlt)
   window.removeEventListener('keyup', swallowAlt)
   window.removeEventListener('pointerdown', commitFocusedField, true)
+  window.removeEventListener('wheel', wheelOnNumberField, true)
   window.removeEventListener('focus', onWindowFocus)
   window.removeEventListener('dragover', onWindowDragOver)
   window.removeEventListener('drop', onWindowDrop)

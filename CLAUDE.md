@@ -98,8 +98,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   de la même façon dans l'aide (`SELECT`, `EDIT` et `VIEW` de `src/app/shortcuts.ts`).
   - Maj : ajoute à la sélection ou en retire (Maj+clic, Maj+lasso) ; pendant un tracé, le
     contraint ou le varie (carré ou cercle dans l'éditeur de composants, L inversé d'un fil ou
-    d'un lien). Jamais autre chose à la souris. Au clavier, Maj donne la variante d'un raccourci
-    (sens inverse d'une rotation, premier plan, dégrouper, cinq pas pour les flèches).
+    d'un lien). Jamais autre chose à la souris sur un canevas. Hors des canevas, Maj+molette
+    sur un champ numérique le règle d'un pas (voir « Champs des panneaux »). Au clavier, Maj
+    donne la variante d'un raccourci (sens inverse d'une rotation, premier plan, dégrouper,
+    cinq pas pour les flèches).
   - Alt : copie (Alt+glisser dépose une copie de la sélection). Deux exceptions, dans le montage :
     Alt+clic sur un croisement inverse l'ordre des deux fils ; pendant le tracé d'un fil, Alt
     maintenue trace à 45° (décision du 10 novembre 2026 : Maj y inverse déjà l'ordre, et Ctrl
@@ -245,7 +247,12 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   cases « Miroir » et « Derrière les fils » d'un composant posé en sont), il ne double pas les
   commandes. Dans les panneaux, X, Y, largeur et hauteur ont leur propre section
   (« Position et taille », « Position et orientation » pour un composant posé, « Taille » pour
-  un composant).
+  un composant). Les quatre champs d'une boîte tiennent toujours sur une ligne (`.box-row` de
+  style.css, une grille de quatre colonnes égales ; décision du 16 novembre 2026) : en ligne
+  souple, le quatrième passait dessous dès que le panneau prenait son ascenseur. Sous le nom
+  du document, un panneau ne montre ni le chemin du fichier ni « Pas encore enregistré »
+  (même décision, pour gagner de la hauteur) : le chemin est dans l'infobulle de l'onglet et
+  du nom, à droite de la barre d'outils.
 - Barre d'application (`src/app/App.vue`) : tout à gauche, un bouton à trois barres ouvre le menu
   Fichier (nouveau, ouvrir, récents, enregistrer,
   exporter, paramètres, raccourcis, quitter) construit avec `ContextMenu` et appelant les actions
@@ -291,7 +298,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Diagramme (`src/features/diagram-editor/`, domaine `src/domain/diagram.ts`,
   `diagramShapes.ts`, `diagramLinks.ts`, `diagramSvg.ts`) : organigrammes, diagrammes d'activité,
   schémas de communication ; pas de diagrammes de séquence ni de classes (décision du 10 novembre
-  2026). Document à part, fichier `.pinuml` (JSON, `schemaVersion` 5), même grille infinie que le
+  2026). Document à part, fichier `.pinuml` (JSON, `schemaVersion` 6), même grille infinie que le
   montage mais plus fine (`style.cellPx` = 10).
   - Nœuds : une boîte en cellules entières, une forme du catalogue en dur (`NODE_SHAPES`,
     `NODE_SPECS`), un titre et un sous-titre, une couleur et un fond (`fill` : contour, teinté,
@@ -324,7 +331,12 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     en thème sombre (`TINT_SHARE` : 20 % de couleur en clair, 40 % en sombre ; `--node-tint` dans
     style.css) ; en plein, le fond est la
     couleur même et le contour s'en détache, éclairci sur une couleur sombre, foncé sur une
-    couleur claire (`SOLID_BORDER_SHARE`). Le texte prend la couleur de la forme, tirée vers
+    couleur claire (`SOLID_BORDER_SHARE`), à moins qu'on ne choisisse sa bordure (décision du 16
+    novembre 2026 ; `borderColor`, null = déduite du fond ; pastilles « Couleur de la bordure »
+    du panneau, avec « Auto » et un « + », et sous-menu « Fond » du clic droit, pour un fond
+    plein seulement ; `setNodesStyle`). Elle est reprise telle quelle, noir compris, et reste
+    sans effet sur les autres fonds, où le trait a la couleur du nœud ; elle s'appelle
+    « bordure » dans l'interface, « Contour » y étant déjà un fond. Le texte prend la couleur de la forme, tirée vers
     l'encre du papier pour ressortir (`NODE_TEXT_SHARE` : moitié couleur, moitié encre ;
     décision du 11 novembre 2026) : plus foncée que la forme sur un papier clair, plus claire
     sur un papier sombre, où la foncer l'effacerait ; à la couleur même de la forme, il se
@@ -337,7 +349,15 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     Texte : le diagramme a une police (normale ou chasse fixe) et des tailles ; chaque nœud a son
     style (`NodeTextStyle`, boutons du panneau) : `font` (null = la police du diagramme, sinon la
     sienne ; un bouton bascule la chasse fixe), `bold`, `italic`, `underline`, `strike`, et
-    `textScale`, multiplicateur ×1 à ×3 des tailles du diagramme (`NODE_TEXT_SCALES`). Gras,
+    `textSize`, la taille de son titre en points (décision du 16 novembre 2026 : une taille
+    qu'on choisit, et non plus un multiplicateur ; null = celle du diagramme, que le nœud suit ;
+    le sous-titre grandit dans la même proportion : `nodeTextScale`, `nodeTitleSize`). Elle se
+    tape dans le champ « Taille (pt) » du panneau, ou se prend dans le sous-menu « Texte »
+    (`NODE_TEXT_SIZES`) ; choisir la taille du diagramme, c'est le suivre de nouveau
+    (`ownTextSize`, comme pour la police). Un texte libre a de même son champ « Taille (pt) »
+    (`size`, bornes `TEXT_SIZE_LIMITS`). Ces tailles valent pour une image exportée à ×1 :
+    le dessin est en cellules, donc elles doublent à ×2 et quadruplent à ×4, comme tout le
+    reste. Gras,
     italique, souligné et barré stylent le titre ; le sous-titre reste une ligne secondaire,
     maigre, en italique en chasse fixe ; police et taille valent pour les deux
     (`layoutNodeText`, `nodeLineAttrs`). Un nœud neuf a un titre gras en police normale, maigre
@@ -568,7 +588,14 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Champs des panneaux : ils valident au `change`. Un clic hors du champ en cours de saisie le
   valide d'abord (`commitFocusedField` dans `App.vue`, en phase de capture), pour que la saisie ne
   soit pas perdue quand le clic retire le champ. Hors des champs, le texte de l'interface ne se
-  surligne pas (`user-select: none`).
+  surligne pas (`user-select: none`). Maj+molette sur un champ numérique, ou sur son libellé,
+  le règle d'un pas par cran, vers le haut pour l'augmenter (décision du 16 novembre 2026 ;
+  `wheelOnNumberField` de `src/ui/numberWheel.ts`, écouté une fois par `App.vue` pour toute
+  la fenêtre, boîtes de dialogue comprises) : la valeur passe au multiple suivant du pas du
+  champ, entre ses bornes (`steppedValue`), puis le champ est validé comme une saisie
+  (`input` et `change`), donc chaque cran est une commande et le dessin suit. Sans Maj, la
+  molette fait défiler le panneau : un champ qui passe sous le pointeur ne change pas. Avec
+  Maj, Chromium fait de la molette un défilement horizontal : le cran se lit dans `deltaX`.
 - Champs de couleur (décision du 11 novembre 2026) : partout où une couleur se règle, la pastille
   qui ouvre le sélecteur est suivie de son code hexadécimal, qu'on peut lire, taper ou coller
   (`src/ui/ColorField.vue` ; `parseHexColor` de `src/ui/hexColor.ts` accepte `#d62828`,
@@ -793,10 +820,12 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
   par version dans `src/domain/fixtures/`. Versions courantes : composant 15, projet 22, paramètres 15,
-  diagramme 5 (paramètres 15 et diagramme 5 sont ceux de la 1.6.0, publiée le 11 novembre
+  diagramme 6 (paramètres 15 et diagramme 5 sont ceux de la 1.6.0, publiée le 11 novembre
   2026 : palette des diagrammes et dossier de Pinout dans les paramètres, couleur du texte
   d'un nœud dans le diagramme ; un diagramme enregistré par la 1.6.0 ne s'ouvre plus dans une
-  version antérieure ; le projet 22 est celui de la 1.7.0, publiée le 12 novembre 2026, avec
+  version antérieure ; le diagramme 6, du 16 novembre 2026, pas encore publié, remplace
+  `textScale` par `textSize` et ajoute `borderColor` : un diagramme qu'il enregistre ne
+  s'ouvrira plus dans la 1.8.0 ni avant ; le projet 22 est celui de la 1.7.0, publiée le 12 novembre 2026, avec
   les styles propres : un montage qu'elle enregistre ne s'ouvre plus dans une version
   antérieure)
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et

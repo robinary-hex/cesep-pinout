@@ -7,7 +7,7 @@ import {
   nearestWirePoint,
   NODE_FAMILIES,
   NODE_SPECS,
-  NODE_TEXT_SCALES,
+  NODE_TEXT_SIZES,
   nodeFont,
   removeVertex,
   wireGeometryProblem,
@@ -224,13 +224,7 @@ function nodeTextMenu(node: DiagramNode, ids: readonly string[]): MenuItem {
       ),
       SEPARATOR,
       heading('Taille'),
-      ...NODE_TEXT_SCALES.map((scale) =>
-        item(
-          `×${String(scale).replace('.', ',')}`,
-          () => store.setNodesTextStyle(ids, 'Taille du texte du nœud', { textScale: scale }),
-          { checked: node.textScale === scale }
-        )
-      ),
+      ...nodeSizeItems(node, ids),
       SEPARATOR,
       heading('Couleur'),
       item(
@@ -249,6 +243,51 @@ function nodeTextMenu(node: DiagramNode, ids: readonly string[]): MenuItem {
     ],
     { icon: 'type' }
   )
+}
+
+/** Une taille de texte comme la dit un menu : en points, à la française. */
+function points(size: number): string {
+  return `${String(Math.round(size * 100) / 100).replace('.', ',')} pt`
+}
+
+/**
+ * Tailles du texte d'un nœud : celle du diagramme (le nœud la suit), puis les tailles courantes,
+ * et la sienne si elle n'en est pas.
+ */
+function nodeSizeItems(node: DiagramNode, ids: readonly string[]): MenuItem[] {
+  const base = store.doc.style.titleSize
+  const own = node.textSize
+  const sizes = new Set<number>(NODE_TEXT_SIZES)
+  if (own !== null) sizes.add(own)
+  sizes.delete(base)
+  const setSize = (textSize: number | null): void =>
+    store.setNodesTextStyle(ids, 'Taille du texte du nœud', { textSize })
+  return [
+    item(`Celle du diagramme (${points(base)})`, () => setSize(null), { checked: own === null }),
+    ...[...sizes]
+      .sort((a, b) => a - b)
+      .map((size) => item(points(size), () => setSize(size), { checked: own === size }))
+  ]
+}
+
+/** Bordure d'un fond plein : déduite du fond, ou une couleur de la palette. */
+function borderItems(node: DiagramNode, ids: readonly string[]): MenuItem[] {
+  if (node.fill !== 'solid') return []
+  const setBorder = (borderColor: string | null): void =>
+    store.setNodesStyle(ids, { borderColor }, 'Couleur de la bordure')
+  return [
+    SEPARATOR,
+    heading('Bordure'),
+    item('Automatique', () => setBorder(null), { checked: node.borderColor === null }),
+    {
+      kind: 'swatches',
+      swatches: store.colorChoices.map((choice) => ({
+        ...choice,
+        current: node.borderColor?.toLowerCase() === choice.hex.toLowerCase()
+      })),
+      pick: (hex) => setBorder(hex)
+    }
+  ]
 }
 
 /** Entrées qui dépendent de l'endroit du lien où l'on a cliqué : un sommet ou un segment. */
@@ -343,7 +382,8 @@ function openMenu(request: DiagramMenuRequest): void {
           }),
           item('Plein', () => store.setCurrentFill('solid'), {
             checked: !multi && node.fill === 'solid'
-          })
+          }),
+          ...borderItems(node, ids)
         ],
         { icon: 'circle' }
       ),

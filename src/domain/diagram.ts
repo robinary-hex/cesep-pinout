@@ -10,7 +10,7 @@ import { textLabelSchema, wireGeometryProblem } from './project'
 // verticaux) ; des textes libres. Rien ne dit dans le fichier qu'un lien est accroché à un nœud :
 // cela se déduit de la géométrie (une extrémité posée sur un point d'accroche du nœud).
 
-export const DIAGRAM_SCHEMA_VERSION = 5
+export const DIAGRAM_SCHEMA_VERSION = 6
 
 /** Formes du catalogue, dans l'ordre de la bibliothèque (famille par famille). */
 export const NODE_SHAPES = [
@@ -226,8 +226,11 @@ export const DIAGRAM_FONT_FAMILIES: Record<DiagramFont, string> = {
   mono: "Consolas, 'Cascadia Mono', monospace"
 }
 
-/** Multiplicateurs de taille proposés pour le texte d'un nœud. */
-export const NODE_TEXT_SCALES = [1, 1.5, 2, 2.5, 3] as const
+/** Tailles proposées pour le texte d'un nœud, en points, en plus de celle du diagramme. */
+export const NODE_TEXT_SIZES = [10, 12, 14, 16, 18, 24, 32] as const
+
+/** Bornes d'une taille de texte choisie à la main (nœud, texte libre), en points. */
+export const TEXT_SIZE_LIMITS = { min: 4, max: 96 } as const
 
 /** Nœud : une boîte en cellules, (x, y) = coin supérieur gauche. */
 export const diagramNodeSchema = z.object({
@@ -251,19 +254,27 @@ export const diagramNodeSchema = z.object({
   italic: z.boolean(),
   underline: z.boolean(),
   strike: z.boolean(),
-  /** Multiplicateur des tailles de texte du diagramme, pour ce nœud (titre et sous-titre). */
-  textScale: z.number().positive(),
+  /**
+   * Taille du titre de ce nœud, en points comme celles du diagramme ; null = celle du diagramme.
+   * Le sous-titre suit dans la même proportion.
+   */
+  textSize: z.number().positive().nullable(),
   /**
    * Couleur du texte ; null = celle de la forme (sur un fond plein, une couleur qui s'y lit).
    */
-  textColor: hexColorSchema.nullable()
+  textColor: hexColorSchema.nullable(),
+  /**
+   * Couleur du contour sur un fond plein ; null = déduite du fond, pour s'en détacher. Sans effet
+   * sur les autres fonds, où le contour a la couleur du nœud.
+   */
+  borderColor: hexColorSchema.nullable()
 })
 export type DiagramNode = z.infer<typeof diagramNodeSchema>
 
 /** Style du texte d'un nœud. */
 export type NodeTextStyle = Pick<
   DiagramNode,
-  'font' | 'bold' | 'italic' | 'underline' | 'strike' | 'textScale' | 'textColor'
+  'font' | 'bold' | 'italic' | 'underline' | 'strike' | 'textSize' | 'textColor'
 >
 
 export const LINK_DASHES = ['solid', 'dashed'] as const
@@ -411,7 +422,7 @@ export function createEmptyDiagram(
 }
 
 /**
- * Style de texte d'un nœud qu'on vient de poser : la police du diagramme, taille ×1, la couleur
+ * Style de texte d'un nœud qu'on vient de poser : la police et la taille du diagramme, la couleur
  * de la forme, et un titre en gras en police normale, maigre en chasse fixe (les organigrammes
  * de code).
  */
@@ -422,7 +433,7 @@ export function defaultNodeTextStyle(style: DiagramStyle): NodeTextStyle {
     italic: false,
     underline: false,
     strike: false,
-    textScale: 1,
+    textSize: null,
     textColor: null
   }
 }
@@ -447,6 +458,7 @@ export function createNode(
     subtitle: '',
     color: '#000000',
     fill: 'tint',
+    borderColor: null,
     ...defaultNodeTextStyle(style)
   }
 }

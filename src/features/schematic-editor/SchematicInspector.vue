@@ -360,8 +360,6 @@ function setLabelVertical(event: Event): void {
           <Icon name="export" />
         </button>
       </div>
-      <p v-if="store.filePath" class="hint path">{{ store.filePath }}</p>
-      <p v-else class="hint">Pas encore enregistré.</p>
     </section>
 
     <template v-if="!store.hasSelection">
@@ -634,7 +632,7 @@ function setLabelVertical(event: Event): void {
       </section>
       <section class="block">
         <h3>Position et taille</h3>
-        <div class="row">
+        <div class="box-row">
           <label v-for="side in BOX_FIELDS" :key="side.key" class="field">
             <span>{{ side.label }}</span>
             <input
@@ -833,10 +831,6 @@ function setLabelVertical(event: Event): void {
   font-size: 12px;
   color: var(--text-muted);
   word-break: break-word;
-}
-
-.path {
-  word-break: break-all;
 }
 
 /* Styles propres du montage : nom, nombre d'éléments, bouton pour les sélectionner. */

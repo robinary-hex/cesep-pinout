@@ -99,7 +99,7 @@ interface TabEditing {
   selectedTexts: string[]
 }
 
-export type NodeStyle = Pick<DiagramNode, 'color' | 'fill'>
+export type NodeStyle = Pick<DiagramNode, 'color' | 'fill' | 'borderColor'>
 export type LinkStyle = Pick<
   DiagramLink,
   'color' | 'dash' | 'startArrow' | 'endArrow' | 'labelBackground'
@@ -655,9 +655,14 @@ export const useDiagramStore = defineStore('diagram', () => {
     })
   }
 
-  function setNodesStyle(ids: readonly string[], patch: Partial<NodeStyle>): void {
+  /** Couleur, fond et couleur du contour (sur un fond plein ; null : déduite du fond) de nœuds. */
+  function setNodesStyle(
+    ids: readonly string[],
+    patch: Partial<NodeStyle>,
+    label = 'Style du nœud'
+  ): void {
     if (ids.length === 0) return
-    apply('Style du nœud', (draft) => {
+    apply(label, (draft) => {
       for (const node of draft.nodes) if (ids.includes(node.id)) Object.assign(node, patch)
     })
   }
