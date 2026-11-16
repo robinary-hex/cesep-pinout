@@ -867,9 +867,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   diagramme 6 (paramètres 15 et diagramme 5 sont ceux de la 1.6.0, publiée le 11 novembre
   2026 : palette des diagrammes et dossier de Pinout dans les paramètres, couleur du texte
   d'un nœud dans le diagramme ; un diagramme enregistré par la 1.6.0 ne s'ouvre plus dans une
-  version antérieure ; le diagramme 6, du 16 novembre 2026, pas encore publié, remplace
-  `textScale` par `textSize` et ajoute `borderColor` : un diagramme qu'il enregistre ne
-  s'ouvrira plus dans la 1.8.0 ni avant ; le projet 22 est celui de la 1.7.0, publiée le 12 novembre 2026, avec
+  version antérieure ; le diagramme 6 est celui de la 1.9.0, publiée le 16 novembre 2026 : il
+  remplace `textScale` par `textSize` et ajoute `borderColor`, et un diagramme qu'elle
+  enregistre ne s'ouvre plus dans la 1.8.0 ni avant ; le projet 22 est celui de la 1.7.0, publiée le 12 novembre 2026, avec
   les styles propres : un montage qu'elle enregistre ne s'ouvre plus dans une version
   antérieure)
   (la v1 des composants avait `strokeWidth` en cellules et `labelPrefix`, migrés en `weight` et
