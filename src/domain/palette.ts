@@ -2,8 +2,9 @@ import type { PaletteColor } from './settings'
 
 // Couleurs proposées par la palette d'une barre d'outils : celles de l'application (paramètres,
 // communes à tous les documents), puis celles que le document garde pour lui (`customColors`).
-// Un clic droit sur une pastille la modifie ou la supprime (décision du 17 novembre 2026) : ce
-// fichier dit ce que deviennent alors les deux listes, sans rien savoir de qui les enregistre.
+// Un clic droit sur une couleur du document la modifie ou la supprime (décision du 17 novembre
+// 2026) ; celles de l'application ne se règlent que dans les paramètres. Ce fichier dit ce que
+// devient alors la liste du document, sans rien savoir de qui l'enregistre.
 
 /** Une couleur proposée : son code, son nom, et d'où elle vient. */
 export interface ColorChoice {
@@ -40,49 +41,28 @@ export function startsDocumentColors(
   return index > 0 && choices[index]?.custom === true && choices[index - 1]?.custom !== true
 }
 
-/** Ce que devient l'une des deux listes quand on y modifie ou qu'on y supprime une couleur. */
-export type PaletteEdit =
-  { list: 'custom'; colors: string[] } | { list: 'app'; colors: PaletteColor[] }
-
 /**
- * Remplace la couleur `hex` par `next`, là où elle se trouve : dans les couleurs du document,
- * sinon dans la palette de l'application, qui garde son nom. Null si rien n'est à faire : couleur
- * inconnue, inchangée, ou `next` déjà proposée.
+ * Les couleurs du document après avoir remplacé `hex` par `next`, à la même place. Null si rien
+ * n'est à faire : `hex` n'est pas une couleur du document (celles de l'application ne se
+ * modifient pas d'ici), elle est inchangée, ou `next` est déjà proposée.
  */
-export function recoloredChoice(
+export function recoloredCustom(
   app: readonly PaletteColor[],
   custom: readonly string[],
   hex: string,
   next: string
-): PaletteEdit | null {
+): string[] | null {
   if (sameColor(hex, next)) return null
+  if (!custom.some((color) => sameColor(color, hex))) return null
   if (paletteChoices(app, custom).some((choice) => sameColor(choice.hex, next))) return null
-  if (custom.some((color) => sameColor(color, hex))) {
-    return { list: 'custom', colors: custom.map((color) => (sameColor(color, hex) ? next : color)) }
-  }
-  if (app.some((color) => sameColor(color.hex, hex))) {
-    return {
-      list: 'app',
-      colors: app.map((color) => (sameColor(color.hex, hex) ? { ...color, hex: next } : color))
-    }
-  }
-  return null
+  return custom.map((color) => (sameColor(color, hex) ? next : color))
 }
 
 /**
- * Retire la couleur `hex` de la liste où elle se trouve. Null si elle est inconnue, ou si c'est
- * la dernière de la palette de l'application : une palette garde au moins une couleur.
+ * Les couleurs du document sans `hex`. Null si ce n'en est pas une : une couleur de
+ * l'application ne se supprime pas d'ici.
  */
-export function removedChoice(
-  app: readonly PaletteColor[],
-  custom: readonly string[],
-  hex: string
-): PaletteEdit | null {
-  if (custom.some((color) => sameColor(color, hex))) {
-    return { list: 'custom', colors: custom.filter((color) => !sameColor(color, hex)) }
-  }
-  if (app.length > 1 && app.some((color) => sameColor(color.hex, hex))) {
-    return { list: 'app', colors: app.filter((color) => !sameColor(color.hex, hex)) }
-  }
-  return null
+export function removedCustom(custom: readonly string[], hex: string): string[] | null {
+  if (!custom.some((color) => sameColor(color, hex))) return null
+  return custom.filter((color) => !sameColor(color, hex))
 }

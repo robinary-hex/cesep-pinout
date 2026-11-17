@@ -231,7 +231,7 @@ describe('diagramme : nœuds', () => {
     expect(library.palette.map((color) => color.hex)).toContain('#d62828')
   })
 
-  it('modifie ou supprime une couleur d’un clic droit sur sa pastille', async () => {
+  it('modifie ou supprime une couleur du diagramme d’un clic droit sur sa pastille', async () => {
     const library = useLibraryStore()
     await library.init()
     const store = useDiagramStore()
@@ -245,20 +245,17 @@ describe('diagramme : nœuds', () => {
     store.removeColorChoice('#123456')
     expect(store.doc.customColors).toEqual([])
     expect(store.currentColor).toBe(store.colorChoices[0]?.hex)
-    // Une couleur de la palette des diagrammes : un réglage de l'application.
-    const second = library.diagramPalette[1]
+    // Une couleur de la palette des diagrammes ne se modifie ni ne se supprime d'ici : c'est
+    // l'affaire des paramètres.
+    const palette = library.diagramPalette.map((color) => ({ ...color }))
+    const second = palette[1]
     if (!second) throw new Error('palette attendue')
     const before = store.doc
     store.changeColorChoice(second.hex, '#abcdef')
+    store.removeColorChoice(second.hex)
     await flushPromises()
-    expect(library.diagramPalette[1]).toEqual({ name: second.name, hex: '#abcdef' })
+    expect(library.diagramPalette).toEqual(palette)
     expect(store.doc).toBe(before)
-    // La palette des fils n'est pas touchée.
-    expect(library.palette.some((color) => color.hex === '#abcdef')).toBe(false)
-    const size = library.diagramPalette.length
-    store.removeColorChoice('#abcdef')
-    await flushPromises()
-    expect(library.diagramPalette).toHaveLength(size - 1)
   })
 
   it('part du style général, le suit quand il change, y revient sur demande', async () => {

@@ -793,32 +793,22 @@ describe('onglets de montage', () => {
     expect(store.doc.customColors).toEqual(['#123456'])
   })
 
-  it('modifie ou supprime une couleur de la palette des fils : un réglage de l’application', async () => {
+  it('ne modifie ni ne supprime une couleur de la palette des fils : c’est l’affaire des paramètres', async () => {
     setBridge(new FakeFs())
     const library = useLibraryStore()
     await library.init()
     const store = useSchematicStore()
-    const [first, second] = library.palette
-    if (!first || !second) throw new Error('palette attendue')
+    const palette = library.palette.map((color) => ({ ...color }))
+    const second = palette[1]
+    if (!second) throw new Error('palette attendue')
     const before = store.doc
     store.setCurrentColor(second.hex)
     store.changeColorChoice(second.hex, '#abcdef')
+    store.removeColorChoice(second.hex)
     await flushPromises()
-    // La palette change dans les paramètres, la couleur garde son nom ; le montage, lui, n'a
-    // rien à annuler.
-    expect(library.palette[1]).toEqual({ name: second.name, hex: '#abcdef' })
+    expect(library.palette).toEqual(palette)
     expect(store.doc).toBe(before)
-    expect(store.currentColor).toBe('#abcdef')
-    // La couleur des nouveaux fils suit, si c'était elle.
-    store.changeColorChoice(library.defaultWireColor, '#010203')
-    await flushPromises()
-    expect(library.defaultWireColor).toBe('#010203')
-    const size = library.palette.length
-    store.removeColorChoice('#abcdef')
-    await flushPromises()
-    expect(library.palette).toHaveLength(size - 1)
-    expect(library.palette.some((color) => color.hex === '#abcdef')).toBe(false)
-    expect(store.currentColor).toBe(library.palette[0]?.hex)
+    expect(store.currentColor).toBe(second.hex)
     setBridge(null)
   })
 

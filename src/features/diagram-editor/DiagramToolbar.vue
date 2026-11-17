@@ -18,7 +18,7 @@ import { useDiagramStore } from './store'
 // Barre d'outils du diagramme. D'abord le début commun aux trois éditeurs (`ToolbarBasics` :
 // zoom, annuler, rétablir, corbeille), puis les outils (pictogramme seul, raccourci dans
 // l'infobulle), le fond des nœuds, le style des liens, la palette (un clic droit sur une couleur
-// la modifie ou la supprime) et, s'il y a des groupes, la
+// du diagramme la modifie ou la supprime) et, s'il y a des groupes, la
 // case qui montre leur contour ; à droite,
 // le nom du document et le bouton du panneau de propriétés. La palette, le fond et le style des liens règlent ce que
 // seront les prochains éléments et changent aussi la sélection. Les formes se posent depuis la
@@ -220,7 +220,6 @@ function toggleEndArrow(): void {
         :swatches="store.colorChoices"
         :current="store.currentColor"
         adder-title="Couleur personnalisée, gardée dans ce diagramme"
-        palette-name="Palette des diagrammes"
         custom-name="Couleur de ce diagramme"
         @pick="store.setCurrentColor"
         @add="pickCustom"

@@ -8,21 +8,19 @@ import { heading, item, type MenuItem } from './contextMenu'
 
 // Palette d'une barre d'outils (montage, diagramme) : une pastille par couleur proposée, puis le
 // « + » qui en ajoute une au document ; un trait sépare les couleurs de l'application de celles
-// du document (`data-first-own`, dessiné par style.css). Un clic choisit la couleur ; un clic
-// droit ouvre un menu
-// qui la modifie (un petit volet avec le champ de couleur, sous la pastille) ou la supprime
-// (décision du 17 novembre 2026). La palette ne sait rien des documents : elle dit ce qu'on lui
-// demande, et l'éditeur fait le reste.
+// du document (`data-first-own`, dessiné par style.css). Un clic choisit la couleur. Un clic
+// droit sur une couleur du document ouvre un menu qui la modifie (un petit volet avec le champ
+// de couleur, sous la pastille) ou la supprime ; les couleurs de l'application n'ont pas ce
+// menu : elles ne se règlent que dans les paramètres (décision du 17 novembre 2026). La palette
+// ne sait rien des documents : elle dit ce qu'on lui demande, et l'éditeur fait le reste.
 
-const props = defineProps<{
+defineProps<{
   swatches: readonly ColorChoice[]
   /** Couleur courante : sa pastille est entourée. */
   current: string
   /** Infobulle du « + ». */
   adderTitle: string
-  /** Nom de la palette de l'application, dans le menu : « Palette des fils ». */
-  paletteName: string
-  /** Nom d'une couleur propre au document, dans le menu : « Couleur de ce montage ». */
+  /** Titre du menu d'une couleur du document : « Couleur de ce montage ». */
   customName: string
 }>()
 const emit = defineEmits<{
@@ -39,17 +37,19 @@ const menu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
 /** Pastille dont on modifie la couleur, et où elle est : le volet se met dessous. */
 const editing = ref<{ hex: string; anchor: Anchor } | null>(null)
 
-function openMenu(swatch: ColorChoice, event: MouseEvent): void {
+/** Titre du menu : la prop, lue au moment du clic. */
+function openMenu(swatch: ColorChoice, title: string, event: MouseEvent): void {
+  // Pas de menu du navigateur sur une pastille ; pas de menu du tout pour une couleur de
+  // l'application, qui ne se modifie ni ne se supprime d'ici.
   event.preventDefault()
+  if (!swatch.custom) return
   const box = (event.currentTarget as HTMLElement).getBoundingClientRect()
   const anchor: Anchor = { left: box.left, top: box.top, width: box.width, height: box.height }
-  // La palette de l'application garde au moins une couleur.
-  const last = !swatch.custom && props.swatches.filter((entry) => !entry.custom).length <= 1
   menu.value = {
     x: event.clientX,
     y: event.clientY,
     items: [
-      heading(swatch.custom ? props.customName : `${props.paletteName} : ${swatch.name}`),
+      heading(title),
       item(
         'Modifier…',
         () => {
@@ -57,11 +57,7 @@ function openMenu(swatch: ColorChoice, event: MouseEvent): void {
         },
         { icon: 'edit' }
       ),
-      item('Supprimer', () => emit('remove', swatch.hex), {
-        icon: 'trash',
-        danger: true,
-        disabled: last
-      })
+      item('Supprimer', () => emit('remove', swatch.hex), { icon: 'trash', danger: true })
     ]
   }
 }
@@ -85,7 +81,7 @@ function change(next: string): void {
       :style="{ background: swatch.hex }"
       :title="swatch.name"
       @click="emit('pick', swatch.hex)"
-      @contextmenu="openMenu(swatch, $event)"
+      @contextmenu="openMenu(swatch, customName, $event)"
     />
     <ColorAdder :value="current" :title="adderTitle" @pick="emit('add', $event)" />
     <ContextMenu v-if="menu" :x="menu.x" :y="menu.y" :items="menu.items" @close="menu = null" />

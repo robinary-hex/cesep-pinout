@@ -33,8 +33,8 @@ import {
   regroupedCopies,
   removeVertex,
   paletteChoices,
-  recoloredChoice,
-  removedChoice,
+  recoloredCustom,
+  removedCustom,
   restackedIds,
   sameColor,
   sameTypeIds,
@@ -1070,44 +1070,37 @@ export const useDiagramStore = defineStore('diagram', () => {
   }
 
   /**
-   * Remplace une couleur proposée par une autre (clic droit sur sa pastille, « Modifier… ») :
-   * dans les couleurs de ce diagramme si elle en est (une commande), sinon dans la palette des
-   * diagrammes de l'application (un réglage, commun à tous, qu'on n'annule pas). Seule la
-   * pastille change : ce qui est déjà dessiné garde sa couleur.
+   * Remplace une couleur de ce diagramme par une autre (clic droit sur sa pastille,
+   * « Modifier… ») : une commande. Seule la pastille change, ce qui est déjà dessiné garde sa
+   * couleur. Les couleurs de l'application ne se modifient que dans les paramètres.
    */
   function changeColorChoice(hex: string, next: string): void {
-    const edit = recoloredChoice(library.diagramPalette, doc.value.customColors, hex, next)
-    if (!edit) {
-      if (!sameColor(hex, next)) status.value = 'Cette couleur est déjà dans la palette.'
+    const colors = recoloredCustom(library.diagramPalette, doc.value.customColors, hex, next)
+    if (!colors) {
+      if (!sameColor(hex, next) && doc.value.customColors.some((color) => sameColor(color, hex))) {
+        status.value = 'Cette couleur est déjà dans la palette.'
+      }
       return
     }
-    if (edit.list === 'custom') {
-      apply('Modifier une couleur', (draft) => {
-        draft.customColors = edit.colors
-      })
-    } else {
-      void library.updateSettings({ diagramPalette: edit.colors })
-    }
+    apply('Modifier une couleur', (draft) => {
+      draft.customColors = colors
+    })
     if (sameColor(nodeColor.value, hex)) nodeColor.value = next
     if (sameColor(linkColor.value, hex)) linkColor.value = next
   }
 
   /**
-   * Retire une couleur proposée (clic droit sur sa pastille, « Supprimer ») : des couleurs de
-   * ce diagramme, ou de la palette des diagrammes de l'application, qui en garde au moins une.
-   * Ce qui est dessiné dans cette couleur la garde.
+   * Retire une couleur de ce diagramme (clic droit sur sa pastille, « Supprimer ») : une
+   * commande. Ce qui est dessiné dans cette couleur la garde. Les couleurs de l'application ne
+   * se suppriment que dans les paramètres.
    */
   function removeColorChoice(hex: string): void {
-    const edit = removedChoice(library.diagramPalette, doc.value.customColors, hex)
-    if (!edit) return
+    const colors = removedCustom(doc.value.customColors, hex)
+    if (!colors) return
     const rest = colorChoices.value.filter((choice) => !sameColor(choice.hex, hex))
-    if (edit.list === 'custom') {
-      apply('Supprimer une couleur', (draft) => {
-        draft.customColors = edit.colors
-      })
-    } else {
-      void library.updateSettings({ diagramPalette: edit.colors })
-    }
+    apply('Supprimer une couleur', (draft) => {
+      draft.customColors = colors
+    })
     // La couleur des prochains éléments n'est plus proposée : la première qui l'est.
     const fallback = rest[0]
     if (fallback && sameColor(nodeColor.value, hex)) nodeColor.value = fallback.hex

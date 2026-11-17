@@ -8,7 +8,8 @@ import { useSchematicStore } from './store'
 
 // Barre d'outils du montage. D'abord le début commun aux trois éditeurs (`ToolbarBasics` : zoom,
 // annuler, rétablir, corbeille), puis les outils (pictogramme seul, raccourci dans l'infobulle),
-// la palette (un clic droit sur une couleur la modifie ou la supprime) et les cases d'affichage
+// la palette (un clic droit sur une couleur du montage la modifie ou la supprime) et les cases
+// d'affichage
 // (broches, broches reliées à rien, groupes s'il y en a),
 // gardées dans les paramètres ; à droite, le nom du document et le bouton du panneau.
 // Quand la place manque, la partie gauche passe à la ligne ; la droite reste sur la première.
@@ -79,7 +80,6 @@ function pickCustom(hex: string): void {
         :swatches="store.colorChoices"
         :current="store.currentColor"
         adder-title="Couleur personnalisée, gardée dans ce montage"
-        palette-name="Palette des fils"
         custom-name="Couleur de ce montage"
         @pick="store.setCurrentColor"
         @add="pickCustom"

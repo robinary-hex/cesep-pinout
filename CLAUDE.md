@@ -192,17 +192,17 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   (`colorChoices`, `paletteChoices` de `src/domain/palette.ts`) : la palette des fils
   (Paramètres), commune à tous les montages, puis
   les couleurs du montage (`customColors`, huit au plus), ajoutées par le « + » de la barre et
-  enregistrées dans son fichier. Un clic droit sur une pastille de la barre d'outils la
-  modifie ou la supprime (décision du 17 novembre 2026 ; `src/ui/ToolbarPalette.vue`, la même
-  dans le montage et le diagramme, `changeColorChoice` et `removeColorChoice` de chaque
-  store) : « Modifier… » ouvre sous la pastille un petit volet avec le champ de couleur
-  (`src/ui/ColorPopover.vue`), « Supprimer » la retire. Une couleur du document : une
-  commande, qu'on annule. Une couleur de la palette de l'application : un réglage
-  (`updateSettings`), commun à tous les documents, qui garde son nom et ne s'annule pas ; la
-  palette garde au moins une couleur. Seule la pastille change : ce qui est déjà dessiné
-  garde sa couleur ; la couleur courante suit sa pastille, ou passe à la première si elle
-  est supprimée. Une couleur déjà proposée est refusée (`recoloredChoice`,
-  `removedChoice`). Partout où ces couleurs sont proposées (barres d'outils, panneaux,
+  enregistrées dans son fichier. Un clic droit sur une couleur du document, dans la barre
+  d'outils, la modifie ou la supprime (décision du 17 novembre 2026 ;
+  `src/ui/ToolbarPalette.vue`, la même dans le montage et le diagramme, `changeColorChoice`
+  et `removeColorChoice` de chaque store) : « Modifier… » ouvre sous la pastille un petit
+  volet avec le champ de couleur (`src/ui/ColorPopover.vue`), « Supprimer » la retire ; une
+  commande à chaque fois, qu'on annule. Les couleurs de l'application n'ont pas ce menu :
+  elles ne se modifient ni ne se suppriment que dans les paramètres (même décision, après
+  un essai où le clic droit les changeait aussi). Seule la pastille change : ce qui est
+  déjà dessiné garde sa couleur ; la couleur courante suit sa pastille, ou passe à la
+  première si elle est supprimée. Une couleur déjà proposée est refusée (`recoloredCustom`,
+  `removedCustom`). Partout où ces couleurs sont proposées (barres d'outils, panneaux,
   menus, dans le montage et le diagramme), un trait sépare celles de l'application de celles
   du document (décision du 17 novembre 2026) : il se dessine devant la première couleur du
   document (`startsDocumentColors`, attribut `data-first-own` de la pastille, règle de
@@ -462,8 +462,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     (`settings/PaletteEditor.vue`, une fois pour chacune).
     La palette de la barre colore la sélection et règle la couleur des prochains nœuds,
     ou des prochains liens quand on en trace ou qu'on n'a sélectionné qu'eux (`paletteOnLinks`).
-    Un clic droit sur une de ses pastilles la modifie ou la supprime, comme dans le montage
-    (voir « Fils » : `ToolbarPalette.vue`).
+    Un clic droit sur une couleur du diagramme la modifie ou la supprime, comme dans le
+    montage (voir « Fils » : `ToolbarPalette.vue`) ; pas celles des paramètres.
   - Gestes : forme prise dans la bibliothèque (clic puis clic, ou glisser-déposer), le texte se
     tape aussitôt sur place (petit éditeur HTML par-dessus le nœud : Entrée valide, Maj+Entrée va
     à la ligne, Échap abandonne) ; double-clic ou Entrée sur un nœud pour y revenir. V sélection,

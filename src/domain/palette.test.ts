@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   paletteChoices,
-  recoloredChoice,
-  removedChoice,
+  recoloredCustom,
+  removedCustom,
   sameColor,
   startsDocumentColors
 } from './palette'
@@ -36,36 +36,21 @@ describe('couleurs proposées par une palette', () => {
     expect(startsDocumentColors(paletteChoices([], custom), 0)).toBe(false)
   })
 
-  it('modifie une couleur là où elle se trouve, sans toucher à l’autre liste', () => {
-    // Une couleur du document : sa place dans la liste ne change pas.
-    expect(recoloredChoice(app, custom, '#FF00AA', '#123456')).toEqual({
-      list: 'custom',
-      colors: ['#123456', '#00ffaa']
-    })
-    // Une couleur de l'application : elle garde son nom.
-    expect(recoloredChoice(app, custom, '#d62828', '#aa0000')).toEqual({
-      list: 'app',
-      colors: [
-        { name: 'Noir', hex: '#000000' },
-        { name: 'Rouge', hex: '#aa0000' }
-      ]
-    })
+  it('modifie une couleur du document, à sa place ; pas celles de l’application', () => {
+    expect(recoloredCustom(app, custom, '#FF00AA', '#123456')).toEqual(['#123456', '#00ffaa'])
     // Rien à faire : la même couleur, une couleur déjà proposée, une couleur inconnue.
-    expect(recoloredChoice(app, custom, '#d62828', '#D62828')).toBeNull()
-    expect(recoloredChoice(app, custom, '#d62828', '#ff00aa')).toBeNull()
-    expect(recoloredChoice(app, custom, '#ff00aa', '#000000')).toBeNull()
-    expect(recoloredChoice(app, custom, '#abcdef', '#123456')).toBeNull()
+    expect(recoloredCustom(app, custom, '#ff00aa', '#FF00AA')).toBeNull()
+    expect(recoloredCustom(app, custom, '#ff00aa', '#000000')).toBeNull()
+    expect(recoloredCustom(app, custom, '#ff00aa', '#00ffaa')).toBeNull()
+    expect(recoloredCustom(app, custom, '#abcdef', '#123456')).toBeNull()
+    // Une couleur de l'application ne se modifie que dans les paramètres.
+    expect(recoloredCustom(app, custom, '#d62828', '#aa0000')).toBeNull()
   })
 
-  it('supprime une couleur, mais jamais la dernière de la palette de l’application', () => {
-    expect(removedChoice(app, custom, '#00FFAA')).toEqual({ list: 'custom', colors: ['#ff00aa'] })
-    expect(removedChoice(app, custom, '#000000')).toEqual({
-      list: 'app',
-      colors: [{ name: 'Rouge', hex: '#D62828' }]
-    })
-    expect(removedChoice([{ name: 'Noir', hex: '#000000' }], custom, '#000000')).toBeNull()
-    expect(removedChoice(app, custom, '#abcdef')).toBeNull()
-    // La dernière couleur du document, elle, se retire.
-    expect(removedChoice(app, ['#ff00aa'], '#ff00aa')).toEqual({ list: 'custom', colors: [] })
+  it('supprime une couleur du document ; pas celles de l’application', () => {
+    expect(removedCustom(custom, '#00FFAA')).toEqual(['#ff00aa'])
+    expect(removedCustom(['#ff00aa'], '#ff00aa')).toEqual([])
+    expect(removedCustom(custom, '#000000')).toBeNull()
+    expect(removedCustom(custom, '#abcdef')).toBeNull()
   })
 })

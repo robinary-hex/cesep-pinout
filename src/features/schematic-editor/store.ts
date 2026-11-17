@@ -35,8 +35,8 @@ import {
   regroupedCopies,
   removeVertex,
   paletteChoices,
-  recoloredChoice,
-  removedChoice,
+  recoloredCustom,
+  removedCustom,
   restackedIds,
   sameColor,
   restretch,
@@ -1209,52 +1209,36 @@ export const useSchematicStore = defineStore('schematic', () => {
   }
 
   /**
-   * Remplace une couleur proposée par une autre (clic droit sur sa pastille, « Modifier… ») :
-   * dans les couleurs de ce montage si elle en est (une commande), sinon dans la palette des
-   * fils de l'application (un réglage, commun à tous les montages, qu'on n'annule pas). Seule
-   * la pastille change : les fils déjà tracés gardent leur couleur.
+   * Remplace une couleur de ce montage par une autre (clic droit sur sa pastille,
+   * « Modifier… ») : une commande. Seule la pastille change, les fils déjà tracés gardent leur
+   * couleur. Les couleurs de l'application ne se modifient que dans les paramètres.
    */
   function changeColorChoice(hex: string, next: string): void {
-    const edit = recoloredChoice(library.palette, doc.value.customColors, hex, next)
-    if (!edit) {
-      if (!sameColor(hex, next)) status.value = 'Cette couleur est déjà dans la palette.'
+    const colors = recoloredCustom(library.palette, doc.value.customColors, hex, next)
+    if (!colors) {
+      if (!sameColor(hex, next) && doc.value.customColors.some((color) => sameColor(color, hex))) {
+        status.value = 'Cette couleur est déjà dans la palette.'
+      }
       return
     }
-    if (edit.list === 'custom') {
-      apply('Modifier une couleur', (draft) => {
-        draft.customColors = edit.colors
-      })
-    } else {
-      void library.updateSettings({
-        palette: edit.colors,
-        ...(sameColor(library.defaultWireColor, hex) ? { defaultWireColor: next } : {})
-      })
-    }
+    apply('Modifier une couleur', (draft) => {
+      draft.customColors = colors
+    })
     if (sameColor(currentColor.value, hex)) currentColor.value = next
   }
 
   /**
-   * Retire une couleur proposée (clic droit sur sa pastille, « Supprimer ») : des couleurs de
-   * ce montage, ou de la palette des fils de l'application, qui en garde au moins une. Les fils
-   * de cette couleur la gardent.
+   * Retire une couleur de ce montage (clic droit sur sa pastille, « Supprimer ») : une commande.
+   * Les fils de cette couleur la gardent. Les couleurs de l'application ne se suppriment que
+   * dans les paramètres.
    */
   function removeColorChoice(hex: string): void {
-    const edit = removedChoice(library.palette, doc.value.customColors, hex)
-    if (!edit) return
+    const colors = removedCustom(doc.value.customColors, hex)
+    if (!colors) return
     const rest = colorChoices.value.filter((choice) => !sameColor(choice.hex, hex))
-    if (edit.list === 'custom') {
-      apply('Supprimer une couleur', (draft) => {
-        draft.customColors = edit.colors
-      })
-    } else {
-      const first = edit.colors[0]
-      void library.updateSettings({
-        palette: edit.colors,
-        ...(first && sameColor(library.defaultWireColor, hex)
-          ? { defaultWireColor: first.hex }
-          : {})
-      })
-    }
+    apply('Supprimer une couleur', (draft) => {
+      draft.customColors = colors
+    })
     // La couleur des prochains fils n'est plus proposée : on passe à la première qui l'est.
     const fallback = rest[0]
     if (fallback && sameColor(currentColor.value, hex)) currentColor.value = fallback.hex

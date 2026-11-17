@@ -12,16 +12,16 @@ afterEach(() => {
 const SWATCHES: ColorChoice[] = [
   { hex: '#000000', name: 'Noir', custom: false },
   { hex: '#d62828', name: 'Rouge', custom: false },
-  { hex: '#ff00aa', name: '#ff00aa', custom: true }
+  { hex: '#ff00aa', name: '#ff00aa', custom: true },
+  { hex: '#00c2a8', name: '#00c2a8', custom: true }
 ]
 
-function mountPalette(swatches = SWATCHES): ReturnType<typeof mount<typeof ToolbarPalette>> {
+function mountPalette(): ReturnType<typeof mount<typeof ToolbarPalette>> {
   return mount(ToolbarPalette, {
     props: {
-      swatches,
+      swatches: SWATCHES,
       current: '#D62828',
       adderTitle: 'Couleur personnalisée',
-      paletteName: 'Palette des fils',
       customName: 'Couleur de ce montage'
     },
     attachTo: document.body
@@ -39,12 +39,14 @@ describe('palette d’une barre d’outils', () => {
     expect(swatches.map((swatch) => swatch.attributes('title'))).toEqual([
       'Noir',
       'Rouge',
-      '#ff00aa'
+      '#ff00aa',
+      '#00c2a8'
     ])
     // La casse du code ne compte pas pour reconnaître la couleur courante.
     expect(swatches.map((swatch) => swatch.classes().includes('current'))).toEqual([
       false,
       true,
+      false,
       false
     ])
     // Un trait sépare les couleurs de l'application de celles du document : il se met devant
@@ -52,7 +54,8 @@ describe('palette d’une barre d’outils', () => {
     expect(swatches.map((swatch) => swatch.attributes('data-first-own'))).toEqual([
       undefined,
       undefined,
-      'true'
+      'true',
+      undefined
     ])
     await swatches[0]?.trigger('click')
     expect(wrapper.emitted('pick')).toEqual([['#000000']])
@@ -60,28 +63,42 @@ describe('palette d’une barre d’outils', () => {
     wrapper.unmount()
   })
 
-  it('un clic droit propose de modifier la couleur : un volet s’ouvre sous la pastille', async () => {
+  it('une couleur des paramètres n’a pas de menu : elle ne se modifie ni ne se supprime d’ici', async () => {
     const wrapper = mountPalette()
-    const swatch = wrapper.findAll('button.swatch')[1]
+    const red = wrapper.findAll('button.swatch')[1]
+    if (!red) throw new Error('pastille attendue')
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 })
+    red.element.dispatchEvent(event)
+    await flushPromises()
+    // Ni notre menu, ni celui du navigateur.
+    expect(document.body.querySelector('.context-menu')).toBeNull()
+    expect(event.defaultPrevented).toBe(true)
+    expect(wrapper.emitted('change')).toBeUndefined()
+    expect(wrapper.emitted('remove')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('un clic droit sur une couleur du document propose de la modifier : un volet s’ouvre sous elle', async () => {
+    const wrapper = mountPalette()
+    const swatch = wrapper.findAll('button.swatch')[2]
     if (!swatch) throw new Error('pastille attendue')
     rightClick(swatch.element, 30, 12)
     await flushPromises()
-    // Le menu dit de quelle palette vient la couleur.
-    expect(heading()).toBe('Palette des fils : Rouge')
+    expect(heading()).toBe('Couleur de ce montage')
     expect(menuLabels()).toEqual(['Modifier…', 'Supprimer'])
     menuEntry('Modifier…').click()
     await flushPromises()
     expect(document.body.querySelector('.context-menu')).toBeNull()
     const code = document.body.querySelector<HTMLInputElement>('.color-popover .hex')
     if (!code) throw new Error('champ de couleur attendu')
-    expect(code.value).toBe('#d62828')
+    expect(code.value).toBe('#ff00aa')
     expect(document.activeElement).toBe(code)
     code.value = '#aa0000'
     code.dispatchEvent(new Event('input', { bubbles: true }))
     code.dispatchEvent(new Event('change', { bubbles: true }))
     await flushPromises()
     // La pastille change de couleur ; le volet se referme.
-    expect(wrapper.emitted('change')).toEqual([['#d62828', '#aa0000']])
+    expect(wrapper.emitted('change')).toEqual([['#ff00aa', '#aa0000']])
     expect(popover()).toBeNull()
     wrapper.unmount()
   })
@@ -89,12 +106,10 @@ describe('palette d’une barre d’outils', () => {
   it('le volet se referme sans rien changer avec Échap ou un clic ailleurs', async () => {
     const wrapper = mountPalette()
     const open = async (): Promise<void> => {
-      const swatch = wrapper.findAll('button.swatch')[2]
+      const swatch = wrapper.findAll('button.swatch')[3]
       if (!swatch) throw new Error('pastille attendue')
       rightClick(swatch.element)
       await flushPromises()
-      // Une couleur gardée par le document le dit.
-      expect(heading()).toBe('Couleur de ce montage')
       menuEntry('Modifier…').click()
       await flushPromises()
     }
@@ -113,37 +128,15 @@ describe('palette d’une barre d’outils', () => {
     wrapper.unmount()
   })
 
-  it('un clic droit propose de supprimer la couleur, sauf la dernière de la palette', async () => {
+  it('un clic droit sur une couleur du document propose de la supprimer', async () => {
     const wrapper = mountPalette()
-    const [, red, pink] = wrapper.findAll('button.swatch')
-    if (!red || !pink) throw new Error('pastilles attendues')
+    const pink = wrapper.findAll('button.swatch')[2]
+    if (!pink) throw new Error('pastille attendue')
     rightClick(pink.element)
     await flushPromises()
     menuEntry('Supprimer').click()
     await flushPromises()
-    rightClick(red.element)
-    await flushPromises()
-    menuEntry('Supprimer').click()
-    await flushPromises()
-    expect(wrapper.emitted('remove')).toEqual([['#ff00aa'], ['#d62828']])
+    expect(wrapper.emitted('remove')).toEqual([['#ff00aa']])
     wrapper.unmount()
-
-    // Une palette garde au moins une couleur : sa dernière ne se supprime pas ; une couleur du
-    // document, si.
-    const alone = mountPalette([
-      { hex: '#000000', name: 'Noir', custom: false },
-      { hex: '#ff00aa', name: '#ff00aa', custom: true }
-    ])
-    const [black, own] = alone.findAll('button.swatch')
-    if (!black || !own) throw new Error('pastilles attendues')
-    rightClick(black.element)
-    await flushPromises()
-    expect(menuEntry('Supprimer').disabled).toBe(true)
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    await flushPromises()
-    rightClick(own.element)
-    await flushPromises()
-    expect(menuEntry('Supprimer').disabled).toBe(false)
-    alone.unmount()
   })
 })
