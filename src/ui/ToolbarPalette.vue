@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { sameColor, type ColorChoice } from '@/domain'
+import { sameColor, startsDocumentColors, type ColorChoice } from '@/domain'
 import ColorAdder from './ColorAdder.vue'
 import ColorPopover from './ColorPopover.vue'
 import ContextMenu from './ContextMenu.vue'
 import { heading, item, type MenuItem } from './contextMenu'
 
 // Palette d'une barre d'outils (montage, diagramme) : une pastille par couleur proposée, puis le
-// « + » qui en ajoute une au document. Un clic choisit la couleur ; un clic droit ouvre un menu
+// « + » qui en ajoute une au document ; un trait sépare les couleurs de l'application de celles
+// du document (`data-first-own`, dessiné par style.css). Un clic choisit la couleur ; un clic
+// droit ouvre un menu
 // qui la modifie (un petit volet avec le champ de couleur, sous la pastille) ou la supprime
 // (décision du 17 novembre 2026). La palette ne sait rien des documents : elle dit ce qu'on lui
 // demande, et l'éditeur fait le reste.
@@ -74,10 +76,11 @@ function change(next: string): void {
 <template>
   <div class="palette">
     <button
-      v-for="swatch in swatches"
+      v-for="(swatch, index) in swatches"
       :key="swatch.hex"
       type="button"
       class="swatch"
+      :data-first-own="startsDocumentColors(swatches, index) || undefined"
       :class="{ current: sameColor(swatch.hex, current) }"
       :style="{ background: swatch.hex }"
       :title="swatch.name"

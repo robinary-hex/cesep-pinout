@@ -202,7 +202,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   palette garde au moins une couleur. Seule la pastille change : ce qui est déjà dessiné
   garde sa couleur ; la couleur courante suit sa pastille, ou passe à la première si elle
   est supprimée. Une couleur déjà proposée est refusée (`recoloredChoice`,
-  `removedChoice`). Extrémités
+  `removedChoice`). Partout où ces couleurs sont proposées (barres d'outils, panneaux,
+  menus, dans le montage et le diagramme), un trait sépare celles de l'application de celles
+  du document (décision du 17 novembre 2026) : il se dessine devant la première couleur du
+  document (`startsDocumentColors`, attribut `data-first-own` de la pastille, règle de
+  style.css). Extrémités
   libres (`freeEnds`) : nettes, en flèche ou en pointillés, dessinées pareil à l'écran et à
   l'export par `src/domain/wireEnds.ts` (corps raccourci, pointe sur le bout du fil, queue
   pointillée d'1,5 cellule). Étiquettes d'extrémité (`endLabels`) : point sur le bout libre et
@@ -267,8 +271,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   le menu contextuel suffisent ; un panneau montre des propriétés (la liste « Rotation » et la
   case « Miroir » d'un composant posé en sont), il ne double pas les
   commandes. Le panneau d'un composant posé (décision du 17 novembre 2026) : « Étirement »
-  (son nombre de motifs, s'il est extensible), « Libellé », sans texte d'exemple dans le
-  champ (ni dans la boîte du clic droit), ses champs, puis « Position et orientation » sur
+  (son nombre de motifs, s'il est extensible), « Libellé », avec « LED, Bouton… » pour
+  exemple dans le champ vide (et dans la boîte du clic droit), ses champs, puis « Position et orientation » sur
   deux colonnes égales (`.pair`) : X et Y, puis la rotation, large comme le champ X, et la
   case « Miroir » à l'aplomb du champ Y. Pas de case pour sa couche : l'ordre suffit (voir
   « Composants et fils »). Dans les panneaux, X, Y, largeur et hauteur ont leur propre section
@@ -845,7 +849,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     motif, le second règle sa taille ; le motif reste dans la boîte quand elle change
     (`setSize`, `setBox`).
   - Montage : le composant seul sélectionné montre une poignée à chaque bout du sens où il
-    s'étire (`stretchHandles`, `.stretch-handle`) ; la tirer ajoute ou retire un motif par taille de
+    s'étire (`stretchHandles`, `.stretch-handle`) : une petite flèche pleine, juste hors du
+    cadre pointillé de la sélection, qui pointe vers l'extérieur (décision du 17 novembre
+    2026 ; `stretchGrips`, `STRETCH_ARROW_PX`, un disque invisible autour d'elle pour la
+    saisir) ; la tirer ajoute ou retire un motif par taille de
     motif (`pulledCount`), avec aperçu, en une commande (`setInstanceCount`, `restretch`).
     Le bout qu'on ne tire pas reste en place, rotation et miroir compris. Le panneau a un
     champ « Étirement » : son nombre de motifs. Les fils suivent leurs broches (`stretchPinMap` : par la fin, les

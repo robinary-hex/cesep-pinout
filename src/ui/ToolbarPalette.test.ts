@@ -47,6 +47,13 @@ describe('palette d’une barre d’outils', () => {
       true,
       false
     ])
+    // Un trait sépare les couleurs de l'application de celles du document : il se met devant
+    // la première de celles-ci, et nulle part ailleurs.
+    expect(swatches.map((swatch) => swatch.attributes('data-first-own'))).toEqual([
+      undefined,
+      undefined,
+      'true'
+    ])
     await swatches[0]?.trigger('click')
     expect(wrapper.emitted('pick')).toEqual([['#000000']])
     expect(wrapper.find('button.color-adder').exists()).toBe(true)

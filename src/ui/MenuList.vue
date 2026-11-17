@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { startsDocumentColors } from '@/domain'
 import type { MenuItem } from './contextMenu'
 import Icon from './Icon.vue'
 
@@ -34,10 +35,11 @@ function elementOf(event: Event): HTMLElement | null {
     <div v-else-if="entry.kind === 'heading'" class="heading">{{ entry.label }}</div>
     <div v-else-if="entry.kind === 'swatches'" class="swatches">
       <button
-        v-for="swatch in entry.swatches"
+        v-for="(swatch, at) in entry.swatches"
         :key="swatch.hex"
         type="button"
         class="swatch"
+        :data-first-own="startsDocumentColors(entry.swatches, at) || undefined"
         :class="{ current: swatch.current }"
         :style="{ background: swatch.hex }"
         :title="swatch.name"

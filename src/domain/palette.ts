@@ -29,6 +29,17 @@ export function paletteChoices(
   ]
 }
 
+/**
+ * Cette couleur est-elle la première de celles du document, après celles de l'application ?
+ * C'est devant elle que les palettes tracent leur séparation (décision du 17 novembre 2026).
+ */
+export function startsDocumentColors(
+  choices: readonly { custom?: boolean }[],
+  index: number
+): boolean {
+  return index > 0 && choices[index]?.custom === true && choices[index - 1]?.custom !== true
+}
+
 /** Ce que devient l'une des deux listes quand on y modifie ou qu'on y supprime une couleur. */
 export type PaletteEdit =
   { list: 'custom'; colors: string[] } | { list: 'app'; colors: PaletteColor[] }

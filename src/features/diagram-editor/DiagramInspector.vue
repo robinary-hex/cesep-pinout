@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import {
   NODE_FAMILIES,
+  startsDocumentColors,
   NODE_SPECS,
   nodeFont,
   nodeTitleSize,
@@ -398,10 +399,11 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
           <span>Couleur</span>
           <div class="swatches">
             <button
-              v-for="choice in store.colorChoices"
+              v-for="(choice, index) in store.colorChoices"
               :key="choice.hex"
               type="button"
               class="swatch"
+              :data-first-own="startsDocumentColors(store.colorChoices, index) || undefined"
               :class="{ current: sameColor(choice.hex, singleNode.color) }"
               :style="{ background: choice.hex }"
               :title="choice.name"
@@ -424,10 +426,11 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
           </div>
           <div class="swatches">
             <button
-              v-for="choice in store.colorChoices"
+              v-for="(choice, index) in store.colorChoices"
               :key="choice.hex"
               type="button"
               class="swatch"
+              :data-first-own="startsDocumentColors(store.colorChoices, index) || undefined"
               :class="{
                 current:
                   singleNode.borderColor !== null && sameColor(choice.hex, singleNode.borderColor)
@@ -525,10 +528,11 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
           </div>
           <div class="swatches">
             <button
-              v-for="choice in store.colorChoices"
+              v-for="(choice, index) in store.colorChoices"
               :key="choice.hex"
               type="button"
               class="swatch"
+              :data-first-own="startsDocumentColors(store.colorChoices, index) || undefined"
               :class="{
                 current:
                   singleNode.textColor !== null && sameColor(choice.hex, singleNode.textColor)
@@ -601,10 +605,11 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
         <span>Couleur</span>
         <div class="swatches">
           <button
-            v-for="choice in store.colorChoices"
+            v-for="(choice, index) in store.colorChoices"
             :key="choice.hex"
             type="button"
             class="swatch"
+            :data-first-own="startsDocumentColors(store.colorChoices, index) || undefined"
             :class="{ current: sameColor(choice.hex, singleLink.color) }"
             :style="{ background: choice.hex }"
             :title="choice.name"
@@ -741,10 +746,11 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
         <span>Couleur</span>
         <div class="swatches">
           <button
-            v-for="choice in store.colorChoices"
+            v-for="(choice, index) in store.colorChoices"
             :key="choice.hex"
             type="button"
             class="swatch"
+            :data-first-own="startsDocumentColors(store.colorChoices, index) || undefined"
             :style="{ background: choice.hex }"
             :title="choice.name"
             @click="store.setCurrentColor(choice.hex)"

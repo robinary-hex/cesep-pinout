@@ -133,6 +133,7 @@ function editInstanceLabel(id: string): void {
     title: found.def.name,
     label: 'Libellé',
     value: found.instance.label,
+    placeholder: 'LED, Bouton…',
     onSubmit: (value) => store.setInstanceLabel(id, value.trim())
   }
 }

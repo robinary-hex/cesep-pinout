@@ -543,3 +543,21 @@ input[type='radio'] {
   stroke-dasharray: 10 5;
   pointer-events: none;
 }
+
+/* Palettes de couleurs (barres d'outils, panneaux, menus) : un trait sépare les couleurs de
+   l'application, réglées dans les paramètres, de celles que le document garde pour lui (décision
+   du 17 novembre 2026). Il se dessine devant la première de celles-ci (`startsDocumentColors`). */
+.swatch[data-first-own] {
+  position: relative;
+  margin-left: 10px;
+}
+
+.swatch[data-first-own]::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  left: -9px;
+  width: 1px;
+  background: var(--text-faint);
+}

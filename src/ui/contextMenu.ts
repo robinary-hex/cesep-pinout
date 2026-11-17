@@ -6,6 +6,8 @@ export interface MenuSwatch {
   hex: string
   name: string
   current: boolean
+  /** Couleur propre au document : un trait la sépare de celles de l'application. */
+  custom?: boolean
 }
 
 export interface MenuItemOptions {

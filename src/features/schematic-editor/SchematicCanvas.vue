@@ -507,9 +507,17 @@ const textsByInstance = computed(() => {
   return byInstance
 })
 
+/** Marge du cadre pointillé de la sélection autour d'un composant, en cellules. */
+const SELECTION_MARGIN_CELLS = 0.15
+/** Flèche d'une poignée d'étirement, en pixels : son écart au cadre, sa longueur, sa demi-base. */
+const STRETCH_ARROW_PX = { gap: 5, length: 10, half: 7, hit: 12 }
+
 /**
  * Poignées d'étirement : aux deux bouts d'un composant extensible seul sélectionné, hors
- * déplacement. Pendant l'étirement elles suivent le composant.
+ * déplacement. Chacune est une petite flèche, juste hors du cadre pointillé de la sélection,
+ * qui pointe dans le sens où la tirer allonge le composant (décision du 17 novembre 2026 : une
+ * barre posée sur le bord du dessin, à l'intérieur du cadre, se voyait mal). Pendant
+ * l'étirement elles suivent le composant.
  */
 const stretchGrips = computed(() => {
   const id = store.selection[0]
@@ -525,14 +533,29 @@ const stretchGrips = computed(() => {
   }
   const item = placed.value.find((candidate) => candidate.instance.id === id)
   if (!item) return []
-  return stretchHandles(item.instance, item.def).map((handle) => ({
-    ...handle,
-    instanceId: id,
-    // Une barre en travers du sens où on la tire.
-    width: (handle.dx === 0 ? 16 : 7) / cell.value,
-    height: (handle.dx === 0 ? 7 : 16) / cell.value,
-    cursor: handle.dx === 0 ? 'ns-resize' : 'ew-resize'
-  }))
+  const px = 1 / cell.value
+  return stretchHandles(item.instance, item.def).map((handle) => {
+    // De la base à la pointe, vers l'extérieur ; la base est en travers de ce sens.
+    const from = SELECTION_MARGIN_CELLS + STRETCH_ARROW_PX.gap * px
+    const base = { x: handle.x + handle.dx * from, y: handle.y + handle.dy * from }
+    const tip = {
+      x: base.x + handle.dx * STRETCH_ARROW_PX.length * px,
+      y: base.y + handle.dy * STRETCH_ARROW_PX.length * px
+    }
+    const side = {
+      x: -handle.dy * STRETCH_ARROW_PX.half * px,
+      y: handle.dx * STRETCH_ARROW_PX.half * px
+    }
+    return {
+      ...handle,
+      instanceId: id,
+      arrow: `M ${tip.x} ${tip.y} L ${base.x + side.x} ${base.y + side.y} L ${base.x - side.x} ${base.y - side.y} Z`,
+      // Zone à saisir : un disque plus large que la flèche, centré sur elle.
+      center: { x: (base.x + tip.x) / 2, y: (base.y + tip.y) / 2 },
+      reach: STRETCH_ARROW_PX.hit * px,
+      cursor: handle.dx === 0 ? 'ns-resize' : 'ew-resize'
+    }
+  })
 })
 
 // Étiquettes texte
@@ -1958,10 +1981,10 @@ const cursorClass = computed(() => {
             v-for="box in selectedBoxes"
             :key="box.id"
             class="selection"
-            :x="box.x - 0.15"
-            :y="box.y - 0.15"
-            :width="box.width + 0.3"
-            :height="box.height + 0.3"
+            :x="box.x - SELECTION_MARGIN_CELLS"
+            :y="box.y - SELECTION_MARGIN_CELLS"
+            :width="box.width + 2 * SELECTION_MARGIN_CELLS"
+            :height="box.height + 2 * SELECTION_MARGIN_CELLS"
             vector-effect="non-scaling-stroke"
           />
 
@@ -1987,19 +2010,21 @@ const cursorClass = computed(() => {
               @pointerdown="onVertexDown(handle.wireId, handle.index, $event)"
               @contextmenu="onContextMenu($event, { kind: 'wire', id: handle.wireId })"
             />
-            <rect
+            <g
               v-for="handle in stretchGrips"
               :key="`stretch:${handle.end}`"
               class="box-handle stretch-handle"
-              :x="handle.x - handle.width / 2"
-              :y="handle.y - handle.height / 2"
-              :width="handle.width"
-              :height="handle.height"
-              :rx="3 / cell"
               :style="{ cursor: handle.cursor }"
-              vector-effect="non-scaling-stroke"
               @pointerdown="onStretchDown(handle, $event)"
-            />
+            >
+              <circle
+                class="stretch-hit"
+                :cx="handle.center.x"
+                :cy="handle.center.y"
+                :r="handle.reach"
+              />
+              <path class="stretch-arrow" :d="handle.arrow" vector-effect="non-scaling-stroke" />
+            </g>
             <rect
               v-for="handle in labelHandles"
               :key="`label:${handle.id}`"
@@ -2345,6 +2370,20 @@ const cursorClass = computed(() => {
   stroke: var(--selection);
   stroke-width: 1.5;
   cursor: nwse-resize;
+}
+
+/* Poignée d'étirement : une flèche pleine, de la couleur de la sélection, détachée de ce
+   qu'elle recouvre par un filet de la couleur du papier ; autour, un disque invisible à saisir. */
+.stretch-arrow {
+  fill: var(--selection);
+  stroke: var(--paper);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+
+.stretch-hit {
+  fill: transparent;
+  stroke: none;
 }
 
 .ghost {

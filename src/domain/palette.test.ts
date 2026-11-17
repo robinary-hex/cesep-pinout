@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { paletteChoices, recoloredChoice, removedChoice, sameColor } from './palette'
+import {
+  paletteChoices,
+  recoloredChoice,
+  removedChoice,
+  sameColor,
+  startsDocumentColors
+} from './palette'
 
 const app = [
   { name: 'Noir', hex: '#000000' },
@@ -17,6 +23,17 @@ describe('couleurs proposées par une palette', () => {
     ])
     expect(sameColor('#D62828', '#d62828')).toBe(true)
     expect(sameColor('#d62828', '#d62829')).toBe(false)
+    // La séparation des palettes se met devant la première couleur du document, une seule fois.
+    const choices = paletteChoices(app, custom)
+    expect(choices.map((_, index) => startsDocumentColors(choices, index))).toEqual([
+      false,
+      false,
+      true,
+      false
+    ])
+    // Sans couleur du document, ou sans couleur de l'application devant elles : pas de trait.
+    expect(startsDocumentColors(paletteChoices(app, []), 1)).toBe(false)
+    expect(startsDocumentColors(paletteChoices([], custom), 0)).toBe(false)
   })
 
   it('modifie une couleur là où elle se trouve, sans toucher à l’autre liste', () => {

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import {
   BASE_VARIANT,
+  startsDocumentColors,
   componentVariants,
   hasVariants,
   instanceDefinition,
@@ -479,6 +480,7 @@ function setLabelVertical(event: Event): void {
           <input
             type="text"
             :value="single.instance.label"
+            placeholder="LED, Bouton…"
             @change="store.setInstanceLabel(single.instance.id, inputValue($event).trim())"
           />
         </label>
@@ -539,10 +541,11 @@ function setLabelVertical(event: Event): void {
         <span>Couleur</span>
         <div class="swatches">
           <button
-            v-for="swatch in swatches"
+            v-for="(swatch, index) in swatches"
             :key="swatch.hex"
             type="button"
             class="swatch"
+            :data-first-own="startsDocumentColors(swatches, index) || undefined"
             :class="{
               current: singleWire && singleWire.color.toLowerCase() === swatch.hex.toLowerCase()
             }"

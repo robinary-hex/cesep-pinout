@@ -967,17 +967,33 @@ describe('canevas du montage : composant extensible', () => {
     const { store, id } = withHeader()
     const wrapper = mount(SchematicCanvas, { attachTo: document.body })
     await nextTick()
-    // Seul sélectionné : ses deux poignées sont là, au milieu de ses bouts.
+    // Seul sélectionné : ses deux poignées sont là, une flèche à chaque bout, à mi-hauteur.
     expect(store.selection).toEqual([id])
     const grips = wrapper.findAll('.stretch-handle')
     expect(grips).toHaveLength(2)
-    const middle = (grip: (typeof grips)[number]): number[] => [
-      Number(grip.attributes('x')) + Number(grip.attributes('width')) / 2,
-      Number(grip.attributes('y')) + Number(grip.attributes('height')) / 2
-    ]
-    expect(grips.map(middle)).toEqual([
-      [10, 11],
-      [14, 11]
+    /** Abscisses des trois sommets d'une flèche (sa pointe d'abord), et ordonnée de sa pointe. */
+    const arrow = (index: number): { xs: number[]; tipY: number } => {
+      const d = grips[index]?.get('.stretch-arrow').attributes('d') ?? ''
+      const numbers = (d.match(/-?\d+(\.\d+)?/g) ?? []).map(Number)
+      return {
+        xs: [numbers[0] ?? NaN, numbers[2] ?? NaN, numbers[4] ?? NaN],
+        tipY: numbers[1] ?? NaN
+      }
+    }
+    const start = arrow(0)
+    const end = arrow(1)
+    expect([start.tipY, end.tipY]).toEqual([11, 11])
+    // Elles sont hors du cadre pointillé de la sélection, qui déborde le composant (de 10 à 14)
+    // de 0,15 cellule, et pointent vers l'extérieur : la pointe est le sommet le plus éloigné.
+    expect(Math.max(...start.xs)).toBeLessThan(10 - 0.15)
+    expect(Math.min(...end.xs)).toBeGreaterThan(14 + 0.15)
+    expect(start.xs[0]).toBe(Math.min(...start.xs))
+    expect(end.xs[0]).toBe(Math.max(...end.xs))
+    // Autour de chaque flèche, un disque à saisir, plus large qu'elle.
+    expect(wrapper.findAll('.stretch-handle .stretch-hit')).toHaveLength(2)
+    expect(grips.map((grip) => (grip.element as SVGElement).style.cursor)).toEqual([
+      'ew-resize',
+      'ew-resize'
     ])
     // Sans sélection, ou pour un composant ordinaire : pas de poignée.
     store.clearSelection()
@@ -1004,8 +1020,10 @@ describe('canevas du montage : composant extensible', () => {
     await fire(svg, 'pointermove', at(store, 16.1, 11.3))
     expect(store.doc.components[0]?.count).toBe(3)
     expect(pins()).toBe(before + 2)
-    const grips = wrapper.findAll('.stretch-handle')
-    expect(Number(grips[1]?.attributes('x')) + Number(grips[1]?.attributes('width')) / 2).toBe(16)
+    // La poignée de fin suit le bout du composant, deux cellules plus loin.
+    const moved = Number(wrapper.findAll('.stretch-handle .stretch-hit')[1]?.attributes('cx'))
+    expect(moved).toBeGreaterThan(16.15)
+    expect(moved).toBeLessThan(17)
     await fire(svg, 'pointerup', at(store, 16.1, 11.3))
     expect(store.doc.components[0]).toMatchObject({ id, x: 10, count: 5 })
     expect(store.undoLabel).toBe('Étirer le composant')
