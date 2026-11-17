@@ -2,16 +2,20 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   absolutePinPosition,
+  anchorPins,
+  boardFaces,
   boxHandles,
   componentImages,
   crossingPieceEnds,
   distanceToSegment,
+  facesFlip,
   formatReadout,
   gridLines,
   groupOutline,
   instanceBounds,
   instanceMatrix,
   instanceTextPlacements,
+  isBoard,
   junctionDot,
   textPlacementTransform,
   layoutLabel,
@@ -22,12 +26,15 @@ import {
   nearestSegmentIndex,
   nearestWirePoint,
   pointsAttribute,
+  projectPins,
+  rectContainsRect,
   rectsIntersect,
   resizeBox,
   rotatedSize,
   routeWire,
   screenToWorld,
   segmentCoordinate,
+  showsUnderside,
   textContent,
   textEmphasisAttrs,
   textStyleAttrs,
@@ -38,6 +45,9 @@ import {
   stretchCount,
   stretchedDefinition,
   stretchHandles,
+  THROUGH_MARK_RADIUS,
+  throughMarks,
+  undersideBounds,
   variantDefinition,
   wireBounds,
   wireEndLabelPlacement,
@@ -63,8 +73,11 @@ import {
   type LocalPoint,
   type PinKind,
   type PinRef,
+  type Project,
+  type Solder,
   type StretchEnd,
   type TextLabel,
+  type ThroughMark,
   type Wire,
   type WireEndFlags
 } from '@/domain'
@@ -138,6 +151,8 @@ type Drag =
       dy: number
       /** Alt+glisser : les originaux restent, une copie se dépose à l'arrivée. */
       duplicate: boolean
+      /** Bouts de fil soudés à un trou d'une plaque qu'on déplace : ils suivent leur trou. */
+      ends: GridPoint[]
     }
   | { kind: 'band'; start: LocalPoint; current: LocalPoint; additive: boolean }
   | { kind: 'text-box'; start: GridPoint; current: GridPoint }
@@ -324,15 +339,24 @@ function baseOf(item: PlacedInstance): ComponentDefinition {
 const dragPreview = computed<{
   wires: Map<string, readonly GridPoint[]>
   junctions: Junction[]
+  solders: Solder[]
+  marks: ThroughMark[]
 } | null>(() => {
   const current = drag.value
   let pins = store.pinRefs
+  let faces = store.faces
   let after: Wire[]
   if (current?.kind === 'stretch') {
     // Composant qu'on étire : les fils soudés à ses broches suivent, comme à la commande.
     const change = stretching.value
     if (!change) return null
     pins = change.pinsAfter
+    faces = boardFaces({
+      ...store.doc,
+      components: store.doc.components.map((instance) =>
+        instance.id === change.instance.id ? change.instance : instance
+      )
+    })
     after = wiresFollowingPins(store.doc.wires, change.pinsBefore, change.pinsAfter)
   } else if (current?.kind === 'wire-segment' || current?.kind === 'wire-vertex') {
     if (samePoints(current.original, current.preview)) return null
@@ -346,22 +370,37 @@ const dragPreview = computed<{
   ) {
     const { dx, dy } = current
     const moving = new Set(current.ids)
-    pins = store.pinRefs.map((pin) =>
-      moving.has(pin.instanceId)
-        ? { ...pin, point: [pin.point[0] + dx, pin.point[1] + dy] as GridPoint }
-        : pin
-    )
+    // Le montage tel qu'il serait : les faces des plaques et les broches s'y relisent, celles
+    // qui ressortent sous une plaque comprises.
+    const moved: Project = {
+      ...store.doc,
+      components: store.doc.components.map((instance) =>
+        moving.has(instance.id) ? { ...instance, x: instance.x + dx, y: instance.y + dy } : instance
+      )
+    }
+    faces = boardFaces(moved)
+    pins = projectPins(moved, faces)
     const translated = new Map<string, GridPoint>(
       current.wireIds.map((id) => [id, [dx, dy] as GridPoint])
     )
-    after = wiresFollowingPins(store.doc.wires, store.pinRefs, pins, translated)
+    // Les bouts soudés à un trou d'une plaque emmenée suivent ce trou, comme une broche.
+    const shifted = current.ends.map((end): GridPoint => [end[0] + dx, end[1] + dy])
+    after = wiresFollowingPins(
+      store.doc.wires,
+      [...store.pinRefs, ...anchorPins(current.ends)],
+      [...pins, ...anchorPins(shifted)],
+      translated
+    )
   } else {
     return null
   }
   const followed = wiresFollowingJunctions(store.doc.wires, after, pins)
+  const connectivity = computeConnectivity(followed, pins, faces.twins)
   return {
     wires: new Map(followed.map((wire) => [wire.id, wire.points])),
-    junctions: computeConnectivity(followed, pins).junctions
+    junctions: connectivity.junctions,
+    solders: connectivity.solders,
+    marks: throughMarks(followed, pins, faces)
   }
 })
 
@@ -433,11 +472,64 @@ const instanceLabels = computed(() =>
     })
 )
 
+/** Cadres de la sélection ; une plaque qui montre son dessous en a un par face. */
 const selectedBoxes = computed(() =>
   placed.value
     .filter((item) => selectedSet.value.has(item.instance.id))
-    .map((item) => ({ id: item.instance.id, ...boundsOf(item) }))
+    .flatMap((item) => {
+      const bounds = boundsOf(item)
+      const boxes = [{ id: item.instance.id, ...bounds }]
+      if (showsUnderside(item.instance, item.def)) {
+        boxes.push({ id: `${item.instance.id}:dessous`, ...undersideBounds(bounds) })
+      }
+      return boxes
+    })
 )
+
+/**
+ * Dessous des plaques qui le montrent : le dessin de la plaque, retourné comme une page qu'on
+ * tourne, à sa droite. La transformation s'ajoute à celle du composant.
+ */
+const undersides = computed(() => {
+  const transforms = new Map<string, string>()
+  for (const item of placed.value) {
+    if (!showsUnderside(item.instance, item.def)) continue
+    transforms.set(item.instance.id, `matrix(-1 0 0 1 ${facesFlip(boundsOf(item))} 0)`)
+  }
+  return transforms
+})
+
+/**
+ * Ce qui traverse les plaques à deux faces, plaque par plaque : sur chaque pastille où ressort
+ * une patte ou un bout de fil enfiché de l'autre côté, une goutte d'étain. Pendant un geste,
+ * celles de l'aperçu.
+ */
+const throughByBoard = computed(() => {
+  const byBoard = new Map<string, { key: string; x: number; y: number }[]>()
+  for (const mark of dragPreview.value?.marks ?? store.throughs) {
+    const [x, y] = mark.point
+    const list = byBoard.get(mark.board) ?? []
+    list.push({ key: `${x},${y}`, x, y })
+    byBoard.set(mark.board, list)
+  }
+  return byBoard
+})
+
+/**
+ * Le trou survolé d'une plaque à deux faces, vu de l'autre face : un anneau l'y montre, pour
+ * retrouver dessous la patte qu'on voit dessus.
+ */
+const twinMark = computed(() => {
+  const point = hover.value
+  const kind = drag.value?.kind
+  if (!point || kind === 'pan' || kind === 'move' || kind === 'band' || kind === 'stretch') {
+    return null
+  }
+  const at = snapGrid(point)
+  if (Math.hypot(at[0] - point.x, at[1] - point.y) > 0.45) return null
+  const twin = store.faces.twins.get(`${at[0]},${at[1]}`)
+  return twin ? { x: twin.point[0], y: twin.point[1] } : null
+})
 
 const pins = computed(() => {
   if (!store.showPins && !store.showUnconnected) return []
@@ -742,7 +834,7 @@ const junctions = computed(() => {
 
 /** Points de soudure des fils nus, sur chaque broche de leur trajet. */
 const solders = computed(() =>
-  store.connectivity.solders.map((solder) => {
+  (dragPreview.value?.solders ?? store.connectivity.solders).map((solder) => {
     const wire = wireById.value.get(solder.wireId)
     const width = (wire ? store.styleFor(wire) : profile.value).wireWidth
     return {
@@ -933,7 +1025,9 @@ const pinGrab = computed<PinRef | null>(() => {
   const point = hover.value
   if (store.tool !== 'select' || !store.ctrlHeld || store.panKeyHeld || !point) return null
   const over = instanceAt(point)
-  return over === null ? nearestPin(point) : nearestPin(point, Number.POSITIVE_INFINITY, over)
+  if (over === null) return nearestPin(point)
+  // Sur une plaque, qui n'a pas de broches : celle qui est à portée, comme dans le vide.
+  return nearestPin(point, Number.POSITIVE_INFINITY, over) ?? nearestPin(point)
 })
 
 /** Sommets posés du tracé en cours : ceux de l'outil Fil, ou la broche d'où l'on tire un fil. */
@@ -1071,17 +1165,34 @@ function captureOnceMoved(event: PointerEvent): void {
 }
 
 function startMove(event: PointerEvent): void {
+  // Une plaque emmène ce qu'elle porte, sans qu'il soit sélectionné ; une copie, non.
+  const load = event.altKey ? null : store.selectionLoad()
   drag.value = {
     kind: 'move',
-    ids: [...store.selection],
-    wireIds: [...store.selectedWires],
-    labelIds: [...store.selectedLabels],
+    ids: [...store.selection, ...(load?.instances ?? [])],
+    wireIds: [...store.selectedWires, ...(load?.wires ?? [])],
+    labelIds: [...store.selectedLabels, ...(load?.labels ?? [])],
     start: toWorld(screenPoint(event)),
     dx: 0,
     dy: 0,
-    duplicate: event.altKey
+    duplicate: event.altKey,
+    ends: load?.ends ?? []
   }
   capture(event)
+}
+
+/**
+ * Le lasso prend-il ce composant ? Il suffit qu'il le touche ; une plaque à trous, elle, n'est
+ * prise que s'il entoure une de ses faces en entier : sinon on ne pourrait pas prendre au lasso
+ * ce qu'elle porte sans la prendre avec.
+ */
+function bandTakes(item: PlacedInstance, rect: GridRect): boolean {
+  const bounds = instanceBounds(item.instance, item.def)
+  if (!isBoard(item.def)) return rectsIntersect(bounds, rect)
+  return (
+    rectContainsRect(rect, bounds) ||
+    (showsUnderside(item.instance, item.def) && rectContainsRect(rect, undersideBounds(bounds)))
+  )
 }
 
 /**
@@ -1092,9 +1203,24 @@ function followGroup(kind: 'instance' | 'wire' | 'label', id: string, event: Mou
   if (!event.ctrlKey) store.syncGroupSelection(kind, id)
 }
 
+/** Ce composant posé est-il une plaque à trous ? */
+function boardId(id: string): boolean {
+  const item = store.placed.find((candidate) => candidate.instance.id === id)
+  return item !== undefined && isBoard(item.def)
+}
+
 function onInstanceDown(id: string, event: PointerEvent): void {
   if (event.button !== 0 || store.panKeyHeld || store.tool !== 'select') return
   event.stopPropagation()
+  // Une plaque est le fond sur lequel on câble : près d'un bout de fil, c'est lui qu'on saisit,
+  // comme dans le vide, et non la plaque.
+  if (boardId(id) && !event.shiftKey && !event.ctrlKey && !event.altKey) {
+    const end = wireEndAt(toWorld(screenPoint(event)), null)
+    if (end) {
+      grabWireEnd(end, event)
+      return
+    }
+  }
   if (event.shiftKey) {
     store.selection = selectedSet.value.has(id)
       ? store.selection.filter((selected) => selected !== id)
@@ -1376,9 +1502,10 @@ function onPointerMove(event: PointerEvent): void {
   captureOnceMoved(event)
   const world = toWorld(screenPoint(event))
   hover.value = world
+  // Une plaque à trous ne prend pas l'appui pour elle près d'un bout de fil : voir onInstanceDown.
   hoverBlocked.value =
     event.target instanceof Element &&
-    event.target.closest('.instance, .text-label, .box-handle, .vertex-handle') !== null
+    event.target.closest('.instance:not(.board), .text-label, .box-handle, .vertex-handle') !== null
   // Ctrl a pu être enfoncée ou relâchée hors de la fenêtre : l'événement fait foi.
   if (store.ctrlHeld !== event.ctrlKey) store.ctrlHeld = event.ctrlKey
   if (store.altHeld !== event.altKey) store.altHeld = event.altKey
@@ -1476,7 +1603,7 @@ function onPointerUp(event: PointerEvent): void {
     const rect = normalizeRect(current.start, current.current)
     if (rect.width > 0.05 || rect.height > 0.05) {
       const instances = store.placed
-        .filter((item) => rectsIntersect(instanceBounds(item.instance, item.def), rect))
+        .filter((item) => bandTakes(item, rect))
         .map((item) => item.instance.id)
       const wires = store.doc.wires
         .filter((wire) => wireIntersectsRect(wire.points, rect))
@@ -1856,6 +1983,7 @@ const cursorClass = computed(() => {
               <template v-for="item in layers[layer].instances" :key="item.instance.id">
                 <g
                   class="instance"
+                  :class="{ board: isBoard(item.def) }"
                   :transform="transformOf(item)"
                   @pointerdown="onInstanceDown(item.instance.id, $event)"
                   @dblclick="onInstanceDoubleClick(item.instance.id, $event)"
@@ -1883,6 +2011,43 @@ const cursorClass = computed(() => {
                     :width="item.def.size.widthCells"
                     :height="item.def.size.heightCells"
                     fill="transparent"
+                  />
+                </g>
+                <!-- Le dessous d'une plaque, à sa droite : le même dessin retourné, sans textes. -->
+                <g
+                  v-if="undersides.has(item.instance.id)"
+                  class="instance underside board"
+                  :transform="undersides.get(item.instance.id)"
+                  @pointerdown="onInstanceDown(item.instance.id, $event)"
+                  @contextmenu="onContextMenu($event, { kind: 'instance', id: item.instance.id })"
+                >
+                  <g :transform="transformOf(item)">
+                    <ComponentGraphic
+                      :def="item.def"
+                      :cell-px="1"
+                      :pixel="1 / cell"
+                      :stroke-base="store.styleFor(item.instance).componentStroke"
+                      :fields="item.instance.fields"
+                      :ink="store.staleDefIds.has(item.def.id) ? 'var(--stale)' : null"
+                      skip-texts
+                    />
+                    <rect
+                      class="hit"
+                      :width="item.def.size.widthCells"
+                      :height="item.def.size.heightCells"
+                      fill="transparent"
+                    />
+                  </g>
+                </g>
+                <g v-if="throughByBoard.has(item.instance.id)" class="through-marks">
+                  <circle
+                    v-for="mark in throughByBoard.get(item.instance.id)"
+                    :key="mark.key"
+                    class="through"
+                    :cx="mark.x"
+                    :cy="mark.y"
+                    :r="THROUGH_MARK_RADIUS"
+                    vector-effect="non-scaling-stroke"
                   />
                 </g>
                 <g v-if="textsByInstance.has(item.instance.id)" class="instance-texts">
@@ -2022,6 +2187,15 @@ const cursorClass = computed(() => {
               />
             </template>
           </g>
+
+          <circle
+            v-if="twinMark"
+            class="twin-mark"
+            :cx="twinMark.x"
+            :cy="twinMark.y"
+            :r="0.42"
+            vector-effect="non-scaling-stroke"
+          />
 
           <circle
             v-if="pinGrab"
@@ -2444,6 +2618,22 @@ const cursorClass = computed(() => {
   fill: #c3ccd3;
   stroke: #5d6770;
   stroke-width: 1;
+  pointer-events: none;
+}
+
+/* Ce qui traverse une plaque à deux faces : une goutte d'étain sur la pastille. */
+.through {
+  fill: #c3ccd3;
+  stroke: #5d6770;
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+/* Le trou survolé, vu de l'autre face de la plaque. */
+.twin-mark {
+  fill: none;
+  stroke: var(--selection);
+  stroke-width: 2;
   pointer-events: none;
 }
 

@@ -1,3 +1,4 @@
+import { OTHER_FACE_PIN } from './boardFaces'
 import type { ComponentDefinition } from './component'
 import { projectPins, type PinRef } from './connectivity'
 import type { LocalPoint } from './grid'
@@ -143,7 +144,14 @@ export function restretch(
   const pinsBefore = projectPins(project).flatMap((pin): PinRef[] => {
     if (pin.instanceId !== instanceId) return [pin]
     const pinId = names.get(pin.pinId)
-    return pinId === undefined ? [] : [{ ...pin, pinId, key: `${instanceId}:${pinId}` }]
+    if (pinId === undefined) return []
+    const key = `${instanceId}:${pinId}`
+    // Enfichée dans une plaque à deux faces, la broche est là aussi vue de l'autre face.
+    return [
+      pin.of === undefined
+        ? { ...pin, pinId, key }
+        : { ...pin, pinId, key: `${key}${OTHER_FACE_PIN}`, of: key }
+    ]
   })
   return { instance: moved, pinsBefore, pinsAfter: projectPins(next) }
 }

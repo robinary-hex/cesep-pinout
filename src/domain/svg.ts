@@ -21,14 +21,17 @@ import {
   textStyleAttrs,
   textTransform
 } from './component'
+import { boardFaces, THROUGH_MARK_RADIUS, throughMarks } from './boardFaces'
 import { computeConnectivity, projectPins, type FreeEnd } from './connectivity'
 import { crossingPieceEnds, crossingPieces } from './crossings'
 import { QUARTERS_PER_CELL, type LocalPoint } from './grid'
 import {
+  facesFlip,
   instanceBounds,
   instanceMatrix,
   matrixToSvg,
   projectBounds,
+  showsUnderside,
   unionRects,
   layoutLabel,
   instanceTextPlacements,
@@ -332,6 +335,12 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
     parts.push(`<g ${attrs({ stroke: '#d8dee4', 'stroke-width': stroke })}>${lines.join('')}</g>`)
   }
 
+  // Plaques à deux faces : ce qui relie leurs faces, et ce qui ressort de l'une sur l'autre.
+  const faces = boardFaces(project)
+  const pins = projectPins(project, faces)
+  const connectivity = computeConnectivity(project.wires, pins, faces.twins)
+  const through = throughMarks(project.wires, pins, faces)
+
   // Composants : dans l'ordre du montage, ceux qu'on a mis derrière les fils avant les fils, les
   // autres après. Leurs textes les suivent ; les libellés (R1, U2) restent au-dessus de tout.
   const labelParts: string[] = []
@@ -343,9 +352,31 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
       const def = instanceDefinition(project, instance)
       if (!def || instance.behindWires !== behind) continue
       const style = styleOf(sheet, instance)
-      instanceParts.push(
-        `<g ${attrs({ transform: matrixToSvg(instanceMatrix(instance, def)) })}>${componentSvg(def, style.componentStroke, instance.fields, { skipTexts: true })}</g>`
-      )
+      const drawing = `<g ${attrs({ transform: matrixToSvg(instanceMatrix(instance, def)) })}>${componentSvg(def, style.componentStroke, instance.fields, { skipTexts: true })}</g>`
+      instanceParts.push(drawing)
+      if (showsUnderside(instance, def)) {
+        // Le dessous d'une plaque, à sa droite : le même dessin retourné, sans ses textes.
+        const flip = facesFlip(instanceBounds(instance, def))
+        instanceParts.push(
+          `<g ${attrs({ class: 'underside', transform: `matrix(-1 0 0 1 ${fmt(flip)} 0)` })}>${drawing}</g>`
+        )
+      }
+      // Sur ses pastilles, ce qui ressort de l'autre face : une goutte d'étain.
+      const marks = through.filter((mark) => mark.board === instance.id)
+      if (marks.length > 0) {
+        const drops = marks.map(
+          (mark) =>
+            `<circle ${attrs({
+              cx: mark.point[0],
+              cy: mark.point[1],
+              r: THROUGH_MARK_RADIUS,
+              fill: SOLDER_COLOR,
+              stroke: SOLDER_EDGE,
+              'stroke-width': 0.04
+            })}/>`
+        )
+        instanceParts.push(`<g class="through">${drops.join('')}</g>`)
+      }
       // Textes : hors de la transformation, droits ou tournés avec le composant, jamais en miroir.
       for (const placement of instanceTextPlacements(instance, def)) {
         const { primitive, box } = placement
@@ -380,7 +411,6 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
   }
   parts.push(...componentLayer(true))
 
-  const connectivity = computeConnectivity(project.wires, projectPins(project))
   const freeEndsByWire = new Map<string, FreeEnd[]>()
   for (const end of connectivity.freeEnds) {
     const list = freeEndsByWire.get(end.wireId) ?? []

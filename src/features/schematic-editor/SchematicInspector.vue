@@ -7,6 +7,7 @@ import {
   componentVariants,
   hasVariants,
   instanceDefinition,
+  isBoard,
   componentFields,
   ROTATIONS,
   stretchCount,
@@ -107,6 +108,12 @@ function setCount(event: Event): void {
   if (Number.isFinite(wanted)) store.setInstanceCount(single.value.instance.id, wanted)
   // Vide ou hors des bornes : le champ redit le nombre retenu.
   field.value = String(count.value)
+}
+
+/** Une plaque à trous montre son dessous à côté d'elle, ou non. */
+function setUnderside(event: Event): void {
+  if (!single.value) return
+  store.setInstanceUnderside(single.value.instance.id, (event.target as HTMLInputElement).checked)
 }
 
 const fields = computed(() => (single.value ? componentFields(single.value.def) : []))
@@ -482,6 +489,18 @@ function setLabelVertical(event: Event): void {
             :value="count"
             @change="setCount"
           />
+        </label>
+        <label
+          v-if="isBoard(single.def)"
+          class="check underside"
+          title="Dessine à droite de la plaque son dessous, vu retourné : les fils s’y soudent"
+        >
+          <input
+            type="checkbox"
+            :checked="single.instance.underside === true"
+            @change="setUnderside"
+          />
+          <span>Montrer le dessous</span>
         </label>
         <div v-if="libraryUpdate" class="notice">
           <Icon name="refresh" :size="16" class="notice-icon" />

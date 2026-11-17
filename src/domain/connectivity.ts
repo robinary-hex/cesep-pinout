@@ -1,3 +1,4 @@
+import { boardFaces, otherFacePins, type BoardFaces, type HoleTwin } from './boardFaces'
 import type { GridPoint } from './grid'
 import { absolutePinPosition, instanceDefinition, type Project, type Wire } from './project'
 import { locateOnWire } from './wires'
@@ -9,7 +10,11 @@ import { locateOnWire } from './wires'
  * - un croisement en milieu de segment ne relie rien ;
  * - un fil nu est relié à toutes les broches posées sur son trajet, pas seulement à ses bouts
  *   (décision du 17 novembre 2026 : aux broches, pas aux pastilles vides d'une plaque) ;
- * - un pont n'est relié que par ses deux bouts : sa courbe ne passe par aucun point de la grille.
+ * - un pont n'est relié que par ses deux bouts : sa courbe ne passe par aucun point de la grille ;
+ * - les trous d'une plaque qui montre ses deux faces sont métallisés : ce qui est soudé à un
+ *   trou d'un côté l'est aussi de l'autre. La broche enfichée dessus se soude dessous
+ *   (`otherFacePins`), deux bouts de fil dans le même trou sont reliés, et un fil nu couché sur
+ *   une pastille d'où ressort un bout de fil lui est soudé.
  * Un point de jonction apparaît là où au moins trois branches arrivent (T, croix reliée).
  */
 
@@ -19,6 +24,11 @@ export interface PinRef {
   instanceId: string
   pinId: string
   point: GridPoint
+  /**
+   * Clé de la broche dont celle-ci est la vue depuis l'autre face d'une plaque : la même broche,
+   * à l'endroit où sa patte ressort. Absente pour une broche là où son composant la dessine.
+   */
+  of?: string
 }
 
 export interface Junction {
@@ -53,8 +63,14 @@ export interface Connectivity {
   unconnectedPinKeys: ReadonlySet<string>
 }
 
-/** Broches de toutes les instances, en coordonnées absolues. */
-export function projectPins(project: Project): PinRef[] {
+/**
+ * Broches de toutes les instances, en coordonnées absolues ; celles qui sont enfichées dans une
+ * plaque à deux faces y sont une seconde fois, là où elles ressortent sur l'autre face.
+ */
+export function projectPins(
+  project: Pick<Project, 'components' | 'embeddedDefs'>,
+  faces: BoardFaces = boardFaces(project)
+): PinRef[] {
   const refs: PinRef[] = []
   for (const instance of project.components) {
     const def = instanceDefinition(project, instance)
@@ -69,7 +85,7 @@ export function projectPins(project: Project): PinRef[] {
       })
     }
   }
-  return refs
+  return faces.twins.size > 0 ? [...refs, ...otherFacePins(refs, faces)] : refs
 }
 
 class UnionFind {
@@ -96,11 +112,23 @@ class UnionFind {
 
 const pointKey = (p: GridPoint): string => `${p[0]},${p[1]}`
 
-export function computeConnectivity(wires: readonly Wire[], pins: readonly PinRef[]): Connectivity {
+const NO_TWINS: ReadonlyMap<string, HoleTwin> = new Map()
+
+/**
+ * `twins` : les trous des plaques à deux faces du montage (`boardFaces`), pour que ce qui est
+ * soudé à un trou d'un côté le soit de l'autre ; sans plaque à deux faces, rien à donner.
+ */
+export function computeConnectivity(
+  wires: readonly Wire[],
+  pins: readonly PinRef[],
+  twins: ReadonlyMap<string, HoleTwin> = NO_TWINS
+): Connectivity {
   const uf = new UnionFind()
+  /** Nœud d'une broche : le même pour elle et pour sa vue depuis l'autre face d'une plaque. */
+  const pinNode = (pin: PinRef): string => `p:${pin.of ?? pin.key}`
   const pinsByPoint = new Map<string, PinRef[]>()
   for (const pin of pins) {
-    uf.find(`p:${pin.key}`)
+    uf.find(pinNode(pin))
     const list = pinsByPoint.get(pointKey(pin.point)) ?? []
     list.push(pin)
     pinsByPoint.set(pointKey(pin.point), list)
@@ -110,12 +138,18 @@ export function computeConnectivity(wires: readonly Wire[], pins: readonly PinRe
     for (let i = 1; i < list.length; i++) {
       const first = list[0]
       const other = list[i]
-      if (first && other) uf.union(`p:${first.key}`, `p:${other.key}`)
+      if (first && other) uf.union(pinNode(first), pinNode(other))
     }
   }
 
   const freeEnds: FreeEnd[] = []
   const junctionAt = new Map<string, Junction>()
+  /** Soudures des fils nus, sans doublon : fil et point. */
+  const soldered = new Map<string, Solder>()
+  const solder = (wireId: string, point: GridPoint): void => {
+    const key = `${wireId}:${pointKey(point)}`
+    if (!soldered.has(key)) soldered.set(key, { wireId, point })
+  }
 
   for (const wire of wires) {
     uf.find(`w:${wire.id}`)
@@ -140,8 +174,22 @@ export function computeConnectivity(wires: readonly Wire[], pins: readonly PinRe
       }
       const pinsHere = pinsByPoint.get(pointKey(point)) ?? []
       for (const pin of pinsHere) {
-        uf.union(`w:${wire.id}`, `p:${pin.key}`)
+        uf.union(`w:${wire.id}`, pinNode(pin))
         touched = true
+      }
+      // Par le trou d'une plaque à deux faces : le bout ressort de l'autre côté, où il est
+      // soudé à un autre bout enfiché dans le même trou, ou à un fil nu couché sur la pastille.
+      const below = twins.get(pointKey(point))?.point
+      if (below) {
+        for (const other of wires) {
+          if (other.id === wire.id) continue
+          const location = locateOnWire(other.points, below)
+          if (!location) continue
+          if (location.kind !== 'end' && other.kind !== 'bare') continue
+          uf.union(`w:${wire.id}`, `w:${other.id}`)
+          touched = true
+          if (other.kind === 'bare') solder(other.id, below)
+        }
       }
       if (!touched) freeEnds.push({ wireId: wire.id, endIndex, point })
       const key = pointKey(point)
@@ -155,16 +203,16 @@ export function computeConnectivity(wires: readonly Wire[], pins: readonly PinRe
   }
 
   // Un fil nu est soudé à toutes les broches posées sur son trajet.
-  const solders: Solder[] = []
   for (const wire of wires) {
     if (wire.kind !== 'bare') continue
     for (const list of pinsByPoint.values()) {
       const point = list[0]?.point
       if (!point || !locateOnWire(wire.points, point)) continue
-      for (const pin of list) uf.union(`w:${wire.id}`, `p:${pin.key}`)
-      solders.push({ wireId: wire.id, point })
+      for (const pin of list) uf.union(`w:${wire.id}`, pinNode(pin))
+      solder(wire.id, point)
     }
   }
+  const solders = [...soldered.values()]
 
   const roots = new Map<string, number>()
   const netOf = (node: string): number => {
@@ -177,7 +225,10 @@ export function computeConnectivity(wires: readonly Wire[], pins: readonly PinRe
     return net
   }
   const wireNet = new Map(wires.map((wire) => [wire.id, netOf(`w:${wire.id}`)]))
-  const pinNet = new Map(pins.map((pin) => [pin.key, netOf(`p:${pin.key}`)]))
+  // Une broche compte une fois, là où son composant la dessine.
+  const pinNet = new Map(
+    pins.filter((pin) => pin.of === undefined).map((pin) => [pin.key, netOf(pinNode(pin))])
+  )
 
   const netsWithWires = new Set(wireNet.values())
   const pinsPerNet = new Map<number, number>()

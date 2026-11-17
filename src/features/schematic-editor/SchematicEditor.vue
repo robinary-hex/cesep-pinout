@@ -5,6 +5,7 @@ import {
   componentVariants,
   hasVariants,
   instanceDefinition,
+  isBoard,
   buildProjectSvg,
   componentFields,
   nearestWirePoint,
@@ -344,6 +345,15 @@ function openMenu(request: MenuRequest): void {
             ),
             { icon: 'swap' }
           )
+        )
+      }
+      if (isBoard(def)) {
+        // Une plaque à trous : son dessous, à côté d'elle.
+        const shown = instance.underside === true
+        items.push(
+          item('Montrer le dessous', () => store.setInstanceUnderside(instance.id, !shown), {
+            checked: shown
+          })
         )
       }
       const newer = store.newerLibraryDefinition(def.id)

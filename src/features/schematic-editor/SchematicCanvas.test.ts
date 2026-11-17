@@ -1149,3 +1149,158 @@ describe('canevas du montage : fil nu et pont', () => {
     wrapper.unmount()
   })
 })
+
+describe('canevas du montage : plaque à deux faces', () => {
+  /** Une plaque de 6 × 4 cellules, avec sa grille de trous. */
+  function board(): ComponentDefinition {
+    const def = createEmptyComponent('plaque', 'Plaque')
+    def.size = { widthCells: 6, heightCells: 4 }
+    def.visual = {
+      kind: 'drawing',
+      primitives: [{ kind: 'holes', x: 4, y: 4, w: 16, h: 8, color: '#d5dbe0' }]
+    }
+    return def
+  }
+
+  /** Une LED à deux pattes, à deux trous d'écart. */
+  function led(): ComponentDefinition {
+    const def = createEmptyComponent('led', 'LED')
+    def.size = { widthCells: 2, heightCells: 2 }
+    def.pins = [
+      { id: 'a', name: '1', kind: 'io', x: 0, y: 1 },
+      { id: 'k', name: '2', kind: 'io', x: 2, y: 1 }
+    ]
+    return def
+  }
+
+  /** La plaque en (0, 0) avec son dessous (de x = 8 à 14), une LED enfichée en (1, 2) et (3, 2). */
+  function withBoard(): {
+    store: ReturnType<typeof useSchematicStore>
+    plate: string
+    part: string
+  } {
+    const store = useSchematicStore()
+    store.startPlacing(board())
+    const plate = store.placeAt(0, 0)
+    store.startPlacing(led())
+    const part = store.placeAt(1, 1)
+    store.stopPlacing()
+    if (!plate || !part) throw new Error('pose refusée')
+    store.setInstanceUnderside(plate, true)
+    store.clearSelection()
+    return { store, plate, part }
+  }
+
+  it('dessine le dessous à droite, retourné, avec les pattes qui y ressortent', async () => {
+    const { store, plate } = withBoard()
+    const wrapper = mount(SchematicCanvas)
+    await nextTick()
+    // Le même dessin, retourné autour de l'axe x = 7 : x devient 14 − x.
+    const underside = wrapper.get('g.underside')
+    expect(underside.attributes('transform')).toBe('matrix(-1 0 0 1 14 0)')
+    expect(underside.find('.hole-pads').exists()).toBe(true)
+    // Les deux pattes de la LED, vues de dessous : une goutte d'étain sur leur pastille.
+    const drops = wrapper
+      .findAll('.through-marks .through')
+      .map((drop) => [drop.attributes('cx'), drop.attributes('cy')])
+    expect(drops).toEqual([
+      ['13', '2'],
+      ['11', '2']
+    ])
+    // La plaque sélectionnée : un cadre par face.
+    store.selection = [plate]
+    await nextTick()
+    expect(wrapper.findAll('rect.selection')).toHaveLength(2)
+    // Le dessous masqué, il ne reste que le dessus.
+    store.setInstanceUnderside(plate, false)
+    await nextTick()
+    expect(wrapper.find('g.underside').exists()).toBe(false)
+    expect(wrapper.find('.through').exists()).toBe(false)
+    expect(wrapper.findAll('rect.selection')).toHaveLength(1)
+  })
+
+  it('montre, vu de l’autre face, le trou que survole le pointeur', async () => {
+    const { store } = withBoard()
+    const wrapper = mount(SchematicCanvas)
+    const svg = wrapper.get('svg.schematic')
+    // Sur le trou (1, 2) du dessus : il est en (13, 2) dessous.
+    await fire(svg, 'pointermove', at(store, 1.1, 2.1))
+    const ring = wrapper.get('.twin-mark')
+    expect([ring.attributes('cx'), ring.attributes('cy')]).toEqual(['13', '2'])
+    // Entre deux trous, ou hors de la plaque : rien.
+    await fire(svg, 'pointermove', at(store, 1.5, 2.5))
+    expect(wrapper.find('.twin-mark').exists()).toBe(false)
+    await fire(svg, 'pointermove', at(store, 20, 2))
+    expect(wrapper.find('.twin-mark').exists()).toBe(false)
+  })
+
+  it('glisser la plaque emmène la LED et le fil du dessous, pendant le geste comme à la fin', async () => {
+    const { store, plate } = withBoard()
+    store.addWire([
+      [13, 2],
+      [13, 3],
+      [11, 3],
+      [11, 2]
+    ])
+    store.clearSelection()
+    const wrapper = mount(SchematicCanvas)
+    const svg = wrapper.get('svg.schematic')
+    // Par son dessous : c'est toujours la plaque qu'on prend.
+    await fire(wrapper.get('g.underside .hit'), 'pointerdown', at(store, 9, 0.5))
+    expect(store.selection).toEqual([plate])
+    await fire(svg, 'pointermove', at(store, 12, 2.5))
+    // Pendant le geste : la LED suit, le fil du dessous aussi, le dessous reste à droite.
+    const shown = wrapper.findAll('g.instance').map((group) => group.attributes('transform'))
+    expect(shown).toContain('matrix(1 0 0 1 4 3)')
+    expect(wrapper.get('g.underside').attributes('transform')).toBe('matrix(-1 0 0 1 20 0)')
+    expect(wrapper.get('.wires .wire').attributes('d')).toContain('M 16 4')
+    await fire(svg, 'pointerup', at(store, 12, 2.5))
+    expect(store.selection).toEqual([plate])
+    expect(store.doc.components.map((instance) => [instance.x, instance.y])).toEqual([
+      [3, 2],
+      [4, 3]
+    ])
+    expect(store.doc.wires[0]?.points.at(0)).toEqual([16, 4])
+    expect(store.connectivity.unconnectedPinKeys.size).toBe(0)
+  })
+
+  it('sur la plaque, près du bout d’un fil : c’est le bout qu’on saisit, pas la plaque', async () => {
+    const { store, plate } = withBoard()
+    const wire = store.addWire([
+      [5, 1],
+      [5, 3]
+    ])
+    store.clearSelection()
+    const wrapper = mount(SchematicCanvas)
+    const svg = wrapper.get('svg.schematic')
+    // L'appui tombe sur la plaque, à côté du fil et tout près de son bout.
+    await fire(wrapper.get('g.instance.board .hit'), 'pointerdown', at(store, 5.2, 3.3))
+    expect([store.selection, store.selectedWires]).toEqual([[], [wire]])
+    await fire(svg, 'pointermove', at(store, 3.2, 3.3))
+    await fire(svg, 'pointerup', at(store, 3.2, 3.3))
+    expect(store.doc.wires[0]?.points.at(-1)).toEqual([3, 3])
+    expect(store.doc.components[0]).toMatchObject({ x: 0, y: 0 })
+    // Plus loin du fil, c'est la plaque qu'on prend.
+    store.clearSelection()
+    await fire(wrapper.get('g.instance.board .hit'), 'pointerdown', at(store, 1.5, 3.5))
+    expect(store.selection).toEqual([plate])
+    await fire(svg, 'pointerup', at(store, 1.5, 3.5))
+  })
+
+  it('un lasso ne prend la plaque que s’il l’entoure : ce qu’elle porte se prend sans elle', async () => {
+    const { store, plate, part } = withBoard()
+    const wrapper = mount(SchematicCanvas)
+    const svg = wrapper.get('svg.schematic')
+    // Parti du vide, le lasso couvre la LED et une partie de la plaque.
+    await fire(svg, 'pointerdown', at(store, -2, -2))
+    await fire(svg, 'pointermove', at(store, 4, 3.5))
+    await fire(svg, 'pointerup', at(store, 4, 3.5))
+    expect(store.selection).toEqual([part])
+    // Autour du dessus en entier : la plaque est prise.
+    store.clearSelection()
+    await fire(svg, 'pointerdown', at(store, -2, -2))
+    await fire(svg, 'pointermove', at(store, 6.5, 4.5))
+    await fire(svg, 'pointerup', at(store, 6.5, 4.5))
+    expect(store.selection).toEqual([plate, part])
+  })
+})

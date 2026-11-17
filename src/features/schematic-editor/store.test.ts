@@ -1940,6 +1940,174 @@ describe('montage : plaque à trous', () => {
     expect(store.doc.components.map((instance) => instance.id)).toEqual([plate, first, last])
     expect(store.doc.components.every((instance) => instance.behindWires)).toBe(true)
   })
+
+  /** Une LED à deux pattes, à deux trous d'écart. */
+  function led(): ComponentDefinition {
+    const def = createEmptyComponent('led', 'LED')
+    def.size = { widthCells: 2, heightCells: 2 }
+    def.pins = [
+      { id: 'a', name: '1', kind: 'io', x: 0, y: 1 },
+      { id: 'k', name: '2', kind: 'io', x: 2, y: 1 }
+    ]
+    return def
+  }
+
+  /**
+   * La plaque en (0, 0), qui montre son dessous de x = 8 à 14 (x + x' = 14 d'une face à
+   * l'autre) ; une LED enfichée en (1, 2) et (3, 2), dont les pattes ressortent en (13, 2) et
+   * (11, 2) ; un fil soudé dessous de l'une à l'autre.
+   */
+  function soldered(): {
+    store: ReturnType<typeof useSchematicStore>
+    plate: string
+    part: string
+    wire: string
+  } {
+    const store = useSchematicStore()
+    store.startPlacing(board())
+    const plate = store.placeAt(0, 0)
+    store.startPlacing(led())
+    const part = store.placeAt(1, 1)
+    store.stopPlacing()
+    if (!plate || !part) throw new Error('pose refusée')
+    store.setInstanceUnderside(plate, true)
+    const wire = store.addWire([
+      [13, 2],
+      [13, 3],
+      [11, 3],
+      [11, 2]
+    ])
+    if (!wire) throw new Error('fil refusé')
+    store.clearSelection()
+    return { store, plate, part, wire }
+  }
+
+  it('montre son dessous à la demande : les pattes enfichées dessus s’y soudent', () => {
+    const store = useSchematicStore()
+    store.startPlacing(board())
+    const plate = store.placeAt(0, 0)
+    store.startPlacing(led())
+    store.placeAt(1, 1)
+    store.stopPlacing()
+    if (!plate) throw new Error('pose refusée')
+    expect(store.faces.boards).toEqual([])
+    expect(store.pinRefs).toHaveLength(2)
+    store.setInstanceUnderside(plate, true)
+    expect(store.status).toContain('Dessous')
+    expect(store.doc.components[0]?.underside).toBe(true)
+    expect(store.faces.boards.map((face) => face.bottom)).toEqual([
+      { x: 8, y: 0, width: 6, height: 4 }
+    ])
+    // Chaque patte est là deux fois : dessus, et là où elle ressort dessous.
+    expect(store.pinRefs.map((pin) => pin.point)).toEqual([
+      [1, 2],
+      [3, 2],
+      [13, 2],
+      [11, 2]
+    ])
+    expect(store.throughs.map((mark) => mark.point)).toEqual([
+      [13, 2],
+      [11, 2]
+    ])
+    // Le montrer une seconde fois ne fait rien ; une annulation le retire.
+    store.setInstanceUnderside(plate, true)
+    store.undo()
+    expect(store.doc.components[0]?.underside).toBeUndefined()
+    expect(store.pinRefs).toHaveLength(2)
+  })
+
+  it('un fil soudé dessous relie les pattes enfichées dessus', () => {
+    const { store } = soldered()
+    expect(store.connectivity.unconnectedPinKeys.size).toBe(0)
+    expect(store.connectivity.freeEnds).toEqual([])
+    // Une patte qui change de trou emmène le bout du fil, en sens inverse vu de dessous.
+    const part = store.doc.components[1]?.id
+    if (!part) throw new Error('LED absente')
+    store.moveInstances([part], 1, 0)
+    expect(store.doc.wires[0]?.points.at(0)).toEqual([12, 2])
+    expect(store.doc.wires[0]?.points.at(-1)).toEqual([10, 2])
+    expect(store.connectivity.unconnectedPinKeys.size).toBe(0)
+  })
+
+  it('déplacée, la plaque emmène ce qu’elle porte sur ses deux faces, elle seule sélectionnée', () => {
+    const { store, plate, part, wire } = soldered()
+    store.selection = [plate]
+    expect(store.selectionLoad()).toEqual({
+      instances: [part],
+      wires: [wire],
+      labels: [],
+      ends: []
+    })
+    store.moveSelection(5, 2)
+    expect(store.selection).toEqual([plate])
+    expect(store.doc.components.map((instance) => [instance.x, instance.y])).toEqual([
+      [5, 2],
+      [6, 3]
+    ])
+    expect(store.doc.wires[0]?.points).toEqual([
+      [18, 4],
+      [18, 5],
+      [16, 5],
+      [16, 4]
+    ])
+    expect(store.connectivity.unconnectedPinKeys.size).toBe(0)
+    // Les champs X et Y du panneau font de même.
+    store.setInstancePosition(plate, 20, 10)
+    expect(store.doc.components[1]).toMatchObject({ x: 21, y: 11 })
+    expect(store.connectivity.unconnectedPinKeys.size).toBe(0)
+    // Une annulation par commande : tout revient d'un coup.
+    store.undo()
+    store.undo()
+    expect(store.doc.components.map((instance) => [instance.x, instance.y])).toEqual([
+      [0, 0],
+      [1, 1]
+    ])
+    expect(store.doc.wires[0]?.points.at(0)).toEqual([13, 2])
+  })
+
+  it('un fil qui sort de la plaque s’étire : son bout suit le trou où il est soudé', () => {
+    const { store, plate } = soldered()
+    const leaving = store.addWire([
+      [5, 3],
+      [5, 9]
+    ])
+    store.clearSelection()
+    store.selection = [plate]
+    expect(store.selectionLoad().ends).toEqual([[5, 3]])
+    store.moveSelection(2, 0)
+    const moved = store.doc.wires.find((entry) => entry.id === leaving)
+    expect(moved?.points.at(0)).toEqual([7, 3])
+    expect(moved?.points.at(-1)).toEqual([5, 9])
+  })
+
+  it('tournée ou retournée, la plaque garde tout en place sur elle, et tout reste relié', () => {
+    const { store, plate, part } = soldered()
+    const onBoard = (): boolean =>
+      store.pinRefs.length === 4 && store.connectivity.unconnectedPinKeys.size === 0
+    store.selection = [plate]
+    store.rotateSelection('cw')
+    expect(store.doc.components[0]?.rotation).toBe(90)
+    // La LED a tourné avec la plaque, autour d'elle.
+    expect(store.doc.components[1]?.rotation).toBe(90)
+    expect(onBoard()).toBe(true)
+    store.flipSelection('horizontal')
+    expect(onBoard()).toBe(true)
+    store.setInstanceOrientation(plate, 180, false)
+    expect(onBoard()).toBe(true)
+    // Sélectionnée avec la plaque, la LED tourne encore avec elle, pas sur elle-même.
+    store.selection = [plate, part]
+    store.rotateSelection('ccw')
+    expect(onBoard()).toBe(true)
+    // Une plaque qui ne montre pas son dessous emmène de même ce qu'elle porte dessus.
+    store.setInstanceUnderside(plate, false)
+    store.selection = [plate]
+    const before = store.doc.components[1]
+    store.moveSelection(1, 1)
+    expect(store.doc.components[1]).toMatchObject({
+      x: (before?.x ?? 0) + 1,
+      y: (before?.y ?? 0) + 1
+    })
+  })
 })
 
 describe('montage : fil nu et pont', () => {

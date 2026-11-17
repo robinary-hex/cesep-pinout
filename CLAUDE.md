@@ -921,6 +921,41 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     `drawingHoles`). Elle n'a pas de broches (pas d'avertissement pour ça), la bibliothèque
     la compte en trous, et elle se pose sous les composants déjà là (`placeAt` : en tête de
     `components`).
+  - Les deux faces (`src/domain/boardFaces.ts`) : une plaque posée peut montrer son dessous
+    à sa droite (`underside` de l'exemplaire ; case « Montrer le dessous » du panneau et
+    entrée du clic droit, `setInstanceUnderside`). Le dessous est le dessus retourné comme
+    une page qu'on tourne, à `BOARD_FACES_GAP` (2) cellules : un point d'abscisse x s'y voit
+    en `facesFlip − x`, à la même hauteur (`undersideBounds`, `facesFlip`, `showsUnderside`
+    de placement.ts). C'est le dessin de la plaque, sans ses textes, à l'écran
+    (`g.underside` du canevas) comme à l'export ; `projectBounds` compte sa place. Rien
+    d'autre n'est stocké : un fil du dessous est un fil du montage comme un autre, posé
+    dans la zone du dessous. Ce qui relie les faces se déduit de la géométrie, les trous
+    étant métallisés (`boardFaces` : `twins`, le même trou sur l'autre face). La broche
+    enfichée dessus est là une seconde fois dessous (`otherFacePins` : un `PinRef` dont `of`
+    nomme la broche, clé suffixée `@verso`, ajouté par `projectPins`) : un fil s'y soude,
+    la suit quand le composant change de trou (en sens inverse, vu de dessous), et Ctrl y
+    tire un fil. Deux bouts de fil dans le même trou, un par face, sont reliés ; un fil nu
+    couché sur une pastille d'où ressort un bout de fil lui est soudé
+    (`computeConnectivity(wires, pins, twins)`). Sur chaque face, une goutte d'étain marque
+    les pastilles où ressort ce qui est enfiché de l'autre côté (`throughMarks`,
+    `.through`) ; le trou survolé se montre d'un anneau sur l'autre face (`twinMark`).
+  - Une plaque emmène ce qu'elle porte (`src/domain/boardCarry.ts`), qu'elle montre son
+    dessous ou non : les composants qui ont une broche dans un de ses trous ou sont posés en
+    entier sur elle, les fils dont tous les sommets sont sur elle, les étiquettes qui y
+    tiennent, face par face (`boardLoad`) ; le bout d'un fil qui va ailleurs suit le trou
+    où il est soudé (`ends`, présentés comme des broches par `anchorPins`). Seule la plaque
+    est sélectionnée. Ça vaut pour tout ce qui la bouge, glisser, flèches, champs X et Y,
+    rotation, miroir : après la recette de toute commande élastique, `settleWires` du store
+    appelle `boardsCarry`, qui mène la charge par la même isométrie de la grille que la
+    plaque (`transformedInstance`, `transformedPoint`), celle du dessous par cette
+    isométrie vue de dessous ; ce que porte une plaque tourne donc autour d'elle, pas sur
+    soi-même, même sélectionné avec elle. Une plaque étirée laisse en place ce qu'elle
+    porte dessus et emmène son dessous, qui s'écarte avec son bord. Pendant le glisser, le
+    canevas montre la même chose (`selectionLoad`, `ends` du geste). Un lasso ne prend une
+    plaque que s'il entoure une de ses faces en entier (`bandTakes`) : ce qu'elle porte se
+    prend au lasso sans elle. Et près d'un bout de fil, un appui sur la plaque saisit ce
+    bout, comme dans le vide, au lieu de la plaque (`onInstanceDown`,
+    `.instance:not(.board)` pour `hoverBlocked`) : elle est le fond sur lequel on câble.
 - Groupes (décision du 11 novembre 2026), dans les trois éditeurs : des éléments qu'on
   sélectionne et déplace d'un bloc. Rien n'est rangé à part : chaque élément groupé porte
   l'identifiant de son groupe (`group`, optionnel, sans montée de version des fichiers) et un
@@ -1035,7 +1070,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
   par version dans `src/domain/fixtures/`. Versions courantes : composant 16, projet 23, paramètres 15,
   diagramme 6 (composant 16 et projet 23, du 17 novembre 2026, pas encore publiés, portent les
-  composants extensibles : `stretch`, `crop`, `count`, et la plaque à trous : forme `holes`, sorte d'un fil `kind` ; un composant ou un montage qu'ils
+  composants extensibles : `stretch`, `crop`, `count`, et la plaque à trous : forme `holes`, sorte d'un fil `kind`, `underside` d'une plaque posée ; un composant ou un montage qu'ils
   enregistrent ne s'ouvrira plus dans la 1.9.1 ni avant ; paramètres 15 et diagramme 5 sont ceux de la 1.6.0, publiée le 11 novembre
   2026 : palette des diagrammes et dossier de Pinout dans les paramètres, couleur du texte
   d'un nœud dans le diagramme ; un diagramme enregistré par la 1.6.0 ne s'ouvre plus dans une

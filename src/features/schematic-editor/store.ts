@@ -2,6 +2,11 @@ import { castDraft, current as snapshot, type Draft } from 'immer'
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 import {
+  anchorPins,
+  boardFaces,
+  boardsCarry,
+  loadOfBoards,
+  throughMarks,
   computeConnectivity,
   computeCrossings,
   createEmptyProject,
@@ -68,6 +73,8 @@ import {
   zoomedView,
   type ComponentDefinition,
   type ComponentInstance,
+  type FaceLoad,
+  type PinRef,
   type WireKind,
   type FlipAxis,
   type FreeEndStyle,
@@ -306,8 +313,14 @@ export const useSchematicStore = defineStore('schematic', () => {
   const sortedWires = computed(() => [...doc.value.wires].sort((a, b) => a.stack - b.stack))
   /** Couleurs proposées pour les fils : la palette de l'application, puis celles du montage. */
   const colorChoices = computed(() => paletteChoices(library.palette, doc.value.customColors))
-  const pinRefs = computed(() => projectPins(doc.value))
-  const connectivity = computed(() => computeConnectivity(doc.value.wires, pinRefs.value))
+  /** Les plaques qui montrent leurs deux faces, et la correspondance de leurs trous. */
+  const faces = computed(() => boardFaces(doc.value))
+  const pinRefs = computed(() => projectPins(doc.value, faces.value))
+  const connectivity = computed(() =>
+    computeConnectivity(doc.value.wires, pinRefs.value, faces.value.twins)
+  )
+  /** Ce qui traverse une plaque à deux faces : les pastilles où une patte ou un fil ressort. */
+  const throughs = computed(() => throughMarks(doc.value.wires, pinRefs.value, faces.value))
   const crossings = computed(() => computeCrossings(doc.value.wires))
   const pieces = computed(() => crossingPieces(doc.value.wires, doc.value.crossingOverrides))
   const hoverNet = computed(() =>
@@ -431,19 +444,59 @@ export const useSchematicStore = defineStore('schematic', () => {
     recipe: (draft: Draft<Project>) => void,
     translatedWires: ReadonlyMap<string, GridPoint> = new Map()
   ): boolean {
-    const wiresBefore = doc.value.wires
+    const before = doc.value
     const pinsBefore = pinRefs.value
     return apply(label, (draft) => {
       recipe(draft)
-      const adjusted = wiresFollowingPins(
-        wiresBefore,
-        pinsBefore,
-        projectPins(draft),
-        translatedWires
-      )
-      if (adjusted.some((wire, index) => wire !== wiresBefore[index])) {
-        draft.wires = castDraft(adjusted)
+      settleWires(draft, before, pinsBefore, translatedWires)
+    })
+  }
+
+  /**
+   * Après qu'une commande a bougé des composants. D'abord les plaques emmènent ce qu'elles
+   * portent (`boardsCarry` : composants enfichés, fils et étiquettes de leurs deux faces) ; puis
+   * les extrémités de fil suivent leurs broches, et celles qui sont soudées à un trou d'une
+   * plaque suivent ce trou.
+   */
+  function settleWires(
+    draft: Draft<Project>,
+    before: Project,
+    pinsBefore: readonly PinRef[],
+    translatedWires: ReadonlyMap<string, GridPoint> = new Map()
+  ): void {
+    const carried = boardsCarry(before, snapshot(draft) as Project, new Set(translatedWires.keys()))
+    if (carried) {
+      draft.components.forEach((instance, index) => {
+        const moved = carried.instances.get(instance.id)
+        if (moved) draft.components[index] = castDraft(moved)
+      })
+      for (const label of draft.labels) {
+        const box = carried.labels.get(label.id)
+        if (box) Object.assign(label, box)
       }
+    }
+    const ends = carried?.ends ?? []
+    const adjusted = wiresFollowingPins(
+      before.wires,
+      [...pinsBefore, ...anchorPins(ends.map((end) => end.from))],
+      [...projectPins(draft), ...anchorPins(ends.map((end) => end.to))],
+      translatedWires,
+      carried?.wires
+    )
+    if (adjusted.some((wire, index) => wire !== before.wires[index])) {
+      draft.wires = castDraft(adjusted)
+    }
+  }
+
+  /**
+   * Ce qu'emmèneraient les plaques de la sélection si on la déplaçait : le canevas le montre
+   * pendant le geste, la commande fait de même (voir boardCarry.ts).
+   */
+  function selectionLoad(): FaceLoad {
+    return loadOfBoards(doc.value, {
+      instances: new Set(selection.value),
+      wires: new Set(selectedWires.value),
+      labels: new Set(selectedLabels.value)
     })
   }
 
@@ -640,7 +693,7 @@ export const useSchematicStore = defineStore('schematic', () => {
   function setInstanceCount(id: string, count: number, fixed: StretchEnd = 'start'): boolean {
     const change = restretch(doc.value, id, count, fixed)
     if (!change) return false
-    const wiresBefore = doc.value.wires
+    const before = doc.value
     const fieldsBefore = doc.value.components.find((instance) => instance.id === id)?.fields
     return apply('Étirer le composant', (draft) => {
       const target = draft.components.find((instance) => instance.id === id)
@@ -650,11 +703,23 @@ export const useSchematicStore = defineStore('schematic', () => {
       target.y = change.instance.y
       // Les valeurs des textes du motif suivent leur motif.
       if (change.instance.fields !== fieldsBefore) target.fields = { ...change.instance.fields }
-      const adjusted = wiresFollowingPins(wiresBefore, change.pinsBefore, projectPins(draft))
-      if (adjusted.some((wire, index) => wire !== wiresBefore[index])) {
-        draft.wires = castDraft(adjusted)
-      }
+      settleWires(draft, before, change.pinsBefore)
     })
+  }
+
+  /** Une plaque à trous montre son dessous à côté de son dessus, ou cesse de le montrer. */
+  function setInstanceUnderside(id: string, shown: boolean): void {
+    const target = doc.value.components.find((instance) => instance.id === id)
+    if (!target || (target.underside === true) === shown) return
+    apply(shown ? 'Montrer le dessous' : 'Masquer le dessous', (draft) => {
+      const instance = draft.components.find((candidate) => candidate.id === id)
+      if (!instance) return
+      if (shown) instance.underside = true
+      else delete instance.underside
+    })
+    status.value = shown
+      ? 'Dessous de la plaque montré à sa droite, vu retourné : les fils s’y soudent.'
+      : 'Dessous de la plaque masqué.'
   }
 
   /** Remplace la définition embarquée par celle de la bibliothèque (même identifiant). */
@@ -1485,8 +1550,22 @@ export const useSchematicStore = defineStore('schematic', () => {
     label: string,
     transform: (instance: ComponentInstance, def: ComponentDefinition) => ComponentInstance
   ): void {
+    // Ce que porte une plaque sélectionnée tourne avec elle, autour d'elle, et non sur soi-même,
+    // même sélectionné : la plaque l'emmène (`settleWires`).
+    const boards = selectedInstances.value.filter((instance) => {
+      const def = instanceDefinition(doc.value, instance)
+      return def !== undefined && isBoard(def)
+    })
+    const carried = new Set(
+      loadOfBoards(doc.value, {
+        instances: new Set(boards.map((board) => board.id)),
+        wires: new Set(),
+        labels: new Set()
+      }).instances
+    )
     const updates = new Map<string, ComponentInstance>()
     for (const instance of selectedInstances.value) {
+      if (carried.has(instance.id)) continue
       const def = instanceDefinition(doc.value, instance)
       if (def) updates.set(instance.id, transform(instance, def))
     }
@@ -1816,6 +1895,9 @@ export const useSchematicStore = defineStore('schematic', () => {
     selectedInstances,
     sortedWires,
     pinRefs,
+    faces,
+    throughs,
+    selectionLoad,
     connectivity,
     crossings,
     pieces,
@@ -1845,6 +1927,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     updateDefinition,
     setInstancesVariant,
     setInstanceCount,
+    setInstanceUnderside,
     selectTool,
     startPlacing,
     stopPlacing,

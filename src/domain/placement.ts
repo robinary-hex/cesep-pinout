@@ -1,4 +1,5 @@
 import {
+  isBoard,
   layoutTextBox,
   textLayoutBox,
   type ComponentDefinition,
@@ -11,6 +12,7 @@ import {
   rotateClockwise,
   rotateCounterClockwise,
   rotatedSize,
+  type GridPoint,
   type LocalPoint,
   type Rotation,
   QUARTERS_PER_CELL
@@ -42,6 +44,43 @@ export function rectsIntersect(a: GridRect, b: GridRect): boolean {
 
 export function rectContainsPoint(rect: GridRect, x: number, y: number): boolean {
   return x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height
+}
+
+/** Vrai si `inner` tient en entier dans `outer`, bords compris. */
+export function rectContainsRect(outer: GridRect, inner: GridRect): boolean {
+  return (
+    inner.x >= outer.x &&
+    inner.y >= outer.y &&
+    inner.x + inner.width <= outer.x + outer.width &&
+    inner.y + inner.height <= outer.y + outer.height
+  )
+}
+
+// Les deux faces d'une plaque à trous (voir boardFaces.ts) : le dessous se dessine à droite du
+// dessus, retourné comme une page qu'on tourne.
+
+/** Écart entre le dessus et le dessous d'une plaque qui montre ses deux faces, en cellules. */
+export const BOARD_FACES_GAP = 2
+
+/** Ce composant posé est-il une plaque qui montre son dessous ? */
+export function showsUnderside(
+  instance: Pick<ComponentInstance, 'underside'>,
+  def: ComponentDefinition
+): boolean {
+  return instance.underside === true && isBoard(def)
+}
+
+/** Boîte du dessous d'une plaque dont `top` est la boîte : à sa droite, de la même taille. */
+export function undersideBounds(top: GridRect): GridRect {
+  return { ...top, x: top.x + top.width + BOARD_FACES_GAP }
+}
+
+/**
+ * Le miroir entre les deux faces : un point d'abscisse x du dessus se voit de dessous à
+ * l'abscisse `facesFlip − x`, à la même hauteur (l'axe du miroir est au milieu de l'écart).
+ */
+export function facesFlip(top: GridRect): number {
+  return 2 * (top.x + top.width) + BOARD_FACES_GAP
 }
 
 /** Union des boîtes de tous les composants d'un projet ; null si le montage est vide. */
@@ -81,7 +120,11 @@ export function projectBounds(project: Project): GridRect | null {
   }
   for (const instance of project.components) {
     const def = instanceDefinition(project, instance)
-    if (def) include(instanceBounds(instance, def))
+    if (!def) continue
+    const bounds = instanceBounds(instance, def)
+    include(bounds)
+    // Une plaque qui montre son dessous occupe aussi la place de celui-ci.
+    if (showsUnderside(instance, def)) include(undersideBounds(bounds))
   }
   const sheet = projectStyleSheet(project)
   for (const wire of project.wires) {
@@ -141,7 +184,8 @@ export interface Matrix {
   f: number
 }
 
-const IDENTITY: Matrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
+export const IDENTITY_MATRIX: Matrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
+const IDENTITY = IDENTITY_MATRIX
 
 /** Composition p ∘ q : q s'applique d'abord. */
 export function multiplyMatrices(p: Matrix, q: Matrix): Matrix {
@@ -188,6 +232,70 @@ export function instanceMatrix(instance: ComponentInstance, def: ComponentDefini
 
 export function matrixToSvg(m: Matrix): string {
   return `matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.e} ${m.f})`
+}
+
+// Isométries de la grille : quarts de tour, miroirs et translations entières. Elles mènent une
+// intersection sur une intersection ; c'est par elles qu'une plaque emmène ce qu'elle porte.
+
+/** Sans zéro négatif : un entier de la grille. */
+const tidy = (value: number): number => Math.round(value) + 0
+
+/** Réciproque d'une isométrie de la grille. */
+export function invertMatrix(m: Matrix): Matrix {
+  const det = m.a * m.d - m.b * m.c
+  const a = m.d / det
+  const b = -m.b / det
+  const c = -m.c / det
+  const d = m.a / det
+  return {
+    a: a + 0,
+    b: b + 0,
+    c: c + 0,
+    d: d + 0,
+    e: -(a * m.e + c * m.f) + 0,
+    f: -(b * m.e + d * m.f) + 0
+  }
+}
+
+export function isIdentityMatrix(m: Matrix): boolean {
+  return m.a === 1 && m.b === 0 && m.c === 0 && m.d === 1 && m.e === 0 && m.f === 0
+}
+
+/** Une intersection de la grille, menée par une isométrie de la grille. */
+export function transformedPoint(m: Matrix, point: GridPoint): GridPoint {
+  const moved = applyMatrix(m, { x: point[0], y: point[1] })
+  return [tidy(moved.x), tidy(moved.y)]
+}
+
+/** Un rectangle de la grille, mené par une isométrie de la grille : encore un rectangle. */
+export function transformedRect(rect: GridRect, m: Matrix): GridRect {
+  const a = applyMatrix(m, { x: rect.x, y: rect.y })
+  const b = applyMatrix(m, { x: rect.x + rect.width, y: rect.y + rect.height })
+  const x = tidy(Math.min(a.x, b.x))
+  const y = tidy(Math.min(a.y, b.y))
+  return { x, y, width: tidy(Math.max(a.x, b.x)) - x, height: tidy(Math.max(a.y, b.y)) - y }
+}
+
+/**
+ * Un composant posé, mené par une isométrie de la grille : il se dessine comme si l'on avait
+ * appliqué l'isométrie à son dessin. Un miroir d'écran d'abord s'il y en a un, puis des quarts de
+ * tour, comme le font `flippedInstance` et `rotatedInstance` ; sa boîte va où l'isométrie la mène.
+ */
+export function transformedInstance(
+  instance: ComponentInstance,
+  def: ComponentDefinition,
+  m: Matrix
+): ComponentInstance {
+  let next = instance
+  const mirrored = m.a * m.d - m.b * m.c < 0
+  if (mirrored) next = flippedInstance(next, 'horizontal')
+  // Après le miroir, il reste une rotation : l'image de l'axe des x dit de combien de quarts.
+  const ax = mirrored ? -m.a : m.a
+  const ay = mirrored ? -m.b : m.b
+  const turns = ax === 1 ? 0 : ay === 1 ? 1 : ax === -1 ? 2 : 3
+  for (let turn = 0; turn < turns; turn++) next = rotatedInstance(next, def, 'cw')
+  const box = transformedRect(instanceBounds(instance, def), m)
+  return { ...next, x: box.x, y: box.y }
 }
 
 /** Prochain repère libre pour un préfixe : R1, R2… ; chaîne vide sans préfixe. */

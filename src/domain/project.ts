@@ -40,6 +40,11 @@ export const componentInstanceSchema = z.object({
    * départ. Sans effet sur un composant qui ne l'est pas.
    */
   count: z.number().int().positive().optional(),
+  /**
+   * Une plaque à trous montre aussi son dessous, à sa droite (voir boardFaces.ts) ; absent : son
+   * dessus seul. Sans effet sur un composant qui n'est pas une plaque.
+   */
+  underside: z.boolean().optional(),
   defId: z.string().min(1),
   x: gridCoordSchema,
   y: gridCoordSchema,

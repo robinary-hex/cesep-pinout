@@ -27,6 +27,9 @@ const pointKey = (p: GridPoint): string => `${p[0]},${p[1]}`
  * (même clé) avant et après ; `translated` donne, par identifiant, le vecteur des fils déplacés
  * en bloc. Un fil qui ne change pas est retourné tel quel (même objet). Vaut pour tout ce qui a
  * la géométrie d'un fil : les liens d'un diagramme suivent ainsi les points d'accroche des nœuds.
+ * `placed` donne, par identifiant, le tracé des fils qu'une plaque a emmenés à une nouvelle place
+ * (voir boardCarry.ts) : comme un fil déplacé en bloc, il garde ses bouts sur les broches restées
+ * immobiles.
  */
 export function wiresFollowingPins<
   W extends { id: string; points: GridPoint[]; kind?: WireKind | undefined }
@@ -34,7 +37,8 @@ export function wiresFollowingPins<
   wires: readonly W[],
   pinsBefore: readonly PinRef[],
   pinsAfter: readonly PinRef[],
-  translated: ReadonlyMap<string, GridPoint> = new Map()
+  translated: ReadonlyMap<string, GridPoint> = new Map(),
+  placed: ReadonlyMap<string, GridPoint[]> = new Map()
 ): W[] {
   const after = new Map(pinsAfter.map((pin) => [pin.key, pin.point]))
   /** Positions d'arrivée des broches qui partaient de chaque point. */
@@ -49,8 +53,12 @@ export function wiresFollowingPins<
   }
 
   return wires.map((wire) => {
-    const shift = translated.get(wire.id)
-    const points = shift ? translatePoints(wire.points, shift[0], shift[1]) : wire.points
+    const carried = placed.get(wire.id)
+    const shift = carried ? undefined : translated.get(wire.id)
+    const points =
+      carried ?? (shift ? translatePoints(wire.points, shift[0], shift[1]) : wire.points)
+    /** Le fil tel qu'il est si aucun de ses bouts n'a de broche à suivre. */
+    const unbent = carried || shift ? { ...wire, points } : wire
     const first = wire.points[0]
     const last = wire.points.at(-1)
     if (!first || !last || wire.points.length < 2) return wire
@@ -70,7 +78,7 @@ export function wiresFollowingPins<
       moves.push({ atStart: end.atStart, target })
     }
 
-    if (moves.length === 0) return shift ? { ...wire, points } : wire
+    if (moves.length === 0) return unbent
 
     // Un pont n'a que ses deux bouts : ils vont où vont leurs broches, sans coude.
     let adjusted = wire.kind === 'jumper' ? [...points] : simplifyPoints(points)
@@ -83,10 +91,24 @@ export function wiresFollowingPins<
       )
     }
     if (adjusted.length < 2 || wireProblem({ points: adjusted, kind: wire.kind }) !== null) {
-      return shift ? { ...wire, points } : wire
+      return unbent
     }
     return { ...wire, points: adjusted }
   })
+}
+
+/**
+ * Points d'ancrage qui ne sont pas des broches, présentés comme telles à `wiresFollowingPins` :
+ * les trous d'une plaque où des bouts de fil sont soudés. Le même rang avant et après désigne
+ * le même trou.
+ */
+export function anchorPins(points: readonly GridPoint[]): PinRef[] {
+  return points.map((point, index) => ({
+    key: `ancre:${index}`,
+    instanceId: '',
+    pinId: '',
+    point
+  }))
 }
 
 // Jonctions qui suivent

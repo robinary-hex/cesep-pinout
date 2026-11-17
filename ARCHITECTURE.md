@@ -51,6 +51,10 @@ la position des broches avant et après et fait suivre les extrémités de fil p
 ajouté par `dragVertex`) ; le canevas appelle la même fonction pour l'aperçu pendant le glisser.
 Poser un composant depuis la bibliothèque remplace la copie embarquée de sa définition si elle a
 changé (même commande élastique) : un projet suit la dernière version posée et garde son autonomie.
+Au même endroit (`settleWires`), une plaque à trous qui vient de bouger emmène ce qu'elle porte :
+`boardsCarry` (`src/domain/boardCarry.ts`) lit sur le montage d'avant ce qui est enfiché dans ses
+trous ou posé sur elle, sur ses deux faces, et le mène par la même isométrie de la grille que la
+plaque. Rien n'est stocké de ce qu'une plaque porte.
 
 Les gestes du canevas du montage sont un état local (`drag`, une union par geste) qui ne touche le
 document qu'au relâchement, par une commande. Tirer un fil d'une broche en mode sélection en est
@@ -205,6 +209,14 @@ directions différentes, diagonales à 45° comprises, hors sommets) et décide 
 locale stockée dans `crossingOverrides` (Alt+clic). Le fil du dessus est redessiné sur une
 demi-cellule avec un liseré couleur de fond ; les exceptions orphelines sont élaguées à chaque
 commande. Rien de tout cela n'est stocké, sauf les exceptions.
+
+Une plaque à trous peut montrer son dessous à côté de son dessus (`src/domain/boardFaces.ts`) :
+le même dessin, retourné, à sa droite. Les fils du dessous sont des fils du montage, posés dans
+cette zone ; ce qui relie les deux faces se déduit encore de la géométrie. `boardFaces` donne
+pour chaque trou le même trou sur l'autre face ; `projectPins` y ajoute, pour chaque broche
+enfichée dans une plaque, la même broche vue de l'autre face (`of`), et `computeConnectivity`
+relie par les trous ce qui est soudé de part et d'autre. L'élasticité n'a rien à savoir de plus :
+la broche vue de dessous bouge quand le composant bouge, le fil soudé là la suit.
 
 ## Export
 
