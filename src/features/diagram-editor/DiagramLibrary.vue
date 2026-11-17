@@ -12,7 +12,8 @@ import DiagramNodeGraphic from '@/render/DiagramNodeGraphic.vue'
 import { useDiagramStore } from './store'
 
 // Bibliothèque du diagramme : les formes du catalogue, en vignettes, rangées par famille
-// (général, organigramme, activité, communication). Un clic puis un clic sur le
+// (général, organigramme, activité, communication), sur trois colonnes, ou sur une seule quand
+// la fenêtre est étroite et que le panneau se réduit. Un clic puis un clic sur le
 // diagramme pose la forme, ou on la glisse directement dessus. Rien à créer ni à enregistrer ici :
 // les formes sont définies en dur dans le domaine.
 
@@ -142,6 +143,26 @@ function onDragEnd(): void {
   grid-template-columns: repeat(3, 1fr);
   gap: 4px;
   padding: 4px 8px 6px;
+}
+
+/* Fenêtre étroite : le panneau se réduit (`--side-panel-width`), une forme par ligne. */
+@media (max-width: 1100px) {
+  .library-head,
+  .family h3 {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .family h3 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 4px 6px 6px;
+  }
 }
 
 .tile {

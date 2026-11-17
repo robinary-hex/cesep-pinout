@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { baseName } from '@/io/paths'
-import ColorAdder from '@/ui/ColorAdder.vue'
 import Icon from '@/ui/Icon.vue'
 import ToolbarBasics from '@/ui/ToolbarBasics.vue'
+import ToolbarPalette from '@/ui/ToolbarPalette.vue'
 import { useSchematicStore } from './store'
 
 // Barre d'outils du montage. D'abord le début commun aux trois éditeurs (`ToolbarBasics` : zoom,
 // annuler, rétablir, corbeille), puis les outils (pictogramme seul, raccourci dans l'infobulle),
-// la palette et les cases d'affichage (broches, broches reliées à rien, groupes s'il y en a),
+// la palette (un clic droit sur une couleur la modifie ou la supprime) et les cases d'affichage
+// (broches, broches reliées à rien, groupes s'il y en a),
 // gardées dans les paramètres ; à droite, le nom du document et le bouton du panneau.
 // Quand la place manque, la partie gauche passe à la ligne ; la droite reste sur la première.
 // Rotation, miroir, duplication, suppression et ordre des fils passent par le menu contextuel et
@@ -17,12 +18,6 @@ import { useSchematicStore } from './store'
 const store = useSchematicStore()
 
 const fileLabel = computed(() => (store.filePath ? baseName(store.filePath) : 'Non enregistré'))
-
-const swatches = computed(() => store.colorChoices)
-
-function isCurrent(hex: string): boolean {
-  return hex.toLowerCase() === store.currentColor.toLowerCase()
-}
 
 function pickCustom(hex: string): void {
   // La couleur choisie reste dans ce montage ; la palette générale se règle dans les Paramètres.
@@ -78,26 +73,19 @@ function pickCustom(hex: string): void {
         </button>
       </div>
 
-      <div
-        class="group palette"
+      <ToolbarPalette
+        class="group"
         title="Couleur des prochains fils ; recolore aussi les fils sélectionnés"
-      >
-        <button
-          v-for="swatch in swatches"
-          :key="swatch.hex"
-          type="button"
-          class="swatch"
-          :class="{ current: isCurrent(swatch.hex) }"
-          :style="{ background: swatch.hex }"
-          :title="swatch.name"
-          @click="store.setCurrentColor(swatch.hex)"
-        />
-        <ColorAdder
-          :value="store.currentColor"
-          title="Couleur personnalisée, gardée dans ce montage"
-          @pick="pickCustom"
-        />
-      </div>
+        :swatches="store.colorChoices"
+        :current="store.currentColor"
+        adder-title="Couleur personnalisée, gardée dans ce montage"
+        palette-name="Palette des fils"
+        custom-name="Couleur de ce montage"
+        @pick="store.setCurrentColor"
+        @add="pickCustom"
+        @change="store.changeColorChoice"
+        @remove="store.removeColorChoice"
+      />
 
       <div class="group">
         <label class="check" title="Afficher les broches des composants">
@@ -169,23 +157,6 @@ function pickCustom(hex: string): void {
 .tool.active {
   background: var(--accent-soft);
   border-color: var(--accent-border);
-}
-
-.palette {
-  gap: 3px;
-}
-
-.swatch {
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 2px solid var(--surface);
-  border-radius: 50%;
-  box-shadow: 0 0 0 1px var(--border);
-}
-
-.swatch.current {
-  box-shadow: 0 0 0 2px var(--accent);
 }
 
 .doc-name {

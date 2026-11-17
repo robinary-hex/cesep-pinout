@@ -392,14 +392,18 @@ describe('montage : ordre des composants', () => {
     rightClick(wrapper.get('.instance .hit').element, ...at(store, 4, 3.5))
     await flushPromises()
     expect(menuLabels()).toContain('Ordre')
+    // Plus d'entrée « Derrière les fils » : l'ordre suffit à passer devant ou derrière eux.
+    expect(menuLabels()).not.toContain('Derrière les fils')
     menuEntry('Ordre').click()
     await flushPromises()
     expect(subMenuLabels()).toEqual(['Avancer', 'Reculer', 'Premier plan', 'Arrière-plan'])
     menuEntry('Premier plan').click()
     await flushPromises()
     expect(order()).toEqual([b, a])
-    // Le panneau montre l'orientation et la couche du composant, sans boutons d'ordre, de
-    // rotation ni de miroir : clavier et menu suffisent.
+    // « Premier plan » : devant tout, fils compris.
+    expect(store.doc.components.map((instance) => instance.behindWires)).toEqual([true, false])
+    // Le panneau montre l'orientation du composant, sans boutons d'ordre, de rotation ni de
+    // miroir, et sans case pour sa couche : clavier et menu suffisent.
     store.inspectorOpen = true
     await flushPromises()
     expect(wrapper.find('.inspector select').exists()).toBe(true)
@@ -407,13 +411,22 @@ describe('montage : ordre des composants', () => {
     expect(
       titles.filter((title) => /rotation|miroir|avancer|reculer|plan/i.test(title ?? ''))
     ).toEqual([])
-    store.reorderInstances('down')
-    expect(order()).toEqual([a, b])
-    // Au clavier : Ctrl+Page haut avance, Ctrl+Page bas recule ; la couche ne change pas.
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageUp', ctrlKey: true }))
+    expect(wrapper.findAll('.inspector .check').map((check) => check.text())).toEqual(['Miroir'])
+    // La rotation et la case « Miroir » sont dans les deux colonnes des champs X et Y.
+    const pairs = wrapper.findAll('.inspector .pair')
+    expect(pairs.map((pair) => pair.findAll('span').map((span) => span.text()))).toEqual([
+      ['X (cellules)', 'Y (cellules)'],
+      ['Rotation', 'Miroir']
+    ])
+    // Au clavier : Ctrl+Page bas recule (derrière les fils, puis sous l'autre composant),
+    // Ctrl+Page haut avance.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageDown', ctrlKey: true }))
     expect(order()).toEqual([b, a])
+    expect(store.doc.components.every((instance) => instance.behindWires)).toBe(true)
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageDown', ctrlKey: true }))
     expect(order()).toEqual([a, b])
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageUp', ctrlKey: true }))
+    expect(order()).toEqual([b, a])
     expect(store.doc.components.every((instance) => instance.behindWires)).toBe(true)
     wrapper.unmount()
   })

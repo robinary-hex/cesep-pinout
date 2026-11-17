@@ -318,7 +318,8 @@ describe('canevas du montage : composants derrière les fils', () => {
     await fire(wrapper.get('.instance'), 'pointerdown', at(store, 4, 3.2))
     expect(store.selection).toEqual([id])
     await fire(wrapper.get('svg.schematic'), 'pointerup', at(store, 4, 3.2))
-    store.setInstancesBehindWires([id], false)
+    // Avancé d'un rang, le seul composant de derrière passe devant les fils.
+    store.reorderInstances('up')
     await wrapper.vm.$nextTick()
     expect(precedes('.wires', '.instance')).toBe(true)
   })

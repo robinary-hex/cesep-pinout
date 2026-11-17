@@ -10,14 +10,15 @@ import {
 } from '@/domain'
 import DiagramNodeGraphic from '@/render/DiagramNodeGraphic.vue'
 import { baseName } from '@/io/paths'
-import ColorAdder from '@/ui/ColorAdder.vue'
 import Icon from '@/ui/Icon.vue'
 import ToolbarBasics from '@/ui/ToolbarBasics.vue'
+import ToolbarPalette from '@/ui/ToolbarPalette.vue'
 import { useDiagramStore } from './store'
 
 // Barre d'outils du diagramme. D'abord le début commun aux trois éditeurs (`ToolbarBasics` :
 // zoom, annuler, rétablir, corbeille), puis les outils (pictogramme seul, raccourci dans
-// l'infobulle), le fond des nœuds, le style des liens, la palette et, s'il y a des groupes, la
+// l'infobulle), le fond des nœuds, le style des liens, la palette (un clic droit sur une couleur
+// la modifie ou la supprime) et, s'il y a des groupes, la
 // case qui montre leur contour ; à droite,
 // le nom du document et le bouton du panneau de propriétés. La palette, le fond et le style des liens règlent ce que
 // seront les prochains éléments et changent aussi la sélection. Les formes se posent depuis la
@@ -34,10 +35,6 @@ const styleCopyTitle = computed(() => {
     ? 'Copier le style de la sélection : clic ou lasso sur les éléments du même type (S)'
     : 'Copier le style (S) : sélectionne d’abord une forme, un lien ou un texte'
 })
-
-function isCurrent(hex: string): boolean {
-  return hex.toLowerCase() === store.currentColor.toLowerCase()
-}
 
 function pickCustom(hex: string): void {
   // La couleur choisie reste dans ce diagramme ; la palette générale se règle dans les Paramètres.
@@ -213,30 +210,23 @@ function toggleEndArrow(): void {
         </button>
       </div>
 
-      <div
+      <ToolbarPalette
         class="group palette"
         :title="
           store.paletteOnLinks
             ? 'Couleur des prochains liens ; recolore aussi la sélection'
             : 'Couleur des prochains nœuds ; recolore aussi la sélection'
         "
-      >
-        <button
-          v-for="swatch in store.colorChoices"
-          :key="swatch.hex"
-          type="button"
-          class="swatch"
-          :class="{ current: isCurrent(swatch.hex) }"
-          :style="{ background: swatch.hex }"
-          :title="swatch.name"
-          @click="store.setCurrentColor(swatch.hex)"
-        />
-        <ColorAdder
-          :value="store.currentColor"
-          title="Couleur personnalisée, gardée dans ce diagramme"
-          @pick="pickCustom"
-        />
-      </div>
+        :swatches="store.colorChoices"
+        :current="store.currentColor"
+        adder-title="Couleur personnalisée, gardée dans ce diagramme"
+        palette-name="Palette des diagrammes"
+        custom-name="Couleur de ce diagramme"
+        @pick="store.setCurrentColor"
+        @add="pickCustom"
+        @change="store.changeColorChoice"
+        @remove="store.removeColorChoice"
+      />
 
       <div v-if="store.hasGroups" class="group">
         <label class="check" title="Entourer les groupes">
@@ -306,19 +296,6 @@ function toggleEndArrow(): void {
    encore sur une ligne dans la fenêtre de départ (1400 px). */
 .palette {
   gap: 2px;
-}
-
-.swatch {
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 2px solid var(--surface);
-  border-radius: 50%;
-  box-shadow: 0 0 0 1px var(--border);
-}
-
-.swatch.current {
-  box-shadow: 0 0 0 2px var(--accent);
 }
 
 /* Pastilles de fond : un petit nœud dessiné sur la couleur du papier, comme sur le diagramme. */

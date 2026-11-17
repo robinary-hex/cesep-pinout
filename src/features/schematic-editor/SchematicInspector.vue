@@ -229,12 +229,6 @@ function setMirror(event: Event): void {
   )
 }
 
-function setBehindWires(event: Event): void {
-  const current = single.value
-  if (!current) return
-  store.setInstancesBehindWires([current.instance.id], (event.target as HTMLInputElement).checked)
-}
-
 function setField(name: string, event: Event): void {
   const current = single.value
   if (current) store.setInstanceField(current.instance.id, name, inputValue(event))
@@ -456,7 +450,7 @@ function setLabelVertical(event: Event): void {
           <span
             title="Nombre de motifs de ce composant extensible ; ses deux poignées l’étirent aussi"
           >
-            Nombre
+            Étirement
           </span>
           <input
             type="number"
@@ -485,7 +479,6 @@ function setLabelVertical(event: Event): void {
           <input
             type="text"
             :value="single.instance.label"
-            placeholder="R1, U2…"
             @change="store.setInstanceLabel(single.instance.id, inputValue($event).trim())"
           />
         </label>
@@ -503,7 +496,7 @@ function setLabelVertical(event: Event): void {
       </section>
       <section class="block">
         <h3>Position et orientation</h3>
-        <div class="row">
+        <div class="pair">
           <label class="field">
             <span>X (cellules)</span>
             <input
@@ -523,7 +516,7 @@ function setLabelVertical(event: Event): void {
             />
           </label>
         </div>
-        <div class="row">
+        <div class="pair">
           <label class="field">
             <span>Rotation</span>
             <select :value="single.instance.rotation" @change="setRotation">
@@ -532,18 +525,11 @@ function setLabelVertical(event: Event): void {
               </option>
             </select>
           </label>
-          <label class="check">
+          <label class="check mirror">
             <input type="checkbox" :checked="single.instance.mirror" @change="setMirror" />
             <span>Miroir</span>
           </label>
         </div>
-        <label
-          class="check"
-          title="Le composant se dessine sous les fils, qui restent visibles sur lui"
-        >
-          <input type="checkbox" :checked="single.instance.behindWires" @change="setBehindWires" />
-          <span>Derrière les fils</span>
-        </label>
       </section>
     </template>
 
@@ -799,6 +785,28 @@ function setLabelVertical(event: Event): void {
   flex: 1;
   min-width: 90px;
   margin-bottom: 0;
+}
+
+/* Position et orientation d'un composant : deux colonnes de même largeur. La rotation a la
+   largeur du champ X, et la case « Miroir » est à l'aplomb du champ Y. */
+.pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: end;
+  margin-bottom: 8px;
+}
+
+.pair .field {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.pair .field input,
+.pair .field select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
 }
 
 /* Nom du montage et bouton d'export sur une seule ligne. */

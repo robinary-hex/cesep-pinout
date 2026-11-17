@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import {
+  DEFAULT_CATEGORY,
   DOT_SCALES,
   naturalImageSize,
   PIN_KIND_LABELS,
@@ -19,6 +20,7 @@ import {
   type PinKind,
   type PinSection
 } from '@/domain'
+import { useLibraryStore } from '@/features/library/store'
 import ComponentGraphic from '@/render/ComponentGraphic.vue'
 import ColorField from '@/ui/ColorField.vue'
 import Icon from '@/ui/Icon.vue'
@@ -32,6 +34,7 @@ import { useComponentEditorStore } from './store'
 // Les champs valident au changement (pas à chaque touche), donc une modification = une commande.
 
 const store = useComponentEditorStore()
+const library = useLibraryStore()
 const doc = computed(() => store.doc)
 
 function inputValue(event: Event): string {
@@ -55,6 +58,48 @@ function setName(event: Event): void {
   store.setMeta({ name })
 }
 
+// Catégorie : une de celles de la bibliothèque, ou une nouvelle, qu'on tape alors dans un champ
+// qui n'apparaît que pour ça (décision du 17 novembre 2026).
+
+/** Valeur de l'entrée « Nouvelle catégorie… » de la liste : aucun nom de catégorie ne l'a. */
+const NEW_CATEGORY = '::nouvelle-categorie::'
+
+/** Nom sous lequel une catégorie se range : un composant sans catégorie est dans « Divers ». */
+function categoryName(category: string): string {
+  return category.trim().length > 0 ? category : DEFAULT_CATEGORY
+}
+
+/** Catégories existantes : celles de la bibliothèque et celle du composant, dans l'ordre. */
+const categories = computed(() => {
+  const names = new Set([categoryName(doc.value.category)])
+  for (const entry of library.entries) if (entry.def) names.add(categoryName(entry.def.category))
+  return [...names].sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }))
+})
+/** « Nouvelle catégorie… » est choisie : le champ où taper son nom est montré. */
+const addingCategory = ref(false)
+const newCategory = ref<HTMLInputElement | null>(null)
+// D'un composant à l'autre, on ne reste pas sur une catégorie en cours de saisie.
+watch(
+  () => store.activeTabId,
+  () => {
+    addingCategory.value = false
+  }
+)
+
+function chooseCategory(event: Event): void {
+  const value = inputValue(event)
+  addingCategory.value = value === NEW_CATEGORY
+  if (addingCategory.value) void nextTick(() => newCategory.value?.focus())
+  else if (value !== categoryName(doc.value.category)) store.setMeta({ category: value })
+}
+
+/** Le nom tapé devient la catégorie du composant ; vide, la liste revient à celle qu'il avait. */
+function setNewCategory(event: Event): void {
+  const name = inputValue(event).trim()
+  addingCategory.value = false
+  if (name.length > 0 && name !== doc.value.category) store.setMeta({ category: name })
+}
+
 function setSize(axis: 'widthCells' | 'heightCells', event: Event): void {
   const value = Math.max(1, Math.round(numberValue(event)))
   store.setSize({ ...store.shown.size, [axis]: value })
@@ -69,12 +114,28 @@ const stretch = computed(() => store.shownVariant.stretch ?? null)
 /** Sens de l'étirement : en largeur (traits verticaux) ou en hauteur (traits horizontaux). */
 const stretchSense = computed(() => (stretch.value ? stretchAxis(stretch.value) : 'x'))
 
-function toggleStretch(event: Event): void {
-  store.setStretch(checked(event) ? {} : null)
-}
+/**
+ * Les trois boutons radio de la section : le composant ne s'étire pas, s'étire à l'horizontale
+ * (en largeur) ou à la verticale (en hauteur). Choisir un sens le rend extensible.
+ */
+type StretchMode = 'off' | 'x' | 'y'
+const STRETCH_MODES: { value: StretchMode; label: string; title: string }[] = [
+  { value: 'off', label: 'Désactivé', title: 'Le composant ne s’étire pas' },
+  {
+    value: 'x',
+    label: 'Horizontal',
+    title: 'Le composant posé s’étire en largeur : un début, un motif, une fin'
+  },
+  {
+    value: 'y',
+    label: 'Vertical',
+    title: 'Le composant posé s’étire en hauteur : un haut, un motif, un bas'
+  }
+]
+const stretchMode = computed<StretchMode>(() => (stretch.value ? stretchSense.value : 'off'))
 
-function setStretchAxis(event: Event): void {
-  store.setStretch({ axis: inputValue(event) === 'y' ? 'y' : 'x' })
+function setStretchMode(mode: StretchMode): void {
+  store.setStretch(mode === 'off' ? null : { axis: mode })
 }
 
 /** Écrit dans le champ ce que le composant a retenu : une valeur refusée ou ramenée se voit. */
@@ -129,7 +190,15 @@ function setPreviewCount(event: Event): void {
   showKept(event, previewCount.value)
 }
 
-const PREVIEW_WIDTH_PX = 268
+/** Un cran du curseur par nombre de motifs permis, du minimum au maximum. */
+const previewTicks = computed(() => {
+  const current = stretch.value
+  if (!current) return []
+  return Array.from({ length: current.max - current.min + 1 }, (_, index) => current.min + index)
+})
+
+/** Place du dessin dans le cadre de l'aperçu, qui prend la largeur du panneau. */
+const PREVIEW_WIDTH_PX = 236
 /** Hauteur laissée à l'aperçu : plus grande pour un composant qui s'étire vers le bas. */
 const previewHeightPx = computed(() => (stretchSense.value === 'y' ? 240 : 96))
 
@@ -763,18 +832,22 @@ function setClosed(event: Event): void {
         </label>
         <label class="field">
           <span>Catégorie</span>
-          <input
-            type="text"
-            :value="doc.category"
-            @change="store.setMeta({ category: inputValue($event) })"
-          />
+          <select
+            class="category"
+            :value="addingCategory ? NEW_CATEGORY : categoryName(doc.category)"
+            @change="chooseCategory"
+          >
+            <option v-for="name in categories" :key="name" :value="name">{{ name }}</option>
+            <option :value="NEW_CATEGORY">Nouvelle catégorie…</option>
+          </select>
         </label>
-        <label class="field">
-          <span>Description</span>
-          <textarea
-            rows="2"
-            :value="doc.description"
-            @change="store.setMeta({ description: inputValue($event) })"
+        <label v-if="addingCategory" class="field new-category">
+          <span>Nouvelle catégorie</span>
+          <input
+            ref="newCategory"
+            type="text"
+            @change="setNewCategory"
+            @keydown.escape.stop="addingCategory = false"
           />
         </label>
       </section>
@@ -874,25 +947,19 @@ function setClosed(event: Event): void {
 
       <section class="block stretch">
         <h3>Étirement</h3>
-        <label
-          class="check"
-          title="Posé sur un montage, le composant s’étire par ses deux bouts : son motif se répète"
-        >
-          <input type="checkbox" :checked="stretch !== null" @change="toggleStretch" />
-          <span>Extensible</span>
-        </label>
-        <template v-if="stretch">
-          <label class="field">
-            <span
-              title="En largeur : un début, un motif, une fin. En hauteur : un haut, un motif, un bas."
-            >
-              Sens
-            </span>
-            <select class="stretch-axis" :value="stretchSense" @change="setStretchAxis">
-              <option value="x">En largeur</option>
-              <option value="y">En hauteur</option>
-            </select>
+        <div class="stretch-modes" role="radiogroup" aria-label="Étirement">
+          <label v-for="mode in STRETCH_MODES" :key="mode.value" class="check" :title="mode.title">
+            <input
+              type="radio"
+              name="stretch-mode"
+              :value="mode.value"
+              :checked="stretchMode === mode.value"
+              @change="setStretchMode(mode.value)"
+            />
+            <span>{{ mode.label }}</span>
           </label>
+        </div>
+        <template v-if="stretch">
           <div class="row">
             <label class="field">
               <span
@@ -1034,32 +1101,40 @@ function setClosed(event: Event): void {
           </div>
           <div v-if="preview" class="stretch-preview">
             <label class="field preview-count">
-              <span title="Ce que donne le composant étiré ; rien n’est enregistré">Aperçu à</span>
+              <span title="Ce que donne le composant étiré ; rien n’est enregistré">
+                Aperçu à {{ previewCount }}
+              </span>
               <input
-                type="number"
+                type="range"
                 step="1"
+                list="stretch-preview-ticks"
                 :min="stretch.min"
                 :max="stretch.max"
                 :value="previewCount"
-                @change="setPreviewCount"
+                @input="setPreviewCount"
               />
+              <datalist id="stretch-preview-ticks">
+                <option v-for="tick in previewTicks" :key="tick" :value="tick" />
+              </datalist>
             </label>
-            <svg
-              class="preview-drawing"
-              :width="preview.width"
-              :height="preview.height"
-              :viewBox="`0 0 ${preview.width} ${preview.height}`"
-            >
-              <ComponentGraphic :def="preview.def" :cell-px="preview.cell" />
-              <circle
-                v-for="pin in preview.pins"
-                :key="pin.id"
-                class="preview-pin"
-                :cx="pin.x"
-                :cy="pin.y"
-                r="2.5"
-              />
-            </svg>
+            <div class="preview-frame">
+              <svg
+                class="preview-drawing"
+                :width="preview.width"
+                :height="preview.height"
+                :viewBox="`0 0 ${preview.width} ${preview.height}`"
+              >
+                <ComponentGraphic :def="preview.def" :cell-px="preview.cell" />
+                <circle
+                  v-for="pin in preview.pins"
+                  :key="pin.id"
+                  class="preview-pin"
+                  :cx="pin.x"
+                  :cy="pin.y"
+                  r="2.5"
+                />
+              </svg>
+            </div>
           </div>
         </template>
       </section>
@@ -1158,15 +1233,33 @@ function setClosed(event: Event): void {
 </template>
 
 <style scoped>
-/* Composant extensible : trois nombres côte à côte, puis l'aperçu étiré sur le papier. */
+/* Composant extensible : trois boutons radio sur une ligne (désactivé, horizontal, vertical),
+   trois nombres côte à côte, puis l'aperçu étiré sur le papier. */
+.stretch-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-bottom: 8px;
+}
+
+.stretch-modes .check {
+  margin-bottom: 0;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.stretch-modes input {
+  margin: 0;
+  cursor: pointer;
+}
+
 .stretch .counts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
-.stretch .counts .field input,
-.stretch .preview-count input {
+.stretch .counts .field input {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
@@ -1222,18 +1315,32 @@ function setClosed(event: Event): void {
   gap: 6px;
 }
 
+/* Le curseur de l'aperçu prend la largeur du panneau, un cran par nombre de motifs. */
 .stretch .preview-count {
-  width: 84px;
   margin-bottom: 0;
+}
+
+.stretch .preview-count input[type='range'] {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+}
+
+/* Le cadre de l'aperçu : toute la largeur du panneau, le composant étiré au milieu. */
+.preview-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 6px;
 }
 
 .preview-drawing {
   display: block;
-  max-width: 100%;
+  flex: none;
   overflow: visible;
-  background: var(--paper);
-  border: 1px solid var(--border-soft);
-  border-radius: 4px;
 }
 
 .preview-pin {

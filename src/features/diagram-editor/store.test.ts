@@ -1,3 +1,4 @@
+import { flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
@@ -223,11 +224,41 @@ describe('diagramme : nœuds', () => {
     })
     store.addCustomColor('#ffdac1')
     expect(store.colorChoices).toEqual([
-      { hex: '#000000', name: 'Noir' },
-      { hex: '#b5ead7', name: 'Menthe' },
-      { hex: '#ffdac1', name: '#ffdac1' }
+      { hex: '#000000', name: 'Noir', custom: false },
+      { hex: '#b5ead7', name: 'Menthe', custom: false },
+      { hex: '#ffdac1', name: '#ffdac1', custom: true }
     ])
     expect(library.palette.map((color) => color.hex)).toContain('#d62828')
+  })
+
+  it('modifie ou supprime une couleur d’un clic droit sur sa pastille', async () => {
+    const library = useLibraryStore()
+    await library.init()
+    const store = useDiagramStore()
+    // Une couleur du diagramme : une commande.
+    store.addCustomColor('#ffdac1')
+    store.setCurrentColor('#ffdac1')
+    store.changeColorChoice('#ffdac1', '#123456')
+    expect(store.doc.customColors).toEqual(['#123456'])
+    expect(store.undoLabel).toBe('Modifier une couleur')
+    expect(store.currentColor).toBe('#123456')
+    store.removeColorChoice('#123456')
+    expect(store.doc.customColors).toEqual([])
+    expect(store.currentColor).toBe(store.colorChoices[0]?.hex)
+    // Une couleur de la palette des diagrammes : un réglage de l'application.
+    const second = library.diagramPalette[1]
+    if (!second) throw new Error('palette attendue')
+    const before = store.doc
+    store.changeColorChoice(second.hex, '#abcdef')
+    await flushPromises()
+    expect(library.diagramPalette[1]).toEqual({ name: second.name, hex: '#abcdef' })
+    expect(store.doc).toBe(before)
+    // La palette des fils n'est pas touchée.
+    expect(library.palette.some((color) => color.hex === '#abcdef')).toBe(false)
+    const size = library.diagramPalette.length
+    store.removeColorChoice('#abcdef')
+    await flushPromises()
+    expect(library.diagramPalette).toHaveLength(size - 1)
   })
 
   it('part du style général, le suit quand il change, y revient sur demande', async () => {

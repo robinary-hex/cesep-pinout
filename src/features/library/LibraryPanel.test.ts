@@ -8,6 +8,7 @@ import { useSchematicStore } from '@/features/schematic-editor/store'
 import { setBridge } from '@/io/bridge'
 import { saveComponent } from '@/io/library'
 import { FakeFs } from '@/io/testing/fakeFs'
+import { useCompactLayout } from '@/ui/compactLayout'
 import { setDialogResponder } from '@/ui/dialogs'
 import { scriptDialogs, type DialogScript } from '@/ui/testing/dialogs'
 import { menuEntry, menuLabels, rightClick } from '@/ui/testing/menus'
@@ -29,6 +30,7 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
+  useCompactLayout().value = false
   setBridge(null)
   setDialogResponder(null)
   document.body.innerHTML = ''
@@ -49,6 +51,30 @@ describe('panneau de la bibliothèque', () => {
     const texts = wrapper.findAll('button').map((button) => button.text())
     expect(texts.some((text) => text.includes('Nouveau'))).toBe(false)
     expect(wrapper.findAll('.item button')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('passe en vignettes, quel que soit le réglage, quand la fenêtre est étroite', async () => {
+    const library = useLibraryStore()
+    const wrapper = mount(LibraryPanel, { props: { mode: 'place' }, attachTo: document.body })
+    await flushPromises()
+    // Fenêtre large : la liste des paramètres, une ligne par composant.
+    expect(library.libraryView).toBe('list')
+    expect(wrapper.find('.item').exists()).toBe(true)
+    expect(wrapper.find('.tile').exists()).toBe(false)
+    // Fenêtre étroite : le panneau se réduit, une vignette par composant, le réglage intact.
+    useCompactLayout().value = true
+    await flushPromises()
+    expect(wrapper.find('.item').exists()).toBe(false)
+    expect(wrapper.findAll('.tile')).toHaveLength(1)
+    expect(wrapper.get('.tile-name').text()).toBe('LED')
+    expect(library.libraryView).toBe('list')
+    // Un clic sur la vignette pose toujours le composant.
+    await wrapper.get('.tile-open').trigger('click')
+    expect(useSchematicStore().placement?.def.id).toBe('led')
+    useCompactLayout().value = false
+    await flushPromises()
+    expect(wrapper.find('.item').exists()).toBe(true)
     wrapper.unmount()
   })
 

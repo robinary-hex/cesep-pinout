@@ -3,8 +3,10 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
-import { DEFAULT_SHAPE_STYLE } from '@/domain'
+import { createEmptyComponent, DEFAULT_SHAPE_STYLE } from '@/domain'
+import { useLibraryStore } from '@/features/library/store'
 import { setBridge } from '@/io/bridge'
+import type { LibraryEntry } from '@/io/library'
 import { FakeFs } from '@/io/testing/fakeFs'
 import { menuEntry, menuLabels, rightClick, subMenuLabels } from '@/ui/testing/menus'
 import ComponentEditor from './ComponentEditor.vue'
@@ -689,7 +691,7 @@ describe('éditeur de composants : composant extensible', () => {
     await nextTick()
   }
 
-  it('la case « Extensible » montre les réglages, l’aperçu et les deux traits de coupe', async () => {
+  it('trois boutons radio règlent l’étirement ; un sens montre les réglages, l’aperçu et les traits', async () => {
     const store = withRectangle()
     store.addPin({ x: 2, y: 1 })
     store.selection = null
@@ -710,23 +712,43 @@ describe('éditeur de composants : composant extensible', () => {
       input.dispatchEvent(new Event('change', { bubbles: true }))
       await nextTick()
     }
-    // Au départ : la case, et rien d'autre ; pas de traits sur le dessin.
+    const modes = (): ReturnType<typeof wrapper.findAll> =>
+      section().findAll('.stretch-modes input[type="radio"]')
+    const choose = async (value: string): Promise<void> => {
+      const radio = modes().find((entry) => entry.attributes('value') === value)
+      if (!radio) throw new Error(`bouton « ${value} » introuvable`)
+      await radio.setValue(true)
+    }
+    const chosen = (): string | undefined =>
+      modes()
+        .find((entry) => (entry.element as HTMLInputElement).checked)
+        ?.attributes('value')
+    // Au départ : les trois boutons, « Désactivé » coché, et rien d'autre ; pas de traits.
+    expect(
+      section()
+        .findAll('.stretch-modes .check')
+        .map((entry) => entry.text())
+    ).toEqual(['Désactivé', 'Horizontal', 'Vertical'])
+    expect(chosen()).toBe('off')
+    expect(section().find('input[type="checkbox"]').exists()).toBe(false)
     expect(section().findAll('.field')).toHaveLength(0)
     expect(wrapper.find('.cuts').exists()).toBe(false)
-    await section().get('input[type="checkbox"]').setValue(true)
+
+    // « Horizontal » rend le composant extensible, en largeur.
+    await choose('x')
     expect(store.doc.stretch).toEqual({ from: 0, to: 16, initial: 1, min: 1, max: 12 })
+    expect(chosen()).toBe('x')
     expect(
       section()
         .findAll('.field span')
         .map((span) => span.text())
     ).toEqual([
-      'Sens',
       'Début du motif',
       'Largeur du motif',
       'Au départ',
       'Minimum',
       'Maximum',
-      'Aperçu à'
+      'Aperçu à 3'
     ])
     // Les deux traits et la bande du motif sont sur la feuille.
     expect(wrapper.findAll('.cuts .cut')).toHaveLength(2)
@@ -741,19 +763,40 @@ describe('éditeur de composants : composant extensible', () => {
     // Hors des bornes : le nombre est ramené, et le champ le redit.
     expect(store.doc.stretch).toMatchObject({ initial: 6, max: 6 })
     expect(field('Au départ').value).toBe('6')
+    await type('Au départ', '2')
+    await type('Minimum', '2')
 
-    // L'aperçu : le composant étiré à trois motifs, ses broches recopiées.
-    expect(field('Aperçu à').value).toBe('3')
-    expect(section().findAll('.preview-pin')).toHaveLength(3)
-    await type('Aperçu à', '5')
+    // L'aperçu : un curseur du minimum au maximum, un cran par nombre ; le composant étiré à
+    // trois motifs, ses broches recopiées, dans un cadre.
+    const slider = (): HTMLInputElement => section().get('.preview-count').get('input').element
+    expect(slider().type).toBe('range')
+    expect([slider().min, slider().max, slider().step, slider().value]).toEqual([
+      '2',
+      '6',
+      '1',
+      '3'
+    ])
+    expect(
+      section()
+        .findAll('.preview-count datalist option')
+        .map((option) => option.attributes('value'))
+    ).toEqual(['2', '3', '4', '5', '6'])
+    expect(section().findAll('.preview-frame .preview-pin')).toHaveLength(3)
+    slider().value = '5'
+    slider().dispatchEvent(new Event('input', { bubbles: true }))
+    await nextTick()
     expect(section().findAll('.preview-pin')).toHaveLength(5)
-    await type('Aperçu à', '40')
-    expect(field('Aperçu à').value).toBe('6')
+    expect(section().get('.preview-count span').text()).toBe('Aperçu à 5')
     // Rien de tout cela n'est enregistré dans le composant.
     expect(store.doc.pins).toHaveLength(1)
 
-    await section().get('input[type="checkbox"]').setValue(false)
+    // « Vertical » change de sens, « Désactivé » rend le composant ordinaire.
+    await choose('y')
+    expect(store.doc.stretch).toMatchObject({ axis: 'y' })
+    expect(chosen()).toBe('y')
+    await choose('off')
     expect(store.doc.stretch).toBeUndefined()
+    expect(chosen()).toBe('off')
     expect(wrapper.find('.cuts').exists()).toBe(false)
     wrapper.unmount()
   })
@@ -848,7 +891,7 @@ describe('éditeur de composants : modèles par nombre', () => {
 })
 
 describe('éditeur de composants : étirement en hauteur', () => {
-  it('le sens se choisit dans le panneau : les traits se couchent, et se glissent de haut en bas', async () => {
+  it('« Vertical » couche les traits, qui se glissent de haut en bas', async () => {
     const store = withRectangle()
     store.setSize({ widthCells: 2, heightCells: 4 })
     store.setStretch({ from: 0, to: 4 })
@@ -861,9 +904,9 @@ describe('éditeur de composants : étirement en hauteur', () => {
     const upright = wrapper.get('.cut-from .cut-line').attributes()
     expect(upright['x1']).toBe(upright['x2'])
 
-    await section().get('select.stretch-axis').setValue('y')
+    await section().get('.stretch-modes input[value="y"]').setValue(true)
     expect(store.doc.stretch).toMatchObject({ axis: 'y', from: 0, to: 16 })
-    expect(section().findAll('.field span')[2]?.text()).toBe('Hauteur du motif')
+    expect(section().findAll('.field span')[1]?.text()).toBe('Hauteur du motif')
     // En hauteur : deux traits horizontaux, sur toute la largeur de la feuille.
     expect(wrapper.get('.cuts').classes()).toContain('vertical')
     const flat = wrapper.get('.cut-from .cut-line').attributes()
@@ -895,6 +938,57 @@ describe('éditeur de composants : étirement en hauteur', () => {
     await fire(svg, 'pointermove', y(1))
     await fire(svg, 'pointerup', y(1))
     expect(store.doc.stretch).toMatchObject({ axis: 'y', from: 4, to: 12 })
+    wrapper.unmount()
+  })
+})
+
+describe('éditeur de composants : propriétés du composant', () => {
+  it('la catégorie se choisit dans une liste, ou se crée ; plus de description', async () => {
+    const library = useLibraryStore()
+    const filed = (id: string, category: string): LibraryEntry => ({
+      folder: `C:/lib/${id}`,
+      def: { ...createEmptyComponent(id, id), category },
+      problem: null
+    })
+    library.entries = [filed('led', 'Opto'), filed('bornier', 'Connecteurs'), filed('r', '')]
+    const store = useComponentEditorStore()
+    store.inspectorOpen = true
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    await nextTick()
+    const block = (): ReturnType<typeof wrapper.get> => wrapper.get('.inspector .block')
+    expect(
+      block()
+        .findAll('.field span')
+        .map((span) => span.text())
+    ).toEqual(['Nom', 'Catégorie'])
+    expect(block().find('textarea').exists()).toBe(false)
+    // Les catégories de la bibliothèque, dans l'ordre, puis de quoi en créer une.
+    const select = (): ReturnType<typeof wrapper.get> => block().get('select.category')
+    expect(
+      select()
+        .findAll('option')
+        .map((option) => option.text())
+    ).toEqual(['Connecteurs', 'Divers', 'Opto', 'Nouvelle catégorie…'])
+    expect((select().element as HTMLSelectElement).value).toBe('Divers')
+    await select().setValue('Opto')
+    expect(store.doc.category).toBe('Opto')
+    expect(block().find('.new-category').exists()).toBe(false)
+
+    // « Nouvelle catégorie… » montre un champ ; ce qu'on y tape devient la catégorie.
+    const last = select().findAll('option').at(-1)
+    await select().setValue(last?.attributes('value'))
+    expect(store.doc.category).toBe('Opto')
+    const input = block().get('.new-category input')
+    await input.setValue('Capteurs')
+    await input.trigger('change')
+    expect(store.doc.category).toBe('Capteurs')
+    expect(block().find('.new-category').exists()).toBe(false)
+    expect((select().element as HTMLSelectElement).value).toBe('Capteurs')
+    expect(
+      select()
+        .findAll('option')
+        .map((option) => option.text())
+    ).toContain('Capteurs')
     wrapper.unmount()
   })
 })

@@ -1,3 +1,4 @@
+import { flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
@@ -762,7 +763,63 @@ describe('onglets de montage', () => {
     expect(store.doc.customColors).toEqual([])
     expect(store.colorChoices).toHaveLength(paletteSize)
     store.activateTab(first)
-    expect(store.colorChoices.at(-1)).toEqual({ hex: '#ff00aa', name: '#ff00aa' })
+    expect(store.colorChoices.at(-1)).toEqual({ hex: '#ff00aa', name: '#ff00aa', custom: true })
+  })
+
+  it('modifie ou supprime une couleur du montage : une commande, les fils gardent la leur', () => {
+    const store = useSchematicStore()
+    store.addCustomColor('#ff00aa')
+    store.setCurrentColor('#ff00aa')
+    const wire = store.addWire([
+      [0, 0],
+      [4, 0]
+    ])
+    store.changeColorChoice('#FF00AA', '#123456')
+    expect(store.doc.customColors).toEqual(['#123456'])
+    expect(store.undoLabel).toBe('Modifier une couleur')
+    // La couleur des prochains fils suit sa pastille ; le fil déjà tracé ne change pas.
+    expect(store.currentColor).toBe('#123456')
+    expect(store.doc.wires.find((candidate) => candidate.id === wire)?.color).toBe('#ff00aa')
+    // Une couleur déjà proposée est refusée.
+    store.changeColorChoice('#123456', '#000000')
+    expect(store.doc.customColors).toEqual(['#123456'])
+    expect(store.status).toContain('déjà dans la palette')
+    store.removeColorChoice('#123456')
+    expect(store.doc.customColors).toEqual([])
+    expect(store.undoLabel).toBe('Supprimer une couleur')
+    // La couleur courante n'est plus proposée : la première de la palette la remplace.
+    expect(store.currentColor).toBe(store.colorChoices[0]?.hex)
+    store.undo()
+    expect(store.doc.customColors).toEqual(['#123456'])
+  })
+
+  it('modifie ou supprime une couleur de la palette des fils : un réglage de l’application', async () => {
+    setBridge(new FakeFs())
+    const library = useLibraryStore()
+    await library.init()
+    const store = useSchematicStore()
+    const [first, second] = library.palette
+    if (!first || !second) throw new Error('palette attendue')
+    const before = store.doc
+    store.setCurrentColor(second.hex)
+    store.changeColorChoice(second.hex, '#abcdef')
+    await flushPromises()
+    // La palette change dans les paramètres, la couleur garde son nom ; le montage, lui, n'a
+    // rien à annuler.
+    expect(library.palette[1]).toEqual({ name: second.name, hex: '#abcdef' })
+    expect(store.doc).toBe(before)
+    expect(store.currentColor).toBe('#abcdef')
+    // La couleur des nouveaux fils suit, si c'était elle.
+    store.changeColorChoice(library.defaultWireColor, '#010203')
+    await flushPromises()
+    expect(library.defaultWireColor).toBe('#010203')
+    const size = library.palette.length
+    store.removeColorChoice('#abcdef')
+    await flushPromises()
+    expect(library.palette).toHaveLength(size - 1)
+    expect(library.palette.some((color) => color.hex === '#abcdef')).toBe(false)
+    expect(store.currentColor).toBe(library.palette[0]?.hex)
+    setBridge(null)
   })
 
   it('réordonne les onglets sans changer celui qui est affiché', () => {
@@ -829,7 +886,7 @@ describe('onglets de montage', () => {
 })
 
 describe('montage : composants derrière les fils, fils à 45°', () => {
-  it('pose les composants derrière les fils ; une commande les passe devant ou derrière', () => {
+  it('pose les composants derrière les fils ; l’ordre les fait passer devant ou derrière', () => {
     const store = useSchematicStore()
     store.startPlacing(resistor())
     const first = store.placeAt(2, 3)
@@ -838,18 +895,27 @@ describe('montage : composants derrière les fils, fils à 45°', () => {
     if (!first || !second) throw new Error('composants attendus')
     // À la pose, un composant est derrière les fils : ceux qu'on trace sur lui restent visibles.
     expect(store.doc.components.map((instance) => instance.behindWires)).toEqual([true, true])
-    store.setInstancesBehindWires([first], false)
-    expect(store.doc.components.map((instance) => instance.behindWires)).toEqual([false, true])
-    expect(store.undoLabel).toBe('Passer devant les fils')
-    // Déjà devant : rien à faire, rien de plus à annuler.
-    store.setInstancesBehindWires([first], false)
+    // « Premier plan » : devant tout, fils compris.
+    store.selection = [first]
+    store.reorderInstances('top')
+    expect(store.doc.components.map((instance) => [instance.id, instance.behindWires])).toEqual([
+      [second, true],
+      [first, false]
+    ])
+    expect(store.undoLabel).toBe('Ordre des composants')
+    expect(store.status).toContain('Devant les fils')
+    // Déjà tout devant : rien à faire, rien de plus à annuler.
+    store.reorderInstances('top')
     store.undo()
-    expect(store.doc.components[0]?.behindWires).toBe(true)
-    // Le réglage s'enregistre avec le montage.
-    store.setInstancesBehindWires([second], false)
-    expect(store.undoLabel).toBe('Passer devant les fils')
+    expect(store.doc.components.map((instance) => instance.behindWires)).toEqual([true, true])
+    // La couche s'enregistre avec le montage.
+    store.selection = [second]
+    store.reorderInstances('top')
     const reread = parseProject(serializeProject(store.doc))
-    expect(reread.components.map((instance) => instance.behindWires)).toEqual([true, false])
+    expect(reread.components.map((instance) => [instance.id, instance.behindWires])).toEqual([
+      [first, true],
+      [second, false]
+    ])
   })
 
   it('accepte un fil en diagonale à 45° et refuse une autre pente', () => {
@@ -1325,11 +1391,11 @@ describe('montage : ordre des composants entre eux', () => {
     expect(order()).toEqual([a, c, b])
     store.undo()
     expect(order()).toEqual([a, b, c])
-    // Ranger les composants ne touche pas à leur couche : ils restent derrière les fils.
+    // Revenus à l'arrière-plan, ils sont tous derrière les fils.
     expect(store.doc.components.every((instance) => instance.behindWires)).toBe(true)
   })
 
-  it('ne range un composant que parmi ceux de sa couche, devant ou derrière les fils', () => {
+  it('les fils tiennent une place dans la pile : avancer ou reculer les fait passer', () => {
     const store = useSchematicStore()
     store.startPlacing(resistor())
     const a = store.placeAt(0, 0)
@@ -1337,16 +1403,49 @@ describe('montage : ordre des composants entre eux', () => {
     const c = store.placeAt(2, 0)
     store.stopPlacing()
     if (!a || !b || !c) throw new Error('composants attendus')
-    // b passe devant les fils : a et c restent derrière, et se rangent entre eux.
-    store.setInstancesBehindWires([b], false)
-    store.selection = [a]
+    /** La pile, du dessous au dessus : les composants derrière les fils, les fils, les autres. */
+    const stack = (): string[] => {
+      const list = store.doc.components
+      return [
+        ...list.filter((instance) => instance.behindWires).map((instance) => instance.id),
+        'fils',
+        ...list.filter((instance) => !instance.behindWires).map((instance) => instance.id)
+      ]
+    }
+    expect(stack()).toEqual([a, b, c, 'fils'])
+    // Le plus haut de derrière avance : il passe devant les fils.
+    store.selection = [c]
     store.reorderInstances('up')
-    expect(store.doc.components.map((instance) => instance.id)).toEqual([c, b, a])
-    // Seul devant les fils, b n'a personne à dépasser.
+    expect(stack()).toEqual([a, b, 'fils', c])
+    expect(store.status).toContain('Devant les fils')
+    // Seul devant, il n'a plus personne à dépasser.
+    const before = store.doc
+    store.reorderInstances('up')
+    expect(store.doc).toBe(before)
+    // Un autre le rejoint, puis le dépasse.
     store.selection = [b]
-    store.reorderInstances('top')
-    expect(store.undoLabel).toBe('Ordre des composants')
-    expect(store.doc.components.map((instance) => instance.id)).toEqual([c, b, a])
+    store.reorderInstances('up')
+    expect(stack()).toEqual([a, 'fils', b, c])
+    store.reorderInstances('up')
+    expect(stack()).toEqual([a, 'fils', c, b])
+    // Reculer : d'abord parmi ceux de devant, puis derrière les fils, puis parmi ceux de derrière.
+    store.reorderInstances('down')
+    store.reorderInstances('down')
+    expect(stack()).toEqual([a, b, 'fils', c])
+    expect(store.status).toContain('Derrière les fils')
+    store.reorderInstances('down')
+    expect(stack()).toEqual([b, a, 'fils', c])
+    // « Arrière-plan » : derrière tout, d'où qu'on vienne.
+    store.selection = [c]
+    store.reorderInstances('bottom')
+    expect(stack()).toEqual([c, b, a, 'fils'])
+    // Deux composants avancent ensemble, et passent les fils ensemble.
+    store.selection = [b, a]
+    store.reorderInstances('up')
+    expect(stack()).toEqual([c, 'fils', b, a])
+    // Une seule annulation remet l'ordre et la couche.
+    store.undo()
+    expect(stack()).toEqual([c, b, a, 'fils'])
   })
 
   it('avance les fils et les composants sélectionnés ensemble, chacun parmi les siens', () => {

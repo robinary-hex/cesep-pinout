@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import {
   BASE_VARIANT,
   componentVariants,
@@ -13,6 +13,7 @@ import { bridge } from '@/io/bridge'
 import { deleteComponent, saveComponent, type LibraryEntry } from '@/io/library'
 import { baseName, samePath } from '@/io/paths'
 import ComponentThumbnail from '@/render/ComponentThumbnail.vue'
+import { useCompactLayout } from '@/ui/compactLayout'
 import ContextMenu from '@/ui/ContextMenu.vue'
 import { heading, item, SEPARATOR, submenu, type MenuItem } from '@/ui/contextMenu'
 import { confirmAction } from '@/ui/dialogs'
@@ -21,7 +22,8 @@ import PromptDialog from '@/ui/PromptDialog.vue'
 import { useLibraryStore } from './store'
 
 // Panneau de gauche : la bibliothèque de composants sur disque, en liste (nom, broches) ou en
-// grille de vignettes (nom au survol) selon le paramètre `libraryView`.
+// grille de vignettes (nom au survol) selon le paramètre `libraryView` ; toujours en vignettes,
+// sur une colonne, quand la fenêtre est étroite et que le panneau se réduit.
 // En mode « edit », un clic ouvre le composant dans l'éditeur ; en mode « place », il le pose sur
 // le montage. Un clic droit ouvre un menu : sur un composant (ouvrir, dupliquer, renommer,
 // catégorie, supprimer ; dans le montage, poser ou modifier), ou dans le vide (nouveau composant,
@@ -34,6 +36,13 @@ const emit = defineEmits<{ edit: [] }>()
 const library = useLibraryStore()
 const editor = useComponentEditorStore()
 const schematic = useSchematicStore()
+
+/**
+ * Liste ou grille : le réglage des paramètres, sauf quand la fenêtre est étroite. Le panneau se
+ * réduit alors à une colonne de vignettes, sans place pour les lignes de la liste.
+ */
+const compact = useCompactLayout()
+const view = computed(() => (compact.value ? 'grid' : library.libraryView))
 
 // Catégories repliables ; une recherche en cours montre tout, le temps de la recherche.
 const collapsed = ref(new Set<string>())
@@ -339,7 +348,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
           <span class="group-name">{{ group.name }}</span>
           <span class="count">{{ group.entries.length }}</span>
         </button>
-        <template v-if="library.libraryView === 'grid'">
+        <template v-if="view === 'grid'">
           <div v-show="isOpen(group.name)" class="grid">
             <div
               v-for="entry in group.entries"
@@ -361,7 +370,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
                 <ComponentThumbnail
                   v-if="entry.def"
                   :def="entry.def"
-                  :size="48"
+                  :size="compact ? 64 : 48"
                   :stroke-base="library.defaultProfile.componentStroke"
                 />
                 <span v-else class="thumb-missing">?</span>
@@ -635,6 +644,29 @@ async function remove(entry: LibraryEntry): Promise<void> {
   grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
   gap: 4px;
   padding: 2px 10px 6px;
+}
+
+/* Fenêtre étroite : le panneau se réduit (`--side-panel-width`), une vignette par ligne. */
+@media (max-width: 1100px) {
+  .library-head {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .search {
+    min-width: 0;
+    padding: 5px 6px;
+  }
+
+  .group-head {
+    padding-left: 6px;
+    padding-right: 8px;
+  }
+
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 2px 6px 6px;
+  }
 }
 
 .tile {

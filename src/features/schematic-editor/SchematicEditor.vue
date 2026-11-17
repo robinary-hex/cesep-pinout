@@ -133,7 +133,6 @@ function editInstanceLabel(id: string): void {
     title: found.def.name,
     label: 'Libellé',
     value: found.instance.label,
-    placeholder: 'R1, U2…',
     onSubmit: (value) => store.setInstanceLabel(id, value.trim())
   }
 }
@@ -368,11 +367,6 @@ function openMenu(request: MenuRequest): void {
       }),
       item('Miroir horizontal', () => store.flip('horizontal'), { hint: 'T', icon: 'flip-h' }),
       item('Miroir vertical', () => store.flip('vertical'), { hint: 'Maj+T', icon: 'flip-v' }),
-      item(
-        'Derrière les fils',
-        () => store.setInstancesBehindWires(store.selection, !instance.behindWires),
-        { checked: instance.behindWires }
-      ),
       ...profileItems(),
       submenu(
         'Ordre',

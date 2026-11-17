@@ -34,7 +34,11 @@ import {
   prunedStyles,
   regroupedCopies,
   removeVertex,
+  paletteChoices,
+  recoloredChoice,
+  removedChoice,
   restackedIds,
+  sameColor,
   restretch,
   restyledLabelSize,
   rotatedInstance,
@@ -154,6 +158,8 @@ export interface DirtyDocument {
 
 /** Couleurs personnalisées gardées par montage, les plus récentes d'abord. */
 const MAX_CUSTOM_COLORS = 8
+/** Place des fils dans la pile des composants : ceux d'avant sont derrière eux, les autres devant. */
+const WIRES_IN_STACK = ':fils:'
 const CROSSING_PICK_CELLS = 0.6
 
 /**
@@ -290,10 +296,7 @@ export const useSchematicStore = defineStore('schematic', () => {
   )
   const sortedWires = computed(() => [...doc.value.wires].sort((a, b) => a.stack - b.stack))
   /** Couleurs proposées pour les fils : la palette de l'application, puis celles du montage. */
-  const colorChoices = computed(() => [
-    ...library.palette.map((color) => ({ hex: color.hex, name: color.name })),
-    ...doc.value.customColors.map((hex) => ({ hex, name: hex }))
-  ])
+  const colorChoices = computed(() => paletteChoices(library.palette, doc.value.customColors))
   const pinRefs = computed(() => projectPins(doc.value))
   const connectivity = computed(() => computeConnectivity(doc.value.wires, pinRefs.value))
   const crossings = computed(() => computeCrossings(doc.value.wires))
@@ -1205,6 +1208,58 @@ export const useSchematicStore = defineStore('schematic', () => {
     recolorWires(selectedWires.value, color)
   }
 
+  /**
+   * Remplace une couleur proposée par une autre (clic droit sur sa pastille, « Modifier… ») :
+   * dans les couleurs de ce montage si elle en est (une commande), sinon dans la palette des
+   * fils de l'application (un réglage, commun à tous les montages, qu'on n'annule pas). Seule
+   * la pastille change : les fils déjà tracés gardent leur couleur.
+   */
+  function changeColorChoice(hex: string, next: string): void {
+    const edit = recoloredChoice(library.palette, doc.value.customColors, hex, next)
+    if (!edit) {
+      if (!sameColor(hex, next)) status.value = 'Cette couleur est déjà dans la palette.'
+      return
+    }
+    if (edit.list === 'custom') {
+      apply('Modifier une couleur', (draft) => {
+        draft.customColors = edit.colors
+      })
+    } else {
+      void library.updateSettings({
+        palette: edit.colors,
+        ...(sameColor(library.defaultWireColor, hex) ? { defaultWireColor: next } : {})
+      })
+    }
+    if (sameColor(currentColor.value, hex)) currentColor.value = next
+  }
+
+  /**
+   * Retire une couleur proposée (clic droit sur sa pastille, « Supprimer ») : des couleurs de
+   * ce montage, ou de la palette des fils de l'application, qui en garde au moins une. Les fils
+   * de cette couleur la gardent.
+   */
+  function removeColorChoice(hex: string): void {
+    const edit = removedChoice(library.palette, doc.value.customColors, hex)
+    if (!edit) return
+    const rest = colorChoices.value.filter((choice) => !sameColor(choice.hex, hex))
+    if (edit.list === 'custom') {
+      apply('Supprimer une couleur', (draft) => {
+        draft.customColors = edit.colors
+      })
+    } else {
+      const first = edit.colors[0]
+      void library.updateSettings({
+        palette: edit.colors,
+        ...(first && sameColor(library.defaultWireColor, hex)
+          ? { defaultWireColor: first.hex }
+          : {})
+      })
+    }
+    // La couleur des prochains fils n'est plus proposée : on passe à la première qui l'est.
+    const fallback = rest[0]
+    if (fallback && sameColor(currentColor.value, hex)) currentColor.value = fallback.hex
+  }
+
   function setWireFreeEnds(id: string, style: FreeEndStyle): void {
     apply('Extrémités libres', (draft) => {
       const wire = draft.wires.find((candidate) => candidate.id === id)
@@ -1249,52 +1304,45 @@ export const useSchematicStore = defineStore('schematic', () => {
   }
 
   /**
-   * Met des composants derrière les fils, ou les ramène devant. Derrière, un composant ne cache
-   * plus les fils qui passent sur lui : pour une image, surtout.
-   */
-  function setInstancesBehindWires(ids: readonly string[], behind: boolean): void {
-    const changing = doc.value.components.filter(
-      (instance) => ids.includes(instance.id) && instance.behindWires !== behind
-    )
-    if (changing.length === 0) return
-    apply(behind ? 'Passer derrière les fils' : 'Passer devant les fils', (draft) => {
-      for (const instance of draft.components) {
-        if (ids.includes(instance.id)) instance.behindWires = behind
-      }
-    })
-  }
-
-  /**
-   * Ordre des composants sélectionnés parmi les autres : le dernier de la liste est dessiné
-   * au-dessus, donc le dernier posé l'est par défaut. Un composant ne se range que parmi ceux de
-   * sa couche, derrière ou devant les fils : les fils, eux, ne bougent pas.
+   * Ordre des composants sélectionnés dans la pile du montage (décision du 17 novembre 2026). La
+   * pile va des composants derrière les fils, dans l'ordre de la liste, aux composants devant
+   * eux ; les fils y tiennent une seule place, entre les deux. Avancer le composant le plus haut
+   * de derrière le fait donc passer devant les fils, reculer le plus bas de devant le ramène
+   * derrière ; « Premier plan » met devant tout, fils compris, « Arrière-plan » derrière tout.
+   * Il n'y a pas d'autre réglage pour la couche d'un composant (`behindWires`) : l'ordre suffit.
    */
   function reorderInstances(move: StackMove): void {
     const ids = new Set(selection.value)
-    const before = doc.value.components.map((instance) => instance.id)
-    let order = before
-    for (const behind of [true, false]) {
-      const layer = doc.value.components
-        .filter((instance) => instance.behindWires === behind)
-        .map((instance) => instance.id)
-      if (!layer.some((id) => ids.has(id))) continue
-      // Les rangs qu'occupe la couche dans la liste restent les siens ; seul leur contenu tourne.
-      const restacked = restackedIds(layer, ids, move)
-      const inLayer = new Set(layer)
-      let next = 0
-      order = order.map((id) => (inLayer.has(id) ? (restacked[next++] ?? id) : id))
-    }
-    if (order.join(' ') === before.join(' ')) return
-    const rank = new Map(order.map((id, index) => [id, index]))
+    if (ids.size === 0) return
+    const components = doc.value.components
+    const stack = [
+      ...components.filter((instance) => instance.behindWires).map((instance) => instance.id),
+      WIRES_IN_STACK,
+      ...components.filter((instance) => !instance.behindWires).map((instance) => instance.id)
+    ]
+    const restacked = restackedIds(stack, ids, move)
+    if (restacked.join(' ') === stack.join(' ')) return
+    const behind = new Set(restacked.slice(0, restacked.indexOf(WIRES_IN_STACK)))
+    const rank = new Map(restacked.map((id, index) => [id, index]))
+    const crossed = components.find(
+      (instance) => ids.has(instance.id) && instance.behindWires !== behind.has(instance.id)
+    )
     apply('Ordre des composants', (draft) => {
       draft.components.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
+      for (const instance of draft.components) instance.behindWires = behind.has(instance.id)
     })
+    // Passer les fils se dit : rien d'autre ne le montre quand aucun fil ne croise le composant.
+    if (crossed) {
+      status.value = behind.has(crossed.id)
+        ? 'Derrière les fils : ils restent visibles sur le composant.'
+        : 'Devant les fils : le composant cache ceux qui passent dessous.'
+    }
   }
 
   /**
    * Ctrl+Page haut / bas sur la sélection : les fils avancent ou reculent entre eux, les
-   * composants entre eux. Passer un composant devant ou derrière les fils est un autre réglage
-   * (`setInstancesBehindWires`).
+   * composants dans leur pile, où ils peuvent passer devant ou derrière les fils
+   * (`reorderInstances`).
    */
   function restackSelection(move: StackMove): void {
     reorderWires(move)
@@ -1766,12 +1814,13 @@ export const useSchematicStore = defineStore('schematic', () => {
     recolorWires,
     setCurrentColor,
     addCustomColor,
+    changeColorChoice,
+    removeColorChoice,
     colorChoices,
     setWireFreeEnds,
     setWireEndLabel,
     removeWires,
     reorderWires,
-    setInstancesBehindWires,
     restackSelection,
     reorderInstances,
     toggleCrossing,

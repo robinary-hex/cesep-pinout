@@ -189,9 +189,20 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   `apply` à chaque commande et dans l'aperçu du canevas) ; une extrémité sur une broche ou
   déplacée par la commande elle-même ne suit pas. Un nouveau fil prend la couleur du dernier fil tracé ou
   recoloré (`currentColor`, recalée sur le dernier fil du projet à l'ouverture). Couleurs proposées
-  (`colorChoices`) : la palette des fils (Paramètres), commune à tous les montages, puis
+  (`colorChoices`, `paletteChoices` de `src/domain/palette.ts`) : la palette des fils
+  (Paramètres), commune à tous les montages, puis
   les couleurs du montage (`customColors`, huit au plus), ajoutées par le « + » de la barre et
-  enregistrées dans son fichier. Extrémités
+  enregistrées dans son fichier. Un clic droit sur une pastille de la barre d'outils la
+  modifie ou la supprime (décision du 17 novembre 2026 ; `src/ui/ToolbarPalette.vue`, la même
+  dans le montage et le diagramme, `changeColorChoice` et `removeColorChoice` de chaque
+  store) : « Modifier… » ouvre sous la pastille un petit volet avec le champ de couleur
+  (`src/ui/ColorPopover.vue`), « Supprimer » la retire. Une couleur du document : une
+  commande, qu'on annule. Une couleur de la palette de l'application : un réglage
+  (`updateSettings`), commun à tous les documents, qui garde son nom et ne s'annule pas ; la
+  palette garde au moins une couleur. Seule la pastille change : ce qui est déjà dessiné
+  garde sa couleur ; la couleur courante suit sa pastille, ou passe à la première si elle
+  est supprimée. Une couleur déjà proposée est refusée (`recoloredChoice`,
+  `removedChoice`). Extrémités
   libres (`freeEnds`) : nettes, en flèche ou en pointillés, dessinées pareil à l'écran et à
   l'export par `src/domain/wireEnds.ts` (corps raccourci, pointe sur le bout du fil, queue
   pointillée d'1,5 cellule). Étiquettes d'extrémité (`endLabels`) : point sur le bout libre et
@@ -230,7 +241,14 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   la barre (`.topbar-side`), large comme le panneau latéral (`--side-panel-width`, 280 px : la
   bibliothèque de composants et celle des formes du diagramme ont la même largeur) ; un trait
   court (`.topbar-side::after`), comme les séparateurs des barres d'outils et non sur toute la
-  hauteur de la barre, sépare les modes des onglets, à l'aplomb de la bordure du panneau. Ce que la coque demande à un
+  hauteur de la barre, sépare les modes des onglets, à l'aplomb de la bordure du panneau.
+  Fenêtre étroite (décision du 17 novembre 2026 ; moins de 1100 px de large :
+  `@media (max-width: 1100px)` de style.css et des deux bibliothèques, la même limite dans
+  `src/ui/compactLayout.ts`) : le panneau latéral se réduit à 112 px et ne montre plus qu'une
+  colonne de vignettes, une forme ou un composant par ligne ; la bibliothèque de composants
+  passe en vignettes quel que soit `libraryView` (`useCompactLayout`), sans changer le
+  réglage. Le bloc gauche de la barre garde alors la place de ses boutons, sans s'aligner
+  sur le panneau. Ce que la coque demande à un
   mode (onglets, fermeture, enregistrement avant de quitter, statut) passe par son `ModeAdapter`.
 - Barres d'outils des trois éditeurs : elles commencent toutes par `src/ui/ToolbarBasics.vue`,
   dans cet ordre (décision du 10 novembre 2026) : zoom arrière, valeur du zoom (un clic ou la
@@ -246,9 +264,14 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   bibliothèque, à l'écran tout de suite, dans le fichier en arrière-plan. Supprimer ne se trouve pas dans les panneaux de propriétés : corbeille, touche Suppr
   ou menu contextuel. L'ordre d'empilement, la rotation et le miroir non plus (décision du 11
   novembre 2026) : pas de boutons pour eux dans les panneaux des trois éditeurs, le clavier et
-  le menu contextuel suffisent ; un panneau montre des propriétés (la liste « Rotation », les
-  cases « Miroir » et « Derrière les fils » d'un composant posé en sont), il ne double pas les
-  commandes. Dans les panneaux, X, Y, largeur et hauteur ont leur propre section
+  le menu contextuel suffisent ; un panneau montre des propriétés (la liste « Rotation » et la
+  case « Miroir » d'un composant posé en sont), il ne double pas les
+  commandes. Le panneau d'un composant posé (décision du 17 novembre 2026) : « Étirement »
+  (son nombre de motifs, s'il est extensible), « Libellé », sans texte d'exemple dans le
+  champ (ni dans la boîte du clic droit), ses champs, puis « Position et orientation » sur
+  deux colonnes égales (`.pair`) : X et Y, puis la rotation, large comme le champ X, et la
+  case « Miroir » à l'aplomb du champ Y. Pas de case pour sa couche : l'ordre suffit (voir
+  « Composants et fils »). Dans les panneaux, X, Y, largeur et hauteur ont leur propre section
   (« Position et taille », « Position et orientation » pour un composant posé, « Taille » pour
   un composant). Les quatre champs d'une boîte tiennent toujours sur une ligne (`.box-row` de
   style.css, une grille de quatre colonnes égales ; décision du 16 novembre 2026) : en ligne
@@ -435,6 +458,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     (`settings/PaletteEditor.vue`, une fois pour chacune).
     La palette de la barre colore la sélection et règle la couleur des prochains nœuds,
     ou des prochains liens quand on en trace ou qu'on n'a sélectionné qu'eux (`paletteOnLinks`).
+    Un clic droit sur une de ses pastilles la modifie ou la supprime, comme dans le montage
+    (voir « Fils » : `ToolbarPalette.vue`).
   - Gestes : forme prise dans la bibliothèque (clic puis clic, ou glisser-déposer), le texte se
     tape aussitôt sur place (petit éditeur HTML par-dessus le nœud : Entrée valide, Maj+Entrée va
     à la ligne, Échap abandonne) ; double-clic ou Entrée sur un nœud pour y revenir. V sélection,
@@ -603,7 +628,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   boutons : tout passe par le clic droit (`openMenu` et `openListMenu` de `LibraryPanel.vue`,
   voir « Menus contextuels »). Renommer ou changer de catégorie réécrit le fichier du composant,
   sauf s'il est ouvert dans un onglet : c'est alors le document ouvert qu'on modifie
-  (`changeMeta`).
+  (`changeMeta`). Dans l'éditeur de composants, le panneau du composant a son nom et sa
+  catégorie, pas de champ « Description » (décision du 17 novembre 2026 ; `description` reste
+  dans le fichier). La catégorie se choisit dans une liste : celles de la bibliothèque, puis
+  « Nouvelle catégorie… », qui montre un champ où taper son nom (`chooseCategory`,
+  `setNewCategory` d'`EditorInspector.vue`).
 - Panneau de propriétés : le même fonctionnement dans les trois éditeurs (décision du 11
   novembre 2026 ; `useInspectorPanel` de `src/state/inspector.ts`, `inspectorOpen` et
   `revealInspector` de chaque store). Replié au départ. La touche I, le bouton tout à droite de
@@ -803,10 +832,14 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     rien d'autre à savoir. `instanceBaseDefinition` rend le dessin d'avant étirement. Le
     résultat est gardé par composant et par nombre : une définition ne se modifie jamais sur
     place (Immer), sinon l'étirement gardé serait périmé.
-  - Éditeur de composants : section « Étirement » du panneau du composant (case
-    « Extensible », liste « Sens » : en largeur ou en hauteur, début et taille du motif,
-    « Au départ », « Minimum », « Maximum », et un aperçu étiré à N qui ne s'enregistre
-    pas ; `setStretch`, `normalizedStretch`). Changer de sens remet le motif sur toute
+  - Éditeur de composants : section « Étirement » du panneau du composant. Trois boutons
+    radio (décision du 17 novembre 2026 ; `STRETCH_MODES`, `setStretchMode`) : « Désactivé »,
+    « Horizontal » (en largeur) ou « Vertical » (en hauteur) ; choisir un sens rend le
+    composant extensible. Puis le début et la taille du motif, « Au départ », « Minimum »,
+    « Maximum », les modèles, et l'aperçu, qui ne s'enregistre pas : un curseur large comme
+    le panneau, du minimum au maximum, un cran par nombre (`previewTicks`), et le composant
+    étiré à ce nombre, centré dans un cadre (`.preview-frame` ; `setStretch`,
+    `normalizedStretch`). Changer de sens remet le motif sur toute
     l'étendue du nouveau et garde les nombres et les modèles. Sur la feuille, les deux
     traits (`.cuts`, couchés quand le sens est la hauteur) : glisser le premier déplace le
     motif, le second règle sa taille ; le motif reste dans la boîte quand elle change
@@ -815,7 +848,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     s'étire (`stretchHandles`, `.stretch-handle`) ; la tirer ajoute ou retire un motif par taille de
     motif (`pulledCount`), avec aperçu, en une commande (`setInstanceCount`, `restretch`).
     Le bout qu'on ne tire pas reste en place, rotation et miroir compris. Le panneau a un
-    champ « Nombre ». Les fils suivent leurs broches (`stretchPinMap` : par la fin, les
+    champ « Étirement » : son nombre de motifs. Les fils suivent leurs broches (`stretchPinMap` : par la fin, les
     motifs gardent leur rang ; par le début, ils se comptent depuis la fin) ; le fil d'une
     broche qui disparaît reste où il est, bout libre.
   - Modèles par nombre (décision du 17 novembre 2026 ; `stretch.models`) : un dessin
@@ -866,16 +899,18 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   ou Ctrl+Maj+I ouvre les outils et F5 ou Ctrl+R recharge (`before-input-event`).
 - Composants et fils, ordre d'empilement du montage : un composant se pose derrière les fils
   (décision du 11 novembre 2026 : `behindWires` vaut vrai à la pose), pour que les fils tracés
-  sur lui restent visibles ; on le passe devant, ou derrière à nouveau, par la case « Derrière
-  les fils » du panneau ou le menu contextuel (`setInstancesBehindWires`). Les composants des
-  montages déjà enregistrés gardent leur réglage.
+  sur lui restent visibles. Les composants des montages déjà enregistrés gardent leur couche.
   Entre eux, les composants s'empilent dans l'ordre de la liste (`components` du montage : le
   dernier posé est au-dessus de tous les autres) et se rangent à la main (décision du 11
   novembre 2026) : sous-menu « Ordre » du clic droit, Ctrl+Page haut / bas (Maj : premier plan /
-  arrière-plan). `reorderInstances` ne range un composant que parmi
-  ceux de sa couche, derrière ou devant les fils : les fils restent où ils sont.
+  arrière-plan). L'ordre suffit à passer devant ou derrière les fils (décision du 17 novembre 2026) : ni case « Derrière les fils » dans le panneau, ni entrée dans le menu. La pile va
+  des composants de derrière aux composants de devant, les fils y tenant une seule place,
+  entre les deux (`WIRES_IN_STACK`, `reorderInstances`) : avancer le plus haut de derrière
+  le fait passer devant les fils, reculer le plus bas de devant le ramène derrière ;
+  « Premier plan » met devant tout, fils compris, « Arrière-plan » derrière tout. La barre
+  d'état dit quand un composant passe les fils.
   `restackSelection` (le clavier) range d'un même geste les fils sélectionnés entre eux (leur
-  `stack`) et les composants entre eux ; `restackedIds` du domaine fait le calcul pour les
+  `stack`) et les composants dans leur pile ; `restackedIds` du domaine fait le calcul pour les
   fils, les composants et les nœuds du diagramme. Même ordre à l'écran (`STACK` et `layers` de
   `SchematicCanvas.vue`) et à l'export (`componentLayer` de `svg.ts`) ; les textes d'un
   composant se dessinent juste après lui (`textsByInstance`), pas au-dessus de toute sa
