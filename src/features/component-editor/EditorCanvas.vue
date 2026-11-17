@@ -108,6 +108,9 @@ type Drag =
   | { kind: 'pan'; lastX: number; lastY: number }
   | { kind: 'text-box'; start: QPoint; current: QPoint }
   | { kind: 'resize-box'; handleId: string; preview: Box }
+  // Un trait de coupe d'un composant extensible : celui de gauche déplace le motif, celui de
+  // droite règle sa largeur. Positions d'aperçu, en quarts de cellule.
+  | { kind: 'cut'; line: 'from' | 'to'; from: number; to: number }
 
 type Preview =
   | { kind: 'rect'; x: number; y: number; width: number; height: number }
@@ -613,6 +616,36 @@ function onPrimitiveDown(index: number, event: PointerEvent): void {
   capture(event)
 }
 
+/**
+ * Traits de coupe d'un composant extensible, en pixels de la feuille : le motif est entre les
+ * deux. Pendant qu'on en glisse un, ce sont ses positions d'aperçu.
+ */
+const cuts = computed(() => {
+  const current = drag.value
+  const stretch = current?.kind === 'cut' ? current : store.shown.stretch
+  if (!stretch) return null
+  return {
+    x: px(stretch.from),
+    width: px(stretch.to - stretch.from),
+    lines: [
+      {
+        id: 'from' as const,
+        x: px(stretch.from),
+        title: 'Début du motif : le glisser déplace le motif'
+      },
+      { id: 'to' as const, x: px(stretch.to), title: 'Fin du motif : le glisser règle sa largeur' }
+    ]
+  }
+})
+
+function onCutDown(line: 'from' | 'to', event: PointerEvent): void {
+  const stretch = store.shown.stretch
+  if (event.button !== 0 || store.tool !== 'select' || spaceHeld.value || !stretch) return
+  event.stopPropagation()
+  drag.value = { kind: 'cut', line, from: stretch.from, to: stretch.to }
+  capture(event)
+}
+
 function onBoxHandleDown(handleId: string, event: PointerEvent): void {
   if (event.button !== 0) return
   event.stopPropagation()
@@ -819,6 +852,22 @@ function onPointerMove(event: PointerEvent): void {
         Math.round(cells.y)
       ])
       break
+    case 'cut': {
+      const width = size.value.widthCells * QUARTERS_PER_CELL
+      const x = toQuarters(cells).x
+      if (current.line === 'from') {
+        // Le motif se déplace au quart de cellule, sans changer de largeur ni sortir de la boîte.
+        const span = current.to - current.from
+        current.from = Math.max(0, Math.min(x, width - span))
+        current.to = current.from + span
+      } else {
+        // Sa largeur va par cellules entières : les broches recopiées restent sur la grille.
+        const most = Math.floor((width - current.from) / QUARTERS_PER_CELL)
+        const wide = Math.round((x - current.from) / QUARTERS_PER_CELL)
+        current.to = current.from + Math.max(1, Math.min(wide, most)) * QUARTERS_PER_CELL
+      }
+      break
+    }
     case 'pan': {
       const container = scroller.value
       if (container) {
@@ -968,6 +1017,9 @@ function onPointerUp(event: PointerEvent): void {
   }
   drag.value = null
   switch (current.kind) {
+    case 'cut':
+      store.setStretch({ from: current.from, to: current.to })
+      break
     case 'resize-box': {
       const box = current.preview
       const before = componentBox.value
@@ -1149,6 +1201,23 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
             :stroke-base="strokeBase"
           />
 
+          <!-- Composant extensible : le motif, entre ses deux traits de coupe. -->
+          <g v-if="cuts" class="cuts" :class="{ idle: store.tool !== 'select' }">
+            <rect class="motif-band" :x="cuts.x" y="0" :width="cuts.width" :height="boxHeight" />
+            <g
+              v-for="line in cuts.lines"
+              :key="line.id"
+              class="cut"
+              :class="`cut-${line.id}`"
+              @pointerdown="onCutDown(line.id, $event)"
+            >
+              <title>{{ line.title }}</title>
+              <line class="cut-line" :x1="line.x" :x2="line.x" y1="-12" :y2="boxHeight + 12" />
+              <path class="cut-grip" :d="`M ${line.x - 6} -18 h 12 l -6 8 z`" />
+              <line class="cut-hit" :x1="line.x" :x2="line.x" y1="-18" :y2="boxHeight + 12" />
+            </g>
+          </g>
+
           <rect
             v-for="outline in groupOutlines"
             :key="`group:${outline.id}`"
@@ -1305,6 +1374,36 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
 </template>
 
 <style scoped>
+/* Composant extensible : le motif en transparence, et ses deux traits de coupe à glisser. */
+.motif-band {
+  fill: var(--accent);
+  opacity: 0.08;
+  pointer-events: none;
+}
+
+.cut-line {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+  pointer-events: none;
+}
+
+.cut-grip {
+  fill: var(--accent);
+  pointer-events: none;
+}
+
+.cut-hit {
+  stroke: transparent;
+  stroke-width: 10;
+  cursor: ew-resize;
+}
+
+/* Avec un outil de dessin, les traits ne gênent pas : on dessine à travers. */
+.cuts.idle .cut-hit {
+  pointer-events: none;
+}
+
 .canvas-wrap {
   flex: 1;
   min-width: 0;

@@ -342,7 +342,9 @@ export const componentMigrations: MigrationTable = {
     12: migrateComponentV12,
     // v13 → v14 : textes verticaux, horizontaux par défaut.
     13: (raw) => withTextDefaults(raw, { vertical: false }),
-    14: migrateComponentV14
+    14: migrateComponentV14,
+    // v15 → v16 : composants extensibles (`stretch`). Aucun ne l'est au départ.
+    15: (raw) => raw
   }
 }
 
@@ -519,7 +521,10 @@ export const projectMigrations: MigrationTable = {
     },
     // Projet v21 → v22 : styles propres à certains éléments ; aucun au départ, tout suit le style
     // du montage.
-    21: (raw) => ({ styles: [], ...raw })
+    21: (raw) => ({ styles: [], ...raw }),
+    // Projet v22 → v23 : nombre de motifs d'un composant extensible posé (`count`) ; les
+    // définitions embarquées passent à la version 16 des composants.
+    22: migrateEmbeddedDefs
   }
 }
 

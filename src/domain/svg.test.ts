@@ -6,7 +6,7 @@ import { DEFAULT_PROFILE } from './profile'
 import { createEmptyProject, type ComponentInstance, type Project } from './project'
 import { parseProject } from './serialize'
 import { DEFAULT_EXPORT } from './settings'
-import { buildProjectSvg, escapeXml, primitiveSvg } from './svg'
+import { buildProjectSvg, componentSvg, escapeXml, primitiveSvg } from './svg'
 
 describe('export SVG', () => {
   const project = parseProject(projectText)
@@ -173,6 +173,26 @@ describe('export SVG', () => {
       `<image href="${dataUrl}" xlink:href="${dataUrl}" x="1" y="0" width="2" height="3" preserveAspectRatio="none"/>`
     )
     expect(primitiveSvg(image, 0.1)).toMatch(/^<rect x="1" y="0" width="2" height="3" /)
+    // Une tranche d'image (composant étiré) : sa boîte, et la fenêtre qui la découpe.
+    expect(primitiveSvg({ ...image, dataUrl, crop: { x: 0.25, w: 0.5 } }, 0.1)).toBe(
+      `<svg x="1" y="0" width="2" height="3" viewBox="0.25 0 0.5 1" preserveAspectRatio="none">` +
+        `<image href="${dataUrl}" xlink:href="${dataUrl}" x="0" y="0" width="1" height="1" preserveAspectRatio="none"/></svg>`
+    )
+    // Deux tranches qui se touchent : la première déborde d'un rien sur la seconde, pour
+    // qu'aucun filet de fond ne passe entre elles ; la dernière garde sa largeur.
+    const def = createEmptyComponent('c', 'C')
+    def.visual = {
+      kind: 'drawing',
+      primitives: [
+        { ...image, dataUrl, crop: { x: 0, w: 0.5 } },
+        { ...image, x: 12, dataUrl, crop: { x: 0.5, w: 0.5 } }
+      ]
+    }
+    const widths = [...componentSvg(def, 0.1).matchAll(/<svg x="(\d+)" y="0" width="([\d.]+)"/g)]
+    expect(widths.map((match) => [match[1], match[2]])).toEqual([
+      ['1', '2.025'],
+      ['3', '2']
+    ])
   })
 
   it('retourne null pour un montage vide et échappe le texte', () => {

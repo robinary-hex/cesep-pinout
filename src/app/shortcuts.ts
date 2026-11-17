@@ -241,6 +241,7 @@ export const SHORTCUT_SECTIONS: ShortcutSection[] = [
         rows: [
           k('R', 'Tourner', { icon: 'rotate-cw', withShift: 'sens inverse' }),
           k('T', 'Miroir', { icon: 'flip-h', withShift: 'vertical' }),
+          k('glisser', 'Étirer par une poignée'),
           k('double-clic', 'Saisir la valeur, le texte', { icon: 'edit' })
         ]
       },

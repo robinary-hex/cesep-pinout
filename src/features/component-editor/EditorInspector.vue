@@ -7,6 +7,9 @@ import {
   PIN_KINDS,
   pinSections,
   PRIMITIVE_KIND_LABELS,
+  QUARTERS_PER_CELL,
+  stretchCount,
+  stretchedDefinition,
   STROKE_WEIGHTS,
   TEXT_BASE_SIZE_CELLS,
   TEXT_SCALES,
@@ -15,6 +18,7 @@ import {
   type PinKind,
   type PinSection
 } from '@/domain'
+import ComponentGraphic from '@/render/ComponentGraphic.vue'
 import ColorField from '@/ui/ColorField.vue'
 import Icon from '@/ui/Icon.vue'
 import type { IconName } from '@/ui/icons'
@@ -54,6 +58,80 @@ function setSize(axis: 'widthCells' | 'heightCells', event: Event): void {
   const value = Math.max(1, Math.round(numberValue(event)))
   store.setSize({ ...store.shown.size, [axis]: value })
 }
+
+// Composant extensible : le motif entre deux traits, les nombres permis, et un aperçu étiré.
+
+const stretch = computed(() => store.shown.stretch ?? null)
+
+function toggleStretch(event: Event): void {
+  store.setStretch(checked(event) ? {} : null)
+}
+
+/** Écrit dans le champ ce que le composant a retenu : une valeur refusée ou ramenée se voit. */
+function showKept(event: Event, value: number): void {
+  ;(event.target as HTMLInputElement).value = String(value)
+}
+
+/** Début du motif, en cellules (au quart) : le motif se déplace sans changer de largeur. */
+function setMotifStart(event: Event): void {
+  const current = stretch.value
+  const cells = numberValue(event)
+  if (!current) return
+  if (Number.isFinite(cells)) {
+    const from = Math.round(cells * QUARTERS_PER_CELL)
+    store.setStretch({ from, to: from + current.to - current.from })
+  }
+  showKept(event, (stretch.value?.from ?? 0) / QUARTERS_PER_CELL)
+}
+
+/** Largeur du motif, en cellules entières. */
+function setMotifWidth(event: Event): void {
+  const current = stretch.value
+  const cells = numberValue(event)
+  if (!current) return
+  if (Number.isFinite(cells)) {
+    store.setStretch({ to: current.from + Math.max(1, Math.round(cells)) * QUARTERS_PER_CELL })
+  }
+  const kept = stretch.value
+  showKept(event, kept ? (kept.to - kept.from) / QUARTERS_PER_CELL : 1)
+}
+
+function setStretchCount(key: 'initial' | 'min' | 'max', event: Event): void {
+  const value = numberValue(event)
+  if (Number.isFinite(value)) store.setStretch({ [key]: Math.max(1, Math.round(value)) })
+  showKept(event, stretch.value?.[key] ?? 1)
+}
+
+/** Nombre de motifs que montre l'aperçu ; il ne s'enregistre pas. */
+const previewWanted = ref(3)
+const previewCount = computed(() => stretchCount(store.shown, previewWanted.value))
+
+function setPreviewCount(event: Event): void {
+  const value = numberValue(event)
+  if (Number.isFinite(value)) previewWanted.value = Math.round(value)
+  showKept(event, previewCount.value)
+}
+
+const PREVIEW_WIDTH_PX = 268
+const PREVIEW_HEIGHT_PX = 96
+
+/** Le composant étiré au nombre de l'aperçu, à l'échelle qui tient dans le panneau. */
+const preview = computed(() => {
+  if (!stretch.value) return null
+  const def = stretchedDefinition(store.shown, previewCount.value)
+  const cell = Math.min(
+    PREVIEW_WIDTH_PX / def.size.widthCells,
+    PREVIEW_HEIGHT_PX / def.size.heightCells,
+    24
+  )
+  return {
+    def,
+    cell,
+    width: def.size.widthCells * cell,
+    height: def.size.heightCells * cell,
+    pins: def.pins.map((pin) => ({ id: pin.id, x: pin.x * cell, y: pin.y * cell }))
+  }
+})
 
 // Broches
 
@@ -776,6 +854,106 @@ function setClosed(event: Event): void {
         </div>
       </section>
 
+      <section class="block stretch">
+        <h3>Étirement</h3>
+        <label
+          class="check"
+          title="Posé sur un montage, le composant s’étire par ses deux bouts : son motif se répète"
+        >
+          <input type="checkbox" :checked="stretch !== null" @change="toggleStretch" />
+          <span>Extensible</span>
+        </label>
+        <template v-if="stretch">
+          <div class="row">
+            <label class="field">
+              <span title="Trait de gauche, en cellules ; se glisse aussi sur le dessin">
+                Début du motif
+              </span>
+              <input
+                type="number"
+                min="0"
+                step="0.25"
+                :value="stretch.from / QUARTERS_PER_CELL"
+                @change="setMotifStart"
+              />
+            </label>
+            <label class="field">
+              <span title="En cellules entières : ce dont le composant s’allonge à chaque motif">
+                Largeur du motif
+              </span>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                :value="(stretch.to - stretch.from) / QUARTERS_PER_CELL"
+                @change="setMotifWidth"
+              />
+            </label>
+          </div>
+          <div class="counts">
+            <label class="field">
+              <span title="Nombre de motifs du composant qu’on vient de poser">Au départ</span>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                :value="stretch.initial"
+                @change="setStretchCount('initial', $event)"
+              />
+            </label>
+            <label class="field">
+              <span>Minimum</span>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                :value="stretch.min"
+                @change="setStretchCount('min', $event)"
+              />
+            </label>
+            <label class="field">
+              <span>Maximum</span>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                :value="stretch.max"
+                @change="setStretchCount('max', $event)"
+              />
+            </label>
+          </div>
+          <div v-if="preview" class="stretch-preview">
+            <label class="field preview-count">
+              <span title="Ce que donne le composant étiré ; rien n’est enregistré">Aperçu à</span>
+              <input
+                type="number"
+                step="1"
+                :min="stretch.min"
+                :max="stretch.max"
+                :value="previewCount"
+                @change="setPreviewCount"
+              />
+            </label>
+            <svg
+              class="preview-drawing"
+              :width="preview.width"
+              :height="preview.height"
+              :viewBox="`0 0 ${preview.width} ${preview.height}`"
+            >
+              <ComponentGraphic :def="preview.def" :cell-px="preview.cell" />
+              <circle
+                v-for="pin in preview.pins"
+                :key="pin.id"
+                class="preview-pin"
+                :cx="pin.x"
+                :cy="pin.y"
+                r="2.5"
+              />
+            </svg>
+          </div>
+        </template>
+      </section>
+
       <section class="block">
         <div class="block-title">
           <h3>Broches</h3>
@@ -870,6 +1048,44 @@ function setClosed(event: Event): void {
 </template>
 
 <style scoped>
+/* Composant extensible : trois nombres côte à côte, puis l'aperçu étiré sur le papier. */
+.stretch .counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.stretch .counts .field input,
+.stretch .preview-count input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+
+.stretch-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stretch .preview-count {
+  width: 84px;
+  margin-bottom: 0;
+}
+
+.preview-drawing {
+  display: block;
+  max-width: 100%;
+  overflow: visible;
+  background: var(--paper);
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+}
+
+.preview-pin {
+  fill: var(--accent);
+}
+
 .inspector {
   width: 300px;
   flex: none;

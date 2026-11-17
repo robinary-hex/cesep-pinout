@@ -117,6 +117,78 @@ describe('ComponentGraphic', () => {
     })
   })
 
+  it('ne montre qu’une tranche d’une image coupée par l’étirement d’un composant', () => {
+    const def = createEmptyComponent('n', 'N')
+    def.visual = {
+      kind: 'drawing',
+      primitives: [
+        {
+          kind: 'image',
+          x: 4,
+          y: 0,
+          w: 8,
+          h: 12,
+          file: 'image.png',
+          dataUrl: 'data:image/png;base64,AAAA',
+          crop: { x: 0.25, w: 0.5 }
+        }
+      ]
+    }
+    const wrapper = mount(ComponentGraphic, { props: { def, cellPx: 20 } })
+    // La boîte de la tranche, et la fenêtre qui ne laisse voir que la moitié du milieu.
+    const slice = wrapper.get('svg.image-slice')
+    expect(slice.attributes()).toMatchObject({
+      x: '20',
+      y: '0',
+      width: '40',
+      height: '60',
+      viewBox: '0.25 0 0.5 1',
+      preserveAspectRatio: 'none'
+    })
+    // L'image entière remplit le carré d'une unité que cette fenêtre découpe.
+    expect(slice.get('image').attributes()).toMatchObject({
+      x: '0',
+      y: '0',
+      width: '1',
+      height: '1',
+      preserveAspectRatio: 'none'
+    })
+  })
+
+  it('fait déborder d’un pixel une image sur sa voisine de droite', () => {
+    const def = createEmptyComponent('n', 'N')
+    const image = {
+      kind: 'image' as const,
+      y: 0,
+      w: 8,
+      h: 12,
+      file: 'image.png',
+      dataUrl: 'data:image/png;base64,AAAA'
+    }
+    def.visual = {
+      kind: 'drawing',
+      primitives: [
+        { ...image, x: 0, crop: { x: 0, w: 0.5 } },
+        { ...image, x: 8, crop: { x: 0.5, w: 0.5 } },
+        { ...image, x: 16 }
+      ]
+    }
+    const wrapper = mount(ComponentGraphic, { props: { def, cellPx: 20 } })
+    // Deux tranches puis une image entière, bord à bord : sans ce pixel de plus, le fond passe
+    // entre elles quand leur frontière tombe au milieu d'un pixel. La dernière garde sa largeur.
+    expect(wrapper.findAll('svg.image-slice').map((slice) => slice.attributes('width'))).toEqual([
+      '41',
+      '41'
+    ])
+    expect(wrapper.get('g > image').attributes()).toMatchObject({ x: '80', width: '40' })
+    // Le montage dessine en cellules, sous une mise à l'échelle : il dit ce que vaut un pixel.
+    const scaled = mount(ComponentGraphic, { props: { def, cellPx: 1, pixel: 0.05 } })
+    expect(scaled.findAll('svg.image-slice').map((slice) => slice.attributes('width'))).toEqual([
+      '2.05',
+      '2.05'
+    ])
+  })
+
   it('signale une image manquante au lieu de planter', () => {
     const def = createEmptyComponent('n', 'N')
     def.visual = {

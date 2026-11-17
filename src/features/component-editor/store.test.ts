@@ -700,3 +700,65 @@ describe('éditeur de composants : broches posées par zone', () => {
     expect(store.doc.pins).toHaveLength(1)
   })
 })
+
+describe('éditeur de composants : composant extensible', () => {
+  it('rend le composant extensible, règle son motif et ses bornes, puis le rend ordinaire', () => {
+    const store = useComponentEditorStore()
+    expect(store.shown.stretch).toBeUndefined()
+    // Au départ : tout le composant (4 cellules) est le motif, de 1 à 12.
+    store.setStretch({})
+    expect(store.doc.stretch).toEqual({ from: 0, to: 16, initial: 1, min: 1, max: 12 })
+    expect(store.undoLabel).toBe('Composant extensible')
+    expect(store.status).toContain('deux traits')
+    // Le motif se déplace au quart de cellule ; sa largeur va par cellules entières.
+    store.setStretch({ from: 2, to: 6 })
+    expect(store.doc.stretch).toMatchObject({ from: 2, to: 6 })
+    expect(store.undoLabel).toBe('Régler le motif')
+    store.setStretch({ to: 9 })
+    expect(store.doc.stretch).toMatchObject({ from: 2, to: 10 })
+    // Il ne sort pas de la boîte.
+    store.setStretch({ from: 14, to: 22 })
+    expect(store.doc.stretch).toMatchObject({ from: 8, to: 16 })
+    // Les nombres restent cohérents : le départ entre le minimum et le maximum.
+    store.setStretch({ initial: 2, min: 2, max: 6 })
+    expect(store.doc.stretch).toMatchObject({ initial: 2, min: 2, max: 6 })
+    store.setStretch({ max: 1 })
+    expect(store.doc.stretch).toMatchObject({ initial: 2, min: 2, max: 2 })
+    // Redire la même chose ne fait pas de commande.
+    const before = store.doc
+    store.setStretch({ max: 2 })
+    expect(store.doc).toBe(before)
+    store.setStretch(null)
+    expect(store.doc.stretch).toBeUndefined()
+    expect(store.undoLabel).toBe('Composant non extensible')
+    store.undo()
+    expect(store.doc.stretch).toMatchObject({ min: 2, max: 2 })
+  })
+
+  it('garde le motif dans la boîte quand le composant change de taille', () => {
+    const store = useComponentEditorStore()
+    store.setStretch({ from: 8, to: 16 })
+    store.setSize({ widthCells: 3, heightCells: 2 })
+    expect(store.doc.stretch).toMatchObject({ from: 4, to: 12 })
+    // La boîte gagne une cellule à gauche : le dessin suit l'origine, le motif aussi.
+    store.setBox({ x: -1, y: 0, w: 4, h: 2 })
+    expect(store.doc.size.widthCells).toBe(4)
+    expect(store.doc.stretch).toMatchObject({ from: 8, to: 16 })
+  })
+
+  it('chaque variante a ses réglages : une copie les reprend, puis vit sa vie', () => {
+    const store = useComponentEditorStore()
+    store.setStretch({ from: 0, to: 8, initial: 2 })
+    const variant = store.addVariant()
+    expect(store.shown.stretch).toMatchObject({ from: 0, to: 8, initial: 2 })
+    store.setStretch(null)
+    expect(store.shown.stretch).toBeUndefined()
+    // La variante d'origine reste extensible.
+    expect(store.doc.stretch).toMatchObject({ from: 0, to: 8 })
+    expect(store.doc.variants?.[0]?.stretch).toBeUndefined()
+    // Supprimer la variante d'origine promeut l'autre, avec ses réglages à elle.
+    store.removeVariant('base')
+    expect(store.doc.stretch).toBeUndefined()
+    expect(variant).toBe('v1')
+  })
+})

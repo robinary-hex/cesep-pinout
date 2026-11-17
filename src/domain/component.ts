@@ -3,7 +3,7 @@ import { hexColorSchema } from './color'
 import { isInsideBox, PNG_PX_PER_CELL, QUARTERS_PER_CELL, sizeSchema, type Size } from './grid'
 import { pngDataUrlDimensions } from './png'
 
-export const COMPONENT_SCHEMA_VERSION = 15
+export const COMPONENT_SCHEMA_VERSION = 16
 
 export const pinKindSchema = z.enum(['in', 'out', 'io', 'power'])
 export type PinKind = z.infer<typeof pinKindSchema>
@@ -170,7 +170,13 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
     /** Nom du fichier PNG rangé à côté de component.json dans la bibliothèque : un nom seul, sans dossier. */
     file: z.string().regex(IMAGE_FILE_PATTERN),
     /** Copie embarquée de l'image (dans un projet ou en mémoire) ; absente du fichier de la bibliothèque. */
-    dataUrl: z.string().startsWith('data:image/png;base64,').optional()
+    dataUrl: z.string().startsWith('data:image/png;base64,').optional(),
+    /**
+     * Tranche de l'image que la boîte montre, en fractions de sa largeur ; absente : l'image
+     * entière. Posée par l'étirement d'un composant extensible, qui coupe une image aux traits
+     * du motif (stretch.ts) ; l'éditeur ne l'écrit jamais.
+     */
+    crop: z.object({ x: z.number().min(0).max(1), w: z.number().positive().max(1) }).optional()
   }),
   z.object({
     kind: z.literal('dot'),
@@ -269,16 +275,53 @@ export const visualSchema = z.object({
 })
 export type Visual = z.infer<typeof visualSchema>
 
-/**
- * Ce qu'une variante d'un composant dessine : sa taille, ses formes, ses broches. Un composant en
- * porte un directement (sa première variante) ; chaque variante de plus a le sien, complet.
- */
-const componentBodyShape = {
+/** Un dessin complet : sa taille, ses formes, ses broches. */
+const drawingShape = {
   size: sizeSchema,
   visual: visualSchema,
   pins: z.array(pinSchema),
   /** Groupes de broches, dans l'ordre du panneau ; absent tant qu'il n'y en a pas. */
   pinGroups: z.array(pinGroupSchema).optional()
+}
+
+/**
+ * Dessin particulier d'un composant extensible pour un nombre de motifs précis (une pièce à un
+ * seul point, moulée d'un bloc) : il remplace alors le motif répété. Prévu dans le format ;
+ * l'éditeur ne permet pas encore d'en créer.
+ */
+export const countModelSchema = z.object({
+  count: z.number().int().positive(),
+  ...drawingShape
+})
+export type CountModel = z.infer<typeof countModelSchema>
+
+/**
+ * Composant extensible (décision du 17 novembre 2026, voir stretch.ts) : deux traits verticaux
+ * coupent le dessin en un début, un motif et une fin ; étirer le composant posé répète le motif.
+ */
+export const stretchSchema = z.object({
+  /** Trait de gauche du motif, en quarts de cellule. */
+  from: quarterSchema,
+  /** Trait de droite ; le motif fait un nombre entier de cellules, pour les broches recopiées. */
+  to: quarterSchema,
+  /** Nombre de motifs d'un exemplaire qu'on vient de poser. */
+  initial: z.number().int().positive(),
+  min: z.number().int().positive(),
+  max: z.number().int().positive(),
+  /** Dessins particuliers pour certains nombres de motifs ; absent tant qu'il n'y en a pas. */
+  models: z.array(countModelSchema).optional()
+})
+export type Stretch = z.infer<typeof stretchSchema>
+
+/**
+ * Ce qu'une variante d'un composant dessine : sa taille, ses formes, ses broches, et comment elle
+ * s'étire si elle est extensible. Un composant en porte un directement (sa première variante) ;
+ * chaque variante de plus a le sien, complet.
+ */
+const componentBodyShape = {
+  ...drawingShape,
+  /** Présent : le composant est extensible. */
+  stretch: stretchSchema.optional()
 }
 export const componentBodySchema = z.object(componentBodyShape)
 export type ComponentBody = z.infer<typeof componentBodySchema>
@@ -391,6 +434,9 @@ export function variantDefinition(
     resolved = { ...def, size: variant.size, visual: variant.visual, pins: variant.pins }
     if (variant.pinGroups) resolved.pinGroups = variant.pinGroups
     else delete resolved.pinGroups
+    // Chaque variante dit elle-même si elle est extensible, et comment.
+    if (variant.stretch) resolved.stretch = variant.stretch
+    else delete resolved.stretch
     cache.set(variant.id, resolved)
   }
   return resolved
@@ -423,12 +469,38 @@ export function sameComponentContent(a: ComponentDefinition, b: ComponentDefinit
   return JSON.stringify(withPreviewVariant(a, null)) === JSON.stringify(withPreviewVariant(b, null))
 }
 
+/** Formes d'un dessin, et celles des modèles particuliers d'un composant extensible. */
+function bodyPrimitives(body: Pick<ComponentBody, 'visual' | 'stretch'>): Primitive[] {
+  return [
+    ...body.visual.primitives,
+    ...(body.stretch?.models ?? []).flatMap((model) => model.visual.primitives)
+  ]
+}
+
 /** Formes de toutes les variantes d'un composant, la première d'abord. */
 export function componentPrimitives(def: ComponentDefinition): Primitive[] {
-  return [
-    ...def.visual.primitives,
-    ...(def.variants ?? []).flatMap((variant) => variant.visual.primitives)
-  ]
+  return [...bodyPrimitives(def), ...(def.variants ?? []).flatMap(bodyPrimitives)]
+}
+
+/** Le même dessin, chacune de ses formes passée par `change`, modèles particuliers compris. */
+function mapBodyPrimitives<T extends Pick<ComponentBody, 'visual' | 'stretch'>>(
+  body: T,
+  change: (primitive: Primitive) => Primitive
+): T {
+  const next: T = {
+    ...body,
+    visual: { ...body.visual, primitives: body.visual.primitives.map(change) }
+  }
+  if (body.stretch?.models) {
+    next.stretch = {
+      ...body.stretch,
+      models: body.stretch.models.map((model) => ({
+        ...model,
+        visual: { ...model.visual, primitives: model.visual.primitives.map(change) }
+      }))
+    }
+  }
+  return next
 }
 
 /** Le même composant, chaque forme de chaque variante passée par `change`. */
@@ -436,15 +508,9 @@ export function mapComponentPrimitives(
   def: ComponentDefinition,
   change: (primitive: Primitive) => Primitive
 ): ComponentDefinition {
-  const next: ComponentDefinition = {
-    ...def,
-    visual: { ...def.visual, primitives: def.visual.primitives.map(change) }
-  }
+  const next: ComponentDefinition = mapBodyPrimitives(def, change)
   if (def.variants) {
-    next.variants = def.variants.map((variant) => ({
-      ...variant,
-      visual: { ...variant.visual, primitives: variant.visual.primitives.map(change) }
-    }))
+    next.variants = def.variants.map((variant) => mapBodyPrimitives(variant, change))
   }
   return next
 }
@@ -875,6 +941,47 @@ function bodyIssues(def: ComponentDefinition): ComponentIssue[] {
     issues.push({ level: 'warning', message: 'Une image a perdu son fichier' })
   }
 
+  const stretch = def.stretch
+  if (stretch) {
+    const span = stretch.to - stretch.from
+    if (span < QUARTERS_PER_CELL || span % QUARTERS_PER_CELL !== 0) {
+      issues.push({
+        level: 'error',
+        message: 'Composant extensible : le motif doit faire un nombre entier de cellules'
+      })
+    }
+    if (
+      stretch.min > stretch.max ||
+      stretch.initial < stretch.min ||
+      stretch.initial > stretch.max
+    ) {
+      issues.push({
+        level: 'error',
+        message:
+          'Composant extensible : le nombre de départ doit être entre le minimum et le maximum'
+      })
+    }
+    if (stretch.from < 0 || stretch.to > maxX) {
+      issues.push({ level: 'warning', message: 'Le motif dépasse la boîte du composant' })
+    }
+    const counts = new Set<number>()
+    for (const model of stretch.models ?? []) {
+      if (counts.has(model.count)) {
+        issues.push({
+          level: 'error',
+          message: `Composant extensible : deux modèles pour ${model.count} motif(s)`
+        })
+      }
+      counts.add(model.count)
+      // Un modèle particulier est un dessin complet : mêmes contrôles, sans le motif.
+      const drawn: ComponentDefinition = { ...def, ...model }
+      delete drawn.stretch
+      for (const issue of bodyIssues(drawn)) {
+        issues.push({ ...issue, message: `Modèle à ${model.count} : ${issue.message}` })
+      }
+    }
+  }
+
   return issues
 }
 
@@ -917,6 +1024,34 @@ export function imageRatio(image: ImagePrimitive): number {
   return pixels && pixels.height > 0 && pixels.width > 0
     ? pixels.width / pixels.height
     : image.w / image.h
+}
+
+/**
+ * Rangs, dans un dessin, des images suivies d'une autre qui commence pile où elles finissent :
+ * les tranches d'une image coupée par l'étirement d'un composant, ses copies qui se touchent,
+ * ou deux images posées bord à bord. Dessinées telles quelles, deux voisines laissent voir le
+ * fond entre elles dès que leur frontière tombe au milieu d'un pixel (un filet clair à chaque
+ * motif, à certains zooms). Qui les dessine les élargit donc d'un rien vers la droite : la
+ * voisine recouvre ce débord, ou passe dessous.
+ */
+export function imagesWithRightNeighbour(primitives: readonly Primitive[]): Set<number> {
+  const images = primitives.flatMap((primitive, index) =>
+    primitive.kind === 'image' ? [{ index, image: primitive }] : []
+  )
+  const found = new Set<number>()
+  if (images.length < 2) return found
+  for (const { index, image } of images) {
+    const right = image.x + image.w
+    const followed = images.some(
+      ({ image: other }) =>
+        other !== image &&
+        Math.abs(other.x - right) < 1e-6 &&
+        other.y < image.y + image.h &&
+        image.y < other.y + other.h
+    )
+    if (followed) found.add(index)
+  }
+  return found
 }
 
 /**

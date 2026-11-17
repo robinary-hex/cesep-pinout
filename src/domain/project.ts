@@ -17,9 +17,10 @@ import {
   type LocalPoint
 } from './grid'
 import { styleProfileSchema, type StyleProfile } from './profile'
+import { stretchedDefinition } from './stretch'
 import { isUTurn, segmentStep } from './wires'
 
-export const PROJECT_SCHEMA_VERSION = 22
+export const PROJECT_SCHEMA_VERSION = 23
 
 /**
  * Style propre à un élément du montage (voir styles.ts) : le nom d'un des `styles` du montage ;
@@ -34,6 +35,11 @@ export const componentInstanceSchema = z.object({
   style: elementStyleSchema,
   /** Variante du composant que cet exemplaire montre ; absent : la première. */
   variant: z.string().min(1).optional(),
+  /**
+   * Nombre de motifs d'un composant extensible (voir stretch.ts) ; absent : son nombre de
+   * départ. Sans effet sur un composant qui ne l'est pas.
+   */
+  count: z.number().int().positive().optional(),
   defId: z.string().min(1),
   x: gridCoordSchema,
   y: gridCoordSchema,
@@ -272,13 +278,27 @@ export function absolutePinPosition(
 }
 
 /**
- * Le composant qu'un exemplaire posé dessine : sa définition embarquée, dans la variante que
- * l'exemplaire a choisie. Indéfini si le montage n'a pas cette définition.
+ * La définition embarquée d'un exemplaire posé, dans la variante qu'il a choisie, telle qu'elle
+ * est dessinée dans l'éditeur de composants : avant tout étirement. Indéfini si le montage n'a
+ * pas cette définition.
  */
-export function instanceDefinition(
+export function instanceBaseDefinition(
   project: Pick<Project, 'embeddedDefs'>,
   instance: Pick<ComponentInstance, 'defId' | 'variant'>
 ): ComponentDefinition | undefined {
   const def = project.embeddedDefs[instance.defId]
   return def ? variantDefinition(def, instance.variant) : undefined
+}
+
+/**
+ * Le composant qu'un exemplaire posé dessine : sa définition embarquée, dans la variante que
+ * l'exemplaire a choisie, étirée à son nombre de motifs si elle est extensible. Indéfini si le
+ * montage n'a pas cette définition.
+ */
+export function instanceDefinition(
+  project: Pick<Project, 'embeddedDefs'>,
+  instance: Pick<ComponentInstance, 'defId' | 'variant' | 'count'>
+): ComponentDefinition | undefined {
+  const def = instanceBaseDefinition(project, instance)
+  return def ? stretchedDefinition(def, instance.count) : undefined
 }

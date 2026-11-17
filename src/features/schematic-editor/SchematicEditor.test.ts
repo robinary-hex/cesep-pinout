@@ -274,6 +274,50 @@ describe('montage : variante d’un composant posé', () => {
   })
 })
 
+describe('montage : composant extensible', () => {
+  it('le panneau donne son nombre de motifs, entre ses bornes', async () => {
+    const store = useSchematicStore()
+    const def = createEmptyComponent('dupont', 'Dupont')
+    def.size = { widthCells: 2, heightCells: 2 }
+    def.pins = [{ id: 'p1', name: '1', kind: 'io', x: 1, y: 1 }]
+    def.stretch = { from: 2, to: 6, initial: 2, min: 1, max: 5 }
+    store.startPlacing(def)
+    const id = store.placeAt(2, 3)
+    store.startPlacing(createEmptyComponent('r', 'Résistance'))
+    const plain = store.placeAt(20, 3)
+    store.stopPlacing()
+    if (!id || !plain) throw new Error('pose refusée')
+    store.selection = [id]
+    store.inspectorOpen = true
+    const wrapper = mount(SchematicEditor, { attachTo: document.body })
+    await flushPromises()
+    const field = (): HTMLInputElement =>
+      wrapper.get('.inspector .stretch-count').get('input').element
+    const type = async (value: string): Promise<void> => {
+      field().value = value
+      field().dispatchEvent(new Event('change', { bubbles: true }))
+      await flushPromises()
+    }
+    expect(field().value).toBe('2')
+    expect([field().min, field().max]).toEqual(['1', '5'])
+    await type('4')
+    expect(store.doc.components[0]).toMatchObject({ id, x: 2, count: 4 })
+    expect(store.undoLabel).toBe('Étirer le composant')
+    // Au-delà du maximum : ramené, et le champ le redit ; vide : rien ne change.
+    await type('30')
+    expect(store.doc.components[0]?.count).toBe(5)
+    expect(field().value).toBe('5')
+    await type('')
+    expect(store.doc.components[0]?.count).toBe(5)
+    expect(field().value).toBe('5')
+    // Un composant ordinaire n'a pas ce champ.
+    store.selection = [plain]
+    await flushPromises()
+    expect(wrapper.find('.inspector .stretch-count').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})
+
 describe('montage : ordre des composants', () => {
   it('se change par le clic droit ou Ctrl+Page ; le panneau n’a pas de boutons pour ça', async () => {
     const store = useSchematicStore()

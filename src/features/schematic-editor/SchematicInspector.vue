@@ -7,6 +7,7 @@ import {
   instanceDefinition,
   componentFields,
   ROTATIONS,
+  stretchCount,
   TEXT_SCALES,
   type FreeEndStyle,
   type ProfileFact,
@@ -89,6 +90,21 @@ const variants = computed(() =>
 function setVariant(event: Event): void {
   if (!single.value) return
   store.setInstancesVariant([single.value.instance.id], (event.target as HTMLSelectElement).value)
+}
+
+/** Nombre de motifs du composant sélectionné, s'il est extensible. */
+const count = computed(() =>
+  single.value ? stretchCount(single.value.def, single.value.instance.count) : 1
+)
+
+/** Étire le composant au nombre tapé ; son début reste en place, comme en tirant sa fin. */
+function setCount(event: Event): void {
+  if (!single.value) return
+  const field = event.target as HTMLInputElement
+  const wanted = field.value.trim() === '' ? NaN : Number(field.value)
+  if (Number.isFinite(wanted)) store.setInstanceCount(single.value.instance.id, wanted)
+  // Vide ou hors des bornes : le champ redit le nombre retenu.
+  field.value = String(count.value)
 }
 
 const fields = computed(() => (single.value ? componentFields(single.value.def) : []))
@@ -435,6 +451,21 @@ function setLabelVertical(event: Event): void {
               {{ variant.name }}
             </option>
           </select>
+        </label>
+        <label v-if="single.def.stretch" class="field stretch-count">
+          <span
+            title="Nombre de motifs de ce composant extensible ; ses deux poignées l’étirent aussi"
+          >
+            Nombre
+          </span>
+          <input
+            type="number"
+            step="1"
+            :min="single.def.stretch.min"
+            :max="single.def.stretch.max"
+            :value="count"
+            @change="setCount"
+          />
         </label>
         <div v-if="libraryUpdate" class="notice">
           <Icon name="refresh" :size="16" class="notice-icon" />

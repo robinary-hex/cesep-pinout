@@ -34,6 +34,11 @@ import {
   textStyleAttrs,
   textTransform,
   textLabelBounds,
+  pulledCount,
+  restretch,
+  stretchCount,
+  stretchedDefinition,
+  stretchHandles,
   variantDefinition,
   wireBounds,
   wireEndLabelPlacement,
@@ -45,12 +50,14 @@ import {
   computeConnectivity,
   type Junction,
   type Box,
+  type ComponentDefinition,
   type ComponentInstance,
   type GridPoint,
   type GridRect,
   type LocalPoint,
   type PinKind,
   type PinRef,
+  type StretchEnd,
   type TextLabel,
   type Wire,
   type WireEndFlags
@@ -129,6 +136,19 @@ type Drag =
   | { kind: 'band'; start: LocalPoint; current: LocalPoint; additive: boolean }
   | { kind: 'text-box'; start: GridPoint; current: GridPoint }
   | { kind: 'label-handle'; id: string; handleId: string; original: Box; preview: Box }
+  // Étirement d'un composant extensible par une de ses deux poignées.
+  | {
+      kind: 'stretch'
+      id: string
+      /** Le bout qu'on tire ; l'autre reste en place. */
+      end: StretchEnd
+      /** Où la poignée a été saisie, et le sens dans lequel la tirer allonge. */
+      origin: LocalPoint
+      dx: number
+      dy: number
+      original: number
+      count: number
+    }
   | {
       /** Fil tiré d'une broche par Ctrl+glisser en mode sélection : relâcher le pose. */
       kind: 'pin-wire'
@@ -258,6 +278,38 @@ function labelOffsetOf(id: string): { dx: number; dy: number } {
 }
 
 /**
+ * Étirement en cours : ce que la commande ferait au nombre de motifs où en est le geste ; null
+ * tant que ce nombre est celui du départ.
+ */
+const stretching = computed(() => {
+  const current = drag.value
+  if (current?.kind !== 'stretch') return null
+  return restretch(store.doc, current.id, current.count, current.end === 'end' ? 'start' : 'end')
+})
+
+/**
+ * Les composants tels qu'on les dessine : ceux du montage, celui qu'on étire montré à sa
+ * nouvelle longueur et à sa nouvelle place.
+ */
+const placed = computed<PlacedInstance[]>(() => {
+  const change = stretching.value
+  if (!change) return store.placed
+  return store.placed.map((item) => {
+    if (item.instance.id !== change.instance.id) return item
+    return {
+      instance: change.instance,
+      def: stretchedDefinition(baseOf(item), change.instance.count)
+    }
+  })
+})
+
+/** Le composant d'un exemplaire tel qu'il est dessiné dans la bibliothèque, avant étirement. */
+function baseOf(item: PlacedInstance): ComponentDefinition {
+  const embedded = store.doc.embeddedDefs[item.instance.defId]
+  return embedded ? variantDefinition(embedded, item.instance.variant) : item.def
+}
+
+/**
  * Aperçu pendant un geste, selon les règles des commandes finales : pendant un déplacement, les
  * fils sélectionnés suivent le vecteur et les extrémités posées sur une broche d'un composant
  * déplacé suivent leur broche ; pendant le glisser d'un segment ou d'un sommet, le fil prend son
@@ -270,7 +322,13 @@ const dragPreview = computed<{
   const current = drag.value
   let pins = store.pinRefs
   let after: Wire[]
-  if (current?.kind === 'wire-segment' || current?.kind === 'wire-vertex') {
+  if (current?.kind === 'stretch') {
+    // Composant qu'on étire : les fils soudés à ses broches suivent, comme à la commande.
+    const change = stretching.value
+    if (!change) return null
+    pins = change.pinsAfter
+    after = wiresFollowingPins(store.doc.wires, change.pinsBefore, change.pinsAfter)
+  } else if (current?.kind === 'wire-segment' || current?.kind === 'wire-vertex') {
     if (samePoints(current.original, current.preview)) return null
     after = store.doc.wires.map((wire) =>
       wire.id === current.wireId ? { ...wire, points: [...current.preview] } : wire
@@ -353,7 +411,7 @@ function boundsOf(item: PlacedInstance): GridRect {
 
 /** Libellés (R1, U2) : au-dessus de la boîte, dans la police des libellés du style du composant. */
 const instanceLabels = computed(() =>
-  store.placed
+  placed.value
     .filter((item) => item.instance.label.length > 0)
     .map((item) => {
       const bounds = boundsOf(item)
@@ -370,7 +428,7 @@ const instanceLabels = computed(() =>
 )
 
 const selectedBoxes = computed(() =>
-  store.placed
+  placed.value
     .filter((item) => selectedSet.value.has(item.instance.id))
     .map((item) => ({ id: item.instance.id, ...boundsOf(item) }))
 )
@@ -378,7 +436,7 @@ const selectedBoxes = computed(() =>
 const pins = computed(() => {
   if (!store.showPins && !store.showUnconnected) return []
   const unconnected = store.connectivity.unconnectedPinKeys
-  return store.placed.flatMap((item) => {
+  return placed.value.flatMap((item) => {
     const { dx, dy } = offsetOf(item.instance.id)
     return item.def.pins.map((pin) => {
       const point = absolutePinPosition(item.instance, item.def, pin)
@@ -396,7 +454,7 @@ const pins = computed(() => {
 
 /** Textes des composants, hors de la transformation : droits, ou tournés avec le composant sans miroir. */
 const instanceTexts = computed(() =>
-  store.placed.flatMap((item) => {
+  placed.value.flatMap((item) => {
     const { dx, dy } = offsetOf(item.instance.id)
     const stale = store.staleDefIds.has(item.def.id)
     return instanceTextPlacements(item.instance, item.def).map((placement, index) => {
@@ -430,7 +488,7 @@ interface ComponentLayer {
 /** Composants de chaque couche, dans l'ordre du montage : le dernier est dessiné au-dessus. */
 const layers = computed<Record<(typeof STACK)[number], ComponentLayer>>(() => {
   const layer = (behind: boolean): ComponentLayer => ({
-    instances: store.placed.filter((item) => item.instance.behindWires === behind)
+    instances: placed.value.filter((item) => item.instance.behindWires === behind)
   })
   return { back: layer(true), wires: { instances: [] }, front: layer(false) }
 })
@@ -447,6 +505,34 @@ const textsByInstance = computed(() => {
     else byInstance.set(entry.instanceId, [entry])
   }
   return byInstance
+})
+
+/**
+ * Poignées d'étirement : aux deux bouts d'un composant extensible seul sélectionné, hors
+ * déplacement. Pendant l'étirement elles suivent le composant.
+ */
+const stretchGrips = computed(() => {
+  const id = store.selection[0]
+  if (
+    id === undefined ||
+    store.selection.length !== 1 ||
+    store.selectedWires.length > 0 ||
+    store.selectedLabels.length > 0 ||
+    store.tool !== 'select' ||
+    drag.value?.kind === 'move'
+  ) {
+    return []
+  }
+  const item = placed.value.find((candidate) => candidate.instance.id === id)
+  if (!item) return []
+  return stretchHandles(item.instance, item.def).map((handle) => ({
+    ...handle,
+    instanceId: id,
+    // Une barre en travers du sens où on la tire.
+    width: (handle.dx === 0 ? 16 : 7) / cell.value,
+    height: (handle.dx === 0 ? 7 : 16) / cell.value,
+    cursor: handle.dx === 0 ? 'ns-resize' : 'ew-resize'
+  }))
 })
 
 // Étiquettes texte
@@ -513,7 +599,7 @@ const groupOutlines = computed(() => {
   if (!store.showGroups) return []
   return store.groups.flatMap((group) => {
     const rects: GridRect[] = []
-    for (const item of store.placed) {
+    for (const item of placed.value) {
       if (group.members.instance.includes(item.instance.id)) rects.push(boundsOf(item))
     }
     for (const wire of store.doc.wires) {
@@ -841,7 +927,8 @@ const ghost = computed(() => {
   const current = store.placement
   const point = hover.value
   if (!current || !point || store.tool !== 'place') return null
-  const def = variantDefinition(current.def, current.variant)
+  // Un composant extensible se pose à son nombre de motifs de départ.
+  const def = stretchedDefinition(variantDefinition(current.def, current.variant))
   const size = rotatedSize(def.size, current.rotation)
   const instance: ComponentInstance = {
     id: 'ghost',
@@ -1102,6 +1189,29 @@ function onWireDown(wireId: string, event: PointerEvent): void {
   capture(event)
 }
 
+/** Appui sur une poignée d'étirement : le geste compte les motifs qu'on ajoute ou qu'on retire. */
+function onStretchDown(
+  handle: { instanceId: string; end: StretchEnd; dx: number; dy: number },
+  event: PointerEvent
+): void {
+  if (event.button !== 0 || store.panKeyHeld || store.tool !== 'select') return
+  event.stopPropagation()
+  const item = store.placed.find((candidate) => candidate.instance.id === handle.instanceId)
+  if (!item) return
+  const count = stretchCount(item.def, item.instance.count)
+  drag.value = {
+    kind: 'stretch',
+    id: handle.instanceId,
+    end: handle.end,
+    origin: toWorld(screenPoint(event)),
+    dx: handle.dx,
+    dy: handle.dy,
+    original: count,
+    count
+  }
+  capture(event)
+}
+
 function onLabelHandleDown(labelId: string, handleId: string, event: PointerEvent): void {
   if (event.button !== 0 || store.panKeyHeld || store.tool !== 'select') return
   event.stopPropagation()
@@ -1240,6 +1350,14 @@ function onPointerMove(event: PointerEvent): void {
     case 'label-handle':
       current.preview = resizeBox(current.original, current.handleId, snapGrid(world))
       break
+    case 'stretch': {
+      // Un motif de plus à chaque largeur de motif tirée dans le sens de la poignée.
+      const item = store.placed.find((candidate) => candidate.instance.id === current.id)
+      const pulled =
+        (world.x - current.origin.x) * current.dx + (world.y - current.origin.y) * current.dy
+      if (item) current.count = pulledCount(item.def, current.original, pulled)
+      break
+    }
     case 'pin-wire':
       if (Math.hypot(event.clientX - current.downX, event.clientY - current.downY) > PIN_DRAG_PX) {
         current.moved = true
@@ -1317,6 +1435,11 @@ function onPointerUp(event: PointerEvent): void {
   } else if (current.kind === 'label-handle') {
     const { original: a, preview: b } = current
     if (a.x !== b.x || a.y !== b.y || a.w !== b.w || a.h !== b.h) store.setLabelBox(current.id, b)
+  } else if (current.kind === 'stretch') {
+    // Le bout qu'on ne tire pas reste en place.
+    if (current.count !== current.original) {
+      store.setInstanceCount(current.id, current.count, current.end === 'end' ? 'start' : 'end')
+    }
   } else if (current.kind === 'pin-wire') {
     if (current.moved) {
       // Relâché sur la broche de départ, le fil n'a qu'un point : `addWire` le refuse.
@@ -1651,6 +1774,7 @@ const cursorClass = computed(() => {
                   <ComponentGraphic
                     :def="item.def"
                     :cell-px="1"
+                    :pixel="1 / cell"
                     :stroke-base="store.styleFor(item.instance).componentStroke"
                     :fields="item.instance.fields"
                     :ink="store.staleDefIds.has(item.def.id) ? 'var(--stale)' : null"
@@ -1864,6 +1988,19 @@ const cursorClass = computed(() => {
               @contextmenu="onContextMenu($event, { kind: 'wire', id: handle.wireId })"
             />
             <rect
+              v-for="handle in stretchGrips"
+              :key="`stretch:${handle.end}`"
+              class="box-handle stretch-handle"
+              :x="handle.x - handle.width / 2"
+              :y="handle.y - handle.height / 2"
+              :width="handle.width"
+              :height="handle.height"
+              :rx="3 / cell"
+              :style="{ cursor: handle.cursor }"
+              vector-effect="non-scaling-stroke"
+              @pointerdown="onStretchDown(handle, $event)"
+            />
+            <rect
               v-for="handle in labelHandles"
               :key="`label:${handle.id}`"
               class="box-handle"
@@ -1903,6 +2040,7 @@ const cursorClass = computed(() => {
               <ComponentGraphic
                 :def="item.def"
                 :cell-px="1"
+                :pixel="1 / cell"
                 :stroke-base="store.styleFor(item.instance).componentStroke"
                 :fields="item.instance.fields"
               />
@@ -1932,6 +2070,7 @@ const cursorClass = computed(() => {
             <ComponentGraphic
               :def="ghost.def"
               :cell-px="1"
+              :pixel="1 / cell"
               :stroke-base="profile.componentStroke"
             />
             <rect

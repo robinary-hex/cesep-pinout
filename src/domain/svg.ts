@@ -2,6 +2,7 @@ import { arrowHeadPoints, middleArrowHead, pointsAttribute, trimForArrows } from
 import { wireEndLabelPlacement, wireRenderParts } from './wireEnds'
 import {
   dotRadiusCells,
+  imagesWithRightNeighbour,
   strokeWidthCells,
   type ComponentDefinition,
   type FieldValues,
@@ -120,11 +121,22 @@ function arrowsSvg(
   return heads.join('')
 }
 
-/** Une forme du mini-éditeur, en unités de cellule. */
+/**
+ * Débord d'une image sur sa voisine de droite, en cellules (`imagesWithRightNeighbour`) : un
+ * demi-pixel d'une image exportée à ×1, assez pour qu'aucun filet de fond ne passe entre les
+ * tranches d'un composant étiré quand le SVG est regardé à une autre échelle.
+ */
+const IMAGE_LAP = 0.025
+
+/**
+ * Une forme du mini-éditeur, en unités de cellule. `lap` élargit une image vers la droite, quand
+ * une autre la suit.
+ */
 export function primitiveSvg(
   primitive: Primitive,
   componentStroke: number,
-  fields?: FieldValues
+  fields?: FieldValues,
+  lap = 0
 ): string {
   if (primitive.kind === 'text') {
     const layout = layoutText(primitive, fields)
@@ -155,6 +167,26 @@ export function primitiveSvg(
     // Sans son image (fichier perdu) : un cadre gris à sa place.
     if (!primitive.dataUrl) {
       return `<rect ${attrs({ ...box, fill: '#eef1f4', stroke: '#8c959f', 'stroke-width': 0.05 })}/>`
+    }
+    box.width += lap
+    const crop = primitive.crop
+    if (crop) {
+      // Une tranche de l'image (composant étiré) : l'image remplit un carré d'une unité, dont
+      // la fenêtre de ce petit SVG ne montre que la tranche voulue.
+      const whole = attrs({
+        href: primitive.dataUrl,
+        'xlink:href': primitive.dataUrl,
+        x: 0,
+        y: 0,
+        width: 1,
+        height: 1,
+        preserveAspectRatio: 'none'
+      })
+      return `<svg ${attrs({
+        ...box,
+        viewBox: `${crop.x} 0 ${crop.w} 1`,
+        preserveAspectRatio: 'none'
+      })}><image ${whole}/></svg>`
     }
     return `<image ${attrs({
       href: primitive.dataUrl,
@@ -217,9 +249,14 @@ export function componentSvg(
   fields?: FieldValues,
   options: { skipTexts?: boolean } = {}
 ): string {
-  return def.visual.primitives
-    .filter((primitive) => !(options.skipTexts && primitive.kind === 'text'))
-    .map((primitive) => primitiveSvg(primitive, componentStroke, fields))
+  const shown = def.visual.primitives.filter(
+    (primitive) => !(options.skipTexts && primitive.kind === 'text')
+  )
+  const lapped = imagesWithRightNeighbour(shown)
+  return shown
+    .map((primitive, index) =>
+      primitiveSvg(primitive, componentStroke, fields, lapped.has(index) ? IMAGE_LAP : 0)
+    )
     .join('')
 }
 

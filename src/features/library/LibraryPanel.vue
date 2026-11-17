@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { BASE_VARIANT, componentVariants, hasVariants } from '@/domain'
+import {
+  BASE_VARIANT,
+  componentVariants,
+  hasVariants,
+  stretchedDefinition,
+  type ComponentDefinition
+} from '@/domain'
 import { useComponentEditorStore } from '@/features/component-editor/store'
 import { useSchematicStore } from '@/features/schematic-editor/store'
 import { bridge } from '@/io/bridge'
@@ -48,7 +54,15 @@ function tileTitle(entry: LibraryEntry): string {
   if (!entry.def) return entry.problem ?? 'Fichier illisible'
   const action =
     props.mode === 'place' ? ' — clic puis clic sur le montage, ou glisser-déposer' : ''
-  return `${entry.def.name} · ${entry.def.pins.length} broche(s)${action}`
+  return `${entry.def.name} · ${pinCount(entry.def)} broche(s)${action}`
+}
+
+/**
+ * Broches du composant qu'on obtient en le posant : un composant extensible compte celles de
+ * son nombre de motifs de départ, comme sa vignette le dessine.
+ */
+function pinCount(def: ComponentDefinition): number {
+  return stretchedDefinition(def).pins.length
 }
 
 function isCurrent(entry: LibraryEntry): boolean {
@@ -391,7 +405,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
               <span class="text">
                 <span class="name">{{ entry.def?.name ?? baseName(entry.folder) }}</span>
                 <span v-if="entry.def" class="meta">
-                  {{ entry.def.pins.length }} broche(s) · {{ entry.def.id }}
+                  {{ pinCount(entry.def) }} broche(s) · {{ entry.def.id }}
                 </span>
                 <span v-else class="meta">Fichier illisible</span>
               </span>

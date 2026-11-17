@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import {
   arrowHeadPoints,
   dotRadiusCells,
+  imagesWithRightNeighbour,
   layoutText,
   middleArrowHead,
   NO_ARROWS,
@@ -45,6 +46,11 @@ const props = withDefaults(
     skipTexts?: boolean
     /** Couleur imposée aux traits et aux textes (composant dont la bibliothèque a une version plus récente). */
     ink?: string | null
+    /**
+     * Taille d'un pixel de l'écran dans l'unité du dessin : 1 quand `cellPx` est en pixels ; le
+     * montage, qui dessine en cellules sous une mise à l'échelle, donne un pixel en cellules.
+     */
+    pixel?: number
   }>(),
   {
     strokeBase: 0.1,
@@ -53,7 +59,8 @@ const props = withDefaults(
     moving: null,
     preview: null,
     skipTexts: false,
-    ink: null
+    ink: null,
+    pixel: 1
   }
 )
 
@@ -77,6 +84,13 @@ const primitives = computed(() => {
 })
 
 const HIT_MIN_PX = 10
+
+/**
+ * Une image suivie d'une voisine (les tranches d'un composant étiré) déborde d'un pixel sur
+ * elle : sans cela le fond passe entre les deux quand leur frontière tombe au milieu d'un pixel.
+ */
+const lapped = computed(() => imagesWithRightNeighbour(primitives.value))
+const lap = (index: number): number => (lapped.value.has(index) ? props.pixel : 0)
 
 function strokePx(style: ShapeStyle): number {
   return strokeWidthCells(style, props.strokeBase) * props.cellPx
@@ -313,12 +327,26 @@ function menu(index: number, event: MouseEvent): void {
       </template>
 
       <template v-else-if="p.kind === 'image'">
+        <!-- Une tranche de l'image (composant étiré) : l'image remplit un carré d'une unité,
+             dont la fenêtre de ce petit SVG ne montre que la tranche voulue. -->
+        <svg
+          v-if="p.dataUrl && p.crop"
+          class="image-slice"
+          :x="q(p.x)"
+          :y="q(p.y)"
+          :width="q(p.w) + lap(i)"
+          :height="q(p.h)"
+          :viewBox="`${p.crop.x} 0 ${p.crop.w} 1`"
+          preserveAspectRatio="none"
+        >
+          <image :href="p.dataUrl" x="0" y="0" width="1" height="1" preserveAspectRatio="none" />
+        </svg>
         <image
-          v-if="p.dataUrl"
+          v-else-if="p.dataUrl"
           :href="p.dataUrl"
           :x="q(p.x)"
           :y="q(p.y)"
-          :width="q(p.w)"
+          :width="q(p.w) + lap(i)"
           :height="q(p.h)"
           preserveAspectRatio="none"
         />

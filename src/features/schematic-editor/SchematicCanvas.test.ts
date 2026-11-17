@@ -933,3 +933,106 @@ describe('canevas du montage : barre d’état', () => {
     wrapper.unmount()
   })
 })
+
+/**
+ * Un connecteur extensible, un contact par cellule : 2 × 2 cellules, sa broche au milieu, et une
+ * broche de repère après le motif, qui suit la fin quand il s'allonge.
+ */
+function header(initial = 3): ComponentDefinition {
+  const def = createEmptyComponent('dupont', 'Dupont')
+  def.size = { widthCells: 2, heightCells: 2 }
+  def.pins = [
+    { id: 'p1', name: '1', kind: 'io', x: 1, y: 1 },
+    { id: 'fin', name: 'F', kind: 'io', x: 2, y: 1 }
+  ]
+  def.stretch = { from: 2, to: 6, initial, min: 1, max: 8 }
+  return def
+}
+
+describe('canevas du montage : composant extensible', () => {
+  /** Un connecteur de trois contacts en (10, 10), seul sélectionné. */
+  function withHeader(): { store: ReturnType<typeof useSchematicStore>; id: string } {
+    const store = useSchematicStore()
+    store.startPlacing(header())
+    const id = store.placeAt(10, 10)
+    store.stopPlacing()
+    if (!id) throw new Error('pose refusée')
+    // Comme après une pose sur le canevas : le composant posé est sélectionné.
+    store.selection = [id]
+    return { store, id }
+  }
+
+  it('montre une poignée à chaque bout du composant seul sélectionné', async () => {
+    const { store, id } = withHeader()
+    const wrapper = mount(SchematicCanvas, { attachTo: document.body })
+    await nextTick()
+    // Seul sélectionné : ses deux poignées sont là, au milieu de ses bouts.
+    expect(store.selection).toEqual([id])
+    const grips = wrapper.findAll('.stretch-handle')
+    expect(grips).toHaveLength(2)
+    const middle = (grip: (typeof grips)[number]): number[] => [
+      Number(grip.attributes('x')) + Number(grip.attributes('width')) / 2,
+      Number(grip.attributes('y')) + Number(grip.attributes('height')) / 2
+    ]
+    expect(grips.map(middle)).toEqual([
+      [10, 11],
+      [14, 11]
+    ])
+    // Sans sélection, ou pour un composant ordinaire : pas de poignée.
+    store.clearSelection()
+    await nextTick()
+    expect(wrapper.findAll('.stretch-handle')).toHaveLength(0)
+    store.startPlacing(resistor())
+    const plain = store.placeAt(0, 0)
+    store.stopPlacing()
+    if (plain) store.selection = [plain]
+    await nextTick()
+    expect(wrapper.findAll('.stretch-handle')).toHaveLength(0)
+    wrapper.unmount()
+  })
+
+  it('tirer la poignée de fin ajoute des contacts, avec aperçu, en une commande', async () => {
+    const { store, id } = withHeader()
+    const wrapper = mount(SchematicCanvas, { attachTo: document.body })
+    await nextTick()
+    const svg = wrapper.get('svg.schematic')
+    const pins = (): number => wrapper.findAll('.pins circle:not(.unconnected)').length
+    const before = pins()
+    await fire(wrapper.findAll('.stretch-handle')[1]!, 'pointerdown', at(store, 14, 11))
+    // Deux cellules plus loin : deux contacts de plus, déjà dessinés, rien d'enregistré.
+    await fire(svg, 'pointermove', at(store, 16.1, 11.3))
+    expect(store.doc.components[0]?.count).toBe(3)
+    expect(pins()).toBe(before + 2)
+    const grips = wrapper.findAll('.stretch-handle')
+    expect(Number(grips[1]?.attributes('x')) + Number(grips[1]?.attributes('width')) / 2).toBe(16)
+    await fire(svg, 'pointerup', at(store, 16.1, 11.3))
+    expect(store.doc.components[0]).toMatchObject({ id, x: 10, count: 5 })
+    expect(store.undoLabel).toBe('Étirer le composant')
+    // Revenir au point de départ ne fait pas de commande.
+    const after = store.doc
+    await fire(wrapper.findAll('.stretch-handle')[1]!, 'pointerdown', at(store, 16, 11))
+    await fire(svg, 'pointermove', at(store, 16.3, 11))
+    await fire(svg, 'pointerup', at(store, 16.3, 11))
+    expect(store.doc).toBe(after)
+    wrapper.unmount()
+  })
+
+  it('tirer la poignée de début allonge de l’autre côté, la fin en place', async () => {
+    const { store } = withHeader()
+    const wrapper = mount(SchematicCanvas, { attachTo: document.body })
+    await nextTick()
+    const svg = wrapper.get('svg.schematic')
+    await fire(wrapper.findAll('.stretch-handle')[0]!, 'pointerdown', at(store, 10, 11))
+    await fire(svg, 'pointermove', at(store, 8.9, 11))
+    await fire(svg, 'pointerup', at(store, 8.9, 11))
+    expect(store.doc.components[0]).toMatchObject({ x: 9, count: 4 })
+    // La broche du bout n'a pas bougé.
+    expect(store.pinRefs.at(-1)?.point).toEqual([14, 11])
+    // Pousser la poignée vers le composant le raccourcit, jusqu'à son minimum.
+    await fire(wrapper.findAll('.stretch-handle')[0]!, 'pointerdown', at(store, 9, 11))
+    await fire(svg, 'pointermove', at(store, 30, 11))
+    await fire(svg, 'pointerup', at(store, 30, 11))
+    expect(store.doc.components[0]).toMatchObject({ x: 12, count: 1 })
+    wrapper.unmount()
+  })
+})

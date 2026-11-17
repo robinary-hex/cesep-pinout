@@ -6,6 +6,7 @@ import {
   DEFAULT_SHAPE_STYLE,
   dotRadiusCells,
   imageRatio,
+  imagesWithRightNeighbour,
   importedImageSize,
   naturalImageSize,
   reorderItem,
@@ -269,6 +270,19 @@ describe('images du mini-éditeur', () => {
     expect(imageRatio({ ...led, w: 4, h: 4 })).toBeCloseTo(2 / 3)
     expect(naturalImageSize(lost)).toBeNull()
     expect(imageRatio({ ...lost, w: 3, h: 6 })).toBe(0.5)
+  })
+
+  it('repère les images suivies d’une autre, bord à bord', () => {
+    const tile = (x: number, y = 0): ImagePrimitive => ({ ...led, x, y, w: 4, h: 8 })
+    // Trois tranches côte à côte : les deux premières ont une voisine à droite, pas la dernière.
+    expect([...imagesWithRightNeighbour([tile(0), tile(4), tile(8)])]).toEqual([0, 1])
+    // L'ordre du dessin ne compte pas : la voisine peut être dessinée avant.
+    expect([...imagesWithRightNeighbour([tile(4), tile(0)])]).toEqual([1])
+    // Une autre forme ne compte pas ; un écart entre deux images, ou une voisine plus bas, non plus.
+    const rect: Primitive = { kind: 'rect', x: 4, y: 0, w: 4, h: 4, rx: 0, style }
+    expect([...imagesWithRightNeighbour([tile(0), rect, tile(5)])]).toEqual([])
+    expect([...imagesWithRightNeighbour([tile(0), tile(4, 8)])]).toEqual([])
+    expect([...imagesWithRightNeighbour([tile(0)])]).toEqual([])
   })
 
   it('signale une image qui a perdu son fichier', () => {

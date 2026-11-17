@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { previewDefinition, type ComponentDefinition } from '@/domain'
+import { previewDefinition, stretchedDefinition, type ComponentDefinition } from '@/domain'
 import ComponentGraphic from './ComponentGraphic.vue'
 
 // Vignette carrée d'un composant, pour la bibliothèque : son dessin seul, sans les broches
@@ -13,8 +13,11 @@ const props = withDefaults(
 
 const PADDING = 8
 
-/** Le composant tel que l'aperçu le montre : la variante choisie à l'enregistrement. */
-const shown = computed(() => previewDefinition(props.def))
+/**
+ * Le composant tel que l'aperçu le montre : la variante choisie à l'enregistrement, avec son
+ * nombre de motifs de départ s'il est extensible (ce qu'on obtient en le posant).
+ */
+const shown = computed(() => stretchedDefinition(previewDefinition(props.def)))
 const cellPx = computed(() => {
   const inner = props.size - 2 * PADDING
   return Math.min(inner / shown.value.size.widthCells, inner / shown.value.size.heightCells)

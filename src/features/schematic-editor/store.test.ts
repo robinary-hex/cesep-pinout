@@ -1545,3 +1545,139 @@ describe('montage : styles propres à une sélection', () => {
     expect(store.styleFor(styled)).toMatchObject({ wireWidth: 0.3, cellPx: 30 })
   })
 })
+
+/**
+ * Un connecteur extensible, un contact par cellule : 2 × 2 cellules, sa broche au milieu, et une
+ * broche de repère après le motif, qui suit la fin quand il s'allonge.
+ */
+function header(initial = 3): ComponentDefinition {
+  const def = createEmptyComponent('dupont', 'Dupont')
+  def.size = { widthCells: 2, heightCells: 2 }
+  def.pins = [
+    { id: 'p1', name: '1', kind: 'io', x: 1, y: 1 },
+    { id: 'fin', name: 'F', kind: 'io', x: 2, y: 1 }
+  ]
+  def.stretch = { from: 2, to: 6, initial, min: 1, max: 8 }
+  return def
+}
+
+describe('montage : composants extensibles', () => {
+  it('se pose à son nombre de départ, avec ses broches recopiées', () => {
+    const store = useSchematicStore()
+    store.startPlacing(header())
+    const id = store.placeAt(10, 10)
+    store.stopPlacing()
+    if (!id) throw new Error('pose refusée')
+    // Le nombre est écrit dans l'exemplaire : il ne changera pas avec la définition.
+    expect(store.doc.components[0]).toMatchObject({ id, x: 10, y: 10, count: 3 })
+    expect(store.placed[0]?.def.size).toEqual({ widthCells: 4, heightCells: 2 })
+    // Trois contacts, puis la broche de repère au bout.
+    expect(store.pinRefs.map((pin) => [pin.pinId, ...pin.point])).toEqual([
+      ['p1', 11, 11],
+      ['p1#1', 12, 11],
+      ['p1#2', 13, 11],
+      ['fin', 14, 11]
+    ])
+    // Un composant ordinaire ne reçoit pas de nombre.
+    store.startPlacing(resistor())
+    store.placeAt(0, 0)
+    store.stopPlacing()
+    expect(store.doc.components[1]?.count).toBeUndefined()
+  })
+
+  it('s’étire par la fin : le début reste, la broche du bout emmène son fil', () => {
+    const store = useSchematicStore()
+    store.startPlacing(header())
+    const id = store.placeAt(10, 10)
+    store.stopPlacing()
+    if (!id) throw new Error('pose refusée')
+    const onThird = store.addWire([
+      [13, 11],
+      [13, 16]
+    ])
+    const onEnd = store.addWire([
+      [14, 11],
+      [14, 16]
+    ])
+    if (!onThird || !onEnd) throw new Error('fils refusés')
+    const points = (wire: string): unknown =>
+      store.doc.wires.find((candidate) => candidate.id === wire)?.points
+
+    expect(store.setInstanceCount(id, 5)).toBe(true)
+    expect(store.doc.components[0]).toMatchObject({ x: 10, y: 10, count: 5 })
+    expect(store.undoLabel).toBe('Étirer le composant')
+    // Le fil du troisième contact ne bouge pas ; celui du bout suit sa broche, deux cellules plus loin.
+    expect(points(onThird)).toEqual([
+      [13, 11],
+      [13, 16]
+    ])
+    expect(points(onEnd)).toEqual([
+      [16, 11],
+      [16, 16],
+      [14, 16]
+    ])
+    // Une seule annulation remet tout.
+    store.undo()
+    expect(store.doc.components[0]?.count).toBe(3)
+    expect(points(onEnd)).toEqual([
+      [14, 11],
+      [14, 16]
+    ])
+    // Raccourci à un seul contact : le troisième disparaît, son fil reste là, bout libre.
+    expect(store.setInstanceCount(id, 1)).toBe(true)
+    expect(points(onThird)).toEqual([
+      [13, 11],
+      [13, 16]
+    ])
+    expect(store.connectivity.freeEnds.some((end) => end.wireId === onThird)).toBe(true)
+    // Le fil du bout a suivi sa broche, revenue en (12, 11).
+    expect(points(onEnd)).toEqual([
+      [12, 11],
+      [12, 16],
+      [14, 16]
+    ])
+  })
+
+  it('s’étire par le début : la fin reste en place, et les fils avec elle', () => {
+    const store = useSchematicStore()
+    store.startPlacing(header())
+    const id = store.placeAt(10, 10)
+    store.stopPlacing()
+    if (!id) throw new Error('pose refusée')
+    const wire = store.addWire([
+      [11, 11],
+      [11, 16]
+    ])
+    expect(store.setInstanceCount(id, 5, 'end')).toBe(true)
+    // Deux contacts de plus du côté du début : le composant part de deux cellules plus à gauche.
+    expect(store.doc.components[0]).toMatchObject({ x: 8, y: 10, count: 5 })
+    expect(store.pinRefs.map((pin) => pin.point[0])).toEqual([9, 10, 11, 12, 13, 14])
+    expect(store.doc.wires.find((candidate) => candidate.id === wire)?.points).toEqual([
+      [11, 11],
+      [11, 16]
+    ])
+  })
+
+  it('ne dépasse pas ses bornes, et ne fait rien pour un composant ordinaire', () => {
+    const store = useSchematicStore()
+    store.startPlacing(header())
+    const id = store.placeAt(10, 10)
+    store.startPlacing(resistor())
+    const plain = store.placeAt(0, 0)
+    store.stopPlacing()
+    if (!id || !plain) throw new Error('pose refusée')
+    expect(store.setInstanceCount(id, 99)).toBe(true)
+    expect(store.doc.components[0]?.count).toBe(8)
+    const before = store.doc
+    // Déjà au maximum, déjà à ce nombre, ou pas extensible : aucune commande.
+    expect(store.setInstanceCount(id, 99)).toBe(false)
+    expect(store.setInstanceCount(id, 8)).toBe(false)
+    expect(store.setInstanceCount(plain, 4)).toBe(false)
+    expect(store.doc).toBe(before)
+    expect(store.setInstanceCount(id, 0)).toBe(true)
+    expect(store.doc.components[0]?.count).toBe(1)
+    // Le montage se rouvre avec ses nombres.
+    const reread = parseProject(serializeProject(store.doc))
+    expect(reread.components[0]?.count).toBe(1)
+  })
+})

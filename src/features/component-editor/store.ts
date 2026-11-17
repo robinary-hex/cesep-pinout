@@ -10,6 +10,7 @@ import {
   movedVariantOrder,
   nextVariantId,
   nextVariantName,
+  defaultStretch,
   variantDefinition,
   arrangedPins,
   createEmptyComponent,
@@ -20,6 +21,7 @@ import {
   nextGroupId,
   nextPinGroupId,
   nextPinGroupName,
+  normalizedStretch,
   pinsInside,
   placedPin,
   placeReadout,
@@ -41,7 +43,8 @@ import {
   type Readout,
   type ShapeStyle,
   type Size,
-  type StackMove
+  type StackMove,
+  type Stretch
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import { samePath } from '@/io/paths'
@@ -523,8 +526,11 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     const kept = pinsInside(shown.value.pins, size)
     const removed = shown.value.pins.length - kept.length
     apply('Redimensionner', (draft) => {
-      bodyOf(draft).size = { widthCells: size.widthCells, heightCells: size.heightCells }
-      if (removed > 0) bodyOf(draft).pins = castDraft(renumberPins(kept))
+      const body = bodyOf(draft)
+      body.size = { widthCells: size.widthCells, heightCells: size.heightCells }
+      if (removed > 0) body.pins = castDraft(renumberPins(kept))
+      // Le motif d'un composant extensible reste dans la boîte.
+      if (body.stretch) body.stretch = castDraft(normalizedStretch(body.stretch, size.widthCells))
     })
     if (removed > 0) {
       status.value = `${removed} broche(s) hors de la nouvelle boîte supprimée(s).`
@@ -567,9 +573,50 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
         }
       }
       bodyOf(draft).pins = castDraft(kept.length !== before.pins.length ? renumberPins(kept) : kept)
+      // Le motif d'un composant extensible suit l'origine, et reste dans la boîte.
+      const stretch = bodyOf(draft).stretch
+      if (stretch) {
+        const shift = dx * QUARTERS_PER_CELL
+        bodyOf(draft).stretch = castDraft(
+          normalizedStretch(
+            { ...stretch, from: stretch.from + shift, to: stretch.to + shift },
+            size.widthCells
+          )
+        )
+      }
     })
     const removed = before.pins.length - kept.length
     if (removed > 0) status.value = `${removed} broche(s) hors de la nouvelle boîte supprimée(s).`
+  }
+
+  /**
+   * Composant extensible (décision du 17 novembre 2026, voir stretch.ts du domaine) : rend
+   * extensible la variante affichée, change les réglages de son motif, ou la rend à nouveau
+   * ordinaire (null). Les réglages sont ramenés à ce qui est permis : un motif dans la boîte,
+   * large d'un nombre entier de cellules, un nombre de départ entre le minimum et le maximum.
+   */
+  function setStretch(patch: Partial<Omit<Stretch, 'models'>> | null): void {
+    const current = shown.value.stretch
+    if (patch === null) {
+      if (!current) return
+      apply('Composant non extensible', (draft) => {
+        delete bodyOf(draft).stretch
+      })
+      return
+    }
+    const width = shown.value.size.widthCells
+    const next = normalizedStretch({ ...(current ?? defaultStretch(width)), ...patch }, width)
+    const same =
+      current !== undefined &&
+      (['from', 'to', 'initial', 'min', 'max'] as const).every((key) => current[key] === next[key])
+    if (same) return
+    apply(current ? 'Régler le motif' : 'Composant extensible', (draft) => {
+      bodyOf(draft).stretch = castDraft(next)
+    })
+    if (!current) {
+      status.value =
+        'Composant extensible : place les deux traits autour de la partie qui se répète.'
+    }
   }
 
   /**
@@ -859,7 +906,8 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
       size: source.size,
       visual: source.visual,
       pins: source.pins,
-      ...(source.pinGroups ? { pinGroups: source.pinGroups } : {})
+      ...(source.pinGroups ? { pinGroups: source.pinGroups } : {}),
+      ...(source.stretch ? { stretch: source.stretch } : {})
     })
     apply('Ajouter une variante', (draft) => {
       draft.variants = [...(draft.variants ?? []), castDraft(copy)]
@@ -917,6 +965,8 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
         draft.pins = castDraft(promoted.pins)
         if (promoted.pinGroups) draft.pinGroups = castDraft(promoted.pinGroups)
         else delete draft.pinGroups
+        if (promoted.stretch) draft.stretch = castDraft(promoted.stretch)
+        else delete draft.stretch
         if (rest.length > 0) {
           draft.variantName = promoted.name
           draft.variants = castDraft(rest)
@@ -1199,6 +1249,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     setId,
     setSize,
     setBox,
+    setStretch,
     importImage,
     resetImageSize,
     addPrimitive,

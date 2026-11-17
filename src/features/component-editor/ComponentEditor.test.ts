@@ -674,3 +674,111 @@ describe('éditeur de composants : barre d’état', () => {
     wrapper.unmount()
   })
 })
+
+describe('éditeur de composants : composant extensible', () => {
+  /** Envoie un événement de pointeur à une position donnée de la fenêtre. */
+  async function fireAt(
+    target: { element: Element },
+    type: string,
+    clientX: number,
+    clientY = 0
+  ): Promise<void> {
+    target.element.dispatchEvent(
+      new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX, clientY })
+    )
+    await nextTick()
+  }
+
+  it('la case « Extensible » montre les réglages, l’aperçu et les deux traits de coupe', async () => {
+    const store = withRectangle()
+    store.addPin({ x: 2, y: 1 })
+    store.selection = null
+    store.inspectorOpen = true
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    await nextTick()
+    const section = (): ReturnType<typeof wrapper.get> => wrapper.get('.inspector .stretch')
+    const field = (name: string): HTMLInputElement => {
+      const found = section()
+        .findAll('.field')
+        .find((entry) => entry.find('span').text() === name)
+      if (!found) throw new Error(`champ « ${name} » introuvable`)
+      return found.get('input').element
+    }
+    const type = async (name: string, value: string): Promise<void> => {
+      const input = field(name)
+      input.value = value
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+      await nextTick()
+    }
+    // Au départ : la case, et rien d'autre ; pas de traits sur le dessin.
+    expect(section().findAll('.field')).toHaveLength(0)
+    expect(wrapper.find('.cuts').exists()).toBe(false)
+    await section().get('input[type="checkbox"]').setValue(true)
+    expect(store.doc.stretch).toEqual({ from: 0, to: 16, initial: 1, min: 1, max: 12 })
+    expect(
+      section()
+        .findAll('.field span')
+        .map((span) => span.text())
+    ).toEqual(['Début du motif', 'Largeur du motif', 'Au départ', 'Minimum', 'Maximum', 'Aperçu à'])
+    // Les deux traits et la bande du motif sont sur la feuille.
+    expect(wrapper.findAll('.cuts .cut')).toHaveLength(2)
+    expect(wrapper.find('.cuts .motif-band').exists()).toBe(true)
+
+    // Le motif : une cellule, à partir d'une demi-cellule.
+    await type('Largeur du motif', '2')
+    await type('Début du motif', '0.5')
+    expect(store.doc.stretch).toMatchObject({ from: 2, to: 10 })
+    await type('Maximum', '6')
+    await type('Au départ', '9')
+    // Hors des bornes : le nombre est ramené, et le champ le redit.
+    expect(store.doc.stretch).toMatchObject({ initial: 6, max: 6 })
+    expect(field('Au départ').value).toBe('6')
+
+    // L'aperçu : le composant étiré à trois motifs, ses broches recopiées.
+    expect(field('Aperçu à').value).toBe('3')
+    expect(section().findAll('.preview-pin')).toHaveLength(3)
+    await type('Aperçu à', '5')
+    expect(section().findAll('.preview-pin')).toHaveLength(5)
+    await type('Aperçu à', '40')
+    expect(field('Aperçu à').value).toBe('6')
+    // Rien de tout cela n'est enregistré dans le composant.
+    expect(store.doc.pins).toHaveLength(1)
+
+    await section().get('input[type="checkbox"]').setValue(false)
+    expect(store.doc.stretch).toBeUndefined()
+    expect(wrapper.find('.cuts').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('glisser le trait de gauche déplace le motif, celui de droite règle sa largeur', async () => {
+    const store = withRectangle()
+    store.setStretch({ from: 0, to: 4 })
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    await nextTick()
+    const svg = wrapper.get('svg.canvas')
+    // jsdom place le dessin en (0, 0) : une abscisse de la feuille, en pixels, pour x cellules.
+    const origin = Number(
+      /translate\(([\d.]+)/.exec(svg.get('g').attributes('transform') ?? '')?.[1]
+    )
+    const x = (cells: number): number => origin + cells * store.cellPx
+    // Le trait de droite, tiré de 1 à 2,9 cellules : le motif fait trois cellules.
+    await fireAt(wrapper.get('.cut-to .cut-hit'), 'pointerdown', x(1))
+    await fireAt(svg, 'pointermove', x(2.9))
+    // Aperçu pendant le geste : rien d'enregistré.
+    expect(store.doc.stretch).toMatchObject({ from: 0, to: 4 })
+    await fireAt(svg, 'pointerup', x(2.9))
+    expect(store.doc.stretch).toMatchObject({ from: 0, to: 12 })
+    expect(store.undoLabel).toBe('Régler le motif')
+    // Le trait de gauche, tiré d'un quart de cellule : le motif se déplace, sans changer de largeur.
+    await fireAt(wrapper.get('.cut-from .cut-hit'), 'pointerdown', x(0))
+    await fireAt(svg, 'pointermove', x(0.26))
+    await fireAt(svg, 'pointerup', x(0.26))
+    expect(store.doc.stretch).toMatchObject({ from: 1, to: 13 })
+    // Il ne sort pas de la boîte (4 cellules).
+    await fireAt(wrapper.get('.cut-from .cut-hit'), 'pointerdown', x(0.25))
+    await fireAt(svg, 'pointermove', x(9))
+    await fireAt(svg, 'pointerup', x(9))
+    expect(store.doc.stretch).toMatchObject({ from: 4, to: 16 })
+    wrapper.unmount()
+  })
+})

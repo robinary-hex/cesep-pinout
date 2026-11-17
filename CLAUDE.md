@@ -755,6 +755,53 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     composant posé
     change de variante par le clic droit (« Variante ») ou la liste du panneau
     (`setInstancesVariant`, par `applyWithElasticWires` : les fils posés sur ses broches suivent).
+- Composants extensibles (décision du 17 novembre 2026 ; `src/domain/stretch.ts`,
+  `stretchPlacement.ts`) : un bornier à deux points qu'on étire à trois, un connecteur d'un
+  contact qui en prend huit. Deux traits verticaux coupent le dessin en un début, un motif
+  et une fin (`stretch` d'un `ComponentBody` : `from`, `to` en quarts de cellule, `initial`,
+  `min`, `max` ; chaque variante a le sien) ; étirer le composant posé répète le motif.
+  - Règle (`stretchedDefinition`) : ce qui est avant le motif ne bouge pas, ce qui est après
+    suit ; ce qui tient dans le motif est recopié dans chaque motif, broches comprises ; une
+    forme à cheval sur un trait s'allonge (un contour garde le rayon de ses coins, un texte
+    centré le reste) ; une image à cheval est coupée aux traits, seule sa tranche du milieu se
+    répète (`crop` d'une image, posé par l'étirement, jamais par l'éditeur ; dessiné par un
+    petit `<svg>` dont la fenêtre découpe l'image, à l'écran comme à l'export). Deux images
+    bord à bord (ces tranches, des copies qui se touchent) : celle de gauche déborde d'un
+    pixel de l'écran sur l'autre (`imagesWithRightNeighbour` ; `pixel` de `ComponentGraphic`,
+    que le montage, dessiné en cellules, donne en cellules ; `IMAGE_LAP` à l'export), sinon
+    le fond passe entre elles aux zooms où leur frontière tombe au milieu d'un pixel. Ce qui n'a pas
+    de largeur (broche, point, trait vertical) appartient au motif depuis son trait de gauche
+    jusqu'avant celui de droite : un trait de séparation posé sur le trait de gauche se
+    retrouve une fois par motif. Les traits se posent au quart de cellule, mais la largeur du
+    motif fait un nombre entier de cellules : les broches recopiées restent sur la grille.
+    Un seul morceau (tout le composant est le motif), deux ou trois parties : la même règle.
+  - Broches d'un composant étiré : celles d'avant le motif, puis celles de chaque motif l'un
+    après l'autre (identifiants `p1`, `p1#1`, `p1#2`… : `stretchPinId`), puis celles
+    d'après ; les numéros suivent cet ordre (`renumberPins`). La bibliothèque montre le
+    composant comme on l'obtient en le posant : vignette et nombre de broches à son nombre de
+    motifs de départ.
+  - `instanceDefinition` rend le composant étiré au nombre de l'exemplaire (`count`, écrit à
+    la pose : il ne change pas si la définition change de nombre de départ ; ramené entre les
+    bornes à chaque dessin, `stretchCount`) : rendu, connectivité, élasticité et export n'ont
+    rien d'autre à savoir. `instanceBaseDefinition` rend le dessin d'avant étirement. Le
+    résultat est gardé par composant et par nombre : une définition ne se modifie jamais sur
+    place (Immer), sinon l'étirement gardé serait périmé.
+  - Éditeur de composants : section « Étirement » du panneau du composant (case
+    « Extensible », début et largeur du motif, « Au départ », « Minimum », « Maximum », et un
+    aperçu étiré à N qui ne s'enregistre pas ; `setStretch`, `normalizedStretch`). Sur la
+    feuille, les deux traits (`.cuts`) : glisser celui de gauche déplace le motif, celui de
+    droite règle sa largeur ; le motif reste dans la boîte quand elle change (`setSize`,
+    `setBox`).
+  - Montage : le composant seul sélectionné montre une poignée à chaque bout
+    (`stretchHandles`, `.stretch-handle`) ; la tirer ajoute ou retire un motif par largeur de
+    motif (`pulledCount`), avec aperçu, en une commande (`setInstanceCount`, `restretch`).
+    Le bout qu'on ne tire pas reste en place, rotation et miroir compris. Le panneau a un
+    champ « Nombre ». Les fils suivent leurs broches (`stretchPinMap` : par la fin, les
+    motifs gardent leur rang ; par le début, ils se comptent depuis la fin) ; le fil d'une
+    broche qui disparaît reste où il est, bout libre.
+  - Modèles par nombre (`stretch.models`, prévus dans le format, pas encore dans l'éditeur) :
+    un dessin particulier pour un nombre précis de motifs (une pièce à un point, moulée d'un
+    bloc) remplace alors le motif répété ; les broches se suivent par leur rang.
 - Groupes (décision du 11 novembre 2026), dans les trois éditeurs : des éléments qu'on
   sélectionne et déplace d'un bloc. Rien n'est rangé à part : chaque élément groupé porte
   l'identifiant de son groupe (`group`, optionnel, sans montée de version des fichiers) et un
@@ -865,8 +912,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     composant posé s'appelle « libellé » dans l'interface.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 15, projet 22, paramètres 15,
-  diagramme 6 (paramètres 15 et diagramme 5 sont ceux de la 1.6.0, publiée le 11 novembre
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 16, projet 23, paramètres 15,
+  diagramme 6 (composant 16 et projet 23, du 17 novembre 2026, pas encore publiés, portent les
+  composants extensibles : `stretch`, `crop`, `count` ; un composant ou un montage qu'ils
+  enregistrent ne s'ouvrira plus dans la 1.9.1 ni avant ; paramètres 15 et diagramme 5 sont ceux de la 1.6.0, publiée le 11 novembre
   2026 : palette des diagrammes et dossier de Pinout dans les paramètres, couleur du texte
   d'un nœud dans le diagramme ; un diagramme enregistré par la 1.6.0 ne s'ouvre plus dans une
   version antérieure ; le diagramme 6 est celui de la 1.9.0, publiée le 16 novembre 2026 : il

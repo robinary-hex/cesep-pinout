@@ -142,6 +142,13 @@ composant ordinaire pour la variante voulue : le rendu, la connectivité et l'ex
 que lui. Dans l'éditeur de composants, `shown` et `bodyOf` jouent ce rôle pour la variante en
 cours d'édition.
 
+Composants extensibles : même idée, un cran plus loin. `stretch.ts` sait répéter le motif d'un
+dessin (formes recopiées, allongées ou coupées selon leur place par rapport aux deux traits) et
+rend, pour un nombre de motifs, un composant ordinaire ; `instanceDefinition` l'appelle après
+`variantDefinition`, avec le nombre de l'exemplaire. Rien d'autre n'a changé dans le rendu, la
+connectivité ou l'export. `stretchPlacement.ts` tient ce qui touche au montage : les poignées,
+et la correspondance des broches d'un nombre à l'autre, pour que les fils suivent.
+
 Groupes : l'appartenance est une propriété de l'élément (`group`), pas une liste à part, pour
 qu'elle le suive sans rien avoir à tenir à jour quand il change de rang, qu'on le copie ou qu'on
 annule sa suppression. `src/domain/groups.ts` en tire les groupes (au moins deux porteurs du même
@@ -233,8 +240,8 @@ un arrêt brutal : c'est alors qu'elles sont proposées.
 
 Tous en JSON indenté, avec `schemaVersion`, validés par Zod à l'ouverture, migrés étape par étape
 (`src/domain/migrations.ts`). Un fichier d'exemple par version dans `src/domain/fixtures/`.
-Versions courantes : composant 15 (image en forme du dessin, textes verticaux, angles arrondis des polylignes, forme point, opacité du remplissage, italique, souligné et barré des textes, orientation réglée texte par texte, textes droits sur le montage, boîtes de texte multilignes, flèche au milieu, graisse des textes, épaisseur en multiplicateur, flèches, textes variables avec
-unité, plus de `labelPrefix`), projet 22 (styles propres à des éléments : `styles` et `style`, composants derrière les fils, fils en diagonale à 45°, fond optionnel des étiquettes texte, styles, sens et couleur des étiquettes texte, couleurs de fil propres au montage, étiquettes texte en boîte, police des étiquettes d'extrémité dans le profil, graisse des étiquettes, étiquettes d'extrémité des fils, `componentStroke` dans le profil, `fields` par instance,
+Versions courantes : composant 16 (composants extensibles : `stretch`, tranche d'une image `crop` ; image en forme du dessin, textes verticaux, angles arrondis des polylignes, forme point, opacité du remplissage, italique, souligné et barré des textes, orientation réglée texte par texte, textes droits sur le montage, boîtes de texte multilignes, flèche au milieu, graisse des textes, épaisseur en multiplicateur, flèches, textes variables avec
+unité, plus de `labelPrefix`), projet 23 (nombre de motifs d'un composant extensible posé : `count` ; styles propres à des éléments : `styles` et `style`, composants derrière les fils, fils en diagonale à 45°, fond optionnel des étiquettes texte, styles, sens et couleur des étiquettes texte, couleurs de fil propres au montage, étiquettes texte en boîte, police des étiquettes d'extrémité dans le profil, graisse des étiquettes, étiquettes d'extrémité des fils, `componentStroke` dans le profil, `fields` par instance,
 définitions embarquées migrées à chaque version des composants), diagramme 6 (taille du texte d'un nœud en points, `textSize`, à la place du multiplicateur `textScale` ; couleur de la bordure d'un fond plein, `borderColor` ; couleur du texte d'un nœud, fond optionnel des étiquettes de lien et des textes, étiquette d'un lien tenue le long du tracé, style de texte par nœud ; nœuds, liens, textes libres, style et couleurs du diagramme), paramètres 15 (un seul dossier, celui de Pinout : `dataDir` remplace `libraryDir` et `settingsDir` ; palette des diagrammes à part de celle des fils, moins pâle qu'à la v13, cases d'affichage des barres d'outils, style général des diagrammes, `componentStroke`
 et `endLabelFont` du profil par défaut, thème sombre par défaut, ouverture du panneau, affichage de
 la bibliothèque).
