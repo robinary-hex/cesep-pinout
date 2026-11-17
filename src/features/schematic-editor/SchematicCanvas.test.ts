@@ -1064,12 +1064,12 @@ describe('canevas du montage : fil nu et pont', () => {
     store.placeAt(2, 4)
     store.stopPlacing()
     store.clearSelection()
-    store.addWire(
+    const bare = store.addWire(
       [
         [2, 1],
         [2, 5]
       ],
-      '#000000',
+      null,
       'bare'
     )
     store.addWire(
@@ -1087,10 +1087,19 @@ describe('canevas du montage : fil nu et pont', () => {
     expect(edge.attributes('stroke')).toBe('#59616a')
     expect(wrapper.get('.wires .wire-bare').attributes('stroke')).toBe('#dfe5ea')
     expect(wrapper.findAll('.solders .solder')).toHaveLength(2)
+    // Une broche soudée se voit : un point de couleur vive, cerné de sombre.
+    expect(wrapper.get('.solders .solder').attributes('fill')).toBe('#f5a524')
     // Le pont : une courbe de A à B, dans sa couleur, bombée vers le haut.
     const jumper = wrapper.get('.wires .wire-jumper')
     expect(jumper.attributes('d')).toBe('M 6 1 Q 9 -1.16 12 1')
     expect(jumper.attributes('stroke')).toBe('#d62828')
+    // Le fil nu prend la couleur qu'on lui donne, sur le même liseré.
+    if (!bare) throw new Error('fil refusé')
+    store.selectedWires = [bare]
+    store.setCurrentColor('#b45309')
+    await nextTick()
+    expect(wrapper.get('.wires .wire-bare').attributes('stroke')).toBe('#b45309')
+    expect(wrapper.get('.wires .wire-edge').attributes('stroke')).toBe('#59616a')
     wrapper.unmount()
   })
 
@@ -1199,6 +1208,12 @@ describe('canevas du montage : plaque à deux faces', () => {
     const underside = wrapper.get('g.underside')
     expect(underside.attributes('transform')).toBe('matrix(-1 0 0 1 14 0)')
     expect(underside.find('.hole-pads').exists()).toBe(true)
+    // Entre les deux faces, le pli : un trait pointillé en deux tronçons, et la flèche.
+    const hinge = wrapper.get('.faces-hinge')
+    expect(hinge.findAll('line').map((line) => line.attributes('x1'))).toEqual(['7', '7'])
+    expect(hinge.get('line').attributes('stroke-dasharray')).toBe('0.25 0.25')
+    expect(hinge.get('path').attributes('d')).toBe('M 6.4 2 Q 7 1.4 7.6 2')
+    expect(hinge.find('polygon').exists()).toBe(true)
     // Les deux pattes de la LED, vues de dessous : une goutte d'étain sur leur pastille.
     const drops = wrapper
       .findAll('.through-marks .through')
@@ -1207,6 +1222,9 @@ describe('canevas du montage : plaque à deux faces', () => {
       ['13', '2'],
       ['11', '2']
     ])
+    // Une marque de couleur vive, cernée de sombre : elle se voit sur les pastilles.
+    expect(wrapper.get('.through').attributes('fill')).toBe('#f5a524')
+    expect(wrapper.get('.through').attributes('stroke')).toBe('#6b3f00')
     // La plaque sélectionnée : un cadre par face.
     store.selection = [plate]
     await nextTick()
@@ -1215,6 +1233,7 @@ describe('canevas du montage : plaque à deux faces', () => {
     store.setInstanceUnderside(plate, false)
     await nextTick()
     expect(wrapper.find('g.underside').exists()).toBe(false)
+    expect(wrapper.find('.faces-hinge').exists()).toBe(false)
     expect(wrapper.find('.through').exists()).toBe(false)
     expect(wrapper.findAll('rect.selection')).toHaveLength(1)
   })
@@ -1253,6 +1272,7 @@ describe('canevas du montage : plaque à deux faces', () => {
     const shown = wrapper.findAll('g.instance').map((group) => group.attributes('transform'))
     expect(shown).toContain('matrix(1 0 0 1 4 3)')
     expect(wrapper.get('g.underside').attributes('transform')).toBe('matrix(-1 0 0 1 20 0)')
+    expect(wrapper.get('.faces-hinge line').attributes('x1')).toBe('10')
     expect(wrapper.get('.wires .wire').attributes('d')).toContain('M 16 4')
     await fire(svg, 'pointerup', at(store, 12, 2.5))
     expect(store.selection).toEqual([plate])

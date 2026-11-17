@@ -134,7 +134,7 @@ const singleWire = computed(() =>
 const wiresOnly = computed(() => onlyWires.value && selectedWireList.value.length > 1)
 
 // Sorte des fils sélectionnés : un fil isolé devient fil nu, et l'inverse ; un pont reste un
-// pont. Un fil nu n'a pas de gaine : pas de couleur à choisir.
+// pont. Un fil nu a sa couleur comme les autres : l'étain vient alors en tête des pastilles.
 const convertible = computed(
   () =>
     selectedWireList.value.length > 0 &&
@@ -179,7 +179,7 @@ const inventory = computed(() => {
   ]
 })
 
-const swatches = computed(() => store.colorChoices)
+const swatches = computed(() => store.paletteSwatches)
 
 // Profil de style de la sélection
 
@@ -490,18 +490,6 @@ function setLabelVertical(event: Event): void {
             @change="setCount"
           />
         </label>
-        <label
-          v-if="isBoard(single.def)"
-          class="check underside"
-          title="Dessine à droite de la plaque son dessous, vu retourné : les fils s’y soudent"
-        >
-          <input
-            type="checkbox"
-            :checked="single.instance.underside === true"
-            @change="setUnderside"
-          />
-          <span>Montrer le dessous</span>
-        </label>
         <div v-if="libraryUpdate" class="notice">
           <Icon name="refresh" :size="16" class="notice-icon" />
           <div class="notice-body">
@@ -523,6 +511,18 @@ function setLabelVertical(event: Event): void {
             placeholder="LED, Bouton…"
             @change="store.setInstanceLabel(single.instance.id, inputValue($event).trim())"
           />
+        </label>
+        <label
+          v-if="isBoard(single.def)"
+          class="check underside"
+          title="Dessine à droite de la plaque son dessous, vu retourné : les fils s’y soudent"
+        >
+          <input
+            type="checkbox"
+            :checked="single.instance.underside === true"
+            @change="setUnderside"
+          />
+          <span>Montrer le dessous</span>
         </label>
         <template v-if="fields.length > 0">
           <label v-for="field in fields" :key="field.name" class="field">
@@ -584,7 +584,7 @@ function setLabelVertical(event: Event): void {
           <option value="bare">Fil nu</option>
         </select>
       </label>
-      <div v-if="!allBare" class="field">
+      <div class="field wire-color">
         <span>Couleur</span>
         <div class="swatches">
           <button
@@ -601,7 +601,7 @@ function setLabelVertical(event: Event): void {
             @click="recolor(swatch.hex)"
           />
           <ColorAdder
-            :value="singleWire?.color ?? store.currentColor"
+            :value="singleWire?.color ?? store.paletteColor"
             title="Couleur personnalisée, gardée dans ce montage"
             @pick="recolorCustom"
           />

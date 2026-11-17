@@ -11,6 +11,7 @@ import {
   type GridRect
 } from './placement'
 import { instanceDefinition, type ComponentInstance, type Project } from './project'
+import { SOLDER_COLOR, SOLDER_EDGE } from './wireKinds'
 
 // Les deux faces d'une plaque à trous (décision du 17 novembre 2026). Une plaque posée peut
 // montrer son dessous à côté de son dessus : le même dessin, retourné comme une page qu'on
@@ -120,10 +121,20 @@ export function otherFacePins(pins: readonly PinRef[], faces: BoardFaces): PinRe
   return through
 }
 
-/** Rayon, en cellules, de la goutte d'étain de ce qui traverse une plaque. */
-export const THROUGH_MARK_RADIUS = 0.22
+/**
+ * Marque de ce qui traverse une plaque : un point de couleur vive sur la pastille, cerné de
+ * sombre, pour qu'on voie d'un coup d'œil où sont les pattes (décision du 17 novembre 2026 :
+ * une goutte d'étain, de la couleur des pastilles, ne se voyait pas). C'est la marque d'une
+ * broche soudée à un fil nu (`SOLDER_COLOR`) : une patte se voit pareil, soudée ou non. Son
+ * rayon est en cellules ; la pastille (0,3) reste visible autour.
+ */
+export const THROUGH_MARK_RADIUS = 0.24
+export const THROUGH_MARK_COLOR = SOLDER_COLOR
+export const THROUGH_MARK_EDGE = SOLDER_EDGE
+/** Épaisseur du cerne à l'export, en cellules. */
+export const THROUGH_MARK_EDGE_WIDTH = 0.05
 
-/** Ce qui traverse une plaque et se voit sur l'autre face : une goutte d'étain sur la pastille. */
+/** Ce qui traverse une plaque et se voit sur l'autre face : un point de couleur sur la pastille. */
 export interface ThroughMark {
   board: string
   point: GridPoint
@@ -131,7 +142,8 @@ export interface ThroughMark {
 
 /**
  * Sur chaque face d'une plaque à deux faces, les pastilles où ressort ce qui est enfiché de
- * l'autre côté : la patte d'un composant, le bout d'un fil. C'est là qu'on soude. Une pastille
+ * l'autre côté : la patte d'un composant, le bout d'un fil. C'est là qu'on soude, et la marque
+ * dépasse du fil qu'on y a soudé. Une pastille
  * qui porte elle-même une broche n'est pas marquée : le composant s'y dessine.
  */
 export function throughMarks(

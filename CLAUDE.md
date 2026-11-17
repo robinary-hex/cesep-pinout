@@ -902,10 +902,21 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     Fil nu : la géométrie et toutes les retouches d'un fil, mais il est soudé à toutes les
     broches posées sur son trajet, pas seulement à ses bouts (`computeConnectivity`,
     `solders`) ; pas aux pastilles vides, et deux fils nus qui se croisent ne se touchent
-    pas. Il n'a pas de gaine, donc pas de couleur : il se dessine en métal
-    (`wireInk`, `BARE_WIRE_COLOR`) sur un liseré sombre, avec un point de soudure sur
-    chaque broche (`.solder`). Le panneau d'un fil a une liste « Type » (isolé ou nu,
-    `setWiresKind`), sans pastilles de couleur pour un fil nu.
+    pas. Il se dessine en métal, sur un liseré sombre (`BARE_WIRE_EDGE`), avec un point de
+    soudure sur chaque broche (`.solder`) : un point de couleur vive, cerné de sombre
+    (`SOLDER_COLOR`, `SOLDER_EDGE` ; décision du 17 novembre 2026 : une goutte d'étain sur
+    un fil d'étain ne disait pas qu'il y avait là une broche). Il a sa couleur comme tout fil (décision du 17
+    novembre 2026, après un essai où il était toujours en étain) : l'étain au départ
+    (`BARE_WIRE_COLOR`), puis celle qu'on lui donne. Les fils nus ont leur propre couleur
+    courante (`bareColor` du store : celle du dernier fil nu tracé ou recoloré, à part de
+    `currentColor`). La palette porte sur eux quand on en trace un ou qu'on n'a sélectionné
+    qu'eux (`paletteOnBare`) : elle règle alors `bareColor` et montre cette couleur comme
+    courante (`paletteColor`). Pour revenir à l'étain : sa pastille, en tête de celles du
+    panneau et du clic droit (`paletteSwatches`) ; la barre d'outils garde ses pastilles
+    (une de plus la ferait passer à la ligne), et l'outil Fil nu en main, recliquer la
+    couleur courante revient à l'étain (`setCurrentColor`, que la barre d'état annonce). Le panneau d'un fil a une liste
+    « Type » (isolé ou nu, `setWiresKind`) : en changeant de sorte, le fil prend la couleur
+    courante de sa nouvelle sorte.
     Pont : un fil isolé de A à B, dessiné en courbe (`jumperPathData`, une quadratique
     bombée à gauche de son sens de tracé : `jumperControl`). Deux clics le posent
     (`finishJumper`). Il n'a que ses deux bouts, où qu'ils soient (`wireProblem` : pas de
@@ -914,20 +925,24 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     ne se raccorde à sa corde, seulement à ses bouts. Un bout qu'on glisse, ou qui suit
     sa broche, va où il va sans ajouter de coude (`movedWireVertex`). Clic droit :
     « Bomber de l'autre côté » (`flipJumper` : ses bouts échangés).
-    Tout ce qui dessine un fil passe par `wireShapeData` et `wireInk`, à l'écran comme à
-    l'export ; tout ce qui valide son tracé par `wireProblem`, jamais par
-    `wireGeometryProblem` seul.
+    Tout ce qui dessine un fil passe par `wireShapeData`, à l'écran comme à l'export ;
+    tout ce qui valide son tracé par `wireProblem`, jamais par `wireGeometryProblem` seul.
   - Un composant est une plaque dès que son dessin a une grille de trous (`isBoard`,
     `drawingHoles`). Elle n'a pas de broches (pas d'avertissement pour ça), la bibliothèque
     la compte en trous, et elle se pose sous les composants déjà là (`placeAt` : en tête de
     `components`).
   - Les deux faces (`src/domain/boardFaces.ts`) : une plaque posée peut montrer son dessous
-    à sa droite (`underside` de l'exemplaire ; case « Montrer le dessous » du panneau et
-    entrée du clic droit, `setInstanceUnderside`). Le dessous est le dessus retourné comme
+    à sa droite (`underside` de l'exemplaire ; case « Montrer le dessous » du panneau, sous
+    le libellé, et entrée du clic droit, `setInstanceUnderside`). Le dessous est le dessus retourné comme
     une page qu'on tourne, à `BOARD_FACES_GAP` (2) cellules : un point d'abscisse x s'y voit
     en `facesFlip − x`, à la même hauteur (`undersideBounds`, `facesFlip`, `showsUnderside`
     de placement.ts). C'est le dessin de la plaque, sans ses textes, à l'écran
-    (`g.underside` du canevas) comme à l'export ; `projectBounds` compte sa place. Rien
+    (`g.underside` du canevas) comme à l'export ; `projectBounds` compte sa place. Entre
+    les deux faces, un pli (décision du 17 novembre 2026 ; `facesHinge`, `HINGE_STYLE`,
+    `.faces-hinge`) : un trait pointillé sur l'axe du miroir, qui dépasse la plaque d'une
+    demi-cellule en haut et en bas, coupé à mi-hauteur par une petite flèche courbe qui va
+    du dessus vers le dessous ; il dit que la plaque de droite est celle de gauche,
+    retournée. Dessiné en cellules, sous tout le reste, à l'écran comme à l'export. Rien
     d'autre n'est stocké : un fil du dessous est un fil du montage comme un autre, posé
     dans la zone du dessous. Ce qui relie les faces se déduit de la géométrie, les trous
     étant métallisés (`boardFaces` : `twins`, le même trou sur l'autre face). La broche
@@ -936,9 +951,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     la suit quand le composant change de trou (en sens inverse, vu de dessous), et Ctrl y
     tire un fil. Deux bouts de fil dans le même trou, un par face, sont reliés ; un fil nu
     couché sur une pastille d'où ressort un bout de fil lui est soudé
-    (`computeConnectivity(wires, pins, twins)`). Sur chaque face, une goutte d'étain marque
-    les pastilles où ressort ce qui est enfiché de l'autre côté (`throughMarks`,
-    `.through`) ; le trou survolé se montre d'un anneau sur l'autre face (`twinMark`).
+    (`computeConnectivity(wires, pins, twins)`). Sur chaque face, un point de couleur vive,
+    cerné de sombre, marque les pastilles où ressort ce qui est enfiché de l'autre côté
+    (`throughMarks`, `.through` ; la même marque que le point de soudure d'un fil nu : une
+    patte se voit pareil, soudée ou non) ; le trou survolé se
+    montre d'un anneau sur l'autre face (`twinMark`).
   - Une plaque emmène ce qu'elle porte (`src/domain/boardCarry.ts`), qu'elle montre son
     dessous ou non : les composants qui ont une broche dans un de ses trous ou sont posés en
     entier sur elle, les fils dont tous les sommets sont sur elle, les étiquettes qui y
@@ -1068,9 +1085,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     composant posé s'appelle « libellé » dans l'interface.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 16, projet 23, paramètres 15,
-  diagramme 6 (composant 16 et projet 23, du 17 novembre 2026, pas encore publiés, portent les
-  composants extensibles : `stretch`, `crop`, `count`, et la plaque à trous : forme `holes`, sorte d'un fil `kind`, `underside` d'une plaque posée ; un composant ou un montage qu'ils
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 16, projet 24, paramètres 15,
+  diagramme 6 (composant 16 et projet 24, du 17 novembre 2026, pas encore publiés, portent les
+  composants extensibles : `stretch`, `crop`, `count`, et la plaque à trous : forme `holes`, sorte d'un fil `kind`, `underside` d'une plaque posée ; le projet 24 donne l'étain aux fils nus du 23, qui se dessinaient tous ainsi ; un composant ou un montage qu'ils
   enregistrent ne s'ouvrira plus dans la 1.9.1 ni avant ; paramètres 15 et diagramme 5 sont ceux de la 1.6.0, publiée le 11 novembre
   2026 : palette des diagrammes et dossier de Pinout dans les paramètres, couleur du texte
   d'un nœud dans le diagramme ; un diagramme enregistré par la 1.6.0 ne s'ouvre plus dans une

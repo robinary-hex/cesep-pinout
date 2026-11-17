@@ -20,7 +20,7 @@ import { styleProfileSchema, type StyleProfile } from './profile'
 import { stretchedDefinition } from './stretch'
 import { isUTurn, segmentStep } from './wires'
 
-export const PROJECT_SCHEMA_VERSION = 23
+export const PROJECT_SCHEMA_VERSION = 24
 
 /**
  * Style propre à un élément du montage (voir styles.ts) : le nom d'un des `styles` du montage ;
@@ -100,7 +100,7 @@ export function wireGeometryProblem(
 /**
  * Sorte d'un fil (décision du 17 novembre 2026, voir wireKinds.ts) ; absente : le fil isolé de
  * toujours, relié par ses seuls bouts. `bare` : un fil nu, soudé à toutes les broches posées
- * sur son trajet. `jumper` : un pont, fil isolé de A à B dessiné en courbe, qui n'a que ses
+ * sur son trajet ; sa couleur (`color`) est l'étain au départ. `jumper` : un pont, fil isolé de A à B dessiné en courbe, qui n'a que ses
  * deux bouts et ne touche rien en chemin.
  */
 export const wireKindSchema = z.enum(['bare', 'jumper'])

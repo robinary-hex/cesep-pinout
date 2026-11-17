@@ -21,12 +21,21 @@ import {
   textStyleAttrs,
   textTransform
 } from './component'
-import { boardFaces, THROUGH_MARK_RADIUS, throughMarks } from './boardFaces'
+import {
+  boardFaces,
+  THROUGH_MARK_COLOR,
+  THROUGH_MARK_EDGE,
+  THROUGH_MARK_EDGE_WIDTH,
+  THROUGH_MARK_RADIUS,
+  throughMarks
+} from './boardFaces'
 import { computeConnectivity, projectPins, type FreeEnd } from './connectivity'
 import { crossingPieceEnds, crossingPieces } from './crossings'
 import { QUARTERS_PER_CELL, type LocalPoint } from './grid'
 import {
   facesFlip,
+  facesHinge,
+  HINGE_STYLE,
   instanceBounds,
   instanceMatrix,
   matrixToSvg,
@@ -47,8 +56,7 @@ import {
   jumperPathData,
   SOLDER_COLOR,
   SOLDER_EDGE,
-  SOLDER_SCALE,
-  wireInk
+  SOLDER_SCALE
 } from './wireKinds'
 import { wirePathData } from './wires'
 
@@ -361,7 +369,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
           `<g ${attrs({ class: 'underside', transform: `matrix(-1 0 0 1 ${fmt(flip)} 0)` })}>${drawing}</g>`
         )
       }
-      // Sur ses pastilles, ce qui ressort de l'autre face : une goutte d'étain.
+      // Sur ses pastilles, ce qui ressort de l'autre face : un point de couleur vive.
       const marks = through.filter((mark) => mark.board === instance.id)
       if (marks.length > 0) {
         const drops = marks.map(
@@ -370,9 +378,9 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
               cx: mark.point[0],
               cy: mark.point[1],
               r: THROUGH_MARK_RADIUS,
-              fill: SOLDER_COLOR,
-              stroke: SOLDER_EDGE,
-              'stroke-width': 0.04
+              fill: THROUGH_MARK_COLOR,
+              stroke: THROUGH_MARK_EDGE,
+              'stroke-width': THROUGH_MARK_EDGE_WIDTH
             })}/>`
         )
         instanceParts.push(`<g class="through">${drops.join('')}</g>`)
@@ -409,6 +417,28 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
     }
     return layer
   }
+  // Le pli entre les deux faces de chaque plaque qui montre son dessous : un trait pointillé,
+  // et la flèche qui dit que la plaque de droite est celle de gauche, retournée. Sous tout le reste.
+  const hingeParts = project.components.flatMap((instance) => {
+    const def = instanceDefinition(project, instance)
+    if (!def || !showsUnderside(instance, def)) return []
+    const hinge = facesHinge(instanceBounds(instance, def))
+    const lines = hinge.spans.map(
+      ([y1, y2]) =>
+        `<line ${attrs({ x1: hinge.x, y1, x2: hinge.x, y2, 'stroke-width': HINGE_STYLE.width, 'stroke-dasharray': HINGE_STYLE.dash })}/>`
+    )
+    return [
+      ...lines,
+      `<path ${attrs({ d: hinge.arc, 'stroke-width': HINGE_STYLE.arrowWidth, 'stroke-linecap': 'round' })}/>`,
+      `<polygon ${attrs({ points: hinge.head, fill: HINGE_STYLE.color, stroke: 'none' })}/>`
+    ]
+  })
+  if (hingeParts.length > 0) {
+    parts.push(
+      `<g ${attrs({ class: 'faces-hinge', fill: 'none', stroke: HINGE_STYLE.color })}>${hingeParts.join('')}</g>`
+    )
+  }
+
   parts.push(...componentLayer(true))
 
   const freeEndsByWire = new Map<string, FreeEnd[]>()
@@ -429,7 +459,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
       start: free.some((end) => end.endIndex === 0),
       end: free.some((end) => end.endIndex === wire.points.length - 1)
     }
-    const ink = wireInk(wire)
+    const ink = wire.color
     if (wire.kind === 'jumper') {
       // Un pont : une courbe de A à B, sans flèche ni pointillés.
       wireParts.push(
@@ -446,7 +476,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
     const shown = wireRenderParts(wire.points, wire.freeEnds, flags, width)
     if (shown.body.length >= 2) {
       if (wire.kind === 'bare') {
-        // Un fil nu : un liseré sombre sous le métal, qui lui donne son relief.
+        // Un fil nu : un liseré sombre sous sa couleur, qui lui donne son relief.
         wireParts.push(
           `<path ${attrs({
             d: wirePathData(shown.body, style.cornerRadius),
@@ -531,7 +561,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
       y1,
       x2,
       y2,
-      stroke: top ? wireInk(top) : '#000000',
+      stroke: top ? top.color : '#000000',
       'stroke-width': width
     })}/>`
     return halo + line

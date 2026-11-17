@@ -8,6 +8,7 @@ import {
   type StyleProfile
 } from './profile'
 import { PROJECT_SCHEMA_VERSION } from './project'
+import { BARE_WIRE_COLOR } from './wireKinds'
 import {
   DEFAULT_AUTOSAVE_SECONDS,
   DEFAULT_DIAGRAM_DEFAULTS,
@@ -524,7 +525,18 @@ export const projectMigrations: MigrationTable = {
     21: (raw) => ({ styles: [], ...raw }),
     // Projet v22 → v23 : nombre de motifs d'un composant extensible posé (`count`) ; les
     // définitions embarquées passent à la version 16 des composants.
-    22: migrateEmbeddedDefs
+    22: migrateEmbeddedDefs,
+    // Projet v23 → v24 : un fil nu a sa couleur. Jusque-là il se dessinait toujours en étain,
+    // quelle que fût la couleur enregistrée : il prend l'étain, et garde son allure.
+    23: (raw) => {
+      const wires = Array.isArray(raw['wires']) ? raw['wires'] : []
+      return {
+        ...raw,
+        wires: wires.map((wire) =>
+          isRecord(wire) && wire['kind'] === 'bare' ? { ...wire, color: BARE_WIRE_COLOR } : wire
+        )
+      }
+    }
   }
 }
 

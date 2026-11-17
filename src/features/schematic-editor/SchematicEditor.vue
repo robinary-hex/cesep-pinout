@@ -188,7 +188,7 @@ function swatchItem(current: string | null): MenuItem {
   const matches = (hex: string): boolean => current?.toLowerCase() === hex.toLowerCase()
   return {
     kind: 'swatches',
-    swatches: store.colorChoices.map((choice) => ({ ...choice, current: matches(choice.hex) })),
+    swatches: store.paletteSwatches.map((choice) => ({ ...choice, current: matches(choice.hex) })),
     pick: (hex) => store.setCurrentColor(hex)
   }
 }

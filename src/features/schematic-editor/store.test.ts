@@ -2154,6 +2154,65 @@ describe('montage : fil nu et pont', () => {
     expect(reread.wires.map((wire) => wire.kind)).toEqual(['bare', 'jumper', undefined])
   })
 
+  it('un fil nu a sa couleur : l’étain au départ, puis celle qu’on lui donne', () => {
+    const store = useSchematicStore()
+    const wireColor = store.currentColor
+    const colorOf = (id: string | null): string | undefined =>
+      store.doc.wires.find((wire) => wire.id === id)?.color
+    const trace = (y: number): string | null => {
+      store.beginWire([0, y])
+      store.appendWirePoints([[6, y]])
+      return store.finishWire()
+    }
+    // Avec son outil : en étain, quelle que soit la couleur des fils ; l'étain vient en tête
+    // des pastilles du panneau et du clic droit.
+    store.startWireTool('bare')
+    expect(store.paletteOnBare).toBe(true)
+    expect(store.paletteSwatches[0]).toEqual({ hex: '#dfe5ea', name: 'Étain', custom: false })
+    expect(store.paletteColor).toBe('#dfe5ea')
+    expect(store.drawingColor).toBe('#dfe5ea')
+    const first = trace(0)
+    expect(colorOf(first)).toBe('#dfe5ea')
+    // Une couleur choisie pendant qu'on trace des fils nus vaut pour eux seuls.
+    store.setCurrentColor('#b45309')
+    expect([store.bareColor, store.currentColor]).toEqual(['#b45309', wireColor])
+    const second = trace(2)
+    expect(colorOf(second)).toBe('#b45309')
+    expect(colorOf(first)).toBe('#dfe5ea')
+    // L'outil en main, recliquer la couleur courante revient à l'étain : la barre d'outils n'a
+    // pas de pastille pour lui.
+    store.setCurrentColor('#b45309')
+    expect(store.bareColor).toBe('#dfe5ea')
+    expect(store.status).toContain('étain')
+    expect(colorOf(second)).toBe('#b45309')
+    // L'outil Fil : la palette revient aux fils, sans l'étain.
+    store.startWireTool()
+    expect(store.paletteOnBare).toBe(false)
+    expect(store.paletteSwatches.some((swatch) => swatch.name === 'Étain')).toBe(false)
+    expect(store.paletteColor).toBe(wireColor)
+    const third = trace(4)
+    expect(colorOf(third)).toBe(wireColor)
+    // En sélection, un fil nu seul sélectionné : la palette porte sur lui, et l'étain le
+    // ramène au métal.
+    store.selectTool()
+    store.clearSelection()
+    if (!second || !third) throw new Error('fil refusé')
+    store.selectedWires = [second]
+    expect(store.paletteOnBare).toBe(true)
+    store.setCurrentColor('#dfe5ea')
+    expect(colorOf(second)).toBe('#dfe5ea')
+    expect([store.bareColor, store.currentColor]).toEqual(['#dfe5ea', wireColor])
+    // Avec un fil isolé dans la sélection, elle porte sur les fils.
+    store.selectedWires = [second, third]
+    expect(store.paletteOnBare).toBe(false)
+    // Changer de sorte donne la couleur des prochains fils de la nouvelle sorte.
+    store.clearSelection()
+    store.setWiresKind([third], 'bare')
+    expect(colorOf(third)).toBe('#dfe5ea')
+    store.setWiresKind([third], null)
+    expect(colorOf(third)).toBe(wireColor)
+  })
+
   it('un fil nu relie les broches de son trajet ; redevenu isolé, plus que ses bouts', () => {
     const store = useSchematicStore()
     // Trois résistances l'une sous l'autre : leurs broches de gauche sont en x = 2.

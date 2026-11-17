@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 23,
+  "name": "Avant la couleur des fils nus",
+  "profile": {
+    "name": "Standard",
+    "cellPx": 20,
+    "wireWidth": 0.15,
+    "cornerRadius": 0.4,
+    "componentStroke": 0.1,
+    "junctionScale": 2,
+    "junctionColor": "wire",
+    "labelFont": {
+      "family": "Segoe UI",
+      "size": 11
+    },
+    "endLabelFont": {
+      "family": "Segoe UI",
+      "size": 14
+    }
+  },
+  "styles": [],
+  "components": [],
+  "wires": [
+    {
+      "id": "w1",
+      "kind": "bare",
+      "color": "#000000",
+      "points": [
+        [0, 0],
+        [6, 0]
+      ],
+      "stack": 0,
+      "freeEnds": "flat",
+      "endLabels": {
+        "start": "",
+        "end": ""
+      }
+    },
+    {
+      "id": "w2",
+      "color": "#d62828",
+      "points": [
+        [0, 2],
+        [6, 2]
+      ],
+      "stack": 1,
+      "freeEnds": "flat",
+      "endLabels": {
+        "start": "",
+        "end": ""
+      }
+    },
+    {
+      "id": "w3",
+      "kind": "jumper",
+      "color": "#1d4ed8",
+      "points": [
+        [0, 4],
+        [5, 7]
+      ],
+      "stack": 2,
+      "freeEnds": "flat",
+      "endLabels": {
+        "start": "",
+        "end": ""
+      }
+    }
+  ],
+  "crossingOverrides": [],
+  "labels": [],
+  "customColors": [],
+  "embeddedDefs": {}
+}

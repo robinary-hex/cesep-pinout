@@ -3,6 +3,8 @@ import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 import {
   anchorPins,
+  BARE_WIRE_COLOR,
+  BARE_WIRE_COLOR_NAME,
   boardFaces,
   boardsCarry,
   loadOfBoards,
@@ -71,6 +73,7 @@ import {
   wiresFollowingPins,
   type StretchEnd,
   zoomedView,
+  type ColorChoice,
   type ComponentDefinition,
   type ComponentInstance,
   type FaceLoad,
@@ -158,6 +161,7 @@ interface TabEditing {
   selectedWires: string[]
   selectedLabels: string[]
   currentColor: string
+  bareColor: string
 }
 
 /** Montage modifié, pour la copie de secours ; `key` est l'identifiant de son onglet. */
@@ -202,6 +206,11 @@ export const useSchematicStore = defineStore('schematic', () => {
    */
   const wireKind = ref<WireKind | null>(null)
   const currentColor = ref(library.defaultWireColor)
+  /**
+   * Couleur des prochains fils nus : l'étain, puis celle du dernier fil nu tracé ou recoloré. Un
+   * fil nu a sa couleur à lui, à part de celle des fils isolés.
+   */
+  const bareColor = ref<string>(BARE_WIRE_COLOR)
   const clipboard = shallowRef<ClipboardData>({ items: [], wires: [], labels: [], styles: [] })
   const view = ref<ViewState>({ ...DEFAULT_VIEW })
   const viewport = ref({ width: 1200, height: 800 })
@@ -248,14 +257,16 @@ export const useSchematicStore = defineStore('schematic', () => {
       selection: [],
       selectedWires: [],
       selectedLabels: [],
-      currentColor: library.defaultWireColor
+      currentColor: library.defaultWireColor,
+      bareColor: BARE_WIRE_COLOR
     }),
     capture: () => ({
       view: view.value,
       selection: selection.value,
       selectedWires: selectedWires.value,
       selectedLabels: selectedLabels.value,
-      currentColor: currentColor.value
+      currentColor: currentColor.value,
+      bareColor: bareColor.value
     }),
     restore: (editing) => {
       view.value = editing.view
@@ -263,6 +274,7 @@ export const useSchematicStore = defineStore('schematic', () => {
       selectedWires.value = editing.selectedWires
       selectedLabels.value = editing.selectedLabels
       currentColor.value = editing.currentColor
+      bareColor.value = editing.bareColor
       // Pose, tracé et aperçus appartenaient au document qu'on quitte.
       placement.value = null
       drawing.value = null
@@ -313,6 +325,32 @@ export const useSchematicStore = defineStore('schematic', () => {
   const sortedWires = computed(() => [...doc.value.wires].sort((a, b) => a.stack - b.stack))
   /** Couleurs proposées pour les fils : la palette de l'application, puis celles du montage. */
   const colorChoices = computed(() => paletteChoices(library.palette, doc.value.customColors))
+  /**
+   * La palette porte-t-elle sur les fils nus ? Quand on en trace un, ou qu'on n'a sélectionné
+   * qu'eux. Elle règle alors la couleur des prochains fils nus, pas celle des fils isolés.
+   */
+  const paletteOnBare = computed(() => {
+    if (tool.value === 'wire') return wireKind.value === 'bare'
+    if (selection.value.length > 0 || selectedLabels.value.length > 0) return false
+    const picked = doc.value.wires.filter((wire) => selectedWires.value.includes(wire.id))
+    return picked.length > 0 && picked.every((wire) => wire.kind === 'bare')
+  })
+  /** Couleur que la palette montre comme courante : celle des prochains fils, nus ou non. */
+  const paletteColor = computed(() => (paletteOnBare.value ? bareColor.value : currentColor.value))
+  /**
+   * Couleurs que proposent le panneau et le clic droit : celles des fils, précédées de l'étain
+   * quand la palette porte sur les fils nus, pour y revenir. La barre d'outils, elle, garde
+   * les mêmes pastilles (`colorChoices`) : une pastille de plus la ferait passer à la ligne.
+   */
+  const paletteSwatches = computed<ColorChoice[]>(() =>
+    paletteOnBare.value
+      ? [{ hex: BARE_WIRE_COLOR, name: BARE_WIRE_COLOR_NAME, custom: false }, ...colorChoices.value]
+      : colorChoices.value
+  )
+  /** Couleur du fil qu'on trace : celle des fils nus avec leur outil, sinon celle des fils. */
+  const drawingColor = computed(() =>
+    tool.value === 'wire' && wireKind.value === 'bare' ? bareColor.value : currentColor.value
+  )
   /** Les plaques qui montrent leurs deux faces, et la correspondance de leurs trous. */
   const faces = computed(() => boardFaces(doc.value))
   const pinRefs = computed(() => projectPins(doc.value, faces.value))
@@ -526,13 +564,21 @@ export const useSchematicStore = defineStore('schematic', () => {
 
   // Fichier
 
-  /** Couleur des prochains fils : celle du dernier fil du montage, sinon celle des paramètres. */
+  /**
+   * Couleur des prochains fils : celle du dernier fil du montage, sinon celle des paramètres ;
+   * de même pour les fils nus, qui ont la leur : celle du dernier fil nu, sinon l'étain.
+   */
   function syncCurrentColor(): void {
-    const last = doc.value.wires.reduce<Wire | null>(
-      (best, wire) => (best === null || wire.stack > best.stack ? wire : best),
-      null
-    )
-    currentColor.value = last?.color ?? library.defaultWireColor
+    const last = (bare: boolean): Wire | null =>
+      doc.value.wires.reduce<Wire | null>(
+        (best, wire) =>
+          (wire.kind === 'bare') === bare && (best === null || wire.stack > best.stack)
+            ? wire
+            : best,
+        null
+      )
+    currentColor.value = last(false)?.color ?? library.defaultWireColor
+    bareColor.value = last(true)?.color ?? BARE_WIRE_COLOR
   }
 
   // Onglets
@@ -1077,13 +1123,15 @@ export const useSchematicStore = defineStore('schematic', () => {
 
   /**
    * Crée un fil à partir de sommets bruts ; retourne son identifiant, ou null s'il est invalide.
-   * `kind` : un fil nu, ou un pont, qui ne garde que son départ et son arrivée.
+   * `kind` : un fil nu, ou un pont, qui ne garde que son départ et son arrivée. Sans `color`,
+   * le fil prend la couleur des prochains fils de sa sorte.
    */
   function addWire(
     points: readonly GridPoint[],
-    color = currentColor.value,
+    color: string | null = null,
     kind: WireKind | null = null
   ): string | null {
+    const ink = color ?? (kind === 'bare' ? bareColor.value : currentColor.value)
     const first = points[0]
     const last = points.at(-1)
     const clean = kind === 'jumper' && first && last ? [first, last] : simplifyPoints(points)
@@ -1096,7 +1144,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     apply(label, (draft) => {
       draft.wires.push({
         id,
-        color,
+        color: ink,
         points: castDraft(clean),
         stack,
         freeEnds: 'flat',
@@ -1136,7 +1184,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     const current = drawing.value
     drawing.value = null
     if (!current || current.points.length < 2) return null
-    const id = addWire(current.points, currentColor.value, wireKind.value)
+    const id = addWire(current.points, null, wireKind.value)
     if (id) {
       status.value = `${wireKindLabel(wireKind.value ?? undefined)} tracé. Clic pour en commencer un autre, V pour revenir à la sélection.`
     }
@@ -1316,9 +1364,27 @@ export const useSchematicStore = defineStore('schematic', () => {
     })
   }
 
+  /**
+   * Un clic sur une couleur (barre d'outils, panneau, clic droit) : elle devient celle des
+   * prochains fils, des prochains fils nus quand la palette porte sur eux (`paletteOnBare`), et
+   * recolore les fils sélectionnés. L'outil Fil nu en main, recliquer la couleur courante
+   * revient à l'étain : la barre d'outils n'a pas de pastille pour lui.
+   */
   function setCurrentColor(color: string): void {
-    currentColor.value = color
-    recolorWires(selectedWires.value, color)
+    let picked = color
+    if (!paletteOnBare.value) {
+      currentColor.value = color
+    } else if (tool.value !== 'wire') {
+      bareColor.value = color
+    } else if (sameColor(bareColor.value, color) && !sameColor(color, BARE_WIRE_COLOR)) {
+      picked = BARE_WIRE_COLOR
+      bareColor.value = picked
+      status.value = 'Prochains fils nus en étain.'
+    } else {
+      bareColor.value = color
+      status.value = 'Prochains fils nus de cette couleur ; la recliquer revient à l’étain.'
+    }
+    recolorWires(selectedWires.value, picked)
   }
 
   /**
@@ -1338,6 +1404,7 @@ export const useSchematicStore = defineStore('schematic', () => {
       draft.customColors = colors
     })
     if (sameColor(currentColor.value, hex)) currentColor.value = next
+    if (sameColor(bareColor.value, hex)) bareColor.value = next
   }
 
   /**
@@ -1355,11 +1422,15 @@ export const useSchematicStore = defineStore('schematic', () => {
     // La couleur des prochains fils n'est plus proposée : on passe à la première qui l'est.
     const fallback = rest[0]
     if (fallback && sameColor(currentColor.value, hex)) currentColor.value = fallback.hex
+    // Les prochains fils nus reviennent à l'étain.
+    if (sameColor(bareColor.value, hex)) bareColor.value = BARE_WIRE_COLOR
   }
 
   /**
    * Fait de fils isolés des fils nus, ou l'inverse (`bare` ou null). Un pont reste un pont : sa
-   * géométrie n'est pas celle d'un fil.
+   * géométrie n'est pas celle d'un fil. Le fil prend la couleur des prochains fils de sa
+   * nouvelle sorte : l'étain (ou la dernière couleur de fil nu) en devenant nu, celle des fils
+   * en redevenant isolé.
    */
   function setWiresKind(ids: readonly string[], kind: 'bare' | null): void {
     const wanted = kind ?? undefined
@@ -1368,11 +1439,13 @@ export const useSchematicStore = defineStore('schematic', () => {
     )
     if (changing.length === 0) return
     const targets = new Set(changing.map((wire) => wire.id))
+    const color = kind === 'bare' ? bareColor.value : currentColor.value
     apply(kind === 'bare' ? 'Fil nu' : 'Fil isolé', (draft) => {
       for (const wire of draft.wires) {
         if (!targets.has(wire.id)) continue
         if (kind === 'bare') wire.kind = 'bare'
         else delete wire.kind
+        wire.color = color
       }
     })
   }
@@ -1855,6 +1928,11 @@ export const useSchematicStore = defineStore('schematic', () => {
     drawing,
     wireKind,
     currentColor,
+    bareColor,
+    paletteOnBare,
+    paletteColor,
+    paletteSwatches,
+    drawingColor,
     view,
     viewport,
     showPins,

@@ -96,7 +96,7 @@ function pickCustom(hex: string): void {
         class="group"
         title="Couleur des prochains fils ; recolore aussi les fils sélectionnés"
         :swatches="store.colorChoices"
-        :current="store.currentColor"
+        :current="store.paletteColor"
         adder-title="Couleur personnalisée, gardée dans ce montage"
         custom-name="Couleur de ce montage"
         @pick="store.setCurrentColor"

@@ -7,6 +7,7 @@ import { wiresFollowingPins } from './elastic'
 import type { GridPoint, Rotation } from './grid'
 import {
   applyMatrix,
+  facesHinge,
   flippedInstance,
   instanceMatrix,
   invertMatrix,
@@ -116,8 +117,30 @@ describe('plaque à deux faces : le dessous à côté du dessus', () => {
     expect(twins.get('17,15')).toEqual({ board: 'b', point: [21, 15] })
     // Hors des trous, rien.
     expect(twins.has('10,10')).toBe(false)
-    // Le montage occupe aussi la place du dessous.
-    expect(projectBounds(doc)).toEqual({ x: 10, y: 10, width: 18, height: 6 })
+    // Le montage occupe aussi la place du dessous, et celle du pli, qui dépasse d'une
+    // demi-cellule en haut et en bas.
+    expect(projectBounds(doc)).toEqual({ x: 10, y: 9.5, width: 18, height: 7 })
+  })
+
+  it('un pli sépare les deux faces : un trait pointillé, et la flèche qui dit « retournée »', () => {
+    const hinge = facesHinge({ x: 10, y: 10, width: 8, height: 6 })
+    // Sur l'axe du miroir, au milieu de l'écart ; coupé à mi-hauteur par la flèche.
+    expect(hinge.x).toBe(19)
+    expect(hinge.spans).toEqual([
+      [9.5, 12.3],
+      [13.5, 16.5]
+    ])
+    // Un arc du dessus vers le dessous, la pointe au bout.
+    expect(hinge.arc).toBe('M 18.4 13 Q 19 12.4 19.6 13')
+    expect(hinge.head.split(' ')).toHaveLength(3)
+    expect(hinge.head.startsWith('19.699,13.099')).toBe(true)
+    const svg = buildProjectSvg(montage(), DEFAULT_EXPORT)?.svg ?? ''
+    expect(svg).toContain('class="faces-hinge"')
+    expect(svg).toContain('x1="19" y1="9.5" x2="19" y2="12.3"')
+    expect(svg).toContain(`d="${hinge.arc}"`)
+    // Avant les composants : sous tout le reste.
+    expect(svg.indexOf('faces-hinge')).toBeLessThan(svg.indexOf('class="components'))
+    expect(buildProjectSvg(montage([], false), DEFAULT_EXPORT)?.svg).not.toContain('faces-hinge')
   })
 
   it('ne se montre qu’à la demande, et s’enregistre avec le montage', () => {

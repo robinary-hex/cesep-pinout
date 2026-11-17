@@ -83,6 +83,57 @@ export function facesFlip(top: GridRect): number {
   return 2 * (top.x + top.width) + BOARD_FACES_GAP
 }
 
+/**
+ * Le pli entre les deux faces d'une plaque (décision du 17 novembre 2026) : un trait pointillé
+ * au milieu de l'écart, sur l'axe du miroir, qui dépasse un peu la plaque en haut et en bas ; à
+ * mi-hauteur, une petite flèche courbe va du dessus vers le dessous. Elle dit que la plaque de
+ * droite est celle de gauche, retournée comme une page. Dessiné pareil à l'écran et à l'export.
+ */
+export interface FacesHinge {
+  /** Abscisse du trait : l'axe du miroir entre les deux faces. */
+  x: number
+  /** Ses deux tronçons, au-dessus et au-dessous de la flèche : ordonnées de début et de fin. */
+  spans: [number, number][]
+  /** Tracé de l'arc de la flèche. */
+  arc: string
+  /** Sommets de sa pointe, du côté du dessous. */
+  head: string
+}
+
+/** De combien le trait du pli dépasse la plaque, en haut et en bas, en cellules. */
+export const HINGE_OVERSHOOT = 0.5
+/** Allure du pli, en cellules : trait, tirets, arc de la flèche ; sa couleur à l'export. */
+export const HINGE_STYLE = {
+  width: 0.06,
+  dash: '0.25 0.25',
+  arrowWidth: 0.08,
+  color: '#6e7781'
+} as const
+
+/** Le pli d'une plaque dont `top` est la boîte du dessus. */
+export function facesHinge(top: GridRect): FacesHinge {
+  const round = (value: number): number => Math.round(value * 1000) / 1000
+  const x = top.x + top.width + BOARD_FACES_GAP / 2
+  const middle = top.y + top.height / 2
+  // La flèche : un arc de 1,2 cellule, bombé vers le haut ; au bout, il descend à 45°.
+  const half = 0.6
+  const slope = Math.SQRT1_2
+  const end = { x: x + half, y: middle }
+  const tip = { x: end.x + 0.14 * slope, y: end.y + 0.14 * slope }
+  const back = { x: end.x - 0.1 * slope, y: end.y - 0.1 * slope }
+  const wing = 0.16 * slope
+  const head = [tip, { x: back.x - wing, y: back.y + wing }, { x: back.x + wing, y: back.y - wing }]
+  return {
+    x,
+    spans: [
+      [top.y - HINGE_OVERSHOOT, round(middle - 0.7)],
+      [round(middle + 0.5), top.y + top.height + HINGE_OVERSHOOT]
+    ],
+    arc: `M ${round(x - half)} ${round(middle)} Q ${round(x)} ${round(middle - half)} ${round(end.x)} ${round(end.y)}`,
+    head: head.map((point) => `${round(point.x)},${round(point.y)}`).join(' ')
+  }
+}
+
 /** Union des boîtes de tous les composants d'un projet ; null si le montage est vide. */
 /** Plus petit rectangle contenant les deux. */
 export function unionRects(a: GridRect, b: GridRect): GridRect {
@@ -123,8 +174,17 @@ export function projectBounds(project: Project): GridRect | null {
     if (!def) continue
     const bounds = instanceBounds(instance, def)
     include(bounds)
-    // Une plaque qui montre son dessous occupe aussi la place de celui-ci.
-    if (showsUnderside(instance, def)) include(undersideBounds(bounds))
+    // Une plaque qui montre son dessous occupe aussi la place de celui-ci, et celle du pli qui
+    // dépasse entre ses deux faces.
+    if (showsUnderside(instance, def)) {
+      include(undersideBounds(bounds))
+      include({
+        x: bounds.x + bounds.width,
+        y: bounds.y - HINGE_OVERSHOOT,
+        width: BOARD_FACES_GAP,
+        height: bounds.height + 2 * HINGE_OVERSHOOT
+      })
+    }
   }
   const sheet = projectStyleSheet(project)
   for (const wire of project.wires) {

@@ -9,9 +9,11 @@ import {
   crossingPieceEnds,
   distanceToSegment,
   facesFlip,
+  facesHinge,
   formatReadout,
   gridLines,
   groupOutline,
+  HINGE_STYLE,
   instanceBounds,
   instanceMatrix,
   instanceTextPlacements,
@@ -45,6 +47,8 @@ import {
   stretchCount,
   stretchedDefinition,
   stretchHandles,
+  THROUGH_MARK_COLOR,
+  THROUGH_MARK_EDGE,
   THROUGH_MARK_RADIUS,
   throughMarks,
   undersideBounds,
@@ -58,8 +62,9 @@ import {
   BARE_WIRE_EDGE_SCALE,
   jumperPathData,
   movedWireVertex,
+  SOLDER_COLOR,
+  SOLDER_EDGE,
   SOLDER_SCALE,
-  wireInk,
   wireShapeData,
   wiresFollowingJunctions,
   wiresFollowingPins,
@@ -424,7 +429,7 @@ const ghostCopies = computed(() => {
         const style = store.styleFor(wire)
         return {
           id: wire.id,
-          color: wireInk(wire),
+          color: wire.color,
           width: style.wireWidth,
           d: wireShapeData(wire.kind, wire.points, style.cornerRadius)
         }
@@ -500,9 +505,20 @@ const undersides = computed(() => {
 })
 
 /**
+ * Le pli entre les deux faces de chaque plaque qui montre son dessous : un trait pointillé et la
+ * flèche qui dit que la plaque de droite est celle de gauche, retournée. Il suit la plaque
+ * pendant un geste.
+ */
+const hinges = computed(() =>
+  placed.value
+    .filter((item) => showsUnderside(item.instance, item.def))
+    .map((item) => ({ id: item.instance.id, ...facesHinge(boundsOf(item)) }))
+)
+
+/**
  * Ce qui traverse les plaques à deux faces, plaque par plaque : sur chaque pastille où ressort
- * une patte ou un bout de fil enfiché de l'autre côté, une goutte d'étain. Pendant un geste,
- * celles de l'aperçu.
+ * une patte ou un bout de fil enfiché de l'autre côté, un point de couleur vive. Pendant un
+ * geste, ceux de l'aperçu.
  */
 const throughByBoard = computed(() => {
   const byBoard = new Map<string, { key: string; x: number; y: number }[]>()
@@ -770,8 +786,8 @@ const renderedWires = computed(() =>
       body: shown ? (shown.body.length >= 2 ? wirePathData(shown.body, radius) : '') : d,
       dotted: shown ? shown.dotted.map((tail) => wirePathData(tail, radius)) : [],
       heads: shown ? shown.heads.map((head) => pointsAttribute(head)) : [],
-      // Un fil nu se dessine en métal, avec un liseré sombre dessous.
-      color: wireInk(wire),
+      // Un fil nu se dessine dans sa couleur (l'étain au départ), avec un liseré sombre dessous.
+      color: wire.color,
       bare: wire.kind === 'bare',
       jumper,
       selected: selectedWireSet.value.has(wire.id),
@@ -811,7 +827,7 @@ const crossingMarks = computed(() =>
       x2,
       y2,
       width: (top ? store.styleFor(top) : profile.value).wireWidth,
-      color: top ? wireInk(top) : '#000000'
+      color: top ? top.color : '#000000'
     }
   })
 )
@@ -832,7 +848,7 @@ const junctions = computed(() => {
   })
 })
 
-/** Points de soudure des fils nus, sur chaque broche de leur trajet. */
+/** Points de soudure des fils nus : un point de couleur vive sur chaque broche de leur trajet. */
 const solders = computed(() =>
   (dragPreview.value?.solders ?? store.connectivity.solders).map((solder) => {
     const wire = wireById.value.get(solder.wireId)
@@ -868,7 +884,7 @@ const endLabels = computed(() =>
         wireId: wire.id,
         endIndex: end.endIndex,
         text,
-        color: wireInk(wire),
+        color: wire.color,
         dotRadius: style.wireWidth,
         fontCells: style.endLabelFont.size / style.cellPx,
         family: style.endLabelFont.family,
@@ -1863,6 +1879,22 @@ const cursorClass = computed(() => {
         </g>
 
         <g :transform="`translate(${view.panX} ${view.panY}) scale(${cell})`">
+          <!-- Le pli entre les deux faces d'une plaque, sous tout le reste. -->
+          <g v-for="hinge in hinges" :key="`hinge:${hinge.id}`" class="faces-hinge">
+            <line
+              v-for="(span, s) in hinge.spans"
+              :key="s"
+              :x1="hinge.x"
+              :x2="hinge.x"
+              :y1="span[0]"
+              :y2="span[1]"
+              :stroke-width="HINGE_STYLE.width"
+              :stroke-dasharray="HINGE_STYLE.dash"
+            />
+            <path :d="hinge.arc" :stroke-width="HINGE_STYLE.arrowWidth" />
+            <polygon :points="hinge.head" />
+          </g>
+
           <template v-for="layer in STACK" :key="layer">
             <template v-if="layer === 'wires'">
               <g class="net-glows">
@@ -1974,6 +2006,8 @@ const cursorClass = computed(() => {
                   :cx="dot.x"
                   :cy="dot.y"
                   :r="dot.r"
+                  :fill="SOLDER_COLOR"
+                  :stroke="SOLDER_EDGE"
                   vector-effect="non-scaling-stroke"
                 />
               </g>
@@ -2047,6 +2081,8 @@ const cursorClass = computed(() => {
                     :cx="mark.x"
                     :cy="mark.y"
                     :r="THROUGH_MARK_RADIUS"
+                    :fill="THROUGH_MARK_COLOR"
+                    :stroke="THROUGH_MARK_EDGE"
                     vector-effect="non-scaling-stroke"
                   />
                 </g>
@@ -2352,7 +2388,7 @@ const cursorClass = computed(() => {
             <path
               class="committed"
               :d="drawingPreview.committed"
-              :stroke="screenColor(store.currentColor)"
+              :stroke="screenColor(store.drawingColor)"
               :stroke-width="wireWidth"
             />
             <circle
@@ -2613,19 +2649,32 @@ const cursorClass = computed(() => {
   cursor: nwse-resize;
 }
 
-/* Point de soudure d'un fil nu sur une broche : une goutte d'étain. */
+/* Point de soudure d'un fil nu sur une broche : un point de couleur vive, cerné de sombre. */
 .solder {
-  fill: #c3ccd3;
-  stroke: #5d6770;
-  stroke-width: 1;
+  stroke-width: 1.25;
   pointer-events: none;
 }
 
-/* Ce qui traverse une plaque à deux faces : une goutte d'étain sur la pastille. */
+/* Le pli entre les deux faces d'une plaque : un trait pointillé et la flèche « retournée ». */
+.faces-hinge {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.faces-hinge line {
+  stroke-linecap: butt;
+}
+
+.faces-hinge polygon {
+  fill: var(--text-muted);
+  stroke: none;
+}
+
+/* Ce qui traverse une plaque à deux faces : un point de couleur vive, cerné de sombre. */
 .through {
-  fill: #c3ccd3;
-  stroke: #5d6770;
-  stroke-width: 1;
+  stroke-width: 1.25;
   pointer-events: none;
 }
 

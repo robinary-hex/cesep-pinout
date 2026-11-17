@@ -13,7 +13,6 @@ import {
   jumperControl,
   jumperPathData,
   movedWireVertex,
-  wireInk,
   wireKindLabel,
   wireShapeData
 } from './wireKinds'
@@ -82,12 +81,6 @@ describe('sortes de fils : tracé', () => {
     expect(wireShapeData('jumper', points, 0)).toContain(' Q ')
     expect(wireShapeData('bare', points, 0)).not.toContain(' Q ')
     expect(wireShapeData(undefined, points, 0)).toBe(wireShapeData('bare', points, 0))
-  })
-
-  it('un fil nu se dessine en métal ; les autres dans leur couleur', () => {
-    expect(wireInk(wire('a', [], 'bare'))).toBe(BARE_WIRE_COLOR)
-    expect(wireInk(wire('a', [], 'jumper'))).toBe('#d62828')
-    expect(wireInk(wire('a', []))).toBe('#d62828')
   })
 
   it('le bout d’un pont va où on le pose ; celui d’un fil ajoute un coude', () => {
@@ -274,14 +267,29 @@ describe('sortes de fils : fichier et export', () => {
   it('s’enregistrent avec le montage et s’exportent chacun à sa façon', () => {
     const project = createEmptyProject('Plaque', DEFAULT_PROFILE)
     project.wires = [
-      wire(
-        'b',
-        [
-          [0, 0],
-          [4, 0]
-        ],
-        'bare'
-      ),
+      {
+        ...wire(
+          'b',
+          [
+            [0, 0],
+            [4, 0]
+          ],
+          'bare'
+        ),
+        color: BARE_WIRE_COLOR
+      },
+      // Un fil nu d'une autre couleur : la sienne, sur le même liseré.
+      {
+        ...wire(
+          'c',
+          [
+            [0, 2],
+            [4, 2]
+          ],
+          'bare'
+        ),
+        color: '#b45309'
+      },
       wire(
         'j',
         [
@@ -296,12 +304,14 @@ describe('sortes de fils : fichier et export', () => {
       ])
     ]
     const reread = parseProject(serializeProject(project))
-    expect(reread.wires.map((entry) => entry.kind)).toEqual(['bare', 'jumper', undefined])
+    expect(reread.wires.map((entry) => entry.kind)).toEqual(['bare', 'bare', 'jumper', undefined])
     const svg = buildProjectSvg(project, DEFAULT_EXPORT)?.svg ?? ''
-    // Le pont : une courbe ; le fil nu : en métal sur un liseré sombre ; le fil : sa couleur.
+    // Le pont : une courbe ; le fil nu : sa couleur, l'étain au départ, sur un liseré sombre ;
+    // le fil : sa couleur.
     expect(svg).toContain('d="M 0 4 Q ')
     expect(svg).toContain(`stroke="${BARE_WIRE_COLOR}"`)
-    expect(svg).toContain('stroke="#59616a"')
+    expect(svg).toContain('stroke="#b45309"')
+    expect(svg.split('stroke="#59616a"')).toHaveLength(3)
     expect(svg).toContain('stroke="#d62828"')
     // Sans broche sur son trajet, pas de point de soudure.
     expect(svg).not.toContain('class="solders"')

@@ -317,6 +317,41 @@ describe('montage : composant extensible', () => {
     wrapper.unmount()
   })
 
+  it('le panneau d’une plaque a la case « Montrer le dessous », sous son libellé', async () => {
+    const store = useSchematicStore()
+    const board = createEmptyComponent('plaque', 'Plaque')
+    board.size = { widthCells: 6, heightCells: 4 }
+    board.visual = {
+      kind: 'drawing',
+      primitives: [{ kind: 'holes', x: 4, y: 4, w: 16, h: 8, color: '#d5dbe0' }]
+    }
+    store.startPlacing(board)
+    const plate = store.placeAt(0, 0)
+    store.startPlacing(createEmptyComponent('r', 'Résistance'))
+    const plain = store.placeAt(20, 3)
+    store.stopPlacing()
+    if (!plate || !plain) throw new Error('pose refusée')
+    store.selection = [plate]
+    store.inspectorOpen = true
+    const wrapper = mount(SchematicEditor, { attachTo: document.body })
+    await flushPromises()
+    const check = wrapper.get('.inspector .underside')
+    // Juste sous le champ « Libellé ».
+    expect(check.element.previousElementSibling?.textContent).toContain('Libellé')
+    const box = check.get('input').element as HTMLInputElement
+    expect(box.checked).toBe(false)
+    box.checked = true
+    box.dispatchEvent(new Event('change', { bubbles: true }))
+    await flushPromises()
+    expect(store.doc.components[0]?.underside).toBe(true)
+    expect(store.undoLabel).toBe('Montrer le dessous')
+    // Un composant ordinaire n'a pas cette case.
+    store.selection = [plain]
+    await flushPromises()
+    expect(wrapper.find('.inspector .underside').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('le panneau a une entrée par copie d’un texte variable du motif', async () => {
     const store = useSchematicStore()
     const def = createEmptyComponent('bornier', 'Bornier')

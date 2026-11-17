@@ -7,21 +7,34 @@ import { dragVertex, wirePathData } from './wires'
 //   - le fil isolé, celui de toujours : des coudes sur la grille, relié par ses seuls bouts ;
 //   - le fil nu (`bare`) : la même géométrie, mais soudé à toutes les broches posées sur son
 //     trajet. C'est le fil dénudé qu'on couche sur une rangée de pattes pour les relier d'un
-//     coup. Il n'a pas de gaine, donc pas de couleur à lui : il se dessine en métal ;
+//     coup. Il se dessine en métal, sur un liseré sombre : en étain au départ, dans la couleur
+//     qu'on lui donne ensuite (cuivre, ou une couleur par piste), comme tout fil ;
 //   - le pont (`jumper`) : un fil isolé de A à B, dessiné en courbe. Il n'a que ses deux bouts,
 //     ne suit pas la grille et ne touche rien en chemin.
 //
 // Tout ce qui tient à la sorte d'un fil est ici ; le reste du domaine traite un fil comme une
 // suite de sommets.
 
-/** Couleur d'un fil nu : l'étain, et le liseré plus sombre qui lui donne son relief. */
+/**
+ * Couleur d'un fil nu tant qu'on ne lui en a pas choisi une autre : l'étain ; et le liseré plus
+ * sombre qui donne son relief à un fil nu, quelle que soit sa couleur.
+ */
 export const BARE_WIRE_COLOR = '#dfe5ea'
+/** Nom de cette couleur dans les palettes, où elle vient en tête pour les fils nus. */
+export const BARE_WIRE_COLOR_NAME = 'Étain'
 export const BARE_WIRE_EDGE = '#59616a'
 /** Largeur du liseré d'un fil nu, en multiple de l'épaisseur du fil. */
 export const BARE_WIRE_EDGE_SCALE = 1.6
-/** Point de soudure d'un fil nu sur une broche : sa couleur, et son rayon en épaisseurs de fil. */
-export const SOLDER_COLOR = '#c3ccd3'
-export const SOLDER_EDGE = '#5d6770'
+/**
+ * Marque d'une broche soudée : un point de couleur vive, cerné de sombre, qu'on voit sur un fil
+ * nu quelle que soit sa couleur, et sur les pastilles d'une plaque (décision du 17 novembre
+ * 2026 : une goutte d'étain sur un fil d'étain ne disait pas qu'il y avait là une broche). C'est
+ * la marque du point de soudure d'un fil nu sur une broche de son trajet, et celle de ce qui
+ * traverse une plaque à deux faces (voir boardFaces.ts). Rayon du point de soudure : en
+ * épaisseurs de fil.
+ */
+export const SOLDER_COLOR = '#f5a524'
+export const SOLDER_EDGE = '#6b3f00'
 export const SOLDER_SCALE = 1.5
 
 export function isJumper(wire: Pick<Wire, 'kind'>): boolean {
@@ -30,11 +43,6 @@ export function isJumper(wire: Pick<Wire, 'kind'>): boolean {
 
 export function isBare(wire: Pick<Wire, 'kind'>): boolean {
   return wire.kind === 'bare'
-}
-
-/** Couleur dans laquelle un fil se dessine : la sienne, ou l'étain pour un fil nu. */
-export function wireInk(wire: Pick<Wire, 'kind' | 'color'>): string {
-  return wire.kind === 'bare' ? BARE_WIRE_COLOR : wire.color
 }
 
 /** Nom d'une sorte de fil dans l'interface. */
