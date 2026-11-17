@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import {
   DEFAULT_CATEGORY,
   DOT_SCALES,
+  holeCounts,
   naturalImageSize,
   PIN_KIND_LABELS,
   PIN_KINDS,
@@ -347,6 +348,13 @@ function isDropEnd(section: PinSection): boolean {
 // Forme(s) sélectionnée(s)
 
 const primitive = computed(() => store.selectedPrimitive)
+
+/** Couleur des pastilles d'une grille de trous. */
+function setHolesColor(color: string): void {
+  store.updatePrimitive(store.selectedIndexes[0] ?? -1, 'Couleur des pastilles', (target) => {
+    if (target.kind === 'holes') target.color = color
+  })
+}
 const primitiveIndex = computed(() => store.selectedIndexes[0] ?? -1)
 /** Formes et broches sélectionnées, ensemble. */
 const multiCount = computed(() => store.selectedIndexes.length + store.selectedPinIds.length)
@@ -693,6 +701,16 @@ function setClosed(event: Event): void {
         >
           Taille d’origine
         </button>
+      </template>
+
+      <template v-else-if="primitive.kind === 'holes'">
+        <p class="hint holes-count">
+          {{ holeCounts(primitive).columns }} × {{ holeCounts(primitive).rows }} trous
+        </p>
+        <label class="field">
+          <span>Pastilles</span>
+          <ColorField :value="primitive.color" @change="setHolesColor" />
+        </label>
       </template>
 
       <template v-else-if="primitive.kind === 'dot'">

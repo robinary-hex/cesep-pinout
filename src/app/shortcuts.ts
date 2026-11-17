@@ -174,7 +174,8 @@ export const SHORTCUT_SECTIONS: ShortcutSection[] = [
           k('L', 'Ligne', { icon: 'line' }),
           k('P', 'Polyligne', { icon: 'polyline' }),
           k('E', 'Texte', { icon: 'type' }),
-          k('B', 'Broche', { icon: 'pin' })
+          k('B', 'Broche', { icon: 'pin' }),
+          k('G', 'Grille de trous', { icon: 'holes' })
         ]
       },
       {

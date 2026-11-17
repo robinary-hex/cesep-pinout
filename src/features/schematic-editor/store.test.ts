@@ -1914,3 +1914,30 @@ describe('montage : composants extensibles', () => {
     expect(store.doc.components[0]).toMatchObject({ count: 3, fields: { Nom: 'A', 'Nom 2': 'B' } })
   })
 })
+
+describe('montage : plaque à trous', () => {
+  /** Une plaque de 6 × 4 cellules, avec sa grille de trous. */
+  function board(): ComponentDefinition {
+    const def = createEmptyComponent('plaque', 'Plaque')
+    def.size = { widthCells: 6, heightCells: 4 }
+    def.visual = {
+      kind: 'drawing',
+      primitives: [{ kind: 'holes', x: 4, y: 4, w: 16, h: 8, color: '#d5dbe0' }]
+    }
+    return def
+  }
+
+  it('se pose sous les composants déjà là : ils vont dessus', () => {
+    const store = useSchematicStore()
+    store.startPlacing(resistor())
+    const first = store.placeAt(2, 2)
+    store.startPlacing(board())
+    const plate = store.placeAt(0, 0)
+    store.startPlacing(resistor())
+    const last = store.placeAt(2, 4)
+    store.stopPlacing()
+    // Le dernier de la liste est dessiné au-dessus : la plaque est la première, donc dessous.
+    expect(store.doc.components.map((instance) => instance.id)).toEqual([plate, first, last])
+    expect(store.doc.components.every((instance) => instance.behindWires)).toBe(true)
+  })
+})

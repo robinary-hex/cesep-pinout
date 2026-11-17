@@ -1,13 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import {
   abuttingImages,
+  componentDefinitionSchema,
   componentFields,
   componentIssues,
   createEmptyComponent,
+  DEFAULT_HOLES_COLOR,
   DEFAULT_SHAPE_STYLE,
+  discsPathData,
   dotRadiusCells,
+  drawingHoles,
+  holeCells,
+  holeCounts,
   imageRatio,
   importedImageSize,
+  isBoard,
   naturalImageSize,
   reorderItem,
   NO_ARROWS,
@@ -17,9 +24,11 @@ import {
   translatePrimitive,
   turnedTextBox,
   withFreeImageFiles,
+  type HolesPrimitive,
   type ImagePrimitive,
   type Primitive
 } from './component'
+import { dragHandle, primitiveHandles } from './handles'
 import { nearestInsidePoint } from './grid'
 import { pngHeaderDataUrl } from './testing/pngHeader'
 
@@ -323,5 +332,76 @@ describe('images du mini-éditeur', () => {
     )
     expect(renamed).toMatchObject({ file: 'image-2.png', dataUrl: other })
     expect(again).toMatchObject({ file: 'image-2.png', x: 0 })
+  })
+})
+
+describe('grille de trous d’une plaque', () => {
+  /** Une grille de 1 à 4 cellules en largeur, de 1 à 3 en hauteur : 4 × 3 trous. */
+  const grid: HolesPrimitive = {
+    kind: 'holes',
+    x: 4,
+    y: 4,
+    w: 12,
+    h: 8,
+    color: DEFAULT_HOLES_COLOR
+  }
+
+  it('a un trou à chaque intersection de sa boîte, bord compris', () => {
+    expect(holeCounts(grid)).toEqual({ columns: 4, rows: 3 })
+    const cells = holeCells(grid)
+    expect(cells).toHaveLength(12)
+    // Ligne par ligne, de gauche à droite.
+    expect(cells.slice(0, 5)).toEqual([
+      { x: 1, y: 1 },
+      { x: 2, y: 1 },
+      { x: 3, y: 1 },
+      { x: 4, y: 1 },
+      { x: 1, y: 2 }
+    ])
+    // Une boîte posée au quart de cellule ne compte que les intersections qu'elle contient.
+    expect(holeCounts({ x: 3, y: 5, w: 6, h: 2 })).toEqual({ columns: 2, rows: 0 })
+    expect(holeCells({ x: 3, y: 5, w: 6, h: 2 })).toEqual([])
+    // Une seule rangée : une boîte fine, posée sur la ligne.
+    expect(holeCounts({ x: 0, y: 4, w: 8, h: 1 })).toEqual({ columns: 3, rows: 1 })
+  })
+
+  it('se déplace, se mesure et se redimensionne comme un rectangle', () => {
+    expect(primitiveBounds(grid)).toEqual({ x1: 4, y1: 4, x2: 16, y2: 12 })
+    expect(translatePrimitive(grid, 4, -4)).toMatchObject({ kind: 'holes', x: 8, y: 0, w: 12 })
+    expect(primitiveHandles(grid)).toHaveLength(8)
+    // Tirer le bord droit de deux cellules : deux colonnes de plus.
+    const wider = dragHandle(grid, 'e', [24, 8])
+    expect(wider).toMatchObject({ kind: 'holes', x: 4, w: 20 })
+    expect(holeCounts(wider as HolesPrimitive).columns).toBe(6)
+  })
+
+  it('se dessine en un seul tracé de disques, et s’enregistre avec le composant', () => {
+    const d = discsPathData(
+      [
+        { x: 1, y: 1 },
+        { x: 2, y: 1 }
+      ],
+      0.25
+    )
+    // Deux disques : deux tracés fermés de deux arcs, de rayon 0,25, centrés sur les trous.
+    expect(d).toBe(
+      'M0.75 1a0.25 0.25 0 1 0 0.5 0a0.25 0.25 0 1 0 -0.5 0M1.75 1a0.25 0.25 0 1 0 0.5 0a0.25 0.25 0 1 0 -0.5 0'
+    )
+    expect(discsPathData([{ x: 1, y: 2 }], 0.25, 20)).toBe('M15 40a5 5 0 1 0 10 0a5 5 0 1 0 -10 0')
+    const board = createEmptyComponent('plaque', 'Plaque')
+    board.size = { widthCells: 5, heightCells: 4 }
+    board.visual = { kind: 'drawing', primitives: [grid] }
+    expect(componentDefinitionSchema.parse(JSON.parse(JSON.stringify(board)))).toEqual(board)
+    // Une plaque se reconnaît à sa grille ; elle n'a pas de broches, et on ne le lui reproche pas.
+    expect(isBoard(board)).toBe(true)
+    expect(isBoard(createEmptyComponent('r', 'R'))).toBe(false)
+    expect(componentIssues(board)).toEqual([])
+    // Deux grilles qui se recouvrent ne comptent pas un trou deux fois.
+    expect(drawingHoles([grid, { ...grid, x: 12 }])).toHaveLength(18)
+    // Une grille qui sort de la boîte du composant se signale, comme toute forme.
+    board.size = { widthCells: 3, heightCells: 4 }
+    expect(componentIssues(board).map((issue) => issue.message)).toContain(
+      'Une forme dépasse la boîte du composant'
+    )
   })
 })

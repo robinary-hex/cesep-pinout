@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
+  DEFAULT_HOLES_COLOR,
   DEFAULT_SHAPE_STYLE,
   dragHandle,
   formatReadout,
@@ -84,7 +85,7 @@ interface QPoint {
 type Drag =
   | {
       kind: 'box'
-      tool: 'rect' | 'ellipse' | 'line'
+      tool: 'rect' | 'ellipse' | 'line' | 'holes'
       start: QPoint
       current: QPoint
       /** Maj enfoncée : carré ou cercle plutôt que rectangle ou ellipse. */
@@ -472,7 +473,7 @@ const preview = computed<Preview | null>(() => {
   const y1 = Math.min(current.start.y, end.y)
   const x2 = Math.max(current.start.x, end.x)
   const y2 = Math.max(current.start.y, end.y)
-  if (current.tool === 'rect') {
+  if (current.tool === 'rect' || current.tool === 'holes') {
     return { kind: 'rect', x: px(x1), y: px(y1), width: px(x2 - x1), height: px(y2 - y1) }
   }
   return {
@@ -827,6 +828,7 @@ function onPointerDown(event: PointerEvent): void {
     case 'rect':
     case 'ellipse':
     case 'line':
+    case 'holes':
       drag.value = { kind: 'box', tool, start: q, current: q, square: event.shiftKey }
       capture(event)
       break
@@ -963,6 +965,14 @@ function commitBox(box: Extract<Drag, { kind: 'box' }>): void {
   if (w === 0 || h === 0) return
   if (box.tool === 'rect') {
     store.addPrimitive({ kind: 'rect', x: x1, y: y1, w, h, rx: 0, style }, 'Ajouter un rectangle')
+    return
+  }
+  if (box.tool === 'holes') {
+    // La grille de trous d'une plaque : un trou à chaque intersection que la boîte contient.
+    store.addPrimitive(
+      { kind: 'holes', x: x1, y: y1, w, h, color: DEFAULT_HOLES_COLOR },
+      'Ajouter une grille de trous'
+    )
     return
   }
   const rx = Math.max(1, Math.round(w / 2))

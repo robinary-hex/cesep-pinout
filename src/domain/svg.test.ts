@@ -216,6 +216,18 @@ describe('export SVG', () => {
     ])
   })
 
+  it('exporte la grille de trous d’une plaque en deux tracés : pastilles, puis trous', () => {
+    const grid = { kind: 'holes' as const, x: 4, y: 4, w: 4, h: 1, color: '#d5dbe0' }
+    const svg = primitiveSvg(grid, 0.1)
+    const paths = [...svg.matchAll(/<path d="([^"]+)" fill="([^"]+)"/g)]
+    expect(paths.map((match) => match[2])).toEqual(['#d5dbe0', '#0b0f14'])
+    // Deux trous, en (1, 1) et (2, 1) : deux disques par tracé.
+    expect(paths.map((match) => (match[1]?.match(/M/g) ?? []).length)).toEqual([2, 2])
+    expect(svg).toContain('fill-opacity="0.7"')
+    // Une grille sans trou (boîte entre deux lignes) ne dessine rien.
+    expect(primitiveSvg({ ...grid, y: 5, h: 2 }, 0.1)).toBe('')
+  })
+
   it('retourne null pour un montage vide et échappe le texte', () => {
     expect(
       buildProjectSvg({ ...project, components: [], wires: [], labels: [] }, DEFAULT_EXPORT)

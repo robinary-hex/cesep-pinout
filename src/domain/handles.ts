@@ -75,6 +75,7 @@ export function primitiveHandles(primitive: Primitive): Handle[] {
   switch (primitive.kind) {
     case 'rect':
     case 'text':
+    case 'holes':
       return boxHandles(primitive)
     case 'image':
       // Une image garde ses proportions : seuls ses coins se saisissent.
@@ -111,6 +112,7 @@ export function dragHandle(
   switch (primitive.kind) {
     case 'rect':
     case 'text':
+    case 'holes':
       return { ...primitive, ...resizeBox(primitive, handleId, target) }
     case 'image':
       return {

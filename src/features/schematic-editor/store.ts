@@ -34,6 +34,7 @@ import {
   prunedStyles,
   regroupedCopies,
   removeVertex,
+  isBoard,
   paletteChoices,
   recoloredCustom,
   removedCustom,
@@ -861,7 +862,12 @@ export const useSchematicStore = defineStore('schematic', () => {
     const shape = variantDefinition(def, current.variant)
     applyWithElasticWires(`Poser ${def.name}`, (draft) => {
       if (refresh) draft.embeddedDefs[def.id] = castDraft(structuredClone(def))
-      draft.components.push({
+      // Une plaque à trous se pose sous tout le reste : les composants vont dessus.
+      const add = (instance: ComponentInstance): void => {
+        if (isBoard(shape)) draft.components.unshift(instance)
+        else draft.components.push(instance)
+      }
+      add({
         id,
         defId: def.id,
         x,

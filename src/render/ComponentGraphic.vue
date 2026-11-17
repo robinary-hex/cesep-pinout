@@ -3,7 +3,13 @@ import { computed } from 'vue'
 import {
   abuttingImages,
   arrowHeadPoints,
+  discsPathData,
   dotRadiusCells,
+  HOLE_COLOR,
+  HOLE_OPACITY,
+  HOLE_PAD_RADIUS_CELLS,
+  HOLE_RADIUS_CELLS,
+  holeCells,
   layoutText,
   middleArrowHead,
   NO_ARROWS,
@@ -17,6 +23,7 @@ import {
   type Arrows,
   type ComponentDefinition,
   type FieldValues,
+  type HolesPrimitive,
   type LocalPoint,
   type Primitive,
   type ShapeStyle,
@@ -219,6 +226,18 @@ function textAttrs(primitive: TextPrimitive): Record<string, string | undefined>
   return attributes
 }
 
+/**
+ * Tracés d'une grille de trous : toutes ses pastilles en un seul, tous ses trous en un autre
+ * (une plaque en a des centaines).
+ */
+function holesPaths(grid: HolesPrimitive): { pads: string; drills: string } {
+  const cells = holeCells(grid)
+  return {
+    pads: discsPathData(cells, HOLE_PAD_RADIUS_CELLS, props.cellPx),
+    drills: discsPathData(cells, HOLE_RADIUS_CELLS, props.cellPx)
+  }
+}
+
 function down(index: number, event: PointerEvent): void {
   if (props.interactive) emit('primitiveDown', index, event)
 }
@@ -324,6 +343,24 @@ function menu(index: number, event: MouseEvent): void {
           :cx="q(p.x)"
           :cy="q(p.y)"
           :r="dotHitRadiusPx(p.scale)"
+          fill="transparent"
+        />
+      </template>
+
+      <template v-else-if="p.kind === 'holes'">
+        <path class="hole-pads" :d="holesPaths(p).pads" :fill="p.color" />
+        <path
+          class="hole-drills"
+          :d="holesPaths(p).drills"
+          :fill="HOLE_COLOR"
+          :fill-opacity="HOLE_OPACITY"
+        />
+        <rect
+          v-if="interactive"
+          :x="q(p.x)"
+          :y="q(p.y)"
+          :width="q(p.w)"
+          :height="q(p.h)"
           fill="transparent"
         />
       </template>

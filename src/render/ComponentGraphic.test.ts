@@ -212,6 +212,27 @@ describe('ComponentGraphic', () => {
     ])
   })
 
+  it('dessine la grille de trous d’une plaque en deux tracés', () => {
+    const def = createEmptyComponent('plaque', 'Plaque')
+    def.visual = {
+      kind: 'drawing',
+      primitives: [{ kind: 'holes', x: 4, y: 4, w: 8, h: 4, color: '#d5dbe0' }]
+    }
+    const wrapper = mount(ComponentGraphic, { props: { def, cellPx: 20 } })
+    // Trois colonnes, deux rangées : six pastilles et six trous, un tracé pour chaque.
+    const pads = wrapper.get('path.hole-pads')
+    const drills = wrapper.get('path.hole-drills')
+    expect((pads.attributes('d')?.match(/M/g) ?? []).length).toBe(6)
+    expect((drills.attributes('d')?.match(/M/g) ?? []).length).toBe(6)
+    expect(pads.attributes('fill')).toBe('#d5dbe0')
+    // La première pastille : centrée sur l'intersection (1, 1), soit (20, 20) px, rayon 6 px.
+    expect(pads.attributes('d')).toMatch(/^M14 20a6 6 0 1 0 12 0/)
+    // Hors de l'éditeur, rien à cliquer.
+    expect(wrapper.find('rect').exists()).toBe(false)
+    const editing = mount(ComponentGraphic, { props: { def, cellPx: 20, interactive: true } })
+    expect(editing.get('rect').attributes()).toMatchObject({ x: '20', y: '20', width: '40' })
+  })
+
   it('signale une image manquante au lieu de planter', () => {
     const def = createEmptyComponent('n', 'N')
     def.visual = {

@@ -1,6 +1,7 @@
 import type { IconName } from '@/ui/icons'
 
-export type ToolId = 'select' | 'rect' | 'ellipse' | 'line' | 'polyline' | 'dot' | 'text' | 'pin'
+export type ToolId =
+  'select' | 'rect' | 'ellipse' | 'line' | 'polyline' | 'dot' | 'text' | 'pin' | 'holes'
 
 export interface ToolInfo {
   id: ToolId
@@ -37,6 +38,13 @@ export const TOOLS: readonly ToolInfo[] = [
     key: 'b',
     hint: 'Broche : cliquer une intersection, ou glisser une zone pour en poser à toutes',
     icon: 'pin'
+  },
+  {
+    id: 'holes',
+    label: 'Grille de trous',
+    key: 'g',
+    hint: 'Plaque à trous : glisser sur la zone des trous, un par intersection',
+    icon: 'holes'
   }
 ]
 

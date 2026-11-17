@@ -148,6 +148,7 @@ function extent(primitive: Primitive): [number, number] {
     case 'rect':
     case 'text':
     case 'image':
+    case 'holes':
       return [primitive.x, primitive.x + primitive.w]
     case 'ellipse':
       return [primitive.cx - primitive.rx, primitive.cx + primitive.rx]
@@ -219,8 +220,10 @@ function stretchedPrimitive(primitive: Primitive, stretch: Stretch, count: numbe
   }
   const at = (x: number): number => stretchedX(x, stretch, count)
   switch (primitive.kind) {
+    // Une grille de trous à cheval s'élargit comme un contour : elle a plus de trous.
     case 'rect':
-    case 'text': {
+    case 'text':
+    case 'holes': {
       const x = at(primitive.x)
       return [{ ...primitive, x, w: at(primitive.x + primitive.w) - x }]
     }
@@ -273,6 +276,7 @@ function turnedPrimitive(primitive: Primitive): Primitive {
   switch (primitive.kind) {
     case 'rect':
     case 'text':
+    case 'holes':
       return { ...primitive, x: primitive.y, y: primitive.x, w: primitive.h, h: primitive.w }
     case 'image': {
       const turned: ImagePrimitive = {

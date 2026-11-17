@@ -992,3 +992,51 @@ describe('éditeur de composants : propriétés du composant', () => {
     wrapper.unmount()
   })
 })
+
+describe('éditeur de composants : plaque à trous', () => {
+  it('l’outil Grille de trous (G) trace la zone des trous ; le panneau dit combien il y en a', async () => {
+    const store = useComponentEditorStore()
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    const svg = wrapper.get('svg.canvas')
+    const at = (x: number, y: number): MouseEventInit => {
+      const origin = /translate\(([-\d.]+) ([-\d.]+)\)/.exec(
+        svg.get('g[transform]').attributes('transform') ?? ''
+      )
+      return {
+        clientX: Number(origin?.[1] ?? 0) + x * store.cellPx,
+        clientY: Number(origin?.[2] ?? 0) + y * store.cellPx
+      }
+    }
+    const send = async (type: string, position: MouseEventInit): Promise<void> => {
+      svg.element.dispatchEvent(
+        new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, ...position })
+      )
+      await nextTick()
+    }
+    await key('g')
+    expect(store.tool).toBe('holes')
+    expect(wrapper.find('.toolbar button[title*="Plaque à trous"]').exists()).toBe(true)
+    // De (1, 0) à (3, 2) cellules : trois colonnes, trois rangées.
+    await send('pointerdown', at(1, 0))
+    await send('pointermove', at(3, 2))
+    await send('pointerup', at(3, 2))
+    expect(store.undoLabel).toBe('Ajouter une grille de trous')
+    expect(store.doc.visual.primitives).toEqual([
+      { kind: 'holes', x: 4, y: 0, w: 8, h: 8, color: '#d5dbe0' }
+    ])
+    expect(wrapper.find('path.hole-pads').exists()).toBe(true)
+    // Sélectionnée, elle montre son nombre de trous et la couleur de ses pastilles.
+    store.selectPrimitives([0])
+    store.inspectorOpen = true
+    await nextTick()
+    const panel = wrapper.get('.inspector')
+    expect(panel.get('h3').text()).toBe('Grille de trous')
+    expect(panel.get('.holes-count').text()).toBe('3 × 3 trous')
+    const code = panel.get('.color-field .hex')
+    await code.setValue('#c9a227')
+    await code.trigger('change')
+    expect(store.doc.visual.primitives[0]).toMatchObject({ kind: 'holes', color: '#c9a227' })
+    expect(store.undoLabel).toBe('Couleur des pastilles')
+    wrapper.unmount()
+  })
+})

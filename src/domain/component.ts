@@ -1,6 +1,13 @@
 import { z } from 'zod'
 import { hexColorSchema } from './color'
-import { isInsideBox, PNG_PX_PER_CELL, QUARTERS_PER_CELL, sizeSchema, type Size } from './grid'
+import {
+  isInsideBox,
+  PNG_PX_PER_CELL,
+  QUARTERS_PER_CELL,
+  sizeSchema,
+  type LocalPoint,
+  type Size
+} from './grid'
 import { pngDataUrlDimensions } from './png'
 
 export const COMPONENT_SCHEMA_VERSION = 16
@@ -195,6 +202,20 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
     /** Taille : le diamètre vaut deux traits de composant, multipliés par `scale`. */
     scale: z.number().positive(),
     color: hexColorSchema
+  }),
+  z.object({
+    kind: z.literal('holes'),
+    group: groupSchema,
+    /**
+     * Boîte de la grille de trous d'une plaque (coin supérieur gauche, taille) : un trou à
+     * chaque intersection de la grille des cellules qu'elle contient, bord compris.
+     */
+    x: quarterSchema,
+    y: quarterSchema,
+    w: z.number().int().positive(),
+    h: z.number().int().positive(),
+    /** Couleur des pastilles : l'anneau de métal autour de chaque trou. */
+    color: hexColorSchema
   })
 ])
 export type Primitive = z.infer<typeof primitiveSchema>
@@ -207,12 +228,92 @@ export const PRIMITIVE_KIND_LABELS: Readonly<Record<PrimitiveKind, string>> = {
   polyline: 'Polyligne',
   dot: 'Point',
   text: 'Texte',
-  image: 'Image'
+  image: 'Image',
+  holes: 'Grille de trous'
 }
 export type TextPrimitive = Extract<Primitive, { kind: 'text' }>
 export type DotPrimitive = Extract<Primitive, { kind: 'dot' }>
 export type ImagePrimitive = Extract<Primitive, { kind: 'image' }>
-export type StyledPrimitive = Exclude<Primitive, { kind: 'text' | 'dot' | 'image' }>
+export type HolesPrimitive = Extract<Primitive, { kind: 'holes' }>
+export type StyledPrimitive = Exclude<Primitive, { kind: 'text' | 'dot' | 'image' | 'holes' }>
+
+// Plaque à trous (décision du 17 novembre 2026) : une plaque de prototypage est un composant
+// comme un autre, dessiné une fois pour toutes. Sa grille de trous est une forme (`holes`) :
+// une boîte, et un trou à chaque intersection de la grille des cellules qu'elle contient. Une
+// cellule vaut donc le pas des trous (2,54 mm) : les broches des composants, qui vivent sur les
+// intersections, tombent dans les trous.
+
+/** Couleur des pastilles d'une nouvelle grille de trous : l'étain. */
+export const DEFAULT_HOLES_COLOR = '#d5dbe0'
+/** Rayon d'une pastille et de son trou, en cellules. */
+export const HOLE_PAD_RADIUS_CELLS = 0.3
+export const HOLE_RADIUS_CELLS = 0.12
+/** Couleur d'un trou : ce qu'on voit à travers la plaque, un sombre posé sur sa couleur. */
+export const HOLE_COLOR = '#0b0f14'
+export const HOLE_OPACITY = 0.7
+
+/**
+ * Trous d'une grille, en cellules du dessin, ligne par ligne : les intersections de la grille
+ * des cellules dans sa boîte, bord compris.
+ */
+export function holeCells(grid: Pick<HolesPrimitive, 'x' | 'y' | 'w' | 'h'>): LocalPoint[] {
+  const q = QUARTERS_PER_CELL
+  const cells: LocalPoint[] = []
+  for (let y = Math.ceil(grid.y / q); y <= Math.floor((grid.y + grid.h) / q); y++) {
+    for (let x = Math.ceil(grid.x / q); x <= Math.floor((grid.x + grid.w) / q); x++) {
+      cells.push({ x, y })
+    }
+  }
+  return cells
+}
+
+/** Nombre de colonnes et de rangées de trous d'une grille. */
+export function holeCounts(grid: Pick<HolesPrimitive, 'x' | 'y' | 'w' | 'h'>): {
+  columns: number
+  rows: number
+} {
+  const q = QUARTERS_PER_CELL
+  return {
+    columns: Math.max(0, Math.floor((grid.x + grid.w) / q) - Math.ceil(grid.x / q) + 1),
+    rows: Math.max(0, Math.floor((grid.y + grid.h) / q) - Math.ceil(grid.y / q) + 1)
+  }
+}
+
+/** Trous d'un dessin, toutes grilles confondues, en cellules et sans doublon. */
+export function drawingHoles(primitives: readonly Primitive[]): LocalPoint[] {
+  const seen = new Set<string>()
+  const holes: LocalPoint[] = []
+  for (const primitive of primitives) {
+    if (primitive.kind !== 'holes') continue
+    for (const cell of holeCells(primitive)) {
+      const key = `${cell.x},${cell.y}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      holes.push(cell)
+    }
+  }
+  return holes
+}
+
+/** Une plaque à trous : un composant dont le dessin a une grille de trous. */
+export function isBoard(def: { visual: { primitives: readonly Primitive[] } }): boolean {
+  return def.visual.primitives.some((primitive) => primitive.kind === 'holes')
+}
+
+/**
+ * Tracé SVG de disques de même rayon : un seul `<path>` pour tous les trous d'une plaque, à
+ * l'écran comme à l'export. `scale` convertit les cellules dans l'unité du dessin.
+ */
+export function discsPathData(centers: readonly LocalPoint[], radius: number, scale = 1): string {
+  const r = +(radius * scale).toFixed(3)
+  return centers
+    .map((center) => {
+      const x = +(center.x * scale - r).toFixed(3)
+      const y = +(center.y * scale).toFixed(3)
+      return `M${x} ${y}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0`
+    })
+    .join('')
+}
 
 /** Tailles de point proposées par l'interface ; le schéma accepte tout multiplicateur positif. */
 export const DOT_SCALES = [1, 1.5, 2, 2.5, 3] as const
@@ -750,6 +851,7 @@ export function primitiveBounds(primitive: Primitive): Bounds {
     }
     case 'text':
     case 'image':
+    case 'holes':
       return {
         x1: primitive.x,
         y1: primitive.y,
@@ -828,6 +930,7 @@ export function translatePrimitive(primitive: Primitive, dx: number, dy: number)
     case 'text':
     case 'dot':
     case 'image':
+    case 'holes':
       return { ...primitive, x: primitive.x + dx, y: primitive.y + dy }
     case 'ellipse':
       return { ...primitive, cx: primitive.cx + dx, cy: primitive.cy + dy }
@@ -929,7 +1032,8 @@ function bodyIssues(def: ComponentDefinition): ComponentIssue[] {
 
   // Un dessin encore vide n'a rien à câbler : l'avertissement attend la première forme.
   const blankDrawing = def.visual.primitives.length === 0
-  if (def.pins.length === 0 && !blankDrawing) {
+  // Une plaque à trous n'a pas de broches : ce sont les composants qu'on y pose qui en ont.
+  if (def.pins.length === 0 && !blankDrawing && !isBoard(def)) {
     issues.push({
       level: 'warning',
       message: 'Aucune broche : le composant ne pourra pas être câblé'

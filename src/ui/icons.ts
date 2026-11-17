@@ -146,6 +146,16 @@ export const ICONS = {
   ],
   // Disque plein : deux cercles concentriques dont les traits se touchent.
   dot: ['M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z', 'M12 11a1 1 0 1 0 0 2a1 1 0 1 0 0-2z'],
+  // Plaque à trous : un cadre et six trous.
+  holes: [
+    'M4 5h16v14H4z',
+    'M8 9.5h.01',
+    'M12 9.5h.01',
+    'M16 9.5h.01',
+    'M8 14.5h.01',
+    'M12 14.5h.01',
+    'M16 14.5h.01'
+  ],
   italic: ['M19 4h-9', 'M14 20H5', 'M15 4L9 20'],
   underline: ['M6 4v6a6 6 0 0 0 12 0V4', 'M4 20h16'],
   strikethrough: ['M16 4H9a3 3 0 0 0-2.83 4', 'M14 12a4 4 0 0 1 1.17 7.83H8', 'M4 12h16']

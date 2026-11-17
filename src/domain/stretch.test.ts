@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   abuttingImages,
   componentFields,
+  holeCounts,
   componentIssues,
   createEmptyComponent,
   DEFAULT_SHAPE_STYLE,
   variantDefinition,
   type ComponentDefinition,
+  type HolesPrimitive,
   type ImagePrimitive,
   type Primitive,
   type Stretch,
@@ -717,5 +719,24 @@ describe('composant extensible : une valeur par copie d’un texte variable', ()
     const plain = { Réf: 'J1' }
     expect(restretchedFields(def, plain, 2, 3, 'end')).toBe(plain)
     expect(restretchedFields(createEmptyComponent('r', 'R'), fields, 2, 3, 'end')).toBe(fields)
+  })
+})
+
+describe('composant extensible : une plaque à trous', () => {
+  it('une grille de trous à cheval sur les traits s’élargit : elle a plus de trous', () => {
+    const def = terminal()
+    // La grille couvre toute la largeur (0 à 4 cellules), le motif va de 1 à 3.
+    const grid: HolesPrimitive = { kind: 'holes', x: 0, y: 0, w: 16, h: 8, color: '#d5dbe0' }
+    def.visual = { kind: 'drawing', primitives: [grid] }
+    expect(holeCounts(grid)).toEqual({ columns: 5, rows: 3 })
+    const three = stretchedDefinition(def, 3).visual.primitives[0] as HolesPrimitive
+    expect(three).toMatchObject({ kind: 'holes', x: 0, w: 32 })
+    // Deux motifs de plus, de deux cellules chacun : quatre colonnes de plus.
+    expect(holeCounts(three)).toEqual({ columns: 9, rows: 3 })
+    // En hauteur, ce sont des rangées qui s'ajoutent.
+    const tall = tower()
+    tall.visual = { kind: 'drawing', primitives: [{ ...grid, w: 8, h: 16 }] }
+    const taller = stretchedDefinition(tall, 2).visual.primitives[0] as HolesPrimitive
+    expect(holeCounts(taller)).toEqual({ columns: 3, rows: 7 })
   })
 })

@@ -3,7 +3,9 @@ import { computed, ref } from 'vue'
 import {
   BASE_VARIANT,
   componentVariants,
+  drawingHoles,
   hasVariants,
+  isBoard,
   stretchedDefinition,
   type ComponentDefinition
 } from '@/domain'
@@ -63,15 +65,19 @@ function tileTitle(entry: LibraryEntry): string {
   if (!entry.def) return entry.problem ?? 'Fichier illisible'
   const action =
     props.mode === 'place' ? ' — clic puis clic sur le montage, ou glisser-déposer' : ''
-  return `${entry.def.name} · ${pinCount(entry.def)} broche(s)${action}`
+  return `${entry.def.name} · ${contents(entry.def)}${action}`
 }
 
 /**
- * Broches du composant qu'on obtient en le posant : un composant extensible compte celles de
- * son nombre de motifs de départ, comme sa vignette le dessine.
+ * Ce qu'on obtient en posant le composant : ses broches (un composant extensible compte celles
+ * de son nombre de motifs de départ, comme sa vignette le dessine), ou ses trous pour une
+ * plaque, qui n'a pas de broches.
  */
-function pinCount(def: ComponentDefinition): number {
-  return stretchedDefinition(def).pins.length
+function contents(def: ComponentDefinition): string {
+  const placed = stretchedDefinition(def)
+  return isBoard(placed)
+    ? `${drawingHoles(placed.visual.primitives).length} trous`
+    : `${placed.pins.length} broche(s)`
 }
 
 function isCurrent(entry: LibraryEntry): boolean {
@@ -414,7 +420,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
               <span class="text">
                 <span class="name">{{ entry.def?.name ?? baseName(entry.folder) }}</span>
                 <span v-if="entry.def" class="meta">
-                  {{ pinCount(entry.def) }} broche(s) · {{ entry.def.id }}
+                  {{ contents(entry.def) }} · {{ entry.def.id }}
                 </span>
                 <span v-else class="meta">Fichier illisible</span>
               </span>

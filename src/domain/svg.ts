@@ -2,7 +2,13 @@ import { arrowHeadPoints, middleArrowHead, pointsAttribute, trimForArrows } from
 import { wireEndLabelPlacement, wireRenderParts } from './wireEnds'
 import {
   abuttingImages,
+  discsPathData,
   dotRadiusCells,
+  HOLE_COLOR,
+  HOLE_OPACITY,
+  HOLE_PAD_RADIUS_CELLS,
+  HOLE_RADIUS_CELLS,
+  holeCells,
   strokeWidthCells,
   type ComponentDefinition,
   type FieldValues,
@@ -156,6 +162,15 @@ export function primitiveSvg(
   }
   if (primitive.kind === 'dot') {
     return `<circle ${attrs({ cx: q(primitive.x), cy: q(primitive.y), r: dotRadiusCells(primitive.scale, componentStroke), fill: primitive.color })}/>`
+  }
+  if (primitive.kind === 'holes') {
+    // Une plaque : toutes ses pastilles en un tracé, tous ses trous en un autre.
+    const cells = holeCells(primitive)
+    if (cells.length === 0) return ''
+    return (
+      `<path ${attrs({ d: discsPathData(cells, HOLE_PAD_RADIUS_CELLS), fill: primitive.color })}/>` +
+      `<path ${attrs({ d: discsPathData(cells, HOLE_RADIUS_CELLS), fill: HOLE_COLOR, 'fill-opacity': HOLE_OPACITY })}/>`
+    )
   }
   if (primitive.kind === 'image') {
     const box = {

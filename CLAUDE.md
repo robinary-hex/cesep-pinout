@@ -877,6 +877,27 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     de la variante (`shownVariant`, `variantBodyOf`), qu'on regarde le motif ou un modèle.
     La barre d'outils a la liste des dessins dès qu'il y a un modèle. Un modèle dont le
     nombre sort des bornes ne sert pas : le panneau le grise, les contrôles le disent.
+- Plaques à trous (décision du 17 novembre 2026) : une plaque de prototypage (des trous au pas
+  de 2,54 mm, des composants enfichés dessus, des fils soudés dessous) se dessine dans le
+  montage, pas dans un mode à part. Une cellule vaut le pas des trous : les broches des
+  composants, qui vivent sur les intersections, tombent dans les trous. Feuille de route, dans
+  l'ordre : la plaque ; deux nouveaux fils (le pont en courbe, le fil nu) ; les deux faces
+  côte à côte. Tranché avec Robin : le fil nu est soudé à toutes les broches sur son trajet,
+  pas aux pastilles vides ; déplacer une plaque emmène ce qu'elle porte ; ses trous sont
+  métallisés (un trou relie la pastille du dessus à celle du dessous).
+  - La plaque est un composant de la bibliothèque, dessiné une fois pour toutes. Sa grille de
+    trous est une forme (`holes` : une boîte en quarts de cellule, la couleur des pastilles) :
+    un trou à chaque intersection de la grille des cellules que la boîte contient, bord
+    compris (`holeCells`, `holeCounts`). Outil « Grille de trous » (G) de l'éditeur de
+    composants : un glisser sur la zone des trous ; ses poignées sont celles d'un rectangle,
+    son panneau dit combien elle a de trous. Une plaque en a des centaines : pastilles et
+    trous se dessinent chacun en un seul tracé (`discsPathData`), à l'écran comme à l'export ;
+    le trou est un sombre posé sur la couleur de la plaque (`HOLE_COLOR`, `HOLE_OPACITY`).
+    À cheval sur les traits d'un composant extensible, la grille s'élargit : plus de trous.
+  - Un composant est une plaque dès que son dessin a une grille de trous (`isBoard`,
+    `drawingHoles`). Elle n'a pas de broches (pas d'avertissement pour ça), la bibliothèque
+    la compte en trous, et elle se pose sous les composants déjà là (`placeAt` : en tête de
+    `components`).
 - Groupes (décision du 11 novembre 2026), dans les trois éditeurs : des éléments qu'on
   sélectionne et déplace d'un bloc. Rien n'est rangé à part : chaque élément groupé porte
   l'identifiant de son groupe (`group`, optionnel, sans montée de version des fichiers) et un
@@ -938,7 +959,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   bibliothèque, sinon comme nouveau composant).
   - Éditeur de composants : V sélection, R rectangle, O ellipse, N point (un clic par point,
     l'outil reste actif), L ligne, P polyligne, E texte,
-    B broche, Suppr, Échap, Entrée (termine une polyligne), Ctrl+Z / Ctrl+Y, Ctrl+S, Ctrl+N,
+    B broche, G grille de trous (plaque), Suppr, Échap, Entrée (termine une polyligne), Ctrl+Z / Ctrl+Y, Ctrl+S, Ctrl+N,
     Ctrl+Page haut/bas (Maj pour premier/arrière-plan) = ordre d'empilement de la forme
     sélectionnée (`reorderItem`, aussi par le sous-menu « Ordre » du clic droit),
     molette = zoom centré sur le curseur (boutons −/+/Ajuster dans la barre), bouton du milieu
@@ -991,7 +1012,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
   par version dans `src/domain/fixtures/`. Versions courantes : composant 16, projet 23, paramètres 15,
   diagramme 6 (composant 16 et projet 23, du 17 novembre 2026, pas encore publiés, portent les
-  composants extensibles : `stretch`, `crop`, `count` ; un composant ou un montage qu'ils
+  composants extensibles : `stretch`, `crop`, `count`, et la plaque à trous : forme `holes` ; un composant ou un montage qu'ils
   enregistrent ne s'ouvrira plus dans la 1.9.1 ni avant ; paramètres 15 et diagramme 5 sont ceux de la 1.6.0, publiée le 11 novembre
   2026 : palette des diagrammes et dossier de Pinout dans les paramètres, couleur du texte
   d'un nœud dans le diagramme ; un diagramme enregistré par la 1.6.0 ne s'ouvre plus dans une
