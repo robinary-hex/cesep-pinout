@@ -757,17 +757,26 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     (`setInstancesVariant`, par `applyWithElasticWires` : les fils posés sur ses broches suivent).
 - Composants extensibles (décision du 17 novembre 2026 ; `src/domain/stretch.ts`,
   `stretchPlacement.ts`) : un bornier à deux points qu'on étire à trois, un connecteur d'un
-  contact qui en prend huit. Deux traits verticaux coupent le dessin en un début, un motif
-  et une fin (`stretch` d'un `ComponentBody` : `from`, `to` en quarts de cellule, `initial`,
+  contact qui en prend huit. Deux traits coupent le dessin en un début, un motif et une fin
+  (`stretch` d'un `ComponentBody` : `axis`, `from`, `to` en quarts de cellule, `initial`,
   `min`, `max` ; chaque variante a le sien) ; étirer le composant posé répète le motif.
+  - Sens (décision du 17 novembre 2026 ; `axis`, `stretchAxis`) : un dessin s'étire en
+    largeur (absent ou `x` : deux traits verticaux, un début, un motif, une fin) ou en
+    hauteur (`y` : deux traits horizontaux, un haut, un motif, un bas). Un seul sens par
+    dessin, au choix, pas les deux à la fois. `from` et `to` se lisent le long de ce sens
+    (`stretchExtent` : la largeur ou la hauteur de la boîte). `stretch.ts` ne raisonne
+    qu'en largeur : l'étirement en hauteur est le même, appliqué au dessin dont on a
+    échangé abscisses et ordonnées (`turnedDrawing`), puis remis à l'endroit. Tout ce qui
+    suit vaut donc dans les deux sens, « gauche » et « droite » se lisant « haut » et « bas ».
   - Règle (`stretchedDefinition`) : ce qui est avant le motif ne bouge pas, ce qui est après
     suit ; ce qui tient dans le motif est recopié dans chaque motif, broches comprises ; une
     forme à cheval sur un trait s'allonge (un contour garde le rayon de ses coins, un texte
     centré le reste) ; une image à cheval est coupée aux traits, seule sa tranche du milieu se
-    répète (`crop` d'une image, posé par l'étirement, jamais par l'éditeur ; dessiné par un
-    petit `<svg>` dont la fenêtre découpe l'image, à l'écran comme à l'export). Deux images
-    bord à bord (ces tranches, des copies qui se touchent) : celle de gauche déborde d'un
-    pixel de l'écran sur l'autre (`imagesWithRightNeighbour` ; `pixel` de `ComponentGraphic`,
+    répète (`crop` d'une image : `x`, `w` en fractions de sa largeur, `y`, `h` de sa hauteur ;
+    posé par l'étirement, jamais par l'éditeur ; dessiné par un petit `<svg>` dont la
+    fenêtre découpe l'image, à l'écran comme à l'export). Deux images bord à bord (ces
+    tranches, des copies qui se touchent) : celle de gauche, ou du dessus, déborde d'un
+    pixel de l'écran sur l'autre (`abuttingImages` ; `pixel` de `ComponentGraphic`,
     que le montage, dessiné en cellules, donne en cellules ; `IMAGE_LAP` à l'export), sinon
     le fond passe entre elles aux zooms où leur frontière tombe au milieu d'un pixel. Ce qui n'a pas
     de largeur (broche, point, trait vertical) appartient au motif depuis son trait de gauche
@@ -780,6 +789,14 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     d'après ; les numéros suivent cet ordre (`renumberPins`). La bibliothèque montre le
     composant comme on l'obtient en le posant : vignette et nombre de broches à son nombre de
     motifs de départ.
+  - Textes variables du motif (décision du 17 novembre 2026) : chaque copie a son champ à
+    elle, toujours, sans réglage. La première garde le nom du champ, les suivantes le font
+    suivre de leur rang (« Nom », « Nom 2 », « Nom 3 » : `stretchFieldName`), donc le
+    panneau du composant posé a une entrée par copie (`componentFields` du composant
+    étiré). Un texte variable hors du motif, ou à cheval sur un trait, reste seul. Quand le
+    composant s'étire, les valeurs suivent leur motif comme les broches
+    (`restretchedFields`, dans `restretch`) : par la fin rien ne bouge, par le début chaque
+    valeur change de rang avec son motif ; celle d'un motif retiré par le début est perdue.
   - `instanceDefinition` rend le composant étiré au nombre de l'exemplaire (`count`, écrit à
     la pose : il ne change pas si la définition change de nombre de départ ; ramené entre les
     bornes à chaque dessin, `stretchCount`) : rendu, connectivité, élasticité et export n'ont
@@ -787,13 +804,15 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     résultat est gardé par composant et par nombre : une définition ne se modifie jamais sur
     place (Immer), sinon l'étirement gardé serait périmé.
   - Éditeur de composants : section « Étirement » du panneau du composant (case
-    « Extensible », début et largeur du motif, « Au départ », « Minimum », « Maximum », et un
-    aperçu étiré à N qui ne s'enregistre pas ; `setStretch`, `normalizedStretch`). Sur la
-    feuille, les deux traits (`.cuts`) : glisser celui de gauche déplace le motif, celui de
-    droite règle sa largeur ; le motif reste dans la boîte quand elle change (`setSize`,
-    `setBox`).
-  - Montage : le composant seul sélectionné montre une poignée à chaque bout
-    (`stretchHandles`, `.stretch-handle`) ; la tirer ajoute ou retire un motif par largeur de
+    « Extensible », liste « Sens » : en largeur ou en hauteur, début et taille du motif,
+    « Au départ », « Minimum », « Maximum », et un aperçu étiré à N qui ne s'enregistre
+    pas ; `setStretch`, `normalizedStretch`). Changer de sens remet le motif sur toute
+    l'étendue du nouveau et garde les nombres et les modèles. Sur la feuille, les deux
+    traits (`.cuts`, couchés quand le sens est la hauteur) : glisser le premier déplace le
+    motif, le second règle sa taille ; le motif reste dans la boîte quand elle change
+    (`setSize`, `setBox`).
+  - Montage : le composant seul sélectionné montre une poignée à chaque bout du sens où il
+    s'étire (`stretchHandles`, `.stretch-handle`) ; la tirer ajoute ou retire un motif par taille de
     motif (`pulledCount`), avec aperçu, en une commande (`setInstanceCount`, `restretch`).
     Le bout qu'on ne tire pas reste en place, rotation et miroir compris. Le panneau a un
     champ « Nombre ». Les fils suivent leurs broches (`stretchPinMap` : par la fin, les

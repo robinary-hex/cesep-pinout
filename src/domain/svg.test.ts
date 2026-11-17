@@ -178,6 +178,12 @@ describe('export SVG', () => {
       `<svg x="1" y="0" width="2" height="3" viewBox="0.25 0 0.5 1" preserveAspectRatio="none">` +
         `<image href="${dataUrl}" xlink:href="${dataUrl}" x="0" y="0" width="1" height="1" preserveAspectRatio="none"/></svg>`
     )
+    // Une tranche coupée dans la hauteur : la fenêtre la découpe de haut en bas.
+    expect(
+      primitiveSvg({ ...image, dataUrl, crop: { x: 0, w: 1, y: 0.25, h: 0.5 } }, 0.1)
+    ).toContain(
+      '<svg x="1" y="0" width="2" height="3" viewBox="0 0.25 1 0.5" preserveAspectRatio="none">'
+    )
     // Deux tranches qui se touchent : la première déborde d'un rien sur la seconde, pour
     // qu'aucun filet de fond ne passe entre elles ; la dernière garde sa largeur.
     const def = createEmptyComponent('c', 'C')
@@ -192,6 +198,21 @@ describe('export SVG', () => {
     expect(widths.map((match) => [match[1], match[2]])).toEqual([
       ['1', '2.025'],
       ['3', '2']
+    ])
+    // L'une sous l'autre : c'est la hauteur de la première qui déborde.
+    def.visual = {
+      kind: 'drawing',
+      primitives: [
+        { ...image, dataUrl, crop: { x: 0, w: 1, y: 0, h: 0.5 } },
+        { ...image, y: 12, dataUrl, crop: { x: 0, w: 1, y: 0.5, h: 0.5 } }
+      ]
+    }
+    const heights = [
+      ...componentSvg(def, 0.1).matchAll(/ y="(\d+)" width="2" height="([\d.]+)" viewBox/g)
+    ]
+    expect(heights.map((match) => [match[1], match[2]])).toEqual([
+      ['0', '3.025'],
+      ['3', '3']
     ])
   })
 

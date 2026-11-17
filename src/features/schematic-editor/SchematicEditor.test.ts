@@ -316,6 +316,65 @@ describe('montage : composant extensible', () => {
     expect(wrapper.find('.inspector .stretch-count').exists()).toBe(false)
     wrapper.unmount()
   })
+
+  it('le panneau a une entrée par copie d’un texte variable du motif', async () => {
+    const store = useSchematicStore()
+    const def = createEmptyComponent('bornier', 'Bornier')
+    def.size = { widthCells: 2, heightCells: 2 }
+    def.pins = [{ id: 'p1', name: '1', kind: 'io', x: 1, y: 1 }]
+    def.visual = {
+      kind: 'drawing',
+      primitives: [
+        {
+          kind: 'text',
+          x: 2,
+          y: 0,
+          w: 4,
+          h: 2,
+          text: 'Nom',
+          size: 0.5,
+          anchor: 'middle',
+          color: '#000000',
+          variable: true,
+          defaultValue: '',
+          unit: '',
+          bold: false,
+          followsRotation: false,
+          italic: false,
+          underline: false,
+          strike: false,
+          vertical: false
+        }
+      ]
+    }
+    def.stretch = { from: 2, to: 6, initial: 3, min: 1, max: 5 }
+    store.startPlacing(def)
+    const id = store.placeAt(2, 3)
+    store.stopPlacing()
+    if (!id) throw new Error('pose refusée')
+    store.selection = [id]
+    store.inspectorOpen = true
+    const wrapper = mount(SchematicEditor, { attachTo: document.body })
+    await flushPromises()
+    const labels = (): string[] =>
+      wrapper.findAll('.inspector .field span').map((span) => span.text())
+    // Trois motifs : trois entrées, chacune avec sa valeur.
+    expect(labels()).toEqual(expect.arrayContaining(['Nom', 'Nom 2', 'Nom 3']))
+    expect(labels()).not.toContain('Nom 4')
+    const second = wrapper
+      .findAll('.inspector .field')
+      .find((entry) => entry.find('span').text() === 'Nom 2')
+    if (!second) throw new Error('champ « Nom 2 » introuvable')
+    await second.get('input').setValue('GND')
+    await second.get('input').trigger('change')
+    expect(store.doc.components[0]?.fields).toEqual({ 'Nom 2': 'GND' })
+    // Un motif de plus : une entrée de plus, les valeurs en place.
+    store.setInstanceCount(id, 4)
+    await flushPromises()
+    expect(labels()).toContain('Nom 4')
+    expect(store.doc.components[0]?.fields).toEqual({ 'Nom 2': 'GND' })
+    wrapper.unmount()
+  })
 })
 
 describe('montage : ordre des composants', () => {

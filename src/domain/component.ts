@@ -172,11 +172,19 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
     /** Copie embarquée de l'image (dans un projet ou en mémoire) ; absente du fichier de la bibliothèque. */
     dataUrl: z.string().startsWith('data:image/png;base64,').optional(),
     /**
-     * Tranche de l'image que la boîte montre, en fractions de sa largeur ; absente : l'image
-     * entière. Posée par l'étirement d'un composant extensible, qui coupe une image aux traits
-     * du motif (stretch.ts) ; l'éditeur ne l'écrit jamais.
+     * Tranche de l'image que la boîte montre, en fractions de sa largeur (`x`, `w`) et de sa
+     * hauteur (`y`, `h` ; absentes : toute la hauteur) ; absente : l'image entière. Posée par
+     * l'étirement d'un composant extensible, qui coupe une image aux traits du motif
+     * (stretch.ts) ; l'éditeur ne l'écrit jamais.
      */
-    crop: z.object({ x: z.number().min(0).max(1), w: z.number().positive().max(1) }).optional()
+    crop: z
+      .object({
+        x: z.number().min(0).max(1),
+        w: z.number().positive().max(1),
+        y: z.number().min(0).max(1).optional(),
+        h: z.number().positive().max(1).optional()
+      })
+      .optional()
   }),
   z.object({
     kind: z.literal('dot'),
@@ -296,13 +304,19 @@ export const countModelSchema = z.object({
 export type CountModel = z.infer<typeof countModelSchema>
 
 /**
- * Composant extensible (décision du 17 novembre 2026, voir stretch.ts) : deux traits verticaux
- * coupent le dessin en un début, un motif et une fin ; étirer le composant posé répète le motif.
+ * Composant extensible (décision du 17 novembre 2026, voir stretch.ts) : deux traits coupent le
+ * dessin en un début, un motif et une fin ; étirer le composant posé répète le motif.
  */
 export const stretchSchema = z.object({
-  /** Trait de gauche du motif, en quarts de cellule. */
+  /**
+   * Sens de l'étirement : absent ou 'x', en largeur (deux traits verticaux : un début, un motif,
+   * une fin) ; 'y', en hauteur (deux traits horizontaux : un haut, un motif, un bas). Un seul
+   * sens par dessin ; `from` et `to` se lisent le long de ce sens.
+   */
+  axis: z.enum(['x', 'y']).optional(),
+  /** Premier trait du motif (celui de gauche, ou du haut), en quarts de cellule. */
   from: quarterSchema,
-  /** Trait de droite ; le motif fait un nombre entier de cellules, pour les broches recopiées. */
+  /** Second trait ; le motif fait un nombre entier de cellules, pour les broches recopiées. */
   to: quarterSchema,
   /** Nombre de motifs d'un exemplaire qu'on vient de poser. */
   initial: z.number().int().positive(),
@@ -961,7 +975,7 @@ function bodyIssues(def: ComponentDefinition): ComponentIssue[] {
           'Composant extensible : le nombre de départ doit être entre le minimum et le maximum'
       })
     }
-    if (stretch.from < 0 || stretch.to > maxX) {
+    if (stretch.from < 0 || stretch.to > (stretch.axis === 'y' ? maxY : maxX)) {
       issues.push({ level: 'warning', message: 'Le motif dépasse la boîte du composant' })
     }
     const counts = new Set<number>()
@@ -1033,31 +1047,35 @@ export function imageRatio(image: ImagePrimitive): number {
 }
 
 /**
- * Rangs, dans un dessin, des images suivies d'une autre qui commence pile où elles finissent :
- * les tranches d'une image coupée par l'étirement d'un composant, ses copies qui se touchent,
- * ou deux images posées bord à bord. Dessinées telles quelles, deux voisines laissent voir le
- * fond entre elles dès que leur frontière tombe au milieu d'un pixel (un filet clair à chaque
- * motif, à certains zooms). Qui les dessine les élargit donc d'un rien vers la droite : la
- * voisine recouvre ce débord, ou passe dessous.
+ * Images d'un dessin qui en touchent une autre : celles suivies d'une image qui commence pile où
+ * elles finissent, à leur droite (`right`) ou dessous (`below`), par leur rang dans le dessin.
+ * Ce sont les tranches d'une image coupée par l'étirement d'un composant, ses copies qui se
+ * touchent, ou deux images posées bord à bord. Dessinées telles quelles, deux voisines laissent
+ * voir le fond entre elles dès que leur frontière tombe au milieu d'un pixel (un filet clair à
+ * chaque motif, à certains zooms). Qui les dessine les élargit donc d'un rien vers leur voisine,
+ * qui recouvre ce débord ou passe dessous.
  */
-export function imagesWithRightNeighbour(primitives: readonly Primitive[]): Set<number> {
+export function abuttingImages(primitives: readonly Primitive[]): {
+  right: Set<number>
+  below: Set<number>
+} {
   const images = primitives.flatMap((primitive, index) =>
     primitive.kind === 'image' ? [{ index, image: primitive }] : []
   )
-  const found = new Set<number>()
-  if (images.length < 2) return found
+  const right = new Set<number>()
+  const below = new Set<number>()
+  if (images.length < 2) return { right, below }
+  const close = (a: number, b: number): boolean => Math.abs(a - b) < 1e-6
   for (const { index, image } of images) {
-    const right = image.x + image.w
-    const followed = images.some(
-      ({ image: other }) =>
-        other !== image &&
-        Math.abs(other.x - right) < 1e-6 &&
-        other.y < image.y + image.h &&
-        image.y < other.y + other.h
-    )
-    if (followed) found.add(index)
+    for (const { image: other } of images) {
+      if (other === image) continue
+      const sameRows = other.y < image.y + image.h && image.y < other.y + other.h
+      const sameColumns = other.x < image.x + image.w && image.x < other.x + other.w
+      if (sameRows && close(other.x, image.x + image.w)) right.add(index)
+      if (sameColumns && close(other.y, image.y + image.h)) below.add(index)
+    }
   }
-  return found
+  return { right, below }
 }
 
 /**

@@ -15,6 +15,8 @@ import {
   modelDefinition,
   modelDrawing,
   STRETCH_MAX_COUNT,
+  stretchAxis,
+  stretchExtent,
   variantDefinition,
   arrangedPins,
   createEmptyComponent,
@@ -594,7 +596,9 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
       body.size = { widthCells: size.widthCells, heightCells: size.heightCells }
       if (removed > 0) body.pins = castDraft(renumberPins(kept))
       // Le motif d'un composant extensible reste dans la boîte.
-      if (body.stretch) body.stretch = castDraft(normalizedStretch(body.stretch, size.widthCells))
+      if (body.stretch) {
+        body.stretch = castDraft(normalizedStretch(body.stretch, stretchExtent(size, body.stretch)))
+      }
     })
     if (removed > 0) {
       status.value = `${removed} broche(s) hors de la nouvelle boîte supprimée(s).`
@@ -640,11 +644,11 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
       // Le motif d'un composant extensible suit l'origine, et reste dans la boîte.
       const stretch = bodyOf(draft).stretch
       if (stretch) {
-        const shift = dx * QUARTERS_PER_CELL
+        const shift = (stretchAxis(stretch) === 'y' ? dy : dx) * QUARTERS_PER_CELL
         bodyOf(draft).stretch = castDraft(
           normalizedStretch(
             { ...stretch, from: stretch.from + shift, to: stretch.to + shift },
-            size.widthCells
+            stretchExtent(size, stretch)
           )
         )
       }
@@ -653,13 +657,19 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     if (removed > 0) status.value = `${removed} broche(s) hors de la nouvelle boîte supprimée(s).`
   }
 
+  /** Les nombres d'un composant extensible : ce qu'il garde quand son motif change de sens. */
+  function keptCounts(stretch: Stretch): Pick<Stretch, 'initial' | 'min' | 'max'> {
+    return { initial: stretch.initial, min: stretch.min, max: stretch.max }
+  }
+
   /**
    * Composant extensible (décision du 17 novembre 2026, voir stretch.ts du domaine) : rend
    * extensible la variante affichée, change les réglages de son motif, ou la rend à nouveau
    * ordinaire (null ; ses modèles particuliers partent avec). Les réglages sont ramenés à ce qui
    * est permis : un motif dans la boîte, large d'un nombre entier de cellules, un nombre de
    * départ entre le minimum et le maximum. Ce sont ceux de la variante, même quand on retouche
-   * un de ses modèles.
+   * un de ses modèles. `axis` choisit le sens : en largeur ('x', deux traits verticaux) ou en
+   * hauteur ('y', deux traits horizontaux).
    */
   function setStretch(patch: Partial<Omit<Stretch, 'models'>> | null): void {
     const current = shownVariant.value.stretch
@@ -670,10 +680,22 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
       })
       return
     }
-    const width = shownVariant.value.size.widthCells
-    const next = normalizedStretch({ ...(current ?? defaultStretch(width)), ...patch }, width)
+    // Le sens demandé, sinon celui qu'il a : en largeur (traits verticaux) ou en hauteur.
+    const axis = patch.axis ?? (current ? stretchAxis(current) : 'x')
+    const extent = stretchExtent(shownVariant.value.size, { axis })
+    // Changer de sens remet le motif sur toute l'étendue du nouveau : ses traits se lisaient
+    // dans l'autre. Les nombres et les modèles restent.
+    const basis =
+      current && stretchAxis(current) === axis
+        ? current
+        : { ...current, ...defaultStretch(extent), ...(current ? keptCounts(current) : {}) }
+    const next = normalizedStretch({ ...basis, ...patch }, extent)
+    // En largeur, le sens ne s'écrit pas.
+    if (axis === 'y') next.axis = 'y'
+    else delete next.axis
     const same =
       current !== undefined &&
+      stretchAxis(current) === axis &&
       (['from', 'to', 'initial', 'min', 'max'] as const).every((key) => current[key] === next[key])
     if (same) return
     apply(current ? 'Régler le motif' : 'Composant extensible', (draft) => {
@@ -682,6 +704,11 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     if (!current) {
       status.value =
         'Composant extensible : place les deux traits autour de la partie qui se répète.'
+    } else if (stretchAxis(current) !== axis) {
+      status.value =
+        axis === 'y'
+          ? 'Le composant s’étire en hauteur : un haut, un motif, un bas.'
+          : 'Le composant s’étire en largeur : un début, un motif, une fin.'
     }
   }
 

@@ -10,6 +10,8 @@ import {
 } from './project'
 import {
   motifCells,
+  restretchedFields,
+  stretchAxis,
   stretchCount,
   stretchedDefinition,
   stretchPinMap,
@@ -30,8 +32,9 @@ export interface StretchHandle {
 }
 
 /**
- * Poignées d'un composant extensible posé, une à chaque bout, rotation et miroir compris. `def`
- * est le composant tel qu'il est dessiné là, étiré. Aucune s'il n'est pas extensible.
+ * Poignées d'un composant extensible posé, une à chaque bout du sens où il s'étire (à gauche et
+ * à droite du dessin, ou en haut et en bas), rotation et miroir compris. `def` est le composant
+ * tel qu'il est dessiné là, étiré. Aucune s'il n'est pas extensible.
  */
 export function stretchHandles(
   instance: ComponentInstance,
@@ -40,9 +43,16 @@ export function stretchHandles(
   if (!def.stretch) return []
   const matrix = instanceMatrix(instance, def)
   const { widthCells, heightCells } = def.size
-  const at = (x: number): LocalPoint => applyMatrix(matrix, { x, y: heightCells / 2 })
+  const vertical = stretchAxis(def.stretch) === 'y'
+  // Le milieu de chaque bout : à mi-hauteur pour un dessin qui s'étire en largeur, à mi-largeur
+  // pour un dessin qui s'étire en hauteur.
+  const at = (along: number): LocalPoint =>
+    applyMatrix(
+      matrix,
+      vertical ? { x: widthCells / 2, y: along } : { x: along, y: heightCells / 2 }
+    )
   const start = at(0)
-  const end = at(widthCells)
+  const end = at(vertical ? heightCells : widthCells)
   // Sens du dessin (de son début vers sa fin) sur le montage : un vecteur unité, à l'horizontale
   // ou à la verticale.
   const dx = Math.sign(end.x - start.x)
@@ -67,7 +77,10 @@ export function pulledCount(def: ComponentDefinition, original: number, pulled: 
 
 /** Ce que change l'étirement d'un composant posé. */
 export interface Restretch {
-  /** L'exemplaire après : son nombre de motifs, et sa place (le bout fixe n'a pas bougé). */
+  /**
+   * L'exemplaire après : son nombre de motifs, sa place (le bout fixe n'a pas bougé) et les
+   * valeurs de ses champs (celles des motifs suivent leur motif).
+   */
   instance: ComponentInstance
   /**
    * Broches de tout le montage avant, celles de l'exemplaire nommées comme elles le seront
@@ -99,11 +112,20 @@ export function restretch(
   const defBefore = stretchedDefinition(base, before)
   const defAfter = stretchedDefinition(base, after)
   // Le bout qui reste en place : le même point du montage avant et après.
-  const anchor = (def: ComponentDefinition): LocalPoint => ({
-    x: fixed === 'start' ? 0 : def.size.widthCells,
-    y: 0
-  })
-  const stretched: ComponentInstance = { ...instance, count: after }
+  const vertical = stretchAxis(base.stretch) === 'y'
+  const anchor = (def: ComponentDefinition): LocalPoint =>
+    fixed === 'start'
+      ? { x: 0, y: 0 }
+      : vertical
+        ? { x: 0, y: def.size.heightCells }
+        : { x: def.size.widthCells, y: 0 }
+  // Les valeurs des textes variables du motif suivent leur motif, comme les broches.
+  const fields = restretchedFields(base, instance.fields, before, after, fixed)
+  const stretched: ComponentInstance = {
+    ...instance,
+    count: after,
+    ...(fields === instance.fields ? {} : { fields: { ...fields } })
+  }
   const from = applyMatrix(instanceMatrix(instance, defBefore), anchor(defBefore))
   const to = applyMatrix(instanceMatrix(stretched, defAfter), anchor(defAfter))
   const moved: ComponentInstance = {

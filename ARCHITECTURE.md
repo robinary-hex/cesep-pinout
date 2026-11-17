@@ -150,7 +150,9 @@ connectivité ou l'export. `stretchPlacement.ts` tient ce qui touche au montage 
 et la correspondance des broches d'un nombre à l'autre, pour que les fils suivent. Un nombre de
 motifs peut avoir son modèle, un dessin à part qui remplace le motif répété (`stretch.models`) :
 c'est encore `stretchedDefinition` qui le choisit, d'après le nombre ; l'éditeur de composants
-le retouche comme une variante (`modelDefinition` pour le lire, `bodyOf` pour l'écrire).
+le retouche comme une variante (`modelDefinition` pour le lire, `bodyOf` pour l'écrire). Un
+dessin s'étire en largeur ou en hauteur (`stretch.axis`) : `stretch.ts` n'écrit la règle qu'une
+fois, en largeur, et l'applique en hauteur au dessin retourné (`turnedDrawing`).
 
 Groupes : l'appartenance est une propriété de l'élément (`group`), pas une liste à part, pour
 qu'elle le suive sans rien avoir à tenir à jour quand il change de rang, qu'on le copie ou qu'on

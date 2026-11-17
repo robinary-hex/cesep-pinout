@@ -181,6 +181,29 @@ describe('ComponentGraphic', () => {
       '41'
     ])
     expect(wrapper.get('g > image').attributes()).toMatchObject({ x: '80', width: '40' })
+    // L'une sous l'autre, coupées dans la hauteur : la fenêtre de chacune, et un pixel de plus
+    // vers le bas pour celle du dessus.
+    const stacked = createEmptyComponent('m', 'M')
+    stacked.visual = {
+      kind: 'drawing',
+      primitives: [
+        { ...image, x: 0, crop: { x: 0, w: 1, y: 0, h: 0.5 } },
+        { ...image, x: 0, y: 12, crop: { x: 0, w: 1, y: 0.5, h: 0.5 } }
+      ]
+    }
+    const tall = mount(ComponentGraphic, { props: { def: stacked, cellPx: 20 } })
+    expect(
+      tall
+        .findAll('svg.image-slice')
+        .map((slice) => [
+          slice.attributes('width'),
+          slice.attributes('height'),
+          slice.attributes('viewBox')
+        ])
+    ).toEqual([
+      ['40', '61', '0 0 1 0.5'],
+      ['40', '60', '0 0.5 1 0.5']
+    ])
     // Le montage dessine en cellules, sous une mise à l'échelle : il dit ce que vaut un pixel.
     const scaled = mount(ComponentGraphic, { props: { def, cellPx: 1, pixel: 0.05 } })
     expect(scaled.findAll('svg.image-slice').map((slice) => slice.attributes('width'))).toEqual([

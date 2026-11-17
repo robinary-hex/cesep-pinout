@@ -13,6 +13,7 @@ import {
   boxHandles,
   resizeBox,
   QUARTERS_PER_CELL,
+  stretchAxis,
   translatePrimitive,
   type ComponentDefinition,
   type Box,
@@ -108,8 +109,8 @@ type Drag =
   | { kind: 'pan'; lastX: number; lastY: number }
   | { kind: 'text-box'; start: QPoint; current: QPoint }
   | { kind: 'resize-box'; handleId: string; preview: Box }
-  // Un trait de coupe d'un composant extensible : celui de gauche déplace le motif, celui de
-  // droite règle sa largeur. Positions d'aperçu, en quarts de cellule.
+  // Un trait de coupe d'un composant extensible : le premier (à gauche, ou en haut) déplace le
+  // motif, le second règle sa taille. Positions d'aperçu, en quarts de cellule.
   | { kind: 'cut'; line: 'from' | 'to'; from: number; to: number }
 
 type Preview =
@@ -616,24 +617,63 @@ function onPrimitiveDown(index: number, event: PointerEvent): void {
   capture(event)
 }
 
+/** Un trait de coupe sur la feuille : ses deux bouts, sa zone à saisir, sa prise en triangle. */
+interface CutLine {
+  id: 'from' | 'to'
+  title: string
+  start: LocalPoint
+  end: LocalPoint
+  /** Départ de la zone à saisir : elle couvre aussi la prise, au-delà du trait. */
+  hit: LocalPoint
+  grip: string
+}
+
 /**
  * Traits de coupe d'un composant extensible, en pixels de la feuille : le motif est entre les
- * deux. Pendant qu'on en glisse un, ce sont ses positions d'aperçu.
+ * deux. Ils sont verticaux quand le composant s'étire en largeur, horizontaux quand il s'étire
+ * en hauteur. Pendant qu'on en glisse un, ce sont ses positions d'aperçu.
  */
 const cuts = computed(() => {
   const current = drag.value
-  const stretch = current?.kind === 'cut' ? current : store.shown.stretch
-  if (!stretch) return null
+  const shown = store.shown.stretch
+  if (!shown) return null
+  const stretch = current?.kind === 'cut' ? current : shown
+  const vertical = stretchAxis(shown) === 'y'
+  const from = px(stretch.from)
+  const to = px(stretch.to)
+  // Un trait dépasse un peu de la feuille ; sa prise, un triangle, est à son départ.
+  const line = (id: 'from' | 'to', at: number, title: string): CutLine =>
+    vertical
+      ? {
+          id,
+          title,
+          start: { x: -12, y: at },
+          end: { x: boxWidth.value + 12, y: at },
+          hit: { x: -18, y: at },
+          grip: `M -18 ${at - 6} v 12 l 8 -6 z`
+        }
+      : {
+          id,
+          title,
+          start: { x: at, y: -12 },
+          end: { x: at, y: boxHeight.value + 12 },
+          hit: { x: at, y: -18 },
+          grip: `M ${at - 6} -18 h 12 l -6 8 z`
+        }
   return {
-    x: px(stretch.from),
-    width: px(stretch.to - stretch.from),
+    vertical,
+    band: vertical
+      ? { x: 0, y: from, width: boxWidth.value, height: to - from }
+      : { x: from, y: 0, width: to - from, height: boxHeight.value },
     lines: [
-      {
-        id: 'from' as const,
-        x: px(stretch.from),
-        title: 'Début du motif : le glisser déplace le motif'
-      },
-      { id: 'to' as const, x: px(stretch.to), title: 'Fin du motif : le glisser règle sa largeur' }
+      line('from', from, 'Début du motif : le glisser déplace le motif'),
+      line(
+        'to',
+        to,
+        vertical
+          ? 'Fin du motif : le glisser règle sa hauteur'
+          : 'Fin du motif : le glisser règle sa largeur'
+      )
     ]
   }
 })
@@ -853,15 +893,18 @@ function onPointerMove(event: PointerEvent): void {
       ])
       break
     case 'cut': {
-      const width = size.value.widthCells * QUARTERS_PER_CELL
-      const x = toQuarters(cells).x
+      // Le long du sens où le composant s'étire : sa largeur, ou sa hauteur.
+      const shown = store.shown.stretch
+      const vertical = shown !== undefined && stretchAxis(shown) === 'y'
+      const width = (vertical ? size.value.heightCells : size.value.widthCells) * QUARTERS_PER_CELL
+      const x = vertical ? toQuarters(cells).y : toQuarters(cells).x
       if (current.line === 'from') {
-        // Le motif se déplace au quart de cellule, sans changer de largeur ni sortir de la boîte.
+        // Le motif se déplace au quart de cellule, sans changer de taille ni sortir de la boîte.
         const span = current.to - current.from
         current.from = Math.max(0, Math.min(x, width - span))
         current.to = current.from + span
       } else {
-        // Sa largeur va par cellules entières : les broches recopiées restent sur la grille.
+        // Sa taille va par cellules entières : les broches recopiées restent sur la grille.
         const most = Math.floor((width - current.from) / QUARTERS_PER_CELL)
         const wide = Math.round((x - current.from) / QUARTERS_PER_CELL)
         current.to = current.from + Math.max(1, Math.min(wide, most)) * QUARTERS_PER_CELL
@@ -1202,8 +1245,18 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
           />
 
           <!-- Composant extensible : le motif, entre ses deux traits de coupe. -->
-          <g v-if="cuts" class="cuts" :class="{ idle: store.tool !== 'select' }">
-            <rect class="motif-band" :x="cuts.x" y="0" :width="cuts.width" :height="boxHeight" />
+          <g
+            v-if="cuts"
+            class="cuts"
+            :class="{ idle: store.tool !== 'select', vertical: cuts.vertical }"
+          >
+            <rect
+              class="motif-band"
+              :x="cuts.band.x"
+              :y="cuts.band.y"
+              :width="cuts.band.width"
+              :height="cuts.band.height"
+            />
             <g
               v-for="line in cuts.lines"
               :key="line.id"
@@ -1212,9 +1265,21 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
               @pointerdown="onCutDown(line.id, $event)"
             >
               <title>{{ line.title }}</title>
-              <line class="cut-line" :x1="line.x" :x2="line.x" y1="-12" :y2="boxHeight + 12" />
-              <path class="cut-grip" :d="`M ${line.x - 6} -18 h 12 l -6 8 z`" />
-              <line class="cut-hit" :x1="line.x" :x2="line.x" y1="-18" :y2="boxHeight + 12" />
+              <line
+                class="cut-line"
+                :x1="line.start.x"
+                :y1="line.start.y"
+                :x2="line.end.x"
+                :y2="line.end.y"
+              />
+              <path class="cut-grip" :d="line.grip" />
+              <line
+                class="cut-hit"
+                :x1="line.hit.x"
+                :y1="line.hit.y"
+                :x2="line.end.x"
+                :y2="line.end.y"
+              />
             </g>
           </g>
 
@@ -1397,6 +1462,11 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
   stroke: transparent;
   stroke-width: 10;
   cursor: ew-resize;
+}
+
+/* Traits horizontaux d'un composant qui s'étire en hauteur : ils se glissent de haut en bas. */
+.cuts.vertical .cut-hit {
+  cursor: ns-resize;
 }
 
 /* Avec un outil de dessin, les traits ne gênent pas : on dessine à travers. */

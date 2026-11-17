@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  abuttingImages,
   componentFields,
   componentIssues,
   createEmptyComponent,
   DEFAULT_SHAPE_STYLE,
   dotRadiusCells,
   imageRatio,
-  imagesWithRightNeighbour,
   importedImageSize,
   naturalImageSize,
   reorderItem,
@@ -274,15 +274,22 @@ describe('images du mini-éditeur', () => {
 
   it('repère les images suivies d’une autre, bord à bord', () => {
     const tile = (x: number, y = 0): ImagePrimitive => ({ ...led, x, y, w: 4, h: 8 })
+    const right = (list: Primitive[]): number[] => [...abuttingImages(list).right]
+    const below = (list: Primitive[]): number[] => [...abuttingImages(list).below]
     // Trois tranches côte à côte : les deux premières ont une voisine à droite, pas la dernière.
-    expect([...imagesWithRightNeighbour([tile(0), tile(4), tile(8)])]).toEqual([0, 1])
+    expect(right([tile(0), tile(4), tile(8)])).toEqual([0, 1])
+    expect(below([tile(0), tile(4), tile(8)])).toEqual([])
     // L'ordre du dessin ne compte pas : la voisine peut être dessinée avant.
-    expect([...imagesWithRightNeighbour([tile(4), tile(0)])]).toEqual([1])
-    // Une autre forme ne compte pas ; un écart entre deux images, ou une voisine plus bas, non plus.
+    expect(right([tile(4), tile(0)])).toEqual([1])
+    // L'une sous l'autre : la première a une voisine dessous.
+    expect(below([tile(0, 0), tile(0, 8), tile(0, 16)])).toEqual([0, 1])
+    expect(right([tile(0, 0), tile(0, 8)])).toEqual([])
+    // Une autre forme ne compte pas ; un écart entre deux images, ou une voisine en coin, non plus.
     const rect: Primitive = { kind: 'rect', x: 4, y: 0, w: 4, h: 4, rx: 0, style }
-    expect([...imagesWithRightNeighbour([tile(0), rect, tile(5)])]).toEqual([])
-    expect([...imagesWithRightNeighbour([tile(0), tile(4, 8)])]).toEqual([])
-    expect([...imagesWithRightNeighbour([tile(0)])]).toEqual([])
+    expect(right([tile(0), rect, tile(5)])).toEqual([])
+    expect(right([tile(0), tile(4, 8)])).toEqual([])
+    expect(below([tile(0), tile(4, 8)])).toEqual([])
+    expect(right([tile(0)])).toEqual([])
   })
 
   it('signale une image qui a perdu son fichier', () => {

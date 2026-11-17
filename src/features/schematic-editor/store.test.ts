@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   absolutePinPosition,
+  componentFields,
   createEmptyComponent,
   createEmptyProject,
   DEFAULT_PROFILE,
@@ -1734,5 +1735,93 @@ describe('montage : composants extensibles', () => {
     // Et retour à un : le modèle revient.
     expect(store.setInstanceCount(id, 1)).toBe(true)
     expect(store.placed[0]?.def.pins.map((pin) => pin.id)).toEqual(['seul', 'bout'])
+  })
+
+  it('s’étire en hauteur quand ses traits sont horizontaux', () => {
+    const store = useSchematicStore()
+    const def = header()
+    // Les deux broches sont dans le motif (la deuxième cellule du haut) : elles descendent ensemble.
+    def.stretch = { axis: 'y', from: 2, to: 6, initial: 3, min: 1, max: 8 }
+    store.startPlacing(def)
+    const id = store.placeAt(10, 10)
+    store.stopPlacing()
+    if (!id) throw new Error('pose refusée')
+    expect(store.placed[0]?.def.size).toEqual({ widthCells: 2, heightCells: 4 })
+    expect(store.pinRefs.map((pin) => [pin.pinId, ...pin.point])).toEqual([
+      ['p1', 11, 11],
+      ['fin', 12, 11],
+      ['p1#1', 11, 12],
+      ['fin#1', 12, 12],
+      ['p1#2', 11, 13],
+      ['fin#2', 12, 13]
+    ])
+    const wire = store.addWire([
+      [11, 13],
+      [11, 18]
+    ])
+    // Par le début (le haut) : le bas reste en place, le composant remonte de deux cellules.
+    expect(store.setInstanceCount(id, 5, 'end')).toBe(true)
+    expect(store.doc.components[0]).toMatchObject({ x: 10, y: 8, count: 5 })
+    expect(store.doc.wires.find((candidate) => candidate.id === wire)?.points).toEqual([
+      [11, 13],
+      [11, 18]
+    ])
+    // Par la fin : le haut reste, et le fil de la dernière broche la suit vers le bas.
+    expect(store.setInstanceCount(id, 6)).toBe(true)
+    expect(store.doc.components[0]).toMatchObject({ x: 10, y: 8, count: 6 })
+    expect(store.placed[0]?.def.size).toEqual({ widthCells: 2, heightCells: 7 })
+  })
+
+  it('donne sa propre valeur à chaque copie d’un texte variable du motif', () => {
+    const store = useSchematicStore()
+    const def = header(2)
+    def.visual = {
+      kind: 'drawing',
+      primitives: [
+        {
+          kind: 'text',
+          x: 2,
+          y: 0,
+          w: 4,
+          h: 2,
+          text: 'Nom',
+          size: 0.5,
+          anchor: 'middle',
+          color: '#000000',
+          variable: true,
+          defaultValue: '',
+          unit: '',
+          bold: false,
+          followsRotation: false,
+          italic: false,
+          underline: false,
+          strike: false,
+          vertical: false
+        }
+      ]
+    }
+    store.startPlacing(def)
+    const id = store.placeAt(10, 10)
+    store.stopPlacing()
+    const placed = store.placed[0]
+    if (!id || !placed) throw new Error('pose refusée')
+    // Deux motifs : deux champs, chacun avec son entrée.
+    expect(componentFields(placed.def).map((field) => field.name)).toEqual(['Nom', 'Nom 2'])
+    store.setInstanceField(id, 'Nom', 'A')
+    store.setInstanceField(id, 'Nom 2', 'B')
+    // Un motif de plus à la fin : les valeurs ne bougent pas, la nouvelle copie attend la sienne.
+    store.setInstanceCount(id, 3)
+    expect(store.doc.components[0]?.fields).toEqual({ Nom: 'A', 'Nom 2': 'B' })
+    expect(componentFields(store.placed[0]?.def ?? def).map((field) => field.name)).toEqual([
+      'Nom',
+      'Nom 2',
+      'Nom 3'
+    ])
+    // Un motif de plus au début : chaque valeur suit son motif.
+    store.setInstanceCount(id, 4, 'end')
+    expect(store.doc.components[0]?.fields).toEqual({ 'Nom 2': 'A', 'Nom 3': 'B' })
+    // Une seule annulation remet le nombre et les valeurs.
+    store.undo()
+    expect(store.doc.components[0]).toMatchObject({ count: 3, fields: { Nom: 'A', 'Nom 2': 'B' } })
   })
 })

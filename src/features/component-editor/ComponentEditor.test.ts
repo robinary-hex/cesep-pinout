@@ -719,7 +719,15 @@ describe('éditeur de composants : composant extensible', () => {
       section()
         .findAll('.field span')
         .map((span) => span.text())
-    ).toEqual(['Début du motif', 'Largeur du motif', 'Au départ', 'Minimum', 'Maximum', 'Aperçu à'])
+    ).toEqual([
+      'Sens',
+      'Début du motif',
+      'Largeur du motif',
+      'Au départ',
+      'Minimum',
+      'Maximum',
+      'Aperçu à'
+    ])
     // Les deux traits et la bande du motif sont sur la feuille.
     expect(wrapper.findAll('.cuts .cut')).toHaveLength(2)
     expect(wrapper.find('.cuts .motif-band').exists()).toBe(true)
@@ -835,6 +843,58 @@ describe('éditeur de composants : modèles par nombre', () => {
     expect(store.doc.stretch?.models).toBeUndefined()
     expect(store.modelCount).toBeNull()
     expect(section().find('.model-list').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})
+
+describe('éditeur de composants : étirement en hauteur', () => {
+  it('le sens se choisit dans le panneau : les traits se couchent, et se glissent de haut en bas', async () => {
+    const store = withRectangle()
+    store.setSize({ widthCells: 2, heightCells: 4 })
+    store.setStretch({ from: 0, to: 4 })
+    store.inspectorOpen = true
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    await nextTick()
+    const section = (): ReturnType<typeof wrapper.get> => wrapper.get('.inspector .stretch')
+    // En largeur : deux traits verticaux.
+    expect(wrapper.get('.cuts').classes()).not.toContain('vertical')
+    const upright = wrapper.get('.cut-from .cut-line').attributes()
+    expect(upright['x1']).toBe(upright['x2'])
+
+    await section().get('select.stretch-axis').setValue('y')
+    expect(store.doc.stretch).toMatchObject({ axis: 'y', from: 0, to: 16 })
+    expect(section().findAll('.field span')[2]?.text()).toBe('Hauteur du motif')
+    // En hauteur : deux traits horizontaux, sur toute la largeur de la feuille.
+    expect(wrapper.get('.cuts').classes()).toContain('vertical')
+    const flat = wrapper.get('.cut-from .cut-line').attributes()
+    expect(flat['y1']).toBe(flat['y2'])
+    expect(Number(flat['x2'])).toBeGreaterThan(Number(flat['x1']))
+
+    // Le trait du bas, remonté de 4 à 2,1 cellules : le motif fait deux cellules de haut.
+    const svg = wrapper.get('svg.canvas')
+    const origin = Number(
+      /translate\([\d.]+[ ,]+([\d.]+)/.exec(svg.get('g').attributes('transform') ?? '')?.[1]
+    )
+    const y = (cells: number): number => origin + cells * store.cellPx
+    const fire = async (
+      target: { element: Element },
+      type: string,
+      clientY: number
+    ): Promise<void> => {
+      target.element.dispatchEvent(
+        new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: 0, clientY })
+      )
+      await nextTick()
+    }
+    await fire(wrapper.get('.cut-to .cut-hit'), 'pointerdown', y(4))
+    await fire(svg, 'pointermove', y(2.1))
+    await fire(svg, 'pointerup', y(2.1))
+    expect(store.doc.stretch).toMatchObject({ axis: 'y', from: 0, to: 8 })
+    // Le trait du haut, descendu d'une cellule : le motif se déplace, sans changer de hauteur.
+    await fire(wrapper.get('.cut-from .cut-hit'), 'pointerdown', y(0))
+    await fire(svg, 'pointermove', y(1))
+    await fire(svg, 'pointerup', y(1))
+    expect(store.doc.stretch).toMatchObject({ axis: 'y', from: 4, to: 12 })
     wrapper.unmount()
   })
 })

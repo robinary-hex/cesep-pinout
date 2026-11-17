@@ -232,3 +232,72 @@ describe('composant extensible posé', () => {
     expect(restretch(plain, 'c1', 5, 'start')).toBeNull()
   })
 })
+
+describe('composant extensible posé : en hauteur', () => {
+  /** Le même connecteur, qui s'étire vers le bas : ses traits sont horizontaux. */
+  function tower(): ComponentDefinition {
+    const def = header()
+    def.stretch = { axis: 'y', from: 2, to: 6, initial: 1, min: 1, max: 8 }
+    return def
+  }
+
+  function standing(placed: ComponentInstance): Project {
+    const doc = project(placed)
+    doc.embeddedDefs = { dupont: tower() }
+    return doc
+  }
+
+  it('s’allonge vers le bas, ses poignées en haut et en bas', () => {
+    const doc = standing(instance())
+    const placed = doc.components[0] as ComponentInstance
+    const def = instanceDefinition(doc, placed)
+    if (!def) throw new Error('définition attendue')
+    expect(def.size).toEqual({ widthCells: 2, heightCells: 4 })
+    expect(pinPoints(doc, placed)).toEqual([
+      [11, 11],
+      [11, 12],
+      [11, 13]
+    ])
+    const handles = (rotation: Rotation): unknown[] => {
+      const turned = standing(instance({ rotation }))
+      const item = turned.components[0] as ComponentInstance
+      const drawn = instanceDefinition(turned, item)
+      if (!drawn) throw new Error('définition attendue')
+      return stretchHandles(item, drawn).map((handle) => [
+        handle.end,
+        handle.x,
+        handle.y,
+        handle.dx,
+        handle.dy
+      ])
+    }
+    // À l'endroit : le début en haut, la fin en bas, au milieu de la largeur.
+    expect(handles(0)).toEqual([
+      ['start', 11, 10, 0, -1],
+      ['end', 11, 14, 0, 1]
+    ])
+    // Tourné d'un quart de tour : le haut du dessin est à droite.
+    expect(handles(90)).toEqual([
+      ['start', 14, 11, 1, 0],
+      ['end', 10, 11, -1, 0]
+    ])
+  })
+
+  it('garde en place le bout qu’on ne tire pas', () => {
+    const grown = (rotation: Rotation, fixed: 'start' | 'end'): number[] => {
+      const doc = standing(instance({ rotation }))
+      const change = restretch(doc, 'c1', 5, fixed)
+      if (!change) throw new Error('étirement attendu')
+      const def = instanceDefinition(doc, change.instance)
+      if (!def) throw new Error('définition attendue')
+      const box = instanceBounds(change.instance, def)
+      return [box.x, box.y, box.width, box.height]
+    }
+    // Au départ : la boîte va de (10, 10) à (12, 14).
+    expect(grown(0, 'start')).toEqual([10, 10, 2, 6])
+    expect(grown(0, 'end')).toEqual([10, 8, 2, 6])
+    // Quart de tour : le haut est à droite, il y reste quand c'est lui qu'on garde.
+    expect(grown(90, 'start')).toEqual([8, 10, 6, 2])
+    expect(grown(90, 'end')).toEqual([10, 10, 6, 2])
+  })
+})

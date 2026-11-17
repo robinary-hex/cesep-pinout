@@ -885,3 +885,50 @@ describe('éditeur de composants : modèles par nombre', () => {
     expect(store.shown.stretch).toBeUndefined()
   })
 })
+
+describe('éditeur de composants : étirement en hauteur', () => {
+  it('change de sens : le motif repart de toute la hauteur, les nombres restent', () => {
+    const store = useComponentEditorStore()
+    const height = store.doc.size.heightCells
+    store.setStretch({ from: 4, to: 12, initial: 2, min: 1, max: 6 })
+    store.setStretch({ axis: 'y' })
+    expect(store.doc.stretch).toEqual({
+      axis: 'y',
+      from: 0,
+      to: height * 4,
+      initial: 2,
+      min: 1,
+      max: 6
+    })
+    expect(store.undoLabel).toBe('Régler le motif')
+    expect(store.status).toContain('en hauteur')
+    // Redire le même sens ne fait rien.
+    const before = store.doc
+    store.setStretch({ axis: 'y' })
+    expect(store.doc).toBe(before)
+    // De retour en largeur, le sens ne s'écrit plus.
+    store.setStretch({ axis: 'x' })
+    expect(store.doc.stretch).toEqual({ from: 0, to: 16, initial: 2, min: 1, max: 6 })
+    // Un composant rendu extensible directement en hauteur.
+    store.setStretch(null)
+    store.setStretch({ axis: 'y' })
+    expect(store.doc.stretch).toMatchObject({ axis: 'y', from: 0, to: height * 4 })
+  })
+
+  it('garde le motif dans la hauteur de la boîte', () => {
+    const store = useComponentEditorStore()
+    store.setSize({ widthCells: 2, heightCells: 5 })
+    store.setStretch({ axis: 'y' })
+    store.setStretch({ from: 8, to: 16 })
+    expect(store.doc.stretch).toMatchObject({ axis: 'y', from: 8, to: 16 })
+    // Il ne sort pas par le bas ; la largeur de la boîte ne le borne pas.
+    store.setStretch({ from: 16, to: 24 })
+    expect(store.doc.stretch).toMatchObject({ from: 12, to: 20 })
+    store.setSize({ widthCells: 1, heightCells: 4 })
+    expect(store.doc.stretch).toMatchObject({ axis: 'y', from: 8, to: 16 })
+    // La boîte gagne une cellule en haut : le dessin suit l'origine, le motif aussi.
+    store.setBox({ x: 0, y: -1, w: 1, h: 5 })
+    expect(store.doc.size.heightCells).toBe(5)
+    expect(store.doc.stretch).toMatchObject({ from: 12, to: 20 })
+  })
+})

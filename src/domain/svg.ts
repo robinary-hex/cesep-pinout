@@ -1,8 +1,8 @@
 import { arrowHeadPoints, middleArrowHead, pointsAttribute, trimForArrows } from './arrows'
 import { wireEndLabelPlacement, wireRenderParts } from './wireEnds'
 import {
+  abuttingImages,
   dotRadiusCells,
-  imagesWithRightNeighbour,
   strokeWidthCells,
   type ComponentDefinition,
   type FieldValues,
@@ -122,21 +122,21 @@ function arrowsSvg(
 }
 
 /**
- * Débord d'une image sur sa voisine de droite, en cellules (`imagesWithRightNeighbour`) : un
+ * Débord d'une image sur sa voisine de droite ou du dessous, en cellules (`abuttingImages`) : un
  * demi-pixel d'une image exportée à ×1, assez pour qu'aucun filet de fond ne passe entre les
  * tranches d'un composant étiré quand le SVG est regardé à une autre échelle.
  */
 const IMAGE_LAP = 0.025
 
 /**
- * Une forme du mini-éditeur, en unités de cellule. `lap` élargit une image vers la droite, quand
- * une autre la suit.
+ * Une forme du mini-éditeur, en unités de cellule. `lap` agrandit une image vers la droite et
+ * vers le bas, quand une autre la suit de ce côté.
  */
 export function primitiveSvg(
   primitive: Primitive,
   componentStroke: number,
   fields?: FieldValues,
-  lap = 0
+  lap: { right: number; below: number } = { right: 0, below: 0 }
 ): string {
   if (primitive.kind === 'text') {
     const layout = layoutText(primitive, fields)
@@ -168,7 +168,8 @@ export function primitiveSvg(
     if (!primitive.dataUrl) {
       return `<rect ${attrs({ ...box, fill: '#eef1f4', stroke: '#8c959f', 'stroke-width': 0.05 })}/>`
     }
-    box.width += lap
+    box.width += lap.right
+    box.height += lap.below
     const crop = primitive.crop
     if (crop) {
       // Une tranche de l'image (composant étiré) : l'image remplit un carré d'une unité, dont
@@ -184,7 +185,7 @@ export function primitiveSvg(
       })
       return `<svg ${attrs({
         ...box,
-        viewBox: `${crop.x} 0 ${crop.w} 1`,
+        viewBox: `${crop.x} ${crop.y ?? 0} ${crop.w} ${crop.h ?? 1}`,
         preserveAspectRatio: 'none'
       })}><image ${whole}/></svg>`
     }
@@ -252,10 +253,13 @@ export function componentSvg(
   const shown = def.visual.primitives.filter(
     (primitive) => !(options.skipTexts && primitive.kind === 'text')
   )
-  const lapped = imagesWithRightNeighbour(shown)
+  const lapped = abuttingImages(shown)
   return shown
     .map((primitive, index) =>
-      primitiveSvg(primitive, componentStroke, fields, lapped.has(index) ? IMAGE_LAP : 0)
+      primitiveSvg(primitive, componentStroke, fields, {
+        right: lapped.right.has(index) ? IMAGE_LAP : 0,
+        below: lapped.below.has(index) ? IMAGE_LAP : 0
+      })
     )
     .join('')
 }

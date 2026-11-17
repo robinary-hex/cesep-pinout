@@ -8,6 +8,7 @@ import {
   pinSections,
   PRIMITIVE_KIND_LABELS,
   QUARTERS_PER_CELL,
+  stretchAxis,
   stretchCount,
   stretchedDefinition,
   STROKE_WEIGHTS,
@@ -65,8 +66,15 @@ function setSize(axis: 'widthCells' | 'heightCells', event: Event): void {
 
 const stretch = computed(() => store.shownVariant.stretch ?? null)
 
+/** Sens de l'étirement : en largeur (traits verticaux) ou en hauteur (traits horizontaux). */
+const stretchSense = computed(() => (stretch.value ? stretchAxis(stretch.value) : 'x'))
+
 function toggleStretch(event: Event): void {
   store.setStretch(checked(event) ? {} : null)
+}
+
+function setStretchAxis(event: Event): void {
+  store.setStretch({ axis: inputValue(event) === 'y' ? 'y' : 'x' })
 }
 
 /** Écrit dans le champ ce que le composant a retenu : une valeur refusée ou ramenée se voit. */
@@ -74,7 +82,7 @@ function showKept(event: Event, value: number): void {
   ;(event.target as HTMLInputElement).value = String(value)
 }
 
-/** Début du motif, en cellules (au quart) : le motif se déplace sans changer de largeur. */
+/** Début du motif, en cellules (au quart) : le motif se déplace sans changer de taille. */
 function setMotifStart(event: Event): void {
   const current = stretch.value
   const cells = numberValue(event)
@@ -86,7 +94,7 @@ function setMotifStart(event: Event): void {
   showKept(event, (stretch.value?.from ?? 0) / QUARTERS_PER_CELL)
 }
 
-/** Largeur du motif, en cellules entières. */
+/** Taille du motif dans le sens de l'étirement (largeur ou hauteur), en cellules entières. */
 function setMotifWidth(event: Event): void {
   const current = stretch.value
   const cells = numberValue(event)
@@ -122,7 +130,8 @@ function setPreviewCount(event: Event): void {
 }
 
 const PREVIEW_WIDTH_PX = 268
-const PREVIEW_HEIGHT_PX = 96
+/** Hauteur laissée à l'aperçu : plus grande pour un composant qui s'étire vers le bas. */
+const previewHeightPx = computed(() => (stretchSense.value === 'y' ? 240 : 96))
 
 /** Le composant étiré au nombre de l'aperçu, à l'échelle qui tient dans le panneau. */
 const preview = computed(() => {
@@ -130,7 +139,7 @@ const preview = computed(() => {
   const def = stretchedDefinition(store.shownVariant, previewCount.value)
   const cell = Math.min(
     PREVIEW_WIDTH_PX / def.size.widthCells,
-    PREVIEW_HEIGHT_PX / def.size.heightCells,
+    previewHeightPx.value / def.size.heightCells,
     24
   )
   return {
@@ -873,9 +882,26 @@ function setClosed(event: Event): void {
           <span>Extensible</span>
         </label>
         <template v-if="stretch">
+          <label class="field">
+            <span
+              title="En largeur : un début, un motif, une fin. En hauteur : un haut, un motif, un bas."
+            >
+              Sens
+            </span>
+            <select class="stretch-axis" :value="stretchSense" @change="setStretchAxis">
+              <option value="x">En largeur</option>
+              <option value="y">En hauteur</option>
+            </select>
+          </label>
           <div class="row">
             <label class="field">
-              <span title="Trait de gauche, en cellules ; se glisse aussi sur le dessin">
+              <span
+                :title="
+                  stretchSense === 'y'
+                    ? 'Trait du haut, en cellules ; se glisse aussi sur le dessin'
+                    : 'Trait de gauche, en cellules ; se glisse aussi sur le dessin'
+                "
+              >
                 Début du motif
               </span>
               <input
@@ -888,7 +914,7 @@ function setClosed(event: Event): void {
             </label>
             <label class="field">
               <span title="En cellules entières : ce dont le composant s’allonge à chaque motif">
-                Largeur du motif
+                {{ stretchSense === 'y' ? 'Hauteur du motif' : 'Largeur du motif' }}
               </span>
               <input
                 type="number"

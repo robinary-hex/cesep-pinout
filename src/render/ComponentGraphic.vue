@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import {
+  abuttingImages,
   arrowHeadPoints,
   dotRadiusCells,
-  imagesWithRightNeighbour,
   layoutText,
   middleArrowHead,
   NO_ARROWS,
@@ -86,11 +86,13 @@ const primitives = computed(() => {
 const HIT_MIN_PX = 10
 
 /**
- * Une image suivie d'une voisine (les tranches d'un composant étiré) déborde d'un pixel sur
- * elle : sans cela le fond passe entre les deux quand leur frontière tombe au milieu d'un pixel.
+ * Une image suivie d'une voisine, à sa droite ou dessous (les tranches d'un composant étiré),
+ * déborde d'un pixel sur elle : sans cela le fond passe entre les deux quand leur frontière
+ * tombe au milieu d'un pixel.
  */
-const lapped = computed(() => imagesWithRightNeighbour(primitives.value))
-const lap = (index: number): number => (lapped.value.has(index) ? props.pixel : 0)
+const lapped = computed(() => abuttingImages(primitives.value))
+const lapRight = (index: number): number => (lapped.value.right.has(index) ? props.pixel : 0)
+const lapBelow = (index: number): number => (lapped.value.below.has(index) ? props.pixel : 0)
 
 function strokePx(style: ShapeStyle): number {
   return strokeWidthCells(style, props.strokeBase) * props.cellPx
@@ -334,9 +336,9 @@ function menu(index: number, event: MouseEvent): void {
           class="image-slice"
           :x="q(p.x)"
           :y="q(p.y)"
-          :width="q(p.w) + lap(i)"
-          :height="q(p.h)"
-          :viewBox="`${p.crop.x} 0 ${p.crop.w} 1`"
+          :width="q(p.w) + lapRight(i)"
+          :height="q(p.h) + lapBelow(i)"
+          :viewBox="`${p.crop.x} ${p.crop.y ?? 0} ${p.crop.w} ${p.crop.h ?? 1}`"
           preserveAspectRatio="none"
         >
           <image :href="p.dataUrl" x="0" y="0" width="1" height="1" preserveAspectRatio="none" />
@@ -346,8 +348,8 @@ function menu(index: number, event: MouseEvent): void {
           :href="p.dataUrl"
           :x="q(p.x)"
           :y="q(p.y)"
-          :width="q(p.w) + lap(i)"
-          :height="q(p.h)"
+          :width="q(p.w) + lapRight(i)"
+          :height="q(p.h) + lapBelow(i)"
           preserveAspectRatio="none"
         />
         <!-- Fichier perdu : un cadre gris à la place de l'image. -->

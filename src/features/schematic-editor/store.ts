@@ -622,18 +622,22 @@ export const useSchematicStore = defineStore('schematic', () => {
    * Étire un composant extensible à `count` motifs (décision du 17 novembre 2026), le bout
    * `fixed` restant en place : son début quand on tire la poignée de fin ou qu'on tape le
    * nombre, sa fin quand on tire la poignée de début. Les fils soudés à ses broches suivent ;
-   * ceux d'une broche qui disparaît restent où ils sont, bout libre. Faux si rien ne change.
+   * ceux d'une broche qui disparaît restent où ils sont, bout libre. Les valeurs des textes
+   * variables du motif suivent leur motif, comme les broches. Faux si rien ne change.
    */
   function setInstanceCount(id: string, count: number, fixed: StretchEnd = 'start'): boolean {
     const change = restretch(doc.value, id, count, fixed)
     if (!change) return false
     const wiresBefore = doc.value.wires
+    const fieldsBefore = doc.value.components.find((instance) => instance.id === id)?.fields
     return apply('Étirer le composant', (draft) => {
       const target = draft.components.find((instance) => instance.id === id)
       if (!target) return
       target.count = change.instance.count
       target.x = change.instance.x
       target.y = change.instance.y
+      // Les valeurs des textes du motif suivent leur motif.
+      if (change.instance.fields !== fieldsBefore) target.fields = { ...change.instance.fields }
       const adjusted = wiresFollowingPins(wiresBefore, change.pinsBefore, projectPins(draft))
       if (adjusted.some((wire, index) => wire !== wiresBefore[index])) {
         draft.wires = castDraft(adjusted)

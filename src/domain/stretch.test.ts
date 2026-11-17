@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
+  abuttingImages,
+  componentFields,
   componentIssues,
   createEmptyComponent,
   DEFAULT_SHAPE_STYLE,
-  imagesWithRightNeighbour,
   variantDefinition,
   type ComponentDefinition,
   type ImagePrimitive,
   type Primitive,
-  type Stretch
+  type Stretch,
+  type TextPrimitive
 } from './component'
 import { pngHeaderDataUrl } from './testing/pngHeader'
 import {
@@ -18,9 +20,13 @@ import {
   modelDrawing,
   motifCells,
   normalizedStretch,
+  restretchedFields,
   STRETCH_MAX_COUNT,
+  stretchAxis,
   stretchCount,
   stretchedDefinition,
+  stretchExtent,
+  stretchFieldName,
   stretchPinId,
   stretchPinMap,
   stretchPinSource
@@ -263,7 +269,7 @@ describe('composant extensible : le dessin étiré', () => {
       [28, 4, { x: 0.75, w: 0.25 }]
     ])
     // Les tranches se touchent : toutes sauf la dernière débordent d'un rien sur la suivante.
-    expect([...imagesWithRightNeighbour(stretchedDefinition(def, 3).visual.primitives)]).toEqual([
+    expect([...abuttingImages(stretchedDefinition(def, 3).visual.primitives).right]).toEqual([
       0, 1, 2, 3
     ])
     // Trois images fournies une à une : celle du milieu est dans le motif, et se répète entière.
@@ -507,5 +513,209 @@ describe('composant extensible : modèles par nombre', () => {
       level: 'warning',
       message: 'Modèle à 9 : hors des nombres permis, il ne sert pas'
     })
+  })
+})
+
+/**
+ * Le même bornier debout : 2 cellules de large, 4 de haut, un contour sur toute la hauteur, une
+ * vis et un trait de séparation dans le motif (de 1 à 3 cellules du haut), un autre trait pile
+ * sur la fin du motif. Il s'étire en hauteur.
+ */
+function tower(stretch: Partial<Stretch> = {}): ComponentDefinition {
+  const def = createEmptyComponent('bornier-debout', 'Bornier debout')
+  def.size = { widthCells: 2, heightCells: 4 }
+  def.visual = {
+    kind: 'drawing',
+    primitives: [
+      { kind: 'rect', x: 0, y: 0, w: 8, h: 16, rx: 2, style },
+      { kind: 'ellipse', cx: 4, cy: 8, rx: 2, ry: 2, style },
+      { kind: 'line', x1: 0, y1: 4, x2: 8, y2: 4, arrows: noArrows, style },
+      { kind: 'line', x1: 0, y1: 12, x2: 8, y2: 12, arrows: noArrows, style }
+    ]
+  }
+  def.pins = [{ id: 'p1', name: '1', kind: 'io', x: 0, y: 2 }]
+  def.stretch = { axis: 'y', from: 4, to: 12, initial: 2, min: 1, max: 6, ...stretch }
+  return def
+}
+
+describe('composant extensible : en hauteur', () => {
+  it('lit ses traits le long de sa hauteur', () => {
+    const def = tower()
+    expect(stretchAxis(def.stretch as Stretch)).toBe('y')
+    expect(stretchExtent(def.size, def.stretch as Stretch)).toBe(4)
+    // Sans rien dire, un composant s'étire en largeur.
+    expect(stretchAxis(terminal().stretch as Stretch)).toBe('x')
+    expect(stretchExtent(terminal().size, terminal().stretch as Stretch)).toBe(4)
+    expect(defaultStretch(3, 'y')).toEqual({
+      axis: 'y',
+      from: 0,
+      to: 12,
+      initial: 1,
+      min: 1,
+      max: 12
+    })
+    expect(defaultStretch(3)).toEqual({ from: 0, to: 12, initial: 1, min: 1, max: 12 })
+  })
+
+  it('répète le motif vers le bas : un haut, des motifs, un bas', () => {
+    const three = stretchedDefinition(tower(), 3)
+    // Deux motifs de plus, de deux cellules chacun : la largeur ne bouge pas.
+    expect(three.size).toEqual({ widthCells: 2, heightCells: 8 })
+    // Le contour s'allonge, la vis est recopiée à chaque motif.
+    expect(three.visual.primitives[0]).toMatchObject({ kind: 'rect', x: 0, y: 0, w: 8, h: 32 })
+    expect(shapes(three, 'ellipse')).toMatchObject([
+      { cx: 4, cy: 8 },
+      { cx: 4, cy: 16 },
+      { cx: 4, cy: 24 }
+    ])
+    // Le trait du haut du motif se retrouve une fois par motif ; celui du bas suit la fin.
+    expect(shapes(three, 'line').map((line) => (line.kind === 'line' ? line.y1 : null))).toEqual([
+      4, 12, 20, 28
+    ])
+    // Les broches descendent avec les motifs, toujours sur la grille.
+    expect(three.pins.map((pin) => [pin.id, pin.name, pin.x, pin.y])).toEqual([
+      ['p1', '1', 0, 2],
+      ['p1#1', '2', 0, 4],
+      ['p1#2', '3', 0, 6]
+    ])
+    // À un seul motif : le composant lui-même.
+    expect(stretchedDefinition(tower(), 1)).toMatchObject({
+      size: { widthCells: 2, heightCells: 4 }
+    })
+  })
+
+  it('coupe une image aux traits horizontaux : sa tranche du milieu se répète', () => {
+    const def = tower()
+    const image: ImagePrimitive = {
+      kind: 'image',
+      x: 0,
+      y: 0,
+      w: 8,
+      h: 16,
+      file: 'bornier.png',
+      dataUrl: pngHeaderDataUrl(160, 320)
+    }
+    def.visual = { kind: 'drawing', primitives: [image] }
+    const stretched = stretchedDefinition(def, 3)
+    const parts = stretched.visual.primitives.map((primitive) =>
+      primitive.kind === 'image' ? [primitive.y, primitive.h, primitive.crop] : []
+    )
+    // Le haut (un quart de l'image), trois fois le motif (sa moitié), puis le bas.
+    expect(parts).toEqual([
+      [0, 4, { x: 0, w: 1, y: 0, h: 0.25 }],
+      [4, 8, { x: 0, w: 1, y: 0.25, h: 0.5 }],
+      [12, 8, { x: 0, w: 1, y: 0.25, h: 0.5 }],
+      [20, 8, { x: 0, w: 1, y: 0.25, h: 0.5 }],
+      [28, 4, { x: 0, w: 1, y: 0.75, h: 0.25 }]
+    ])
+    // Elles sont l'une sous l'autre : chacune déborde d'un rien sur celle du dessous.
+    expect([...abuttingImages(stretched.visual.primitives).below]).toEqual([0, 1, 2, 3])
+    expect([...abuttingImages(stretched.visual.primitives).right]).toEqual([])
+    // Le dessin de départ d'un modèle garde l'image entière, et le reste tel qu'il est.
+    expect(modelDrawing(def, 1)?.visual.primitives).toEqual([image])
+    expect(modelDrawing(tower(), 1)?.visual.primitives).toEqual(tower().visual.primitives)
+  })
+
+  it('suit les broches d’un nombre à l’autre, et signale un motif hors de la hauteur', () => {
+    const def = tower()
+    expect([...stretchPinMap(def, 2, 3, 'start')]).toEqual([
+      ['p1', 'p1'],
+      ['p1#1', 'p1#1']
+    ])
+    // La fin (le bas) reste en place : les motifs se comptent depuis elle.
+    expect([...stretchPinMap(def, 2, 3, 'end')]).toEqual([
+      ['p1', 'p1#1'],
+      ['p1#1', 'p1#2']
+    ])
+    expect(componentIssues(tower()).map((issue) => issue.message)).toEqual([])
+    // Le motif se lit le long de la hauteur (4 cellules), pas de la largeur (2).
+    expect(componentIssues(tower({ from: 12, to: 20 })).map((issue) => issue.message)).toContain(
+      'Le motif dépasse la boîte du composant'
+    )
+  })
+})
+
+describe('composant extensible : une valeur par copie d’un texte variable', () => {
+  const text = (patch: Partial<TextPrimitive>): TextPrimitive => ({
+    kind: 'text',
+    x: 5,
+    y: 1,
+    w: 6,
+    h: 2,
+    text: 'Nom',
+    size: 0.5,
+    anchor: 'middle',
+    color: '#000000',
+    variable: true,
+    defaultValue: '',
+    unit: '',
+    bold: false,
+    followsRotation: false,
+    italic: false,
+    underline: false,
+    strike: false,
+    vertical: false,
+    ...patch
+  })
+
+  /** Le bornier, avec un nom par borne dans le motif, un repère avant lui et un texte fixe. */
+  function labelled(): ComponentDefinition {
+    const def = terminal()
+    def.visual = {
+      kind: 'drawing',
+      primitives: [
+        text({}),
+        text({ x: 0, w: 3, text: 'Réf' }),
+        text({ y: 5, text: 'vis', variable: false })
+      ]
+    }
+    return def
+  }
+
+  it('nomme le champ de chaque copie : la première garde son nom', () => {
+    expect(stretchFieldName('Nom', 0)).toBe('Nom')
+    expect(stretchFieldName('Nom', 1)).toBe('Nom 2')
+    expect(stretchFieldName('Nom', 4)).toBe('Nom 5')
+    const three = stretchedDefinition(labelled(), 3)
+    // Un champ par copie du texte du motif ; le repère, hors du motif, reste seul.
+    expect(componentFields(three).map((field) => field.name)).toEqual([
+      'Nom',
+      'Nom 2',
+      'Nom 3',
+      'Réf'
+    ])
+    // Un texte fixe est recopié tel quel.
+    expect(
+      three.visual.primitives.flatMap((primitive) =>
+        primitive.kind === 'text' && !primitive.variable ? [primitive.text] : []
+      )
+    ).toEqual(['vis', 'vis', 'vis'])
+    // À un seul motif, rien ne change.
+    expect(componentFields(stretchedDefinition(labelled(), 1)).map((field) => field.name)).toEqual([
+      'Nom',
+      'Réf'
+    ])
+  })
+
+  it('les valeurs suivent leur motif quand le composant s’étire par le début', () => {
+    const def = labelled()
+    const fields = { Nom: 'A', 'Nom 2': 'B', Réf: 'J1' }
+    // Le début reste en place : les motifs s'ajoutent à la fin, rien ne bouge.
+    expect(restretchedFields(def, fields, 2, 3, 'start')).toBe(fields)
+    // La fin reste en place : un motif de plus au début, chaque valeur recule d'un rang.
+    expect(restretchedFields(def, fields, 2, 3, 'end')).toEqual({
+      'Nom 2': 'A',
+      'Nom 3': 'B',
+      Réf: 'J1'
+    })
+    // Un motif de moins au début : sa valeur est perdue, les autres avancent.
+    expect(restretchedFields(def, { Nom: 'A', 'Nom 2': 'B', 'Nom 3': 'C' }, 3, 2, 'end')).toEqual({
+      Nom: 'B',
+      'Nom 2': 'C'
+    })
+    // Sans valeur de motif, rien ne change.
+    const plain = { Réf: 'J1' }
+    expect(restretchedFields(def, plain, 2, 3, 'end')).toBe(plain)
+    expect(restretchedFields(createEmptyComponent('r', 'R'), fields, 2, 3, 'end')).toBe(fields)
   })
 })
