@@ -57,11 +57,29 @@ function pickCustom(hex: string): void {
         <button
           type="button"
           class="tool icon-only"
-          :class="{ active: store.tool === 'wire' }"
+          :class="{ active: store.tool === 'wire' && store.wireKind === null }"
           title="Tracer un fil (F)"
           @click="store.startWireTool()"
         >
           <Icon name="wire" :size="18" />
+        </button>
+        <button
+          type="button"
+          class="tool icon-only"
+          :class="{ active: store.tool === 'wire' && store.wireKind === 'bare' }"
+          title="Tracer un fil nu, soudé à toutes les broches sur son trajet (N)"
+          @click="store.startWireTool('bare')"
+        >
+          <Icon name="bare-wire" :size="18" />
+        </button>
+        <button
+          type="button"
+          class="tool icon-only"
+          :class="{ active: store.tool === 'wire' && store.wireKind === 'jumper' }"
+          title="Poser un pont : un fil en courbe, de A à B (P)"
+          @click="store.startWireTool('jumper')"
+        >
+          <Icon name="jumper" :size="18" />
         </button>
         <button
           type="button"

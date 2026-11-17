@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import {
   BASE_VARIANT,
   startsDocumentColors,
+  wireKindLabel,
   componentVariants,
   hasVariants,
   instanceDefinition,
@@ -124,6 +125,26 @@ const singleWire = computed(() =>
     : null
 )
 const wiresOnly = computed(() => onlyWires.value && selectedWireList.value.length > 1)
+
+// Sorte des fils sélectionnés : un fil isolé devient fil nu, et l'inverse ; un pont reste un
+// pont. Un fil nu n'a pas de gaine : pas de couleur à choisir.
+const convertible = computed(
+  () =>
+    selectedWireList.value.length > 0 &&
+    selectedWireList.value.every((wire) => wire.kind !== 'jumper')
+)
+const allBare = computed(
+  () =>
+    selectedWireList.value.length > 0 &&
+    selectedWireList.value.every((wire) => wire.kind === 'bare')
+)
+
+function setWireKind(event: Event): void {
+  store.setWiresKind(
+    store.selectedWires,
+    (event.target as HTMLSelectElement).value === 'bare' ? 'bare' : null
+  )
+}
 
 const selectedLabelList = computed(() =>
   doc.value.labels.filter((label) => store.selectedLabels.includes(label.id))
@@ -536,8 +557,15 @@ function setLabelVertical(event: Event): void {
     </template>
 
     <section v-else-if="singleWire || wiresOnly" class="block">
-      <h3>{{ singleWire ? 'Fil' : `${selectedWireList.length} fils` }}</h3>
-      <div class="field">
+      <h3>{{ singleWire ? wireKindLabel(singleWire.kind) : `${selectedWireList.length} fils` }}</h3>
+      <label v-if="convertible" class="field wire-kind">
+        <span>Type</span>
+        <select :value="allBare ? 'bare' : 'wire'" @change="setWireKind">
+          <option value="wire">Fil isolé</option>
+          <option value="bare">Fil nu</option>
+        </select>
+      </label>
+      <div v-if="!allBare" class="field">
         <span>Couleur</span>
         <div class="swatches">
           <button

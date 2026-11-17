@@ -1941,3 +1941,132 @@ describe('montage : plaque à trous', () => {
     expect(store.doc.components.every((instance) => instance.behindWires)).toBe(true)
   })
 })
+
+describe('montage : fil nu et pont', () => {
+  it('l’outil Fil trace un fil isolé, un fil nu ou un pont', () => {
+    const store = useSchematicStore()
+    // Un fil nu : tracé comme un fil, enregistré avec sa sorte.
+    store.startWireTool('bare')
+    expect(store.tool).toBe('wire')
+    expect(store.wireKind).toBe('bare')
+    expect(store.status).toContain('Fil nu')
+    store.beginWire([0, 0])
+    store.appendWirePoints([[6, 0]])
+    const bare = store.finishWire()
+    expect(store.doc.wires.find((wire) => wire.id === bare)).toMatchObject({
+      kind: 'bare',
+      points: [
+        [0, 0],
+        [6, 0]
+      ]
+    })
+    expect(store.undoLabel).toBe('Tracer un fil nu')
+    // Un pont : deux clics, où qu'ils soient.
+    store.startWireTool('jumper')
+    store.beginWire([0, 4])
+    const jumper = store.finishJumper([5, 7])
+    expect(store.doc.wires.find((wire) => wire.id === jumper)).toMatchObject({
+      kind: 'jumper',
+      points: [
+        [0, 4],
+        [5, 7]
+      ]
+    })
+    expect(store.undoLabel).toBe('Poser un pont')
+    expect(store.status).toContain('Pont tracé')
+    // L'outil Fil ordinaire ne donne pas de sorte.
+    store.startWireTool()
+    expect(store.wireKind).toBeNull()
+    store.beginWire([0, 10])
+    store.appendWirePoints([[4, 10]])
+    const plain = store.finishWire()
+    expect(store.doc.wires.find((wire) => wire.id === plain)?.kind).toBeUndefined()
+    // Le fichier garde les sortes.
+    const reread = parseProject(serializeProject(store.doc))
+    expect(reread.wires.map((wire) => wire.kind)).toEqual(['bare', 'jumper', undefined])
+  })
+
+  it('un fil nu relie les broches de son trajet ; redevenu isolé, plus que ses bouts', () => {
+    const store = useSchematicStore()
+    // Trois résistances l'une sous l'autre : leurs broches de gauche sont en x = 2.
+    store.startPlacing(resistor())
+    store.placeAt(2, 0)
+    store.placeAt(2, 4)
+    store.placeAt(2, 8)
+    store.stopPlacing()
+    const wire = store.addWire(
+      [
+        [2, 1],
+        [2, 9]
+      ],
+      '#000000',
+      'bare'
+    )
+    if (!wire) throw new Error('fil refusé')
+    const net = (key: string): number | undefined => store.connectivity.pinNet.get(key)
+    expect(net('c1:a')).toBe(net('c2:a'))
+    expect(net('c2:a')).toBe(net('c3:a'))
+    expect(store.connectivity.solders).toHaveLength(3)
+    // Devenu fil isolé : la broche du milieu n'est plus reliée.
+    store.setWiresKind([wire], null)
+    expect(store.undoLabel).toBe('Fil isolé')
+    expect(store.doc.wires[0]?.kind).toBeUndefined()
+    expect(net('c1:a')).toBe(net('c3:a'))
+    expect(net('c2:a')).not.toBe(net('c1:a'))
+    expect(store.connectivity.solders).toEqual([])
+    store.setWiresKind([wire], 'bare')
+    expect(store.undoLabel).toBe('Fil nu')
+    // Redire la même sorte ne fait rien.
+    const before = store.doc
+    store.setWiresKind([wire], 'bare')
+    expect(store.doc).toBe(before)
+  })
+
+  it('un pont n’a que ses deux bouts : ni sommet, ni coupe ; il se retourne et suit ses broches', () => {
+    const store = useSchematicStore()
+    store.startPlacing(resistor())
+    const id = store.placeAt(2, 0)
+    store.stopPlacing()
+    // Du bout gauche de la résistance (2, 1) à un point quelconque.
+    const jumper = store.addWire(
+      [
+        [2, 1],
+        [9, 6]
+      ],
+      '#d62828',
+      'jumper'
+    )
+    if (!jumper || !id) throw new Error('pont refusé')
+    const points = (): unknown => store.doc.wires.find((wire) => wire.id === jumper)?.points
+    const before = store.doc
+    // Pas de sommet à ajouter, pas de coupe, pas de sorte à changer.
+    store.addWireVertex(jumper, [5, 3])
+    expect(store.toggleWireVertex(jumper, { x: 5, y: 3 })).toBe(false)
+    expect(store.splitWire(jumper, [5, 3])).toBeNull()
+    store.setWiresKind([jumper], 'bare')
+    expect(store.doc).toBe(before)
+    // Retourné : ses bouts échangés, il se bombe de l'autre côté.
+    store.flipJumper(jumper)
+    expect(store.undoLabel).toBe('Retourner le pont')
+    expect(points()).toEqual([
+      [9, 6],
+      [2, 1]
+    ])
+    // Un bout se pose où l'on veut, hors de toute direction de la grille.
+    store.setWirePoints(jumper, [
+      [10, 3],
+      [2, 1]
+    ])
+    expect(points()).toEqual([
+      [10, 3],
+      [2, 1]
+    ])
+    // Le composant bouge : le bout du pont suit sa broche, sans coude.
+    store.selection = [id]
+    store.moveSelection(1, 4)
+    expect(points()).toEqual([
+      [10, 3],
+      [3, 5]
+    ])
+  })
+})

@@ -92,11 +92,35 @@ export function wireGeometryProblem(
   return null
 }
 
+/**
+ * Sorte d'un fil (décision du 17 novembre 2026, voir wireKinds.ts) ; absente : le fil isolé de
+ * toujours, relié par ses seuls bouts. `bare` : un fil nu, soudé à toutes les broches posées
+ * sur son trajet. `jumper` : un pont, fil isolé de A à B dessiné en courbe, qui n'a que ses
+ * deux bouts et ne touche rien en chemin.
+ */
+export const wireKindSchema = z.enum(['bare', 'jumper'])
+export type WireKind = z.infer<typeof wireKindSchema>
+
+/**
+ * Ce qui cloche dans le tracé d'un fil, selon sa sorte : un pont a deux bouts distincts, sans
+ * autre contrainte ; les autres fils suivent la grille (`wireGeometryProblem`). Null si tout va.
+ */
+export function wireProblem(wire: {
+  points: ReadonlyArray<GridPoint>
+  kind?: WireKind | undefined
+}): string | null {
+  if (wire.kind !== 'jumper') return wireGeometryProblem(wire.points)
+  const [from, to] = wire.points
+  if (wire.points.length !== 2 || !from || !to) return 'Un pont a deux bouts, et rien entre eux'
+  return from[0] === to[0] && from[1] === to[1] ? 'Les deux bouts du pont sont confondus' : null
+}
+
 export const wireSchema = z
   .object({
     id: z.string().min(1),
     group: groupSchema,
     style: elementStyleSchema,
+    kind: wireKindSchema.optional(),
     color: hexColorSchema,
     points: z.array(gridPointSchema).min(2),
     /** Rang d'empilement : un fil de rang supérieur passe au-dessus aux croisements. */
@@ -106,7 +130,7 @@ export const wireSchema = z
     endLabels: z.object({ start: z.string(), end: z.string() })
   })
   .superRefine((wire, ctx) => {
-    const problem = wireGeometryProblem(wire.points)
+    const problem = wireProblem(wire)
     if (problem !== null) ctx.addIssue({ code: 'custom', message: problem, path: ['points'] })
   })
 export type Wire = z.infer<typeof wireSchema>

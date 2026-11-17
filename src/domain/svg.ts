@@ -38,6 +38,15 @@ import { instanceDefinition, type Project } from './project'
 import { roundedPathData } from './roundedPath'
 import type { ExportSettings } from './settings'
 import { junctionDot, projectStyleSheet, styleOf } from './styles'
+import {
+  BARE_WIRE_EDGE,
+  BARE_WIRE_EDGE_SCALE,
+  jumperPathData,
+  SOLDER_COLOR,
+  SOLDER_EDGE,
+  SOLDER_SCALE,
+  wireInk
+} from './wireKinds'
 import { wirePathData } from './wires'
 
 /**
@@ -390,13 +399,40 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
       start: free.some((end) => end.endIndex === 0),
       end: free.some((end) => end.endIndex === wire.points.length - 1)
     }
+    const ink = wireInk(wire)
+    if (wire.kind === 'jumper') {
+      // Un pont : une courbe de A à B, sans flèche ni pointillés.
+      wireParts.push(
+        `<path ${attrs({
+          d: jumperPathData(wire.points),
+          fill: 'none',
+          stroke: ink,
+          'stroke-width': width,
+          'stroke-linecap': 'round'
+        })}/>`
+      )
+      continue
+    }
     const shown = wireRenderParts(wire.points, wire.freeEnds, flags, width)
     if (shown.body.length >= 2) {
+      if (wire.kind === 'bare') {
+        // Un fil nu : un liseré sombre sous le métal, qui lui donne son relief.
+        wireParts.push(
+          `<path ${attrs({
+            d: wirePathData(shown.body, style.cornerRadius),
+            fill: 'none',
+            stroke: BARE_WIRE_EDGE,
+            'stroke-width': width * BARE_WIRE_EDGE_SCALE,
+            'stroke-linecap': 'butt',
+            'stroke-linejoin': 'round'
+          })}/>`
+        )
+      }
       wireParts.push(
         `<path ${attrs({
           d: wirePathData(shown.body, style.cornerRadius),
           fill: 'none',
-          stroke: wire.color,
+          stroke: ink,
           'stroke-width': width,
           'stroke-linecap': 'butt',
           'stroke-linejoin': 'round'
@@ -408,7 +444,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
         `<path ${attrs({
           d: wirePathData(tail, style.cornerRadius),
           fill: 'none',
-          stroke: wire.color,
+          stroke: ink,
           'stroke-width': width,
           'stroke-linecap': 'round',
           'stroke-dasharray': `0 ${fmt(width * 2)}`
@@ -416,7 +452,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
       )
     }
     for (const head of shown.heads) {
-      wireParts.push(`<polygon ${attrs({ points: pointsAttribute(head), fill: wire.color })}/>`)
+      wireParts.push(`<polygon ${attrs({ points: pointsAttribute(head), fill: ink })}/>`)
     }
     // Étiquettes d'extrémité : un point sur le bout libre, le texte dans le prolongement du fil.
     for (const end of free) {
@@ -424,7 +460,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
       const placement = text.length > 0 ? wireEndLabelPlacement(wire.points, end.endIndex) : null
       if (!placement) continue
       endLabelParts.push(
-        `<circle ${attrs({ cx: end.point[0], cy: end.point[1], r: width, fill: wire.color })}/>`
+        `<circle ${attrs({ cx: end.point[0], cy: end.point[1], r: width, fill: ink })}/>`
       )
       endLabelParts.push(
         `<text ${attrs({
@@ -465,7 +501,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
       y1,
       x2,
       y2,
-      stroke: top?.color ?? '#000000',
+      stroke: top ? wireInk(top) : '#000000',
       'stroke-width': width
     })}/>`
     return halo + line
@@ -477,6 +513,21 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
     return `<circle ${attrs({ cx: junction.point[0], cy: junction.point[1], r: dot.radius, fill: dot.color })}/>`
   })
   parts.push(`<g class="junctions">${junctionParts.join('')}</g>`)
+
+  // Points de soudure des fils nus, sur chaque broche de leur trajet.
+  const solderParts = connectivity.solders.map((solder) => {
+    const wire = wireById.get(solder.wireId)
+    const width = (wire ? styleOf(sheet, wire) : profile).wireWidth
+    return `<circle ${attrs({
+      cx: solder.point[0],
+      cy: solder.point[1],
+      r: width * SOLDER_SCALE,
+      fill: SOLDER_COLOR,
+      stroke: SOLDER_EDGE,
+      'stroke-width': width * 0.25
+    })}/>`
+  })
+  if (solderParts.length > 0) parts.push(`<g class="solders">${solderParts.join('')}</g>`)
 
   parts.push(...componentLayer(false))
   if (labelParts.length > 0) parts.push(`<g class="labels">${labelParts.join('')}</g>`)

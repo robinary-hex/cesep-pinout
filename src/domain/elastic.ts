@@ -1,8 +1,8 @@
 import type { PinRef } from './connectivity'
 import type { GridPoint } from './grid'
-import { wireGeometryProblem, type Wire } from './project'
+import { wireProblem, type Wire, type WireKind } from './project'
+import { movedWireVertex } from './wireKinds'
 import {
-  dragVertex,
   locateOnWire,
   pointOnSegment,
   pointsEqual,
@@ -28,7 +28,9 @@ const pointKey = (p: GridPoint): string => `${p[0]},${p[1]}`
  * en bloc. Un fil qui ne change pas est retourné tel quel (même objet). Vaut pour tout ce qui a
  * la géométrie d'un fil : les liens d'un diagramme suivent ainsi les points d'accroche des nœuds.
  */
-export function wiresFollowingPins<W extends { id: string; points: GridPoint[] }>(
+export function wiresFollowingPins<
+  W extends { id: string; points: GridPoint[]; kind?: WireKind | undefined }
+>(
   wires: readonly W[],
   pinsBefore: readonly PinRef[],
   pinsAfter: readonly PinRef[],
@@ -70,11 +72,17 @@ export function wiresFollowingPins<W extends { id: string; points: GridPoint[] }
 
     if (moves.length === 0) return shift ? { ...wire, points } : wire
 
-    let adjusted = simplifyPoints(points)
+    // Un pont n'a que ses deux bouts : ils vont où vont leurs broches, sans coude.
+    let adjusted = wire.kind === 'jumper' ? [...points] : simplifyPoints(points)
     for (const move of moves) {
-      adjusted = dragVertex(adjusted, move.atStart ? 0 : adjusted.length - 1, move.target)
+      adjusted = movedWireVertex(
+        wire.kind,
+        adjusted,
+        move.atStart ? 0 : adjusted.length - 1,
+        move.target
+      )
     }
-    if (adjusted.length < 2 || wireGeometryProblem(adjusted) !== null) {
+    if (adjusted.length < 2 || wireProblem({ points: adjusted, kind: wire.kind }) !== null) {
       return shift ? { ...wire, points } : wire
     }
     return { ...wire, points: adjusted }
@@ -183,7 +191,7 @@ export function wiresFollowingJunctions(
     const carriers = current.flatMap((wire) => {
       const old = original.get(wire.id)
       return old && !samePoints(old.points, wire.points)
-        ? [{ id: wire.id, from: old.points, to: wire.points }]
+        ? [{ id: wire.id, from: old.points, to: wire.points, jumper: wire.kind === 'jumper' }]
         : []
     })
     if (carriers.length === 0) break
@@ -202,7 +210,10 @@ export function wiresFollowingJunctions(
         if (!origin || !now || !pointsEqual(origin, now) || pinPoints.has(pointKey(now))) continue
         let target: GridPoint | null = null
         for (const carrier of carriers) {
-          if (carrier.id === wire.id || !locateOnWire(carrier.from, origin)) continue
+          if (carrier.id === wire.id) continue
+          const held = locateOnWire(carrier.from, origin)
+          // Un pont ne porte de jonction qu'à ses bouts.
+          if (!held || (carrier.jumper && held.kind !== 'end')) continue
           const candidate = movedJunction(carrier.from, carrier.to, origin)
           if (!pointsEqual(candidate, origin)) {
             target = candidate
@@ -210,9 +221,11 @@ export function wiresFollowingJunctions(
           }
         }
         if (!target) continue
-        const base = simplifyPoints(shown)
-        const adjusted = dragVertex(base, atStart ? 0 : base.length - 1, target)
-        if (adjusted.length < 2 || wireGeometryProblem(adjusted) !== null) continue
+        const base = wire.kind === 'jumper' ? [...shown] : simplifyPoints(shown)
+        const adjusted = movedWireVertex(wire.kind, base, atStart ? 0 : base.length - 1, target)
+        if (adjusted.length < 2 || wireProblem({ points: adjusted, kind: wire.kind }) !== null) {
+          continue
+        }
         points = adjusted
         moved.add(key)
       }

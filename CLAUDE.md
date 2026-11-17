@@ -128,7 +128,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Raccourcis définis par la lettre (`KeyboardEvent.key`), clavier AZERTY belge, jamais de crochets
   ni de touches AltGr. Les deux seuls chiffres (0, 1) se lisent par touche physique (`event.code`)
   car la rangée du haut demande Maj sur ce clavier.
-  - Montage : V sélection (arrête la pose ou le fil), F fil (clic par coude, Maj inverse le L,
+  - Montage : V sélection (arrête la pose ou le fil), N fil nu, P pont (voir « Plaques à
+    trous »), F fil (clic par coude, Maj inverse le L,
     Alt maintenue trace à 45° : une diagonale puis un segment droit, l'inverse avec Maj ;
     double-clic ou Entrée termine, Retour arrière retire le dernier sommet, Échap termine aussi
     dès deux sommets),
@@ -894,6 +895,28 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     trous se dessinent chacun en un seul tracé (`discsPathData`), à l'écran comme à l'export ;
     le trou est un sombre posé sur la couleur de la plaque (`HOLE_COLOR`, `HOLE_OPACITY`).
     À cheval sur les traits d'un composant extensible, la grille s'élargit : plus de trous.
+  - Trois sortes de fils (`kind` d'un fil, `src/domain/wireKinds.ts`) : le fil isolé de
+    toujours (pas de `kind`), le fil nu (`bare`) et le pont (`jumper`). Les deux derniers
+    servent aussi hors d'une plaque. Outils du montage : F fil, N fil nu, P pont (les
+    trois boutons de la barre, `startWireTool(kind)`, `wireKind` du store).
+    Fil nu : la géométrie et toutes les retouches d'un fil, mais il est soudé à toutes les
+    broches posées sur son trajet, pas seulement à ses bouts (`computeConnectivity`,
+    `solders`) ; pas aux pastilles vides, et deux fils nus qui se croisent ne se touchent
+    pas. Il n'a pas de gaine, donc pas de couleur : il se dessine en métal
+    (`wireInk`, `BARE_WIRE_COLOR`) sur un liseré sombre, avec un point de soudure sur
+    chaque broche (`.solder`). Le panneau d'un fil a une liste « Type » (isolé ou nu,
+    `setWiresKind`), sans pastilles de couleur pour un fil nu.
+    Pont : un fil isolé de A à B, dessiné en courbe (`jumperPathData`, une quadratique
+    bombée à gauche de son sens de tracé : `jumperControl`). Deux clics le posent
+    (`finishJumper`). Il n'a que ses deux bouts, où qu'ils soient (`wireProblem` : pas de
+    contrainte de direction) : ni sommet, ni tronçon à glisser (on le déplace d'un bloc),
+    ni coupe, ni croisement (`computeCrossings` l'ignore : il passe par-dessus), et rien
+    ne se raccorde à sa corde, seulement à ses bouts. Un bout qu'on glisse, ou qui suit
+    sa broche, va où il va sans ajouter de coude (`movedWireVertex`). Clic droit :
+    « Bomber de l'autre côté » (`flipJumper` : ses bouts échangés).
+    Tout ce qui dessine un fil passe par `wireShapeData` et `wireInk`, à l'écran comme à
+    l'export ; tout ce qui valide son tracé par `wireProblem`, jamais par
+    `wireGeometryProblem` seul.
   - Un composant est une plaque dès que son dessin a une grille de trous (`isBoard`,
     `drawingHoles`). Elle n'a pas de broches (pas d'avertissement pour ça), la bibliothèque
     la compte en trous, et elle se pose sous les composants déjà là (`placeAt` : en tête de
@@ -1012,7 +1035,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
   par version dans `src/domain/fixtures/`. Versions courantes : composant 16, projet 23, paramètres 15,
   diagramme 6 (composant 16 et projet 23, du 17 novembre 2026, pas encore publiés, portent les
-  composants extensibles : `stretch`, `crop`, `count`, et la plaque à trous : forme `holes` ; un composant ou un montage qu'ils
+  composants extensibles : `stretch`, `crop`, `count`, et la plaque à trous : forme `holes`, sorte d'un fil `kind` ; un composant ou un montage qu'ils
   enregistrent ne s'ouvrira plus dans la 1.9.1 ni avant ; paramètres 15 et diagramme 5 sont ceux de la 1.6.0, publiée le 11 novembre
   2026 : palette des diagrammes et dossier de Pinout dans les paramètres, couleur du texte
   d'un nœud dans le diagramme ; un diagramme enregistré par la 1.6.0 ne s'ouvre plus dans une

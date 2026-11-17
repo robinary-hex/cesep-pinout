@@ -212,6 +212,7 @@ export const SHORTCUT_SECTIONS: ShortcutSection[] = [
         rows: [
           k('V', 'Sélection', { icon: 'cursor' }),
           k('F', 'Fil', { icon: 'wire' }),
+          k('N / P', 'Fil nu, pont', { icon: 'jumper' }),
           k('E', 'Étiquette', { icon: 'type' }),
           k('clic / glisser', 'Poser un composant', { icon: 'chip' })
         ]
@@ -220,8 +221,7 @@ export const SHORTCUT_SECTIONS: ShortcutSection[] = [
         title: 'Tracer un fil',
         rows: [
           k('clic', 'Poser un coude'),
-          k('Maj', 'Inverser le L'),
-          k('Alt', 'Tracer à 45°'),
+          k('Maj / Alt', 'Inverser le L, tracer à 45°'),
           k('Entrée / double-clic', 'Terminer le fil'),
           k('Retour arrière', 'Retirer le dernier coude'),
           k('Ctrl+glisser', 'Tirer un fil d’une broche'),

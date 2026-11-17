@@ -63,7 +63,9 @@ function interiorCrossing(
   return [a1[0] + (numerator * ax) / denominator, a1[1] + (numerator * ay) / denominator]
 }
 
-export function computeCrossings(wires: readonly Wire[]): Crossing[] {
+export function computeCrossings(all: readonly Wire[]): Crossing[] {
+  // Un pont passe par-dessus tout, en courbe : il n'a pas de croisement à redessiner.
+  const wires = all.filter((wire) => wire.kind !== 'jumper')
   const result: Crossing[] = []
   for (let i = 0; i < wires.length; i++) {
     const a = wires[i]

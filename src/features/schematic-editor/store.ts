@@ -58,6 +58,8 @@ import {
   unionRects,
   wireBounds,
   wireGeometryProblem,
+  wireKindLabel,
+  wireProblem,
   withGroup,
   withStyle,
   wiresFollowingJunctions,
@@ -66,6 +68,7 @@ import {
   zoomedView,
   type ComponentDefinition,
   type ComponentInstance,
+  type WireKind,
   type FlipAxis,
   type FreeEndStyle,
   type GridPoint,
@@ -186,6 +189,11 @@ export const useSchematicStore = defineStore('schematic', () => {
   const tool = ref<SchematicTool>('select')
   const placement = shallowRef<Placement | null>(null)
   const drawing = shallowRef<WireDrawing | null>(null)
+  /**
+   * Sorte du fil que trace l'outil Fil : le fil isolé (null), un fil nu ou un pont (décision du
+   * 17 novembre 2026, voir wireKinds.ts du domaine).
+   */
+  const wireKind = ref<WireKind | null>(null)
   const currentColor = ref(library.defaultWireColor)
   const clipboard = shallowRef<ClipboardData>({ items: [], wires: [], labels: [], styles: [] })
   const view = ref<ViewState>({ ...DEFAULT_VIEW })
@@ -800,13 +808,19 @@ export const useSchematicStore = defineStore('schematic', () => {
     if (tool.value === 'place') tool.value = 'select'
   }
 
-  function startWireTool(): void {
+  /** L'outil Fil, pour un fil isolé (par défaut), un fil nu ou un pont. */
+  function startWireTool(kind: WireKind | null = null): void {
     tool.value = 'wire'
     placement.value = null
     stopWireDrawing()
+    wireKind.value = kind
     clearSelection()
     status.value =
-      'Fil : clic sur une broche ou une intersection pour partir, clic pour chaque coude, Alt trace à 45°, Maj inverse l’ordre, double-clic ou Entrée pour finir.'
+      kind === 'jumper'
+        ? 'Pont : clic au départ, clic à l’arrivée. Il se bombe à gauche de son sens de tracé.'
+        : kind === 'bare'
+          ? 'Fil nu : il se trace comme un fil, et se soude à toutes les broches sur son trajet.'
+          : 'Fil : clic sur une broche ou une intersection pour partir, clic pour chaque coude, Alt trace à 45°, Maj inverse l’ordre, double-clic ou Entrée pour finir.'
   }
 
   function startTextTool(): void {
@@ -996,20 +1010,33 @@ export const useSchematicStore = defineStore('schematic', () => {
     return doc.value.wires.reduce((max, wire) => Math.max(max, wire.stack + 1), 0)
   }
 
-  /** Crée un fil à partir de sommets bruts ; retourne son identifiant, ou null s'il est invalide. */
-  function addWire(points: readonly GridPoint[], color = currentColor.value): string | null {
-    const clean = simplifyPoints(points)
-    if (clean.length < 2 || wireGeometryProblem(clean) !== null) return null
+  /**
+   * Crée un fil à partir de sommets bruts ; retourne son identifiant, ou null s'il est invalide.
+   * `kind` : un fil nu, ou un pont, qui ne garde que son départ et son arrivée.
+   */
+  function addWire(
+    points: readonly GridPoint[],
+    color = currentColor.value,
+    kind: WireKind | null = null
+  ): string | null {
+    const first = points[0]
+    const last = points.at(-1)
+    const clean = kind === 'jumper' && first && last ? [first, last] : simplifyPoints(points)
+    const wireKindOf = kind ?? undefined
+    if (clean.length < 2 || wireProblem({ points: clean, kind: wireKindOf }) !== null) return null
     const id = nextWireId()
     const stack = nextStack()
-    apply('Tracer un fil', (draft) => {
+    const label =
+      kind === 'jumper' ? 'Poser un pont' : kind === 'bare' ? 'Tracer un fil nu' : 'Tracer un fil'
+    apply(label, (draft) => {
       draft.wires.push({
         id,
         color,
         points: castDraft(clean),
         stack,
         freeEnds: 'flat',
-        endLabels: { start: '', end: '' }
+        endLabels: { start: '', end: '' },
+        ...(kind === null ? {} : { kind })
       })
     })
     return id
@@ -1025,6 +1052,14 @@ export const useSchematicStore = defineStore('schematic', () => {
     drawing.value = { points: normalizePoints([...current.points, ...points]) }
   }
 
+  /** Second clic de l'outil Pont : le pont va du départ à ce point, tout de suite. */
+  function finishJumper(point: GridPoint): string | null {
+    const start = drawing.value?.points[0]
+    if (!start) return null
+    drawing.value = { points: [start, point] }
+    return finishWire()
+  }
+
   /** Retire le dernier sommet validé ; annule le tracé s'il n'en reste pas. */
   function popWireVertex(): void {
     const current = drawing.value
@@ -1036,9 +1071,10 @@ export const useSchematicStore = defineStore('schematic', () => {
     const current = drawing.value
     drawing.value = null
     if (!current || current.points.length < 2) return null
-    const id = addWire(current.points)
-    if (id)
-      status.value = 'Fil tracé. Clic pour en commencer un autre, V pour revenir à la sélection.'
+    const id = addWire(current.points, currentColor.value, wireKind.value)
+    if (id) {
+      status.value = `${wireKindLabel(wireKind.value ?? undefined)} tracé. Clic pour en commencer un autre, V pour revenir à la sélection.`
+    }
     return id
   }
 
@@ -1057,8 +1093,10 @@ export const useSchematicStore = defineStore('schematic', () => {
   // Édition des fils
 
   function setWirePoints(id: string, points: readonly GridPoint[]): void {
-    const clean = normalizePoints(points)
-    if (clean.length < 2 || wireGeometryProblem(clean) !== null) return
+    const kind = doc.value.wires.find((candidate) => candidate.id === id)?.kind
+    // Un pont n'a que ses deux bouts : rien à remettre en ordre.
+    const clean = kind === 'jumper' ? [...points] : normalizePoints(points)
+    if (clean.length < 2 || wireProblem({ points: clean, kind }) !== null) return
     apply('Modifier le fil', (draft) => {
       const wire = draft.wires.find((candidate) => candidate.id === id)
       if (wire) wire.points = castDraft(clean)
@@ -1068,7 +1106,8 @@ export const useSchematicStore = defineStore('schematic', () => {
   /** Ajoute un sommet au milieu d'un segment du fil : rien ne bouge, il reste à le glisser. */
   function addWireVertex(id: string, point: GridPoint): void {
     const wire = doc.value.wires.find((candidate) => candidate.id === id)
-    const points = wire ? insertVertex(wire.points, point) : null
+    // Un pont n'a pas de sommets : seulement ses deux bouts.
+    const points = wire && wire.kind !== 'jumper' ? insertVertex(wire.points, point) : null
     if (!points) return
     apply('Ajouter un sommet', (draft) => {
       const target = draft.wires.find((candidate) => candidate.id === id)
@@ -1093,6 +1132,7 @@ export const useSchematicStore = defineStore('schematic', () => {
    */
   function toggleWireVertex(id: string, point: LocalPoint): boolean {
     const wire = doc.value.wires.find((candidate) => candidate.id === id)
+    if (wire?.kind === 'jumper') return false
     const spot = wire ? nearestWirePoint(wire.points, point) : null
     if (!wire || !spot || spot.location.kind === 'end') return false
     const before = wire.points
@@ -1124,7 +1164,8 @@ export const useSchematicStore = defineStore('schematic', () => {
    */
   function splitWire(id: string, point: GridPoint): string | null {
     const wire = doc.value.wires.find((candidate) => candidate.id === id)
-    const parts = wire ? splitPoints(wire.points, point) : null
+    // Un pont ne se coupe pas : il n'a rien entre ses deux bouts.
+    const parts = wire && wire.kind !== 'jumper' ? splitPoints(wire.points, point) : null
     if (!wire || !parts) return null
     const [head, tail] = parts
     const newId = nextWireId()
@@ -1143,7 +1184,8 @@ export const useSchematicStore = defineStore('schematic', () => {
         stack: wire.stack + 1,
         freeEnds: wire.freeEnds,
         endLabels: { start: '', end: wire.endLabels.end },
-        // Le second morceau reste dans le groupe du fil coupé, et garde son style.
+        // Le second morceau reste dans le groupe du fil coupé, garde son style et sa sorte.
+        ...(wire.kind === undefined ? {} : { kind: wire.kind }),
         ...(wire.group === undefined ? {} : { group: wire.group }),
         ...(wire.style === undefined ? {} : { style: wire.style })
       })
@@ -1248,6 +1290,39 @@ export const useSchematicStore = defineStore('schematic', () => {
     // La couleur des prochains fils n'est plus proposée : on passe à la première qui l'est.
     const fallback = rest[0]
     if (fallback && sameColor(currentColor.value, hex)) currentColor.value = fallback.hex
+  }
+
+  /**
+   * Fait de fils isolés des fils nus, ou l'inverse (`bare` ou null). Un pont reste un pont : sa
+   * géométrie n'est pas celle d'un fil.
+   */
+  function setWiresKind(ids: readonly string[], kind: 'bare' | null): void {
+    const wanted = kind ?? undefined
+    const changing = doc.value.wires.filter(
+      (wire) => ids.includes(wire.id) && wire.kind !== 'jumper' && wire.kind !== wanted
+    )
+    if (changing.length === 0) return
+    const targets = new Set(changing.map((wire) => wire.id))
+    apply(kind === 'bare' ? 'Fil nu' : 'Fil isolé', (draft) => {
+      for (const wire of draft.wires) {
+        if (!targets.has(wire.id)) continue
+        if (kind === 'bare') wire.kind = 'bare'
+        else delete wire.kind
+      }
+    })
+  }
+
+  /** Retourne un pont : ses bouts échangés, il se bombe de l'autre côté. */
+  function flipJumper(id: string): void {
+    const wire = doc.value.wires.find((candidate) => candidate.id === id)
+    if (wire?.kind !== 'jumper') return
+    apply('Retourner le pont', (draft) => {
+      const target = draft.wires.find((candidate) => candidate.id === id)
+      if (!target) return
+      target.points.reverse()
+      const { start, end } = target.endLabels
+      target.endLabels = { start: end, end: start }
+    })
   }
 
   function setWireFreeEnds(id: string, style: FreeEndStyle): void {
@@ -1699,6 +1774,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     tool,
     placement,
     drawing,
+    wireKind,
     currentColor,
     view,
     viewport,
@@ -1791,6 +1867,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     appendWirePoints,
     popWireVertex,
     finishWire,
+    finishJumper,
     stopWireDrawing,
     setWirePoints,
     addWireVertex,
@@ -1808,6 +1885,8 @@ export const useSchematicStore = defineStore('schematic', () => {
     removeColorChoice,
     colorChoices,
     setWireFreeEnds,
+    setWiresKind,
+    flipJumper,
     setWireEndLabel,
     removeWires,
     reorderWires,

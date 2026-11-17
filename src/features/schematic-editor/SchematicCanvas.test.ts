@@ -1055,3 +1055,97 @@ describe('canevas du montage : composant extensible', () => {
     wrapper.unmount()
   })
 })
+
+describe('canevas du montage : fil nu et pont', () => {
+  it('dessine un fil nu en métal avec ses soudures, un pont en courbe', async () => {
+    const store = useSchematicStore()
+    store.startPlacing(resistor())
+    store.placeAt(2, 0)
+    store.placeAt(2, 4)
+    store.stopPlacing()
+    store.clearSelection()
+    store.addWire(
+      [
+        [2, 1],
+        [2, 5]
+      ],
+      '#000000',
+      'bare'
+    )
+    store.addWire(
+      [
+        [6, 1],
+        [12, 1]
+      ],
+      '#d62828',
+      'jumper'
+    )
+    const wrapper = mount(SchematicCanvas, { attachTo: document.body })
+    await nextTick()
+    // Le fil nu : un liseré sombre sous un trait d'étain, et une soudure par broche.
+    const edge = wrapper.get('.wires .wire-edge')
+    expect(edge.attributes('stroke')).toBe('#59616a')
+    expect(wrapper.get('.wires .wire-bare').attributes('stroke')).toBe('#dfe5ea')
+    expect(wrapper.findAll('.solders .solder')).toHaveLength(2)
+    // Le pont : une courbe de A à B, dans sa couleur, bombée vers le haut.
+    const jumper = wrapper.get('.wires .wire-jumper')
+    expect(jumper.attributes('d')).toBe('M 6 1 Q 9 -1.16 12 1')
+    expect(jumper.attributes('stroke')).toBe('#d62828')
+    wrapper.unmount()
+  })
+
+  it('l’outil Pont : un clic au départ, un clic à l’arrivée', async () => {
+    const store = useSchematicStore()
+    const wrapper = mount(SchematicCanvas, { attachTo: document.body })
+    const svg = wrapper.get('svg.schematic')
+    store.startWireTool('jumper')
+    await nextTick()
+    await fire(svg, 'pointerdown', at(store, 2, 2))
+    await fire(svg, 'pointerup', at(store, 2, 2))
+    expect(store.doc.wires).toHaveLength(0)
+    // L'aperçu est déjà une courbe, du départ au pointeur.
+    await fire(svg, 'pointermove', at(store, 7, 4))
+    expect(wrapper.get('.drawing .pending').attributes('d')).toMatch(/^M 2 2 Q /)
+    await fire(svg, 'pointerdown', at(store, 7, 4))
+    expect(store.doc.wires).toMatchObject([
+      {
+        kind: 'jumper',
+        points: [
+          [2, 2],
+          [7, 4]
+        ]
+      }
+    ])
+    // L'outil reste actif, prêt pour le pont suivant.
+    expect(store.tool).toBe('wire')
+    expect(store.drawing).toBeNull()
+    wrapper.unmount()
+  })
+
+  it('glisser le bout d’un pont le pose où l’on veut, sans coude', async () => {
+    const store = useSchematicStore()
+    const id = store.addWire(
+      [
+        [2, 2],
+        [8, 2]
+      ],
+      '#d62828',
+      'jumper'
+    )
+    if (!id) throw new Error('pont refusé')
+    store.selectedWires = [id]
+    const wrapper = mount(SchematicCanvas, { attachTo: document.body })
+    await nextTick()
+    const svg = wrapper.get('svg.schematic')
+    const handles = wrapper.findAll('.vertex-handle')
+    expect(handles).toHaveLength(2)
+    await fire(handles[1]!, 'pointerdown', at(store, 8, 2))
+    await fire(svg, 'pointermove', at(store, 7, 5))
+    await fire(svg, 'pointerup', at(store, 7, 5))
+    expect(store.doc.wires[0]?.points).toEqual([
+      [2, 2],
+      [7, 5]
+    ])
+    wrapper.unmount()
+  })
+})

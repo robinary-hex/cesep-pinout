@@ -62,6 +62,19 @@ export const ICONS = {
   schematic: ['M2 12h4l1.5-4l3 8l3-8l3 8l1.5-4h4'],
   diagram: ['M9 3h6v5H9z', 'M3 16h6v5H3z', 'M15 16h6v5h-6z', 'M12 8v4', 'M6 16v-4h12v4'],
   wire: ['M3 18h8V6h8', 'M1 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0', 'M17 6a2 2 0 1 0 4 0a2 2 0 1 0-4 0'],
+  // Fil nu : un trait droit soudé à trois broches.
+  'bare-wire': [
+    'M2 12h20',
+    'M4 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0',
+    'M10 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0',
+    'M16 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0'
+  ],
+  // Pont : une courbe entre deux trous.
+  jumper: [
+    'M5 17Q12 1 19 17',
+    'M3 17a2 2 0 1 0 4 0a2 2 0 1 0-4 0',
+    'M17 17a2 2 0 1 0 4 0a2 2 0 1 0-4 0'
+  ],
   type: ['M4 7V4h16v3', 'M9 20h6', 'M12 4v16'],
   'zoom-in': ['M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z', 'M21 21l-4.3-4.3', 'M11 8v6', 'M8 11h6'],
   'zoom-out': ['M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z', 'M21 21l-4.3-4.3', 'M8 11h6'],

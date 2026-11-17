@@ -260,6 +260,10 @@ function commonItems(): MenuItem[] {
 /** Entrées qui dépendent de l'endroit du fil où l'on a cliqué : sommet, segment, croisement. */
 function wireSpotItems(wire: Wire, point: LocalPoint): MenuItem[] {
   const items: MenuItem[] = []
+  // Un pont n'a ni sommet ni croisement : seulement ses deux bouts, et son côté.
+  if (wire.kind === 'jumper') {
+    return [item('Bomber de l’autre côté', () => store.flipJumper(wire.id), { icon: 'swap' })]
+  }
   const spot = nearestWirePoint(wire.points, point)
   if (spot) {
     const { location } = spot
@@ -523,6 +527,11 @@ function openMenu(request: MenuRequest): void {
       item('Tout sélectionner', () => store.selectAll(), { hint: 'Ctrl+A', icon: 'select-all' }),
       SEPARATOR,
       item('Tracer un fil', () => store.startWireTool(), { hint: 'F', icon: 'wire' }),
+      item('Tracer un fil nu', () => store.startWireTool('bare'), {
+        hint: 'N',
+        icon: 'bare-wire'
+      }),
+      item('Poser un pont', () => store.startWireTool('jumper'), { hint: 'P', icon: 'jumper' }),
       item(
         'Poser une étiquette ici',
         () => {
@@ -651,6 +660,12 @@ function onKeyDown(event: KeyboardEvent): void {
   switch (key) {
     case 'v':
       store.selectTool()
+      break
+    case 'n':
+      store.startWireTool('bare')
+      break
+    case 'p':
+      store.startWireTool('jumper')
       break
     case 'f':
       store.startWireTool()

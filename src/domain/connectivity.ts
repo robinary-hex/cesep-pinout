@@ -6,7 +6,10 @@ import { locateOnWire } from './wires'
  * Connectivité électrique dérivée de la géométrie, jamais stockée :
  * - deux fils sont reliés quand une extrémité de l'un est sur un sommet ou un segment de l'autre ;
  * - un fil est relié à une broche quand une extrémité est dessus ;
- * - un croisement en milieu de segment ne relie rien.
+ * - un croisement en milieu de segment ne relie rien ;
+ * - un fil nu est relié à toutes les broches posées sur son trajet, pas seulement à ses bouts
+ *   (décision du 17 novembre 2026 : aux broches, pas aux pastilles vides d'une plaque) ;
+ * - un pont n'est relié que par ses deux bouts : sa courbe ne passe par aucun point de la grille.
  * Un point de jonction apparaît là où au moins trois branches arrivent (T, croix reliée).
  */
 
@@ -31,9 +34,17 @@ export interface FreeEnd {
   point: GridPoint
 }
 
+/** Soudure d'un fil nu sur une broche de son trajet : là où se dessine le point de soudure. */
+export interface Solder {
+  wireId: string
+  point: GridPoint
+}
+
 export interface Connectivity {
   junctions: Junction[]
   freeEnds: FreeEnd[]
+  /** Soudures des fils nus sur les broches de leur trajet. */
+  solders: Solder[]
   /** Numéro de net de chaque fil. */
   wireNet: ReadonlyMap<string, number>
   /** Numéro de net de chaque broche (clé de PinRef). */
@@ -119,6 +130,8 @@ export function computeConnectivity(wires: readonly Wire[], pins: readonly PinRe
         if (other.id === wire.id) continue
         const location = locateOnWire(other.points, point)
         if (!location) continue
+        // Un pont ne se rejoint que par ses bouts : sa courbe ne passe pas par sa corde.
+        if (other.kind === 'jumper' && location.kind !== 'end') continue
         uf.union(`w:${wire.id}`, `w:${other.id}`)
         touched = true
         const passing = location.kind !== 'end'
@@ -138,6 +151,18 @@ export function computeConnectivity(wires: readonly Wire[], pins: readonly PinRe
         )
         junctionAt.set(key, { point, carrierWireId: sorted[0]?.id ?? wire.id, branches })
       }
+    }
+  }
+
+  // Un fil nu est soudé à toutes les broches posées sur son trajet.
+  const solders: Solder[] = []
+  for (const wire of wires) {
+    if (wire.kind !== 'bare') continue
+    for (const list of pinsByPoint.values()) {
+      const point = list[0]?.point
+      if (!point || !locateOnWire(wire.points, point)) continue
+      for (const pin of list) uf.union(`w:${wire.id}`, `p:${pin.key}`)
+      solders.push({ wireId: wire.id, point })
     }
   }
 
@@ -162,5 +187,12 @@ export function computeConnectivity(wires: readonly Wire[], pins: readonly PinRe
     if (!netsWithWires.has(net) && (pinsPerNet.get(net) ?? 0) < 2) unconnectedPinKeys.add(key)
   }
 
-  return { junctions: [...junctionAt.values()], freeEnds, wireNet, pinNet, unconnectedPinKeys }
+  return {
+    junctions: [...junctionAt.values()],
+    freeEnds,
+    solders,
+    wireNet,
+    pinNet,
+    unconnectedPinKeys
+  }
 }

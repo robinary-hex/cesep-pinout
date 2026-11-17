@@ -6,7 +6,6 @@ import {
   componentImages,
   crossingPieceEnds,
   distanceToSegment,
-  dragVertex,
   formatReadout,
   gridLines,
   groupOutline,
@@ -45,6 +44,13 @@ import {
   wireIntersectsRect,
   wirePathData,
   wireRenderParts,
+  BARE_WIRE_EDGE,
+  BARE_WIRE_EDGE_SCALE,
+  jumperPathData,
+  movedWireVertex,
+  SOLDER_SCALE,
+  wireInk,
+  wireShapeData,
   wiresFollowingJunctions,
   wiresFollowingPins,
   computeConnectivity,
@@ -379,9 +385,9 @@ const ghostCopies = computed(() => {
         const style = store.styleFor(wire)
         return {
           id: wire.id,
-          color: wire.color,
+          color: wireInk(wire),
           width: style.wireWidth,
-          d: wirePathData(wire.points, style.cornerRadius)
+          d: wireShapeData(wire.kind, wire.points, style.cornerRadius)
         }
       }),
     labels: store.doc.labels
@@ -660,15 +666,22 @@ const renderedWires = computed(() =>
     const style = store.styleFor(wire)
     const width = style.wireWidth
     const radius = style.cornerRadius
-    const shown = wireRenderParts(points, wire.freeEnds, flags, width)
+    // Un pont est une courbe de bout en bout : ni flèche ni pointillés à ses extrémités.
+    const jumper = wire.kind === 'jumper'
+    const shown = jumper ? null : wireRenderParts(points, wire.freeEnds, flags, width)
+    const d = wireShapeData(wire.kind, points, radius)
     return {
       wire,
       width,
       hitWidth: hitWidthOf(width),
-      d: wirePathData(points, radius),
-      body: shown.body.length >= 2 ? wirePathData(shown.body, radius) : '',
-      dotted: shown.dotted.map((tail) => wirePathData(tail, radius)),
-      heads: shown.heads.map((head) => pointsAttribute(head)),
+      d,
+      body: shown ? (shown.body.length >= 2 ? wirePathData(shown.body, radius) : '') : d,
+      dotted: shown ? shown.dotted.map((tail) => wirePathData(tail, radius)) : [],
+      heads: shown ? shown.heads.map((head) => pointsAttribute(head)) : [],
+      // Un fil nu se dessine en métal, avec un liseré sombre dessous.
+      color: wireInk(wire),
+      bare: wire.kind === 'bare',
+      jumper,
       selected: selectedWireSet.value.has(wire.id),
       inHoverNet:
         store.hoverNet !== null && store.connectivity.wireNet.get(wire.id) === store.hoverNet
@@ -706,7 +719,7 @@ const crossingMarks = computed(() =>
       x2,
       y2,
       width: (top ? store.styleFor(top) : profile.value).wireWidth,
-      color: top?.color ?? '#000000'
+      color: top ? wireInk(top) : '#000000'
     }
   })
 )
@@ -726,6 +739,20 @@ const junctions = computed(() => {
     }
   })
 })
+
+/** Points de soudure des fils nus, sur chaque broche de leur trajet. */
+const solders = computed(() =>
+  store.connectivity.solders.map((solder) => {
+    const wire = wireById.value.get(solder.wireId)
+    const width = (wire ? store.styleFor(wire) : profile.value).wireWidth
+    return {
+      key: `${solder.wireId}:${solder.point[0]},${solder.point[1]}`,
+      x: solder.point[0],
+      y: solder.point[1],
+      r: width * SOLDER_SCALE
+    }
+  })
+)
 
 function endLabelText(wire: Wire, endIndex: number): string {
   return endIndex === 0 ? wire.endLabels.start : wire.endLabels.end
@@ -749,7 +776,7 @@ const endLabels = computed(() =>
         wireId: wire.id,
         endIndex: end.endIndex,
         text,
-        color: wire.color,
+        color: wireInk(wire),
         dotRadius: style.wireWidth,
         fontCells: style.endLabelFont.size / style.cellPx,
         family: style.endLabelFont.family,
@@ -930,10 +957,14 @@ const drawingPreview = computed(() => {
   const committed = wirePathData(points, cornerRadius.value)
   if (!point) return { committed, pending: '', end: null as GridPoint | null, onPin: false }
   const snap = wireSnap(point)
+  // Un pont : sa courbe, du départ au pointeur.
+  const jumper = store.tool === 'wire' && store.wireKind === 'jumper'
   const route = wireRoute(last, snap.point)
   return {
     committed,
-    pending: wirePathData([...points, ...route.slice(1)], cornerRadius.value),
+    pending: jumper
+      ? jumperPathData([last, snap.point])
+      : wirePathData([...points, ...route.slice(1)], cornerRadius.value),
     end: snap.point,
     onPin: snap.pinKey !== null
   }
@@ -1202,6 +1233,11 @@ function onWireDown(wireId: string, event: PointerEvent): void {
   }
   const wire = store.doc.wires.find((candidate) => candidate.id === wireId)
   if (!wire) return
+  // Un pont n'a pas de tronçon à glisser : on le déplace d'un bloc.
+  if (wire.kind === 'jumper') {
+    startMove(event)
+    return
+  }
   drag.value = {
     kind: 'wire-segment',
     wireId,
@@ -1315,6 +1351,11 @@ function onPointerDown(event: PointerEvent): void {
     }
     const last = current.points.at(-1)
     if (!last) return
+    if (store.wireKind === 'jumper') {
+      // Un pont : le second clic le termine.
+      store.finishJumper(snap.point)
+      return
+    }
     store.appendWirePoints(wireRoute(last, snap.point).slice(1))
     if (snap.pinKey !== null || wireAt(snap.point)) store.finishWire()
     return
@@ -1368,7 +1409,12 @@ function onPointerMove(event: PointerEvent): void {
       break
     }
     case 'wire-vertex':
-      current.preview = dragVertex(current.original, current.index, snapGrid(world))
+      current.preview = movedWireVertex(
+        wireById.value.get(current.wireId)?.kind,
+        current.original,
+        current.index,
+        snapGrid(world)
+      )
       break
     case 'label-handle':
       current.preview = resizeBox(current.original, current.handleId, snapGrid(world))
@@ -1542,7 +1588,8 @@ function onDoubleClick(event: MouseEvent): void {
 function wireSpotAt(point: LocalPoint): GridPoint | null {
   for (let index = store.sortedWires.length - 1; index >= 0; index--) {
     const wire = store.sortedWires[index]
-    if (!wire) continue
+    // On ne se raccorde pas au milieu d'un pont : il n'a que ses bouts.
+    if (!wire || wire.kind === 'jumper') continue
     const reach = hitWidthOf(store.styleFor(wire).wireWidth) / 2
     const at = nearestSegmentIndex(wire.points, point)
     const a = wire.points[at]
@@ -1718,10 +1765,18 @@ const cursorClass = computed(() => {
               <g class="wires">
                 <template v-for="item in renderedWires" :key="item.wire.id">
                   <path
+                    v-if="item.body && item.bare"
+                    class="wire wire-edge"
+                    :d="item.body"
+                    :stroke="BARE_WIRE_EDGE"
+                    :stroke-width="item.width * BARE_WIRE_EDGE_SCALE"
+                  />
+                  <path
                     v-if="item.body"
                     class="wire"
+                    :class="{ 'wire-bare': item.bare, 'wire-jumper': item.jumper }"
                     :d="item.body"
-                    :stroke="screenColor(item.wire.color)"
+                    :stroke="screenColor(item.color)"
                     :stroke-width="item.width"
                   />
                   <path
@@ -1729,7 +1784,7 @@ const cursorClass = computed(() => {
                     :key="`tail${t}`"
                     class="wire wire-dotted"
                     :d="tail"
-                    :stroke="screenColor(item.wire.color)"
+                    :stroke="screenColor(item.color)"
                     :stroke-width="item.width"
                     :stroke-dasharray="`0 ${item.width * 2}`"
                   />
@@ -1738,7 +1793,7 @@ const cursorClass = computed(() => {
                     :key="`head${h}`"
                     class="wire-head"
                     :points="head"
-                    :fill="screenColor(item.wire.color)"
+                    :fill="screenColor(item.color)"
                   />
                   <path
                     class="wire-hit"
@@ -1781,6 +1836,18 @@ const cursorClass = computed(() => {
                   :cy="dot.y"
                   :r="dot.r"
                   :fill="screenColor(dot.fill)"
+                />
+              </g>
+
+              <g class="solders">
+                <circle
+                  v-for="dot in solders"
+                  :key="dot.key"
+                  class="solder"
+                  :cx="dot.x"
+                  :cy="dot.y"
+                  :r="dot.r"
+                  vector-effect="non-scaling-stroke"
                 />
               </g>
             </template>
@@ -2370,6 +2437,19 @@ const cursorClass = computed(() => {
   stroke: var(--selection);
   stroke-width: 1.5;
   cursor: nwse-resize;
+}
+
+/* Point de soudure d'un fil nu sur une broche : une goutte d'étain. */
+.solder {
+  fill: #c3ccd3;
+  stroke: #5d6770;
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+/* Un pont est une courbe : ses bouts sont ronds. */
+.wire-jumper {
+  stroke-linecap: round;
 }
 
 /* Poignée d'étirement : une flèche pleine, de la couleur de la sélection, détachée de ce
