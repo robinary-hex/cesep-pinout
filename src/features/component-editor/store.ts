@@ -11,6 +11,10 @@ import {
   nextVariantId,
   nextVariantName,
   defaultStretch,
+  freeModelCount,
+  modelDefinition,
+  modelDrawing,
+  STRETCH_MAX_COUNT,
   variantDefinition,
   arrangedPins,
   createEmptyComponent,
@@ -78,13 +82,14 @@ export interface ComponentTabInfo {
 }
 
 /**
- * État d'édition qu'un onglet garde quand il n'est pas affiché : sa sélection, son zoom, et la
- * variante qu'on y regardait.
+ * État d'édition qu'un onglet garde quand il n'est pas affiché : sa sélection, son zoom, la
+ * variante qu'on y regardait et, pour un composant extensible, le modèle qu'on y retouchait.
  */
 interface TabEditing {
   selection: Selection | null
   cellPx: number
   variant: string | null
+  model: number | null
 }
 
 const MIN_CELL_PX = 8
@@ -141,6 +146,12 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
    * sinon son identifiant. Toute l'édition porte sur elle : `shown` pour lire, `bodyOf` pour écrire.
    */
   const activeVariant = ref<string | null>(null)
+  /**
+   * Modèle particulier en cours d'édition, par son nombre de motifs ; null : le dessin qui
+   * s'étire. Un composant extensible peut avoir, pour certains nombres, un dessin à part
+   * (`stretch.models`) : on en retouche un à la fois, comme les variantes.
+   */
+  const activeModel = ref<number | null>(null)
   const tool = ref<ToolId>('select')
   /** Panneau de propriétés à droite (`useInspectorPanel`) : replié par défaut, touche I. */
   const inspector = useInspectorPanel({
@@ -167,16 +178,18 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   const base = useDocumentTabs<ComponentDefinition, TabEditing>({
     blank: blankComponent,
     needsSaving,
-    freshEditing: () => ({ selection: null, cellPx: DEFAULT_CELL_PX, variant: null }),
+    freshEditing: () => ({ selection: null, cellPx: DEFAULT_CELL_PX, variant: null, model: null }),
     capture: () => ({
       selection: selection.value,
       cellPx: cellPx.value,
-      variant: activeVariant.value
+      variant: activeVariant.value,
+      model: activeModel.value
     }),
     restore: (editing) => {
       selection.value = editing.selection
       cellPx.value = editing.cellPx
       activeVariant.value = editing.variant
+      activeModel.value = editing.model
       tool.value = 'select'
       hoverPinId.value = null
       status.value = ''
@@ -196,18 +209,58 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
       dirty: tab.dirty
     }))
   )
-  /** Le composant tel que le dessine la variante affichée : ce que l'éditeur montre et modifie. */
-  const shown = computed(() => variantDefinition(doc.value, activeVariant.value))
+  /**
+   * Le composant tel que le dessine la variante affichée, modèles particuliers à part : c'est
+   * elle qui dit si le composant est extensible, et comment.
+   */
+  const shownVariant = computed(() => variantDefinition(doc.value, activeVariant.value))
+  /**
+   * Ce que l'éditeur montre et modifie : la variante affichée ou, quand on retouche le modèle
+   * particulier d'un nombre, le dessin de ce modèle (sans motif ni traits de coupe).
+   */
+  const shown = computed(() => modelDefinition(shownVariant.value, activeModel.value))
+  /**
+   * Modèles particuliers de la variante affichée, par nombre croissant ; `used` : ce nombre est
+   * entre le minimum et le maximum, donc le modèle sert.
+   */
+  const models = computed(() => {
+    const stretch = shownVariant.value.stretch
+    return (stretch?.models ?? [])
+      .map((model) => ({
+        count: model.count,
+        used: stretch !== undefined && model.count >= stretch.min && model.count <= stretch.max
+      }))
+      .sort((a, b) => a.count - b.count)
+  })
+  /** Nombre du modèle qu'on retouche ; null : le dessin qui s'étire. */
+  const modelCount = computed(() =>
+    models.value.some((model) => model.count === activeModel.value) ? activeModel.value : null
+  )
   /** Variantes du composant, la première d'abord ; une seule entrée s'il n'en a pas d'autre. */
   const variants = computed(() => componentVariants(doc.value))
   /** Identifiant de la variante affichée (`BASE_VARIANT` pour la première). */
   const variantId = computed(() => activeVariant.value ?? BASE_VARIANT)
 
-  /** Dans un brouillon du composant, le dessin de la variante affichée : là où l'on écrit. */
-  function bodyOf(draft: Draft<ComponentDefinition>): Draft<ComponentBody> {
+  /**
+   * Dans un brouillon du composant, la variante affichée : là où vivent ses réglages
+   * d'étirement et ses modèles particuliers.
+   */
+  function variantBodyOf(draft: Draft<ComponentDefinition>): Draft<ComponentBody> {
     const id = activeVariant.value
     const variant = id === null ? undefined : draft.variants?.find((entry) => entry.id === id)
     return variant ?? draft
+  }
+
+  /**
+   * Dans un brouillon du composant, le dessin affiché : celui de la variante ou, si l'on retouche
+   * un modèle particulier, celui de ce modèle. C'est là qu'on écrit formes, broches et taille.
+   */
+  function bodyOf(draft: Draft<ComponentDefinition>): Draft<ComponentBody> {
+    const body = variantBodyOf(draft)
+    const count = activeModel.value
+    const model =
+      count === null ? undefined : body.stretch?.models?.find((entry) => entry.count === count)
+    return model ?? body
   }
 
   const issues = computed(() => componentIssues(doc.value))
@@ -254,6 +307,16 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     const variant = activeVariant.value
     if (variant !== null && !doc.value.variants?.some((entry) => entry.id === variant)) {
       activeVariant.value = null
+      activeModel.value = null
+      selection.value = null
+    }
+    // De même pour le modèle particulier qu'on retouchait.
+    const model = activeModel.value
+    if (
+      model !== null &&
+      !shownVariant.value.stretch?.models?.some((entry) => entry.count === model)
+    ) {
+      activeModel.value = null
       selection.value = null
     }
     const current = selection.value
@@ -320,6 +383,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     const preview = def.previewVariant
     activeVariant.value =
       preview !== undefined && def.variants?.some((entry) => entry.id === preview) ? preview : null
+    activeModel.value = null
   }
 
   function markSaved(savedFolder: string): void {
@@ -592,26 +656,28 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   /**
    * Composant extensible (décision du 17 novembre 2026, voir stretch.ts du domaine) : rend
    * extensible la variante affichée, change les réglages de son motif, ou la rend à nouveau
-   * ordinaire (null). Les réglages sont ramenés à ce qui est permis : un motif dans la boîte,
-   * large d'un nombre entier de cellules, un nombre de départ entre le minimum et le maximum.
+   * ordinaire (null ; ses modèles particuliers partent avec). Les réglages sont ramenés à ce qui
+   * est permis : un motif dans la boîte, large d'un nombre entier de cellules, un nombre de
+   * départ entre le minimum et le maximum. Ce sont ceux de la variante, même quand on retouche
+   * un de ses modèles.
    */
   function setStretch(patch: Partial<Omit<Stretch, 'models'>> | null): void {
-    const current = shown.value.stretch
+    const current = shownVariant.value.stretch
     if (patch === null) {
       if (!current) return
       apply('Composant non extensible', (draft) => {
-        delete bodyOf(draft).stretch
+        delete variantBodyOf(draft).stretch
       })
       return
     }
-    const width = shown.value.size.widthCells
+    const width = shownVariant.value.size.widthCells
     const next = normalizedStretch({ ...(current ?? defaultStretch(width)), ...patch }, width)
     const same =
       current !== undefined &&
       (['from', 'to', 'initial', 'min', 'max'] as const).every((key) => current[key] === next[key])
     if (same) return
     apply(current ? 'Régler le motif' : 'Composant extensible', (draft) => {
-      bodyOf(draft).stretch = castDraft(next)
+      variantBodyOf(draft).stretch = castDraft(next)
     })
     if (!current) {
       status.value =
@@ -891,6 +957,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     const next = doc.value.variants?.some((entry) => entry.id === id) ? id : null
     if (next === activeVariant.value) return
     activeVariant.value = next
+    activeModel.value = null
     selection.value = null
     hoverPinId.value = null
     fitToViewport()
@@ -899,7 +966,8 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   /** Nouvelle variante : une copie de celle qu'on regarde, affichée aussitôt pour la retoucher. */
   function addVariant(): string {
     const id = nextVariantId(doc.value)
-    const source = shown.value
+    // La variante entière, avec son étirement et ses modèles, même si l'on regardait l'un d'eux.
+    const source = shownVariant.value
     const copy: ComponentVariant = structuredClone({
       id,
       name: nextVariantName(doc.value),
@@ -958,6 +1026,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     const others = doc.value.variants ?? []
     const [promoted, ...rest] = others
     if (!promoted) return
+    const wasShown = id === variantId.value
     if (id === BASE_VARIANT) {
       apply('Supprimer la variante', (draft) => {
         draft.size = promoted.size
@@ -990,8 +1059,94 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
       })
       if (activeVariant.value === id) activeVariant.value = null
     }
+    // La variante qu'on regardait n'est plus : on ne reste pas sur un de ses modèles.
+    if (wasShown) activeModel.value = null
     selection.value = null
     fitToViewport()
+  }
+
+  // Modèles par nombre d'un composant extensible (décision du 17 novembre 2026) : pour certains
+  // nombres de motifs, un dessin à part remplace le motif répété. Chacun est un dessin complet,
+  // né d'une copie du composant étiré à ce nombre ; on en retouche un à la fois.
+
+  /** Affiche le modèle d'un nombre pour le retoucher ; null : le dessin qui s'étire. */
+  function showModel(count: number | null): void {
+    const next = models.value.some((model) => model.count === count) ? count : null
+    if (next === activeModel.value) return
+    activeModel.value = next
+    selection.value = null
+    hoverPinId.value = null
+    fitToViewport()
+  }
+
+  /**
+   * Nouveau modèle particulier, pour le premier nombre permis qui n'a pas le sien : une copie du
+   * composant étiré à ce nombre, affichée aussitôt pour la retoucher. Retourne ce nombre ; null
+   * si le composant n'est pas extensible ou si chaque nombre a déjà son modèle.
+   */
+  function addModel(): number | null {
+    const variant = shownVariant.value
+    const stretch = variant.stretch
+    if (!stretch) return null
+    const count = freeModelCount(stretch)
+    const drawn = count === null ? null : modelDrawing(variant, count)
+    if (count === null || !drawn) {
+      status.value = 'Chaque nombre permis a déjà son modèle.'
+      return null
+    }
+    const model = structuredClone(drawn)
+    apply('Ajouter un modèle', (draft) => {
+      const target = variantBodyOf(draft).stretch
+      if (!target) return
+      target.models = castDraft([...(target.models ?? []), model].sort((a, b) => a.count - b.count))
+    })
+    showModel(count)
+    status.value = `Modèle à ${count} : une copie à retoucher. À ce nombre, il remplace le motif répété.`
+    return count
+  }
+
+  /** Change le nombre de motifs auquel un modèle sert ; refusé si ce nombre a déjà le sien. */
+  function setModelCount(count: number, wanted: number): void {
+    const next = Math.max(1, Math.min(Math.round(wanted), STRETCH_MAX_COUNT))
+    if (next === count || !models.value.some((model) => model.count === count)) return
+    if (models.value.some((model) => model.count === next)) {
+      status.value = `Le nombre ${next} a déjà son modèle.`
+      return
+    }
+    const shownNow = activeModel.value === count
+    const kept = selection.value
+    // Le modèle qu'on regarde change de nombre : on le suit, avant que l'élagage ne le perde.
+    if (shownNow) activeModel.value = null
+    apply('Nombre du modèle', (draft) => {
+      const list = variantBodyOf(draft).stretch?.models
+      const model = list?.find((entry) => entry.count === count)
+      if (!list || !model) return
+      model.count = next
+      list.sort((a, b) => a.count - b.count)
+    })
+    if (shownNow) {
+      activeModel.value = next
+      selection.value = kept
+    }
+  }
+
+  /** Supprime le modèle d'un nombre : à ce nombre, le composant reprend son motif répété. */
+  function removeModel(count: number): void {
+    if (!models.value.some((model) => model.count === count)) return
+    const shownNow = activeModel.value === count
+    if (shownNow) activeModel.value = null
+    apply('Supprimer le modèle', (draft) => {
+      const stretch = variantBodyOf(draft).stretch
+      if (!stretch?.models) return
+      const kept = stretch.models.filter((entry) => entry.count !== count)
+      if (kept.length > 0) stretch.models = kept
+      else delete stretch.models
+    })
+    if (shownNow) {
+      selection.value = null
+      fitToViewport()
+    }
+    status.value = `Modèle à ${count} supprimé : à ce nombre, le motif répété revient.`
   }
 
   // Groupes de broches : des sections nommées du panneau de propriétés où ranger les broches
@@ -1208,6 +1363,13 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     issues,
     hasErrors,
     shown,
+    shownVariant,
+    models,
+    modelCount,
+    showModel,
+    addModel,
+    setModelCount,
+    removeModel,
     variants,
     variantId,
     showVariant,

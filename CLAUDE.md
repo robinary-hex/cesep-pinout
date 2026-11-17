@@ -799,9 +799,25 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     champ « Nombre ». Les fils suivent leurs broches (`stretchPinMap` : par la fin, les
     motifs gardent leur rang ; par le début, ils se comptent depuis la fin) ; le fil d'une
     broche qui disparaît reste où il est, bout libre.
-  - Modèles par nombre (`stretch.models`, prévus dans le format, pas encore dans l'éditeur) :
-    un dessin particulier pour un nombre précis de motifs (une pièce à un point, moulée d'un
-    bloc) remplace alors le motif répété ; les broches se suivent par leur rang.
+  - Modèles par nombre (décision du 17 novembre 2026 ; `stretch.models`) : un dessin
+    particulier pour un nombre précis de motifs (une pièce à un point, moulée d'un bloc)
+    remplace alors le motif répété. On ne le choisit pas en posant le composant : c'est le
+    nombre de motifs qui le désigne, donc étirer passe d'un dessin à l'autre
+    (`stretchedDefinition`) ; d'un dessin à l'autre les broches se suivent par leur rang,
+    compté depuis le bout qui reste en place (`stretchPinMap`). Chaque modèle est un dessin
+    complet (`size`, `visual`, `pins`, `pinGroups`), né d'une copie du composant étiré à ce
+    nombre (`modelDrawing` : une image que l'étirement couperait y revient entière, les
+    broches gardent leurs identifiants) puis retouché.
+    Éditeur : sous les nombres de la section « Étirement », « + Modèle » en crée un pour le
+    premier nombre permis qui n'a pas le sien (`freeModelCount`, `addModel`) ; une ligne par
+    dessin, bouton radio devant : « Motif répété », puis « Modèle à N » avec son nombre
+    modifiable (`setModelCount`, refusé s'il est pris) et sa corbeille (`removeModel`). On en
+    retouche un à la fois, comme les variantes (`activeModel`, `modelCount`, `showModel`,
+    gardé par onglet) : `shown` est alors le dessin du modèle, sans motif ni traits de coupe
+    (`modelDefinition`), et `bodyOf(draft)` y écrit ; les réglages d'étirement restent ceux
+    de la variante (`shownVariant`, `variantBodyOf`), qu'on regarde le motif ou un modèle.
+    La barre d'outils a la liste des dessins dès qu'il y a un modèle. Un modèle dont le
+    nombre sort des bornes ne sert pas : le panneau le grise, les contrôles le disent.
 - Groupes (décision du 11 novembre 2026), dans les trois éditeurs : des éléments qu'on
   sélectionne et déplace d'un bloc. Rien n'est rangé à part : chaque élément groupé porte
   l'identifiant de son groupe (`group`, optionnel, sans montée de version des fichiers) et un

@@ -286,8 +286,8 @@ const drawingShape = {
 
 /**
  * Dessin particulier d'un composant extensible pour un nombre de motifs précis (une pièce à un
- * seul point, moulée d'un bloc) : il remplace alors le motif répété. Prévu dans le format ;
- * l'éditeur ne permet pas encore d'en créer.
+ * seul point, moulée d'un bloc) : il remplace alors le motif répété. C'est le nombre de motifs
+ * du composant posé qui le désigne ; on ne le choisit pas (voir stretch.ts).
  */
 export const countModelSchema = z.object({
   count: z.number().int().positive(),
@@ -973,6 +973,12 @@ function bodyIssues(def: ComponentDefinition): ComponentIssue[] {
         })
       }
       counts.add(model.count)
+      if (model.count < stretch.min || model.count > stretch.max) {
+        issues.push({
+          level: 'warning',
+          message: `Modèle à ${model.count} : hors des nombres permis, il ne sert pas`
+        })
+      }
       // Un modèle particulier est un dessin complet : mêmes contrôles, sans le motif.
       const drawn: ComponentDefinition = { ...def, ...model }
       delete drawn.stretch

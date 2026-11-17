@@ -11,8 +11,9 @@ import { TOOLS } from './tools'
 // Barre d'outils de l'éditeur de composants. D'abord le début commun aux trois éditeurs
 // (`ToolbarBasics` : zoom, annuler, rétablir, corbeille), puis les outils de dessin (pictogramme
 // seul, raccourci dans l'infobulle), l'import d'une image, posée comme une forme, les variantes
-// (celle qu'on regarde, et le bouton qui en crée une), et la case
-// « Groupes » quand le composant en a ; à droite, le
+// (celle qu'on regarde, et le bouton qui en crée une), le dessin affiché d'un composant
+// extensible qui a des modèles particuliers (son motif répété, ou le modèle d'un nombre), et la
+// case « Groupes » quand le composant en a ; à droite, le
 // nom du composant avec son fichier, le bouton du panneau de propriétés tout au bout, et
 // Enregistrer (aussi dans le menu Fichier). Quand la place manque, la partie gauche passe à la
 // ligne ; la droite reste sur la première.
@@ -23,6 +24,12 @@ const emit = defineEmits<{ save: [] }>()
 const fileLabel = computed(() =>
   store.folder ? `${baseName(store.folder)}/${COMPONENT_FILE}` : 'Non enregistré'
 )
+
+/** Liste des dessins d'un composant extensible : la valeur vide est son motif répété. */
+function showModel(event: Event): void {
+  const value = (event.target as HTMLSelectElement).value
+  store.showModel(value === '' ? null : Number(value))
+}
 </script>
 
 <template>
@@ -87,6 +94,18 @@ const fileLabel = computed(() =>
         >
           <Icon name="layers" :size="18" />
         </button>
+        <select
+          v-if="store.models.length > 0"
+          class="variant-select model-select"
+          :value="store.modelCount ?? ''"
+          title="Dessin affiché : le motif qui se répète, ou le modèle particulier d’un nombre"
+          @change="showModel"
+        >
+          <option value="">Motif répété</option>
+          <option v-for="model in store.models" :key="model.count" :value="model.count">
+            Modèle à {{ model.count }}
+          </option>
+        </select>
       </div>
 
       <div v-if="store.hasGroups" class="group">

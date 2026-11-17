@@ -147,7 +147,10 @@ dessin (formes recopiées, allongées ou coupées selon leur place par rapport a
 rend, pour un nombre de motifs, un composant ordinaire ; `instanceDefinition` l'appelle après
 `variantDefinition`, avec le nombre de l'exemplaire. Rien d'autre n'a changé dans le rendu, la
 connectivité ou l'export. `stretchPlacement.ts` tient ce qui touche au montage : les poignées,
-et la correspondance des broches d'un nombre à l'autre, pour que les fils suivent.
+et la correspondance des broches d'un nombre à l'autre, pour que les fils suivent. Un nombre de
+motifs peut avoir son modèle, un dessin à part qui remplace le motif répété (`stretch.models`) :
+c'est encore `stretchedDefinition` qui le choisit, d'après le nombre ; l'éditeur de composants
+le retouche comme une variante (`modelDefinition` pour le lire, `bodyOf` pour l'écrire).
 
 Groupes : l'appartenance est une propriété de l'élément (`group`), pas une liste à part, pour
 qu'elle le suive sans rien avoir à tenir à jour quand il change de rang, qu'on le copie ou qu'on

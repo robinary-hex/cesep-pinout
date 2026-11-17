@@ -762,3 +762,126 @@ describe('éditeur de composants : composant extensible', () => {
     expect(variant).toBe('v1')
   })
 })
+
+describe('éditeur de composants : modèles par nombre', () => {
+  /** Un bornier extensible : un contour sur ses 4 cellules, une broche dans le motif (de 1 à 3). */
+  function extensible(): ReturnType<typeof useComponentEditorStore> {
+    const store = useComponentEditorStore()
+    store.addPrimitive(
+      { kind: 'rect', x: 0, y: 0, w: 16, h: 8, rx: 0, style: DEFAULT_SHAPE_STYLE },
+      'Ajouter un rectangle'
+    )
+    store.addPin({ x: 2, y: 1 })
+    store.selection = null
+    store.setStretch({ from: 4, to: 12, initial: 1, min: 1, max: 4 })
+    return store
+  }
+
+  it('crée un modèle pour le premier nombre libre et le montre : on y dessine sans toucher au motif', () => {
+    const store = extensible()
+    expect(store.models).toEqual([])
+    expect(store.addModel()).toBe(1)
+    expect(store.undoLabel).toBe('Ajouter un modèle')
+    expect(store.status).toContain('Modèle à 1')
+    expect(store.models).toEqual([{ count: 1, used: true }])
+    expect(store.modelCount).toBe(1)
+    // On regarde le modèle : une copie du dessin, sans motif ni traits de coupe.
+    expect(store.shown.stretch).toBeUndefined()
+    expect(store.shown.visual.primitives).toEqual(store.doc.visual.primitives)
+    expect(store.shown.pins).toEqual(store.doc.pins)
+    // Les réglages d'étirement restent ceux de la variante.
+    expect(store.shownVariant.stretch).toMatchObject({ from: 4, to: 12 })
+
+    // Ce qu'on dessine va dans le modèle, pas dans le dessin qui s'étire.
+    store.setSize({ widthCells: 3, heightCells: 2 })
+    store.addPin({ x: 0, y: 1 })
+    expect(store.doc.size.widthCells).toBe(4)
+    expect(store.doc.pins).toHaveLength(1)
+    expect(store.doc.stretch).toMatchObject({ from: 4, to: 12 })
+    const model = store.doc.stretch?.models?.[0]
+    expect(model?.size.widthCells).toBe(3)
+    expect(model?.pins).toHaveLength(2)
+
+    // Régler le motif pendant qu'on regarde un modèle : la variante change, ses modèles restent.
+    store.setStretch({ max: 6 })
+    expect(store.doc.stretch).toMatchObject({ max: 6 })
+    expect(store.doc.stretch?.models).toHaveLength(1)
+    expect(store.modelCount).toBe(1)
+
+    // Retour au dessin qui s'étire.
+    store.showModel(null)
+    expect(store.shown.stretch).toBeDefined()
+    expect(store.shown.size.widthCells).toBe(4)
+    // Un composant ordinaire n'a pas de modèles.
+    store.newComponent()
+    expect(store.addModel()).toBeNull()
+  })
+
+  it('le modèle suivant part du composant étiré ; son nombre se change, il se supprime', () => {
+    const store = extensible()
+    store.addModel()
+    // Depuis un modèle, le suivant part toujours du motif répété : ici à deux motifs.
+    expect(store.addModel()).toBe(2)
+    expect(store.shown.size.widthCells).toBe(6)
+    expect(store.shown.pins.map((pin) => [pin.id, pin.x])).toEqual([
+      ['p1', 2],
+      ['p1#1', 4]
+    ])
+    expect(store.shown.visual.primitives[0]).toMatchObject({ kind: 'rect', w: 24 })
+
+    // Un nombre déjà pris est refusé.
+    store.setModelCount(2, 1)
+    expect(store.status).toContain('déjà son modèle')
+    expect(store.models.map((model) => model.count)).toEqual([1, 2])
+    // Un nombre libre : le modèle qu'on regarde change de nombre, et on le suit.
+    store.setModelCount(2, 9)
+    expect(store.undoLabel).toBe('Nombre du modèle')
+    expect(store.models).toEqual([
+      { count: 1, used: true },
+      { count: 9, used: false }
+    ])
+    expect(store.modelCount).toBe(9)
+    expect(store.issues.map((issue) => issue.message)).toContain(
+      'Modèle à 9 : hors des nombres permis, il ne sert pas'
+    )
+
+    // Supprimer celui qu'on regarde ramène au dessin qui s'étire.
+    store.removeModel(9)
+    expect(store.undoLabel).toBe('Supprimer le modèle')
+    expect(store.modelCount).toBeNull()
+    expect(store.models.map((model) => model.count)).toEqual([1])
+    store.removeModel(1)
+    expect(store.doc.stretch?.models).toBeUndefined()
+  })
+
+  it('ne reste pas sur un modèle qui n’existe plus, et le retrouve d’un onglet à l’autre', () => {
+    const store = extensible()
+    store.addModel()
+    // Annuler l'ajout : le modèle qu'on regardait n'est plus.
+    store.undo()
+    expect(store.modelCount).toBeNull()
+    expect(store.shown.stretch).toBeDefined()
+    store.redo()
+    store.showModel(1)
+    expect(store.modelCount).toBe(1)
+
+    // Un autre onglet, puis retour : on retrouve le modèle qu'on retouchait.
+    const tab = store.activeTabId
+    store.newComponent()
+    expect(store.modelCount).toBeNull()
+    store.activateTab(tab)
+    expect(store.modelCount).toBe(1)
+
+    // Une nouvelle variante copie la variante entière, modèles compris, et s'ouvre sur son motif.
+    store.addVariant()
+    expect(store.modelCount).toBeNull()
+    expect(store.shown.stretch?.models).toHaveLength(1)
+    expect(store.doc.variants?.[0]?.stretch?.models).toHaveLength(1)
+
+    // Rendre le composant ordinaire emporte ses modèles.
+    store.showModel(1)
+    store.setStretch(null)
+    expect(store.modelCount).toBeNull()
+    expect(store.shown.stretch).toBeUndefined()
+  })
+})

@@ -1680,4 +1680,59 @@ describe('montage : composants extensibles', () => {
     const reread = parseProject(serializeProject(store.doc))
     expect(reread.components[0]?.count).toBe(1)
   })
+
+  it('prend le modèle particulier d’un nombre : étirer passe d’un dessin à l’autre', () => {
+    const store = useSchematicStore()
+    const def = header(1)
+    // À un seul contact, une pièce à part : trois cellules de large, deux broches.
+    def.stretch = {
+      from: 2,
+      to: 6,
+      initial: 1,
+      min: 1,
+      max: 8,
+      models: [
+        {
+          count: 1,
+          size: { widthCells: 3, heightCells: 2 },
+          visual: { kind: 'drawing', primitives: [] },
+          pins: [
+            { id: 'seul', name: '1', kind: 'io', x: 1, y: 1 },
+            { id: 'bout', name: 'F', kind: 'io', x: 3, y: 1 }
+          ]
+        }
+      ]
+    }
+    store.startPlacing(def)
+    const id = store.placeAt(10, 10)
+    store.stopPlacing()
+    if (!id) throw new Error('pose refusée')
+    // Posé à un : c'est le modèle qui se dessine, sans qu'on l'ait choisi.
+    expect(store.doc.components[0]).toMatchObject({ count: 1 })
+    expect(store.placed[0]?.def.size.widthCells).toBe(3)
+    expect(store.pinRefs.map((pin) => [pin.pinId, ...pin.point])).toEqual([
+      ['seul', 11, 11],
+      ['bout', 13, 11]
+    ])
+    const wire = store.addWire([
+      [11, 11],
+      [11, 16]
+    ])
+    // Étiré à deux : le motif répété reprend, avec ses broches à lui.
+    expect(store.setInstanceCount(id, 2)).toBe(true)
+    expect(store.pinRefs.map((pin) => [pin.pinId, ...pin.point])).toEqual([
+      ['p1', 11, 11],
+      ['p1#1', 12, 11],
+      ['fin', 13, 11]
+    ])
+    // Le fil de la première broche reste sur la première.
+    expect(store.doc.wires.find((candidate) => candidate.id === wire)?.points).toEqual([
+      [11, 11],
+      [11, 16]
+    ])
+    expect(store.connectivity.freeEnds.filter((end) => end.wireId === wire)).toHaveLength(1)
+    // Et retour à un : le modèle revient.
+    expect(store.setInstanceCount(id, 1)).toBe(true)
+    expect(store.placed[0]?.def.pins.map((pin) => pin.id)).toEqual(['seul', 'bout'])
+  })
 })

@@ -782,3 +782,59 @@ describe('éditeur de composants : composant extensible', () => {
     wrapper.unmount()
   })
 })
+
+describe('éditeur de composants : modèles par nombre', () => {
+  it('le panneau liste les modèles : en créer un l’affiche, sans traits de coupe', async () => {
+    const store = withRectangle()
+    store.addPin({ x: 2, y: 1 })
+    store.selection = null
+    store.setStretch({ from: 4, to: 12, initial: 1, min: 1, max: 4 })
+    store.inspectorOpen = true
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    await nextTick()
+    const section = (): ReturnType<typeof wrapper.get> => wrapper.get('.inspector .stretch')
+    const rows = (): ReturnType<typeof wrapper.findAll> => section().findAll('.model-row')
+    const modelRow = (): ReturnType<typeof wrapper.get> => {
+      const row = rows()[1]
+      if (!row) throw new Error('ligne du modèle introuvable')
+      return row
+    }
+    // Pas de liste tant qu'il n'y a pas de modèle, ni dans le panneau ni dans la barre d'outils.
+    expect(section().find('.model-list').exists()).toBe(false)
+    expect(wrapper.find('.toolbar .model-select').exists()).toBe(false)
+    expect(wrapper.findAll('.cuts .cut')).toHaveLength(2)
+
+    await section().get('button.add-model').trigger('click')
+    expect(store.modelCount).toBe(1)
+    // Deux lignes : le motif répété, puis le modèle à 1, qu'on regarde.
+    expect(rows()).toHaveLength(2)
+    expect(rows()[0]?.text()).toBe('Motif répété')
+    expect(modelRow().classes()).toContain('selected')
+    expect((modelRow().get('input[type="number"]').element as HTMLInputElement).value).toBe('1')
+    // Un modèle n'a pas de motif : plus de traits sur la feuille.
+    expect(wrapper.find('.cuts').exists()).toBe(false)
+
+    // La barre d'outils dit quel dessin on regarde, et en change.
+    const select = wrapper.get('.toolbar .model-select')
+    expect((select.element as HTMLSelectElement).value).toBe('1')
+    await select.setValue('')
+    expect(store.modelCount).toBeNull()
+    expect(wrapper.findAll('.cuts .cut')).toHaveLength(2)
+    // Un clic sur la ligne du modèle y revient.
+    await modelRow().trigger('click')
+    expect(store.modelCount).toBe(1)
+
+    // Son nombre se change dans le champ.
+    const count = modelRow().get('input[type="number"]')
+    ;(count.element as HTMLInputElement).value = '3'
+    await count.trigger('change')
+    expect(store.models.map((model) => model.count)).toEqual([3])
+    expect(store.modelCount).toBe(3)
+    // La corbeille le supprime : le motif répété revient, la liste disparaît.
+    await modelRow().get('button').trigger('click')
+    expect(store.doc.stretch?.models).toBeUndefined()
+    expect(store.modelCount).toBeNull()
+    expect(section().find('.model-list').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})

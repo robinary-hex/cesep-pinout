@@ -59,9 +59,11 @@ function setSize(axis: 'widthCells' | 'heightCells', event: Event): void {
   store.setSize({ ...store.shown.size, [axis]: value })
 }
 
-// Composant extensible : le motif entre deux traits, les nombres permis, et un aperçu étiré.
+// Composant extensible : le motif entre deux traits, les nombres permis, les modèles particuliers
+// de certains nombres, et un aperçu étiré. Ces réglages sont ceux de la variante affichée, même
+// quand on retouche un de ses modèles.
 
-const stretch = computed(() => store.shown.stretch ?? null)
+const stretch = computed(() => store.shownVariant.stretch ?? null)
 
 function toggleStretch(event: Event): void {
   store.setStretch(checked(event) ? {} : null)
@@ -102,9 +104,16 @@ function setStretchCount(key: 'initial' | 'min' | 'max', event: Event): void {
   showKept(event, stretch.value?.[key] ?? 1)
 }
 
+/** Nombre de motifs auquel sert un modèle ; un nombre déjà pris est refusé, le champ le redit. */
+function setModelCount(count: number, event: Event): void {
+  const value = numberValue(event)
+  if (Number.isFinite(value)) store.setModelCount(count, value)
+  if (store.models.some((model) => model.count === count)) showKept(event, count)
+}
+
 /** Nombre de motifs que montre l'aperçu ; il ne s'enregistre pas. */
 const previewWanted = ref(3)
-const previewCount = computed(() => stretchCount(store.shown, previewWanted.value))
+const previewCount = computed(() => stretchCount(store.shownVariant, previewWanted.value))
 
 function setPreviewCount(event: Event): void {
   const value = numberValue(event)
@@ -118,7 +127,7 @@ const PREVIEW_HEIGHT_PX = 96
 /** Le composant étiré au nombre de l'aperçu, à l'échelle qui tient dans le panneau. */
 const preview = computed(() => {
   if (!stretch.value) return null
-  const def = stretchedDefinition(store.shown, previewCount.value)
+  const def = stretchedDefinition(store.shownVariant, previewCount.value)
   const cell = Math.min(
     PREVIEW_WIDTH_PX / def.size.widthCells,
     PREVIEW_HEIGHT_PX / def.size.heightCells,
@@ -922,6 +931,81 @@ function setClosed(event: Event): void {
               />
             </label>
           </div>
+          <div class="block-title models-title">
+            <span
+              class="sub-title"
+              title="Dessins particuliers pour certains nombres de motifs : ils y remplacent le motif répété"
+            >
+              Modèles
+            </span>
+            <button
+              type="button"
+              class="small with-icon add-model"
+              title="Nouveau modèle : une copie du composant étiré à ce nombre, à retoucher"
+              @click="store.addModel()"
+            >
+              <Icon name="plus" :size="13" /> Modèle
+            </button>
+          </div>
+          <div v-if="store.models.length > 0" class="model-list">
+            <div
+              class="variant-row model-row"
+              :class="{ selected: store.modelCount === null }"
+              @click="store.showModel(null)"
+            >
+              <input
+                type="radio"
+                name="shown-model"
+                :checked="store.modelCount === null"
+                title="Afficher le dessin qui s’étire : c’est lui qu’on modifie"
+                @click.stop
+                @change="store.showModel(null)"
+              />
+              <span class="model-name">Motif répété</span>
+            </div>
+            <div
+              v-for="model in store.models"
+              :key="model.count"
+              class="variant-row model-row"
+              :class="{ selected: store.modelCount === model.count, unused: !model.used }"
+              @click="store.showModel(model.count)"
+            >
+              <input
+                type="radio"
+                name="shown-model"
+                :checked="store.modelCount === model.count"
+                :title="`Afficher le modèle à ${model.count} : c’est lui qu’on modifie`"
+                @click.stop
+                @change="store.showModel(model.count)"
+              />
+              <label
+                class="model-name"
+                :title="
+                  model.used
+                    ? 'Nombre de motifs auquel ce dessin remplace le motif répété'
+                    : 'Hors des nombres permis : ce modèle ne sert pas'
+                "
+              >
+                <span>Modèle à</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  :value="model.count"
+                  @click.stop="store.showModel(model.count)"
+                  @change="setModelCount(model.count, $event)"
+                />
+              </label>
+              <button
+                type="button"
+                class="small icon-only"
+                title="Supprimer ce modèle : à ce nombre, le motif répété revient"
+                @click.stop="store.removeModel(model.count)"
+              >
+                <Icon name="trash" :size="14" />
+              </button>
+            </div>
+          </div>
           <div v-if="preview" class="stretch-preview">
             <label class="field preview-count">
               <span title="Ce que donne le composant étiré ; rien n’est enregistré">Aperçu à</span>
@@ -1060,6 +1144,50 @@ function setClosed(event: Event): void {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
+}
+
+/* Modèles particuliers : comme les variantes, celui qu'on retouche est surligné. */
+.models-title {
+  margin: 4px 0 4px;
+}
+
+.sub-title {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.model-list {
+  margin-bottom: 10px;
+}
+
+.model-row {
+  grid-template-columns: 16px 1fr 28px;
+  min-height: 28px;
+}
+
+.model-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.model-row.unused .model-name {
+  color: var(--text-faint);
+}
+
+.model-name input {
+  box-sizing: border-box;
+  width: 56px;
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
 }
 
 .stretch-preview {

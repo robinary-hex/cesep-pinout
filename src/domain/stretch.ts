@@ -2,6 +2,7 @@ import {
   renumberPins,
   translatePrimitive,
   type ComponentDefinition,
+  type CountModel,
   type ImagePrimitive,
   type Pin,
   type Primitive,
@@ -221,6 +222,37 @@ function stretchedPins(pins: readonly Pin[], stretch: Stretch, count: number): P
   ])
 }
 
+/**
+ * Dessin d'un composant dont le motif est répété `n` fois : sa taille, ses formes, ses broches.
+ * Avec `wholeImages`, une image à cheval sur un trait n'est pas coupée : elle reste entière, à
+ * sa place (le dessin de départ d'un modèle particulier).
+ */
+function repeatedDrawing(
+  def: ComponentDefinition,
+  stretch: Stretch,
+  n: number,
+  wholeImages = false
+): Pick<ComponentDefinition, 'size' | 'visual' | 'pins'> {
+  const kept = (primitive: Primitive): boolean =>
+    wholeImages &&
+    primitive.kind === 'image' &&
+    zoneOf(primitive.x, primitive.x + primitive.w, stretch) === 'across'
+  return {
+    size: {
+      widthCells: def.size.widthCells + (n - 1) * motifCells(stretch),
+      heightCells: def.size.heightCells
+    },
+    visual: {
+      kind: 'drawing',
+      primitives: def.visual.primitives.flatMap((primitive) =>
+        kept(primitive) ? [primitive] : stretchedPrimitive(primitive, stretch, n)
+      )
+    },
+    // À un seul motif rien ne bouge : les broches gardent leur ordre, donc leurs numéros.
+    pins: n === 1 ? def.pins : stretchedPins(def.pins, stretch, n)
+  }
+}
+
 const stretched = new WeakMap<ComponentDefinition, Map<number, ComponentDefinition>>()
 
 /**
@@ -251,22 +283,67 @@ export function stretchedDefinition(
       if (model.pinGroups) resolved.pinGroups = model.pinGroups
       else delete resolved.pinGroups
     } else {
-      resolved = {
-        ...def,
-        size: {
-          widthCells: def.size.widthCells + (n - 1) * motifCells(stretch),
-          heightCells: def.size.heightCells
-        },
-        visual: {
-          kind: 'drawing',
-          primitives: def.visual.primitives.flatMap((primitive) =>
-            stretchedPrimitive(primitive, stretch, n)
-          )
-        },
-        pins: stretchedPins(def.pins, stretch, n)
-      }
+      resolved = { ...def, ...repeatedDrawing(def, stretch, n) }
     }
     cache.set(n, resolved)
+  }
+  return resolved
+}
+
+// Modèles par nombre (décision du 17 novembre 2026) : pour certains nombres de motifs, un dessin
+// à part remplace le motif répété (une pièce à un seul point, moulée d'un bloc, n'a pas l'allure
+// d'un bout de barrette). On ne le choisit pas en posant le composant : c'est le nombre qui le
+// désigne, donc étirer le composant passe de l'un à l'autre.
+
+/**
+ * Dessin de départ du modèle particulier d'un nombre de motifs : le composant tel que son motif
+ * répété le dessine à ce nombre, à retoucher ensuite. Une image que l'étirement couperait y
+ * revient entière, à sa place : une tranche ne se retouche pas, et un modèle a le plus souvent
+ * son image à lui. Les broches gardent les identifiants qu'elles ont dans le composant étiré.
+ * Null pour un composant qui n'est pas extensible.
+ */
+export function modelDrawing(def: ComponentDefinition, count: number): CountModel | null {
+  const stretch = def.stretch
+  if (!stretch) return null
+  const n = Math.max(1, Math.min(Math.round(count), STRETCH_MAX_COUNT))
+  const model: CountModel = { count: n, ...repeatedDrawing(def, stretch, n, true) }
+  if (def.pinGroups) model.pinGroups = def.pinGroups
+  return model
+}
+
+/** Premier nombre de motifs permis qui n'a pas encore son modèle ; null s'ils l'ont tous. */
+export function freeModelCount(stretch: Stretch): number | null {
+  const taken = new Set((stretch.models ?? []).map((model) => model.count))
+  const max = Math.min(stretch.max, STRETCH_MAX_COUNT)
+  for (let n = stretch.min; n <= max; n++) if (!taken.has(n)) return n
+  return null
+}
+
+const modelDefinitions = new WeakMap<ComponentDefinition, Map<number, ComponentDefinition>>()
+
+/**
+ * Le composant tel que le dessine le modèle particulier d'un nombre, pour le retoucher dans
+ * l'éditeur : son dessin seul, sans motif ni traits de coupe. Le composant lui-même quand ce
+ * nombre n'a pas de modèle. Pour un même composant et un même nombre, toujours le même objet.
+ */
+export function modelDefinition(
+  def: ComponentDefinition,
+  count: number | null | undefined
+): ComponentDefinition {
+  const model = def.stretch?.models?.find((candidate) => candidate.count === count)
+  if (!model) return def
+  let cache = modelDefinitions.get(def)
+  if (!cache) {
+    cache = new Map()
+    modelDefinitions.set(def, cache)
+  }
+  let resolved = cache.get(model.count)
+  if (!resolved) {
+    resolved = { ...def, size: model.size, visual: model.visual, pins: model.pins }
+    if (model.pinGroups) resolved.pinGroups = model.pinGroups
+    else delete resolved.pinGroups
+    delete resolved.stretch
+    cache.set(model.count, resolved)
   }
   return resolved
 }

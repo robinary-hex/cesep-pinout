@@ -174,4 +174,32 @@ describe('bibliothèque sur disque : variantes', () => {
     const loaded = await loadComponent(folder)
     expect(loaded).toEqual(def)
   })
+
+  it('range aussi l’image du modèle particulier d’un composant extensible', async () => {
+    const dataUrl = `data:image/png;base64,${ONE_PIXEL}`
+    const def = resistor()
+    // À un seul motif, une pièce à part, avec sa propre image.
+    def.stretch = {
+      from: 4,
+      to: 12,
+      initial: 1,
+      min: 1,
+      max: 4,
+      models: [
+        {
+          count: 1,
+          size: def.size,
+          visual: {
+            kind: 'drawing',
+            primitives: [{ kind: 'image', x: 0, y: 0, w: 4, h: 4, file: 'seul.png', dataUrl }]
+          },
+          pins: def.pins
+        }
+      ]
+    }
+    const folder = await saveComponent(LIB, def)
+    expect(fs.binaries.get(`${folder}/seul.png`)).toBe(ONE_PIXEL)
+    expect(await fs.readTextFile(`${folder}/component.json`)).not.toContain('dataUrl')
+    expect(await loadComponent(folder)).toEqual(def)
+  })
 })

@@ -13,6 +13,9 @@ import {
 import { pngHeaderDataUrl } from './testing/pngHeader'
 import {
   defaultStretch,
+  freeModelCount,
+  modelDefinition,
+  modelDrawing,
   motifCells,
   normalizedStretch,
   STRETCH_MAX_COUNT,
@@ -408,5 +411,101 @@ describe('composant extensible : contrôles', () => {
     expect(messages({ from: 12, to: 20 })).toContain(
       'warning : Le motif dépasse la boîte du composant'
     )
+  })
+})
+
+describe('composant extensible : modèles par nombre', () => {
+  it('part du composant étiré à ce nombre, une image coupée revenant entière', () => {
+    const def = terminal()
+    def.pinGroups = [{ id: 'g1', name: 'Bornes' }]
+    // À un motif : le dessin tel quel, ses broches dans leur ordre.
+    const one = modelDrawing(def, 1)
+    expect(one).toMatchObject({ count: 1, size: def.size, pinGroups: def.pinGroups })
+    expect(one?.visual.primitives).toEqual(def.visual.primitives)
+    expect(one?.pins).toBe(def.pins)
+    // À trois : le contour s'allonge, la vis et la broche du motif sont recopiées.
+    const three = modelDrawing(def, 3)
+    expect(three?.size).toEqual({ widthCells: 8, heightCells: 2 })
+    expect(
+      three?.visual.primitives.filter((primitive) => primitive.kind === 'ellipse')
+    ).toHaveLength(3)
+    expect(three?.visual.primitives[0]).toMatchObject({ kind: 'rect', x: 0, w: 32 })
+    expect(three?.pins.map((pin) => [pin.id, pin.x])).toEqual([
+      ['p1', 2],
+      ['p1#1', 4],
+      ['p1#2', 6]
+    ])
+    // Une image à cheval sur les traits n'est pas coupée : elle reste entière, à sa place.
+    const pictured = terminal()
+    const image: ImagePrimitive = {
+      kind: 'image',
+      x: 0,
+      y: 0,
+      w: 16,
+      h: 8,
+      file: 'bornier.png',
+      dataUrl: pngHeaderDataUrl(320, 160)
+    }
+    pictured.visual = { kind: 'drawing', primitives: [image] }
+    expect(modelDrawing(pictured, 3)?.visual.primitives).toEqual([image])
+    // Un composant ordinaire n'a pas de modèles.
+    expect(modelDrawing(createEmptyComponent('r', 'R'), 2)).toBeNull()
+  })
+
+  it('propose le premier nombre permis qui n’a pas son modèle', () => {
+    const stretch = terminal().stretch as Stretch
+    const model = (count: number): NonNullable<Stretch['models']>[number] => ({
+      count,
+      size: { widthCells: 2, heightCells: 2 },
+      visual: { kind: 'drawing', primitives: [] },
+      pins: []
+    })
+    expect(freeModelCount(stretch)).toBe(1)
+    expect(freeModelCount({ ...stretch, models: [model(1), model(2)] })).toBe(3)
+    expect(freeModelCount({ ...stretch, min: 2, initial: 2 })).toBe(2)
+    expect(freeModelCount({ ...stretch, max: 2, models: [model(1), model(2)] })).toBeNull()
+  })
+
+  it('montre le dessin d’un modèle seul, sans motif', () => {
+    const def = terminal()
+    def.stretch = {
+      ...(def.stretch as Stretch),
+      models: [
+        {
+          count: 1,
+          size: { widthCells: 3, heightCells: 2 },
+          visual: { kind: 'drawing', primitives: [] },
+          pins: [{ id: 'seul', name: '1', kind: 'io', x: 1, y: 2 }]
+        }
+      ]
+    }
+    const shown = modelDefinition(def, 1)
+    expect(shown.size.widthCells).toBe(3)
+    expect(shown.pins.map((pin) => pin.id)).toEqual(['seul'])
+    expect(shown.stretch).toBeUndefined()
+    expect(shown.id).toBe(def.id)
+    // Toujours le même objet ; sans modèle pour ce nombre, le composant lui-même.
+    expect(modelDefinition(def, 1)).toBe(shown)
+    expect(modelDefinition(def, 2)).toBe(def)
+    expect(modelDefinition(def, null)).toBe(def)
+  })
+
+  it('signale un modèle dont le nombre est hors des bornes', () => {
+    const def = terminal()
+    def.stretch = {
+      ...(def.stretch as Stretch),
+      models: [
+        {
+          count: 9,
+          size: { widthCells: 3, heightCells: 2 },
+          visual: { kind: 'drawing', primitives: [] },
+          pins: []
+        }
+      ]
+    }
+    expect(componentIssues(def)).toContainEqual({
+      level: 'warning',
+      message: 'Modèle à 9 : hors des nombres permis, il ne sert pas'
+    })
   })
 })
