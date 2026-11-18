@@ -8,6 +8,7 @@ import {
   createEmptyProject,
   DEFAULT_PROFILE,
   DEFAULT_SETTINGS,
+  DEFAULT_SHAPE_STYLE,
   parseProject,
   serializeProject,
   withPreviewVariant,
@@ -2027,6 +2028,61 @@ describe('montage : plaque à trous', () => {
     expect(store.doc.wires[0]?.points.at(0)).toEqual([12, 2])
     expect(store.doc.wires[0]?.points.at(-1)).toEqual([10, 2])
     expect(store.connectivity.unconnectedPinKeys.size).toBe(0)
+  })
+
+  it('écartée de son pli, la plaque et son dessous s’en éloignent autant ; ce qu’ils portent suit', () => {
+    const { store, plate } = soldered()
+    // Trois cellules vers la gauche, une vers le bas : le pli reste en x = 7.
+    expect(store.spreadBoardFaces(plate, -3, 1)).toBe(true)
+    expect(store.status).toContain('8 cellules')
+    expect(store.doc.components.map((instance) => [instance.x, instance.y])).toEqual([
+      [-3, 1],
+      [-2, 2]
+    ])
+    expect(store.doc.components[0]?.facesGap).toBe(8)
+    expect(store.faces.boards[0]).toMatchObject({ bottom: { x: 11, y: 1 }, flip: 14 })
+    // Le fil du dessous est allé de trois cellules à droite ; il relie toujours les deux pattes.
+    expect(store.doc.wires[0]?.points).toEqual([
+      [16, 3],
+      [16, 4],
+      [14, 4],
+      [14, 3]
+    ])
+    expect(store.connectivity.unconnectedPinKeys.size).toBe(0)
+    // Vers le pli : pas plus près que l'écart d'origine, qui ne s'enregistre pas.
+    expect(store.spreadBoardFaces(plate, 5, 0)).toBe(true)
+    expect(store.doc.components[0]).toMatchObject({ x: 0, y: 1 })
+    expect(store.doc.components[0]).not.toHaveProperty('facesGap')
+    expect(store.spreadBoardFaces(plate, 1, 0)).toBe(false)
+    // Une commande, qu'on annule.
+    store.undo()
+    expect(store.doc.components[0]).toMatchObject({ x: -3, y: 1, facesGap: 8 })
+    expect(store.doc.wires[0]?.points.at(0)).toEqual([16, 3])
+  })
+
+  it('un composant enfiché montre son empreinte sur l’autre face d’une plaque à deux faces', () => {
+    const store = useSchematicStore()
+    store.startPlacing(board())
+    const plate = store.placeAt(0, 0)
+    const part = led()
+    part.visual = {
+      kind: 'drawing',
+      primitives: [
+        { kind: 'rect', x: 0, y: 2, w: 8, h: 4, rx: 0, style: DEFAULT_SHAPE_STYLE, footprint: true }
+      ]
+    }
+    store.startPlacing(part)
+    const id = store.placeAt(1, 1)
+    store.stopPlacing()
+    if (!plate || !id) throw new Error('pose refusée')
+    expect(store.footprints.size).toBe(0)
+    store.setInstanceUnderside(plate, true)
+    expect([...store.footprints.entries()].map(([key, face]) => [key, face.id])).toEqual([
+      [id, plate]
+    ])
+    // Sorti de la plaque, le composant n'a plus d'empreinte à montrer.
+    store.moveInstances([id], 20, 0)
+    expect(store.footprints.size).toBe(0)
   })
 
   it('déplacée, la plaque emmène ce qu’elle porte sur ses deux faces, elle seule sélectionnée', () => {

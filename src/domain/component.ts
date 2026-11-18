@@ -96,11 +96,20 @@ export const TEXT_SCALES = [1, 1.5, 2, 2.5, 3] as const
 export const textAnchorSchema = z.enum(['start', 'middle', 'end'])
 export type TextAnchor = z.infer<typeof textAnchorSchema>
 
+/**
+ * Empreinte (décision du 18 novembre 2026) : une forme qui ne fait pas partie du dessin du
+ * composant posé. Elle dit la place qu'il prend de l'autre côté d'une plaque à trous : quand la
+ * plaque où il est enfiché montre ses deux faces, la forme se dessine en pointillés sur l'autre
+ * face, et nulle part ailleurs. Absent : une forme comme les autres.
+ */
+const footprintSchema = z.boolean().optional()
+
 /** Formes du mini-éditeur de composants, rendues en SVG natif. */
 export const primitiveSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('rect'),
     group: groupSchema,
+    footprint: footprintSchema,
     x: quarterSchema,
     y: quarterSchema,
     w: z.number().int().positive(),
@@ -111,6 +120,7 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('ellipse'),
     group: groupSchema,
+    footprint: footprintSchema,
     cx: quarterSchema,
     cy: quarterSchema,
     rx: z.number().int().positive(),
@@ -120,6 +130,7 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('line'),
     group: groupSchema,
+    footprint: footprintSchema,
     x1: quarterSchema,
     y1: quarterSchema,
     x2: quarterSchema,
@@ -130,6 +141,7 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('polyline'),
     group: groupSchema,
+    footprint: footprintSchema,
     points: z.array(quarterPointSchema).min(2),
     closed: z.boolean(),
     /** Rayon d'arrondi des angles, en quarts de cellule ; 0 = angles vifs. */
@@ -236,6 +248,25 @@ export type DotPrimitive = Extract<Primitive, { kind: 'dot' }>
 export type ImagePrimitive = Extract<Primitive, { kind: 'image' }>
 export type HolesPrimitive = Extract<Primitive, { kind: 'holes' }>
 export type StyledPrimitive = Exclude<Primitive, { kind: 'text' | 'dot' | 'image' | 'holes' }>
+
+/** Cette forme est-elle une empreinte : dessinée sur l'autre face d'une plaque, pas sur le composant ? */
+export function isFootprint(primitive: Primitive): boolean {
+  return 'footprint' in primitive && primitive.footprint === true
+}
+
+/** Le dessin a-t-il des formes d'empreinte ? */
+export function hasFootprint(def: { visual: { primitives: readonly Primitive[] } }): boolean {
+  return def.visual.primitives.some((primitive) => isFootprint(primitive))
+}
+
+/**
+ * Tirets d'une empreinte, pour un trait de cette épaisseur (attribut `stroke-dasharray`, dans
+ * l'unité du trait) : avec ses bouts ronds, des tirets de trois épaisseurs séparés de deux.
+ */
+export function footprintDash(strokeWidth: number): string {
+  const round = (value: number): number => Math.round(value * 1000) / 1000
+  return `${round(2 * strokeWidth)} ${round(3 * strokeWidth)}`
+}
 
 // Plaque à trous (décision du 17 novembre 2026) : une plaque de prototypage est un composant
 // comme un autre, dessiné une fois pour toutes. Sa grille de trous est une forme (`holes`) :

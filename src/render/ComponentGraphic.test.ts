@@ -233,6 +233,27 @@ describe('ComponentGraphic', () => {
     expect(editing.get('rect').attributes()).toMatchObject({ x: '20', y: '20', width: '40' })
   })
 
+  it('une empreinte est en pointillés, et ne se dessine que là où on la demande', () => {
+    const def = createEmptyComponent('b', 'Bornier')
+    def.visual = {
+      kind: 'drawing',
+      primitives: [
+        { kind: 'rect', x: 0, y: 0, w: 8, h: 8, rx: 0, style: DEFAULT_SHAPE_STYLE },
+        { kind: 'rect', x: 0, y: 2, w: 8, h: 4, rx: 0, style: DEFAULT_SHAPE_STYLE, footprint: true }
+      ]
+    }
+    const dashes = (footprints?: 'hidden' | 'drawn' | 'only'): (string | undefined)[] =>
+      mount(ComponentGraphic, { props: { def, cellPx: 20, ...(footprints ? { footprints } : {}) } })
+        .findAll('rect')
+        .map((rect) => rect.attributes('stroke-dasharray'))
+    // Le composant tel qu'on le pose : sans son empreinte.
+    expect(dashes()).toEqual([undefined])
+    // Dans l'éditeur : tout le dessin, l'empreinte en pointillés (trait de 2 px : tirets 4, 6).
+    expect(dashes('drawn')).toEqual([undefined, '4 6'])
+    // Sur l'autre face d'une plaque : l'empreinte seule.
+    expect(dashes('only')).toEqual(['4 6'])
+  })
+
   it('signale une image manquante au lieu de planter', () => {
     const def = createEmptyComponent('n', 'N')
     def.visual = {

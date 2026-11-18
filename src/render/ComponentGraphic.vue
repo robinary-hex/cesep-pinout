@@ -5,11 +5,13 @@ import {
   arrowHeadPoints,
   discsPathData,
   dotRadiusCells,
+  footprintDash,
   HOLE_COLOR,
   HOLE_OPACITY,
   HOLE_PAD_RADIUS_CELLS,
   HOLE_RADIUS_CELLS,
   holeCells,
+  isFootprint,
   layoutText,
   middleArrowHead,
   NO_ARROWS,
@@ -58,6 +60,13 @@ const props = withDefaults(
      * montage, qui dessine en cellules sous une mise à l'échelle, donne un pixel en cellules.
      */
     pixel?: number
+    /**
+     * Formes d'empreinte (la place que le composant prend de l'autre côté d'une plaque à trous),
+     * toujours en pointillés : `hidden`, le composant tel qu'on le pose, sans elles ; `drawn`,
+     * tout le dessin, elles comprises (l'éditeur de composants) ; `only`, elles seules (sur
+     * l'autre face de la plaque).
+     */
+    footprints?: 'hidden' | 'drawn' | 'only'
   }>(),
   {
     strokeBase: 0.1,
@@ -67,7 +76,8 @@ const props = withDefaults(
     preview: null,
     skipTexts: false,
     ink: null,
-    pixel: 1
+    pixel: 1,
+    footprints: 'hidden'
   }
 )
 
@@ -83,7 +93,16 @@ const q = (value: number): number => (value * props.cellPx) / QUARTERS_PER_CELL
 const primitives = computed(() => {
   const all = props.def.visual.primitives
   const hideTexts = props.skipTexts
-  const list = hideTexts ? all.filter((primitive) => primitive.kind !== 'text') : all
+  const footprints = props.footprints
+  // Dans l'éditeur (`drawn`), rien n'est retiré : le rang d'une forme reste celui du dessin.
+  const list =
+    hideTexts || footprints !== 'drawn'
+      ? all.filter(
+          (primitive) =>
+            !(hideTexts && primitive.kind === 'text') &&
+            (footprints === 'drawn' || isFootprint(primitive) === (footprints === 'only'))
+        )
+      : all
   const preview = props.preview
   return preview
     ? list.map((primitive, i) => (i === preview.index ? preview.primitive : primitive))
@@ -110,10 +129,12 @@ function inkFor(color: string): string {
   return props.ink && color !== 'none' ? props.ink : screenColor(color)
 }
 
-function shapeAttrs(style: ShapeStyle): Record<string, string | number> {
+function shapeAttrs(style: ShapeStyle, footprint?: boolean): Record<string, string | number> {
   return {
     stroke: inkFor(style.stroke),
     'stroke-width': strokePx(style),
+    // Une empreinte : en pointillés.
+    ...(footprint === true ? { 'stroke-dasharray': footprintDash(strokePx(style)) } : {}),
     // Un remplissage de la couleur du trait fait partie du trait (forme pleine).
     fill:
       props.ink && style.fill !== 'none' && style.fill === style.stroke
@@ -264,7 +285,7 @@ function menu(index: number, event: MouseEvent): void {
           :width="q(p.w)"
           :height="q(p.h)"
           :rx="q(p.rx)"
-          v-bind="shapeAttrs(p.style)"
+          v-bind="shapeAttrs(p.style, p.footprint)"
         />
         <rect
           v-if="interactive"
@@ -284,7 +305,7 @@ function menu(index: number, event: MouseEvent): void {
           :cy="q(p.cy)"
           :rx="q(p.rx)"
           :ry="q(p.ry)"
-          v-bind="shapeAttrs(p.style)"
+          v-bind="shapeAttrs(p.style, p.footprint)"
         />
         <ellipse
           v-if="interactive"
@@ -299,7 +320,7 @@ function menu(index: number, event: MouseEvent): void {
       </template>
 
       <template v-else-if="p.kind === 'line'">
-        <line v-bind="{ ...lineAttrs(p), ...shapeAttrs(p.style) }" />
+        <line v-bind="{ ...lineAttrs(p), ...shapeAttrs(p.style, p.footprint) }" />
         <polygon
           v-for="(head, h) in arrowHeads(p)"
           :key="h"
@@ -318,9 +339,17 @@ function menu(index: number, event: MouseEvent): void {
       </template>
 
       <template v-else-if="p.kind === 'polyline'">
-        <path v-if="p.radius > 0" :d="roundedPath(p)" v-bind="shapeAttrs(p.style)" />
-        <polygon v-else-if="p.closed" :points="polyPoints(p.points)" v-bind="shapeAttrs(p.style)" />
-        <polyline v-else :points="pointsAttribute(strokePoints(p))" v-bind="shapeAttrs(p.style)" />
+        <path v-if="p.radius > 0" :d="roundedPath(p)" v-bind="shapeAttrs(p.style, p.footprint)" />
+        <polygon
+          v-else-if="p.closed"
+          :points="polyPoints(p.points)"
+          v-bind="shapeAttrs(p.style, p.footprint)"
+        />
+        <polyline
+          v-else
+          :points="pointsAttribute(strokePoints(p))"
+          v-bind="shapeAttrs(p.style, p.footprint)"
+        />
         <polygon
           v-for="(head, h) in arrowHeads(p)"
           :key="h"

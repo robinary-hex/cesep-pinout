@@ -4,6 +4,7 @@ import type { GridPoint } from './grid'
 import {
   applyMatrix,
   facesFlip,
+  facesGap,
   instanceBounds,
   instanceMatrix,
   showsUnderside,
@@ -46,11 +47,12 @@ export function boardFace(instance: ComponentInstance, def: ComponentDefinition)
     const at = applyMatrix(matrix, hole)
     return [Math.round(at.x), Math.round(at.y)]
   })
+  const gap = facesGap(instance)
   return {
     id: instance.id,
     top,
-    bottom: showsUnderside(instance, def) ? undersideBounds(top) : null,
-    flip: facesFlip(top),
+    bottom: showsUnderside(instance, def) ? undersideBounds(top, gap) : null,
+    flip: facesFlip(top, gap),
     holes
   }
 }

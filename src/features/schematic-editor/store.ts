@@ -6,8 +6,11 @@ import {
   BARE_WIRE_COLOR,
   BARE_WIRE_COLOR_NAME,
   boardFaces,
+  boardFootprints,
   boardsCarry,
+  facesGap,
   loadOfBoards,
+  spreadBoard,
   throughMarks,
   computeConnectivity,
   computeCrossings,
@@ -359,6 +362,11 @@ export const useSchematicStore = defineStore('schematic', () => {
   )
   /** Ce qui traverse une plaque à deux faces : les pastilles où une patte ou un fil ressort. */
   const throughs = computed(() => throughMarks(doc.value.wires, pinRefs.value, faces.value))
+  /**
+   * Empreintes : pour chaque composant qu'une plaque à deux faces porte et qui a des formes
+   * d'empreinte, cette plaque. Elles se dessinent sur son autre face.
+   */
+  const footprints = computed(() => boardFootprints(doc.value, faces.value))
   const crossings = computed(() => computeCrossings(doc.value.wires))
   const pieces = computed(() => crossingPieces(doc.value.wires, doc.value.crossingOverrides))
   const hoverNet = computed(() =>
@@ -766,6 +774,32 @@ export const useSchematicStore = defineStore('schematic', () => {
     status.value = shown
       ? 'Dessous de la plaque montré à sa droite, vu retourné : les fils s’y soudent.'
       : 'Dessous de la plaque masqué.'
+  }
+
+  /**
+   * Déplace une plaque à deux faces par rapport à son pli (décision du 18 novembre 2026 : Ctrl
+   * pendant qu'on la glisse). Le pli reste où il est : le dessus va de (`dx`, `dy`), le dessous
+   * fait le geste en miroir, et les deux faces s'écartent du pli, ou s'en rapprochent, d'autant
+   * l'une que l'autre (`spreadBoard`). Ce que la plaque porte suit sa face. Faux si rien ne change.
+   */
+  function spreadBoardFaces(id: string, dx: number, dy: number): boolean {
+    const instance = doc.value.components.find((candidate) => candidate.id === id)
+    const def = instance ? instanceDefinition(doc.value, instance) : undefined
+    const moved = instance && def ? spreadBoard(instance, def, dx, dy) : null
+    if (!instance || !moved) return false
+    const gap = facesGap(moved)
+    const spread = gap !== facesGap(instance)
+    const done = applyWithElasticWires(
+      spread ? 'Écarter les faces de la plaque' : 'Déplacer la sélection',
+      (draft) => {
+        const index = draft.components.findIndex((candidate) => candidate.id === id)
+        if (index >= 0) draft.components[index] = castDraft(moved)
+      }
+    )
+    if (done && spread) {
+      status.value = `Faces de la plaque à ${gap} cellules l’une de l’autre.`
+    }
+    return done
   }
 
   /** Remplace la définition embarquée par celle de la bibliothèque (même identifiant). */
@@ -1975,6 +2009,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     pinRefs,
     faces,
     throughs,
+    footprints,
     selectionLoad,
     connectivity,
     crossings,
@@ -2006,6 +2041,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     setInstancesVariant,
     setInstanceCount,
     setInstanceUnderside,
+    spreadBoardFaces,
     selectTool,
     startPlacing,
     stopPlacing,

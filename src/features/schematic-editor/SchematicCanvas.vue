@@ -4,11 +4,13 @@ import {
   absolutePinPosition,
   anchorPins,
   boardFaces,
+  boardsCarry,
   boxHandles,
   componentImages,
   crossingPieceEnds,
   distanceToSegment,
   facesFlip,
+  facesGap,
   facesHinge,
   formatReadout,
   gridLines,
@@ -37,6 +39,7 @@ import {
   screenToWorld,
   segmentCoordinate,
   showsUnderside,
+  spreadBoard,
   textContent,
   textEmphasisAttrs,
   textStyleAttrs,
@@ -158,6 +161,11 @@ type Drag =
       duplicate: boolean
       /** Bouts de fil soudés à un trou d'une plaque qu'on déplace : ils suivent leur trou. */
       ends: GridPoint[]
+      /**
+       * Plaque à deux faces prise seule : tant que Ctrl est enfoncée, elle bouge par rapport à
+       * son pli (`spreading`). `bottom` : on l'a saisie par son dessous.
+       */
+      board: { id: string; bottom: boolean } | null
     }
   | { kind: 'band'; start: LocalPoint; current: LocalPoint; additive: boolean }
   | { kind: 'text-box'; start: GridPoint; current: GridPoint }
@@ -280,10 +288,39 @@ const selectedSet = computed(() => new Set(store.selection))
 const selectedWireSet = computed(() => new Set(store.selectedWires))
 const selectedLabelSet = computed(() => new Set(store.selectedLabels))
 
-/** Décalage appliqué aux originaux pendant un déplacement (pas pendant une copie). */
+/**
+ * Plaque à deux faces qu'on glisse seule, Ctrl enfoncée (décision du 18 novembre 2026) : elle
+ * bouge par rapport à son pli, qui reste en place. La face saisie suit le pointeur, l'autre fait
+ * le geste en miroir : les deux s'écartent du pli, ou s'en rapprochent, d'autant l'une que
+ * l'autre. Ce que la plaque porte suit sa face (`boardsCarry`, comme à la commande). Rend la
+ * plaque à sa nouvelle place et ce qu'elle emmène ; null hors de ce geste.
+ */
+const spreading = computed(() => {
+  const current = drag.value
+  if (current?.kind !== 'move' || current.duplicate || !current.board || !store.ctrlHeld) {
+    return null
+  }
+  const { id, bottom } = current.board
+  const item = store.placed.find((candidate) => candidate.instance.id === id)
+  if (!item) return null
+  // Saisie par son dessous, la plaque fait le geste inverse de celui du pointeur.
+  const board = spreadBoard(item.instance, item.def, bottom ? -current.dx : current.dx, current.dy)
+  // Rien ne change (au plus près du pli, on ne s'en rapproche pas) : la plaque reste où elle est.
+  if (!board) return { board: item.instance, carried: null }
+  const after: Project = {
+    ...store.doc,
+    components: store.doc.components.map((instance) => (instance.id === id ? board : instance))
+  }
+  return { board, carried: boardsCarry(store.doc, after) }
+})
+
+/**
+ * Décalage appliqué aux originaux pendant un déplacement (pas pendant une copie, ni quand une
+ * plaque bouge par rapport à son pli : chaque élément a alors sa place, donnée par `spreading`).
+ */
 const moveOffset = computed(() => {
   const current = drag.value
-  return current?.kind === 'move' && !current.duplicate
+  return current?.kind === 'move' && !current.duplicate && !spreading.value
     ? {
         ids: new Set(current.ids),
         labelIds: new Set(current.labelIds),
@@ -315,9 +352,20 @@ const stretching = computed(() => {
 
 /**
  * Les composants tels qu'on les dessine : ceux du montage, celui qu'on étire montré à sa
- * nouvelle longueur et à sa nouvelle place.
+ * nouvelle longueur et à sa nouvelle place, la plaque qu'on écarte de son pli et ce qu'elle
+ * porte, là où ils vont.
  */
 const placed = computed<PlacedInstance[]>(() => {
+  const spread = spreading.value
+  if (spread) {
+    return store.placed.map((item) => {
+      const moved =
+        item.instance.id === spread.board.id
+          ? spread.board
+          : spread.carried?.instances.get(item.instance.id)
+      return moved ? { instance: moved, def: item.def } : item
+    })
+  }
   const change = stretching.value
   if (!change) return store.placed
   return store.placed.map((item) => {
@@ -348,10 +396,33 @@ const dragPreview = computed<{
   marks: ThroughMark[]
 } | null>(() => {
   const current = drag.value
+  const spread = spreading.value
   let pins = store.pinRefs
   let faces = store.faces
   let after: Wire[]
-  if (current?.kind === 'stretch') {
+  if (spread) {
+    // Plaque écartée de son pli : le montage tel qu'il serait, ce qu'elle porte ayant suivi sa
+    // face ; les fils soudés à ses trous et aux broches qu'elle porte suivent, comme à la commande.
+    const { board, carried } = spread
+    if (store.doc.components.includes(board)) return null
+    const moved: Project = {
+      ...store.doc,
+      components: store.doc.components.map(
+        (instance) =>
+          (instance.id === board.id ? board : carried?.instances.get(instance.id)) ?? instance
+      )
+    }
+    faces = boardFaces(moved)
+    pins = projectPins(moved, faces)
+    const ends = carried?.ends ?? []
+    after = wiresFollowingPins(
+      store.doc.wires,
+      [...store.pinRefs, ...anchorPins(ends.map((end) => end.from))],
+      [...pins, ...anchorPins(ends.map((end) => end.to))],
+      new Map(),
+      carried?.wires
+    )
+  } else if (current?.kind === 'stretch') {
     // Composant qu'on étire : les fils soudés à ses broches suivent, comme à la commande.
     const change = stretching.value
     if (!change) return null
@@ -485,7 +556,10 @@ const selectedBoxes = computed(() =>
       const bounds = boundsOf(item)
       const boxes = [{ id: item.instance.id, ...bounds }]
       if (showsUnderside(item.instance, item.def)) {
-        boxes.push({ id: `${item.instance.id}:dessous`, ...undersideBounds(bounds) })
+        boxes.push({
+          id: `${item.instance.id}:dessous`,
+          ...undersideBounds(bounds, facesGap(item.instance))
+        })
       }
       return boxes
     })
@@ -499,9 +573,28 @@ const undersides = computed(() => {
   const transforms = new Map<string, string>()
   for (const item of placed.value) {
     if (!showsUnderside(item.instance, item.def)) continue
-    transforms.set(item.instance.id, `matrix(-1 0 0 1 ${facesFlip(boundsOf(item))} 0)`)
+    const flip = facesFlip(boundsOf(item), facesGap(item.instance))
+    transforms.set(item.instance.id, `matrix(-1 0 0 1 ${flip} 0)`)
   }
   return transforms
+})
+
+/**
+ * Empreintes, plaque par plaque : les composants qu'une plaque à deux faces porte et qui ont des
+ * formes d'empreinte. Elles se dessinent avec la plaque, sur son autre face (par le miroir de
+ * son dessous), sous les pattes qui y ressortent.
+ */
+const footprintsByBoard = computed(() => {
+  const byBoard = new Map<string, PlacedInstance[]>()
+  if (store.footprints.size === 0) return byBoard
+  for (const item of placed.value) {
+    const face = store.footprints.get(item.instance.id)
+    if (!face) continue
+    const list = byBoard.get(face.id)
+    if (list) list.push(item)
+    else byBoard.set(face.id, [item])
+  }
+  return byBoard
 })
 
 /**
@@ -512,7 +605,10 @@ const undersides = computed(() => {
 const hinges = computed(() =>
   placed.value
     .filter((item) => showsUnderside(item.instance, item.def))
-    .map((item) => ({ id: item.instance.id, ...facesHinge(boundsOf(item)) }))
+    .map((item) => ({
+      id: item.instance.id,
+      ...facesHinge(boundsOf(item), facesGap(item.instance))
+    }))
 )
 
 /**
@@ -678,6 +774,9 @@ const stretchGrips = computed(() => {
 function labelBox(label: TextLabel): Box {
   const current = drag.value
   if (current?.kind === 'label-handle' && current.id === label.id) return current.preview
+  // Sur une plaque qu'on écarte de son pli : là où sa face l'emmène.
+  const carried = spreading.value?.carried?.labels.get(label.id)
+  if (carried) return carried
   const { dx, dy } = labelOffsetOf(label.id)
   return { x: label.x + dx, y: label.y + dy, w: label.w, h: label.h }
 }
@@ -1180,19 +1279,41 @@ function captureOnceMoved(event: PointerEvent): void {
   if (drag.value) svg.value?.setPointerCapture(event.pointerId)
 }
 
+/**
+ * La plaque à deux faces qu'un déplacement peut écarter de son pli : seule sélectionnée.
+ * `bottom` dit si l'appui, en `start`, l'a prise par son dessous.
+ */
+function spreadableBoard(start: LocalPoint): { id: string; bottom: boolean } | null {
+  const id = store.selection[0]
+  if (
+    id === undefined ||
+    store.selection.length !== 1 ||
+    store.selectedWires.length > 0 ||
+    store.selectedLabels.length > 0
+  ) {
+    return null
+  }
+  const item = store.placed.find((candidate) => candidate.instance.id === id)
+  if (!item || !showsUnderside(item.instance, item.def)) return null
+  const bounds = instanceBounds(item.instance, item.def)
+  return { id, bottom: start.x > bounds.x + bounds.width + facesGap(item.instance) / 2 }
+}
+
 function startMove(event: PointerEvent): void {
   // Une plaque emmène ce qu'elle porte, sans qu'il soit sélectionné ; une copie, non.
   const load = event.altKey ? null : store.selectionLoad()
+  const start = toWorld(screenPoint(event))
   drag.value = {
     kind: 'move',
     ids: [...store.selection, ...(load?.instances ?? [])],
     wireIds: [...store.selectedWires, ...(load?.wires ?? [])],
     labelIds: [...store.selectedLabels, ...(load?.labels ?? [])],
-    start: toWorld(screenPoint(event)),
+    start,
     dx: 0,
     dy: 0,
     duplicate: event.altKey,
-    ends: load?.ends ?? []
+    ends: load?.ends ?? [],
+    board: event.altKey ? null : spreadableBoard(start)
   }
   capture(event)
 }
@@ -1207,7 +1328,8 @@ function bandTakes(item: PlacedInstance, rect: GridRect): boolean {
   if (!isBoard(item.def)) return rectsIntersect(bounds, rect)
   return (
     rectContainsRect(rect, bounds) ||
-    (showsUnderside(item.instance, item.def) && rectContainsRect(rect, undersideBounds(bounds)))
+    (showsUnderside(item.instance, item.def) &&
+      rectContainsRect(rect, undersideBounds(bounds, facesGap(item.instance))))
   )
 }
 
@@ -1614,7 +1736,11 @@ function onPointerUp(event: PointerEvent): void {
   drag.value = null
   if (current.kind === 'move') {
     if (current.duplicate) store.duplicateSelectionAt(current.dx, current.dy)
-    else store.moveSelection(current.dx, current.dy)
+    else if (current.board && event.ctrlKey) {
+      // Ctrl : la plaque bouge par rapport à son pli, ses deux faces en miroir.
+      const { id, bottom } = current.board
+      store.spreadBoardFaces(id, bottom ? -current.dx : current.dx, current.dy)
+    } else store.moveSelection(current.dx, current.dy)
   } else if (current.kind === 'band') {
     const rect = normalizeRect(current.start, current.current)
     if (rect.width > 0.05 || rect.height > 0.05) {
@@ -2073,6 +2199,28 @@ const cursorClass = computed(() => {
                     />
                   </g>
                 </g>
+                <!-- Sur l'autre face d'une plaque à deux faces, l'empreinte des composants
+                     qu'elle porte : leurs formes d'empreinte, en pointillés, sous les pattes
+                     qui y ressortent. -->
+                <template v-if="footprintsByBoard.has(item.instance.id)">
+                  <g
+                    v-for="part in footprintsByBoard.get(item.instance.id)"
+                    :key="`empreinte:${part.instance.id}`"
+                    class="footprint"
+                    :transform="undersides.get(item.instance.id)"
+                  >
+                    <g :transform="transformOf(part)">
+                      <ComponentGraphic
+                        :def="part.def"
+                        :cell-px="1"
+                        :pixel="1 / cell"
+                        :stroke-base="store.styleFor(part.instance).componentStroke"
+                        :ink="store.staleDefIds.has(part.def.id) ? 'var(--stale)' : null"
+                        footprints="only"
+                      />
+                    </g>
+                  </g>
+                </template>
                 <g v-if="throughByBoard.has(item.instance.id)" class="through-marks">
                   <circle
                     v-for="mark in throughByBoard.get(item.instance.id)"
@@ -2670,6 +2818,11 @@ const cursorClass = computed(() => {
 .faces-hinge polygon {
   fill: var(--text-muted);
   stroke: none;
+}
+
+/* L'empreinte d'un composant sur l'autre face de sa plaque : on ne la saisit pas. */
+.footprint {
+  pointer-events: none;
 }
 
 /* Ce qui traverse une plaque à deux faces : un point de couleur vive, cerné de sombre. */

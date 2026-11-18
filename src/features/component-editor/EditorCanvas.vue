@@ -1239,6 +1239,7 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
             :def="store.shown"
             :cell-px="cell"
             :stroke-base="strokeBase"
+            footprints="drawn"
             interactive
             :moving="moving"
             :preview="handlePreview"
@@ -1252,6 +1253,7 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
             :def="ghostDef"
             :cell-px="cell"
             :stroke-base="strokeBase"
+            footprints="drawn"
           />
 
           <!-- Composant extensible : le motif, entre ses deux traits de coupe. -->

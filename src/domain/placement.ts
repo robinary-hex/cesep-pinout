@@ -59,7 +59,10 @@ export function rectContainsRect(outer: GridRect, inner: GridRect): boolean {
 // Les deux faces d'une plaque à trous (voir boardFaces.ts) : le dessous se dessine à droite du
 // dessus, retourné comme une page qu'on tourne.
 
-/** Écart entre le dessus et le dessous d'une plaque qui montre ses deux faces, en cellules. */
+/**
+ * Écart entre le dessus et le dessous d'une plaque qui montre ses deux faces, en cellules : celui
+ * d'une plaque qu'on n'a pas écartée de son pli, et le plus petit qu'elle puisse avoir.
+ */
 export const BOARD_FACES_GAP = 2
 
 /** Ce composant posé est-il une plaque qui montre son dessous ? */
@@ -70,17 +73,54 @@ export function showsUnderside(
   return instance.underside === true && isBoard(def)
 }
 
-/** Boîte du dessous d'une plaque dont `top` est la boîte : à sa droite, de la même taille. */
-export function undersideBounds(top: GridRect): GridRect {
-  return { ...top, x: top.x + top.width + BOARD_FACES_GAP }
+/**
+ * Écart entre les deux faces d'une plaque posée, en cellules : le sien si on l'a écartée de son
+ * pli (`facesGap`, décision du 18 novembre 2026 ; voir `spreadBoard`), sinon `BOARD_FACES_GAP`.
+ */
+export function facesGap(instance: Pick<ComponentInstance, 'facesGap'>): number {
+  return Math.max(BOARD_FACES_GAP, instance.facesGap ?? BOARD_FACES_GAP)
+}
+
+/**
+ * Boîte du dessous d'une plaque dont `top` est la boîte : à sa droite, de la même taille, à `gap`
+ * cellules.
+ */
+export function undersideBounds(top: GridRect, gap = BOARD_FACES_GAP): GridRect {
+  return { ...top, x: top.x + top.width + gap }
 }
 
 /**
  * Le miroir entre les deux faces : un point d'abscisse x du dessus se voit de dessous à
  * l'abscisse `facesFlip − x`, à la même hauteur (l'axe du miroir est au milieu de l'écart).
  */
-export function facesFlip(top: GridRect): number {
-  return 2 * (top.x + top.width) + BOARD_FACES_GAP
+export function facesFlip(top: GridRect, gap = BOARD_FACES_GAP): number {
+  return 2 * (top.x + top.width) + gap
+}
+
+/**
+ * Une plaque à deux faces déplacée par rapport à son pli (décision du 18 novembre 2026 : Ctrl
+ * pendant qu'on la glisse). Le pli, l'axe du miroir, reste où il est : le dessus va de
+ * (`dx`, `dy`) et le dessous, son reflet, de (−`dx`, `dy`). L'écart entre les faces change donc
+ * du double de `dx` : la plaque s'écarte de son pli ou s'en rapproche, sans que l'écart descende
+ * sous `BOARD_FACES_GAP`. Rend la plaque à sa nouvelle place, avec son nouvel écart ; null si
+ * elle ne montre pas son dessous ou si rien ne change.
+ */
+export function spreadBoard(
+  instance: ComponentInstance,
+  def: ComponentDefinition,
+  dx: number,
+  dy: number
+): ComponentInstance | null {
+  if (!showsUnderside(instance, def)) return null
+  const gap = facesGap(instance)
+  // Vers le pli (le dessus est à sa gauche), jamais plus près que l'écart d'origine.
+  const shift = Math.min(dx, Math.floor((gap - BOARD_FACES_GAP) / 2))
+  if (shift === 0 && dy === 0) return null
+  const moved: ComponentInstance = { ...instance, x: instance.x + shift, y: instance.y + dy }
+  const next = gap - 2 * shift
+  if (next === BOARD_FACES_GAP) delete moved.facesGap
+  else moved.facesGap = next
+  return moved
 }
 
 /**
@@ -110,10 +150,10 @@ export const HINGE_STYLE = {
   color: '#6e7781'
 } as const
 
-/** Le pli d'une plaque dont `top` est la boîte du dessus. */
-export function facesHinge(top: GridRect): FacesHinge {
+/** Le pli d'une plaque dont `top` est la boîte du dessus, ses faces à `gap` cellules. */
+export function facesHinge(top: GridRect, gap = BOARD_FACES_GAP): FacesHinge {
   const round = (value: number): number => Math.round(value * 1000) / 1000
-  const x = top.x + top.width + BOARD_FACES_GAP / 2
+  const x = top.x + top.width + gap / 2
   const middle = top.y + top.height / 2
   // La flèche : un arc de 1,2 cellule, bombé vers le haut ; au bout, il descend à 45°.
   const half = 0.6
@@ -177,11 +217,12 @@ export function projectBounds(project: Project): GridRect | null {
     // Une plaque qui montre son dessous occupe aussi la place de celui-ci, et celle du pli qui
     // dépasse entre ses deux faces.
     if (showsUnderside(instance, def)) {
-      include(undersideBounds(bounds))
+      const gap = facesGap(instance)
+      include(undersideBounds(bounds, gap))
       include({
         x: bounds.x + bounds.width,
         y: bounds.y - HINGE_OVERSHOOT,
-        width: BOARD_FACES_GAP,
+        width: gap,
         height: bounds.height + 2 * HINGE_OVERSHOOT
       })
     }

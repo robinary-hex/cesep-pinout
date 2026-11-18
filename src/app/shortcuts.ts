@@ -243,6 +243,7 @@ export const SHORTCUT_SECTIONS: ShortcutSection[] = [
           k('R', 'Tourner', { icon: 'rotate-cw', withShift: 'sens inverse' }),
           k('T', 'Miroir', { icon: 'flip-h', withShift: 'vertical' }),
           k('glisser', 'Étirer par une poignée'),
+          k('Ctrl+glisser', 'Écarter les faces d’une plaque'),
           k('double-clic', 'Saisir la valeur, le texte', { icon: 'edit' })
         ]
       },

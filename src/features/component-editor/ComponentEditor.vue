@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
 import {
+  isFootprint,
   naturalImageSize,
   PIN_KIND_LABELS,
   PIN_KINDS,
@@ -84,7 +85,10 @@ function renamePin(id: string): void {
   }
 }
 
-/** Entrées propres à une forme : son texte, ses flèches, sa fermeture, la taille de son image. */
+/**
+ * Entrées propres à une forme : son texte, ses flèches, sa fermeture, son rôle d'empreinte, la
+ * taille de son image.
+ */
 function shapeItems(index: number, primitive: Primitive): MenuItem[] {
   const items: MenuItem[] = []
   if (primitive.kind === 'text') {
@@ -131,6 +135,14 @@ function shapeItems(index: number, primitive: Primitive): MenuItem[] {
           ),
         { checked: !closed }
       )
+    )
+  }
+  if ('style' in primitive) {
+    const footprint = !isFootprint(primitive)
+    items.push(
+      item('Empreinte sur l’autre face', () => store.setFootprint(index, footprint), {
+        checked: !footprint
+      })
     )
   }
   if (primitive.kind === 'image') {

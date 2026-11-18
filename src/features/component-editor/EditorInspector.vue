@@ -4,6 +4,7 @@ import {
   DEFAULT_CATEGORY,
   DOT_SCALES,
   holeCounts,
+  isFootprint,
   naturalImageSize,
   PIN_KIND_LABELS,
   PIN_KINDS,
@@ -361,6 +362,13 @@ const multiCount = computed(() => store.selectedIndexes.length + store.selectedP
 const shapeStyle = computed(() =>
   primitive.value && 'style' in primitive.value ? primitive.value.style : null
 )
+/** La forme est-elle une empreinte, dessinée sur l'autre face d'une plaque à trous ? */
+const footprint = computed(() => primitive.value !== null && isFootprint(primitive.value))
+
+function setFootprint(event: Event): void {
+  store.setFootprint(primitiveIndex.value, checked(event))
+}
+
 const weightChoices = computed(() => {
   const current = shapeStyle.value?.weight
   const list: number[] = [...STROKE_WEIGHTS]
@@ -831,6 +839,13 @@ function setClosed(event: Event): void {
         <label v-if="primitive.kind === 'polyline'" class="check">
           <input type="checkbox" :checked="primitive.closed" @change="setClosed" />
           <span>Fermée (polygone)</span>
+        </label>
+        <label
+          class="check footprint"
+          title="La forme ne se dessine pas sur le composant posé : elle montre, en pointillés, la place qu’il prend sur l’autre face d’une plaque à trous qui montre son dessous."
+        >
+          <input type="checkbox" :checked="footprint" @change="setFootprint" />
+          <span>Empreinte sur l’autre face d’une plaque</span>
         </label>
       </template>
     </section>

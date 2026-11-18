@@ -4,11 +4,13 @@ import {
   abuttingImages,
   discsPathData,
   dotRadiusCells,
+  footprintDash,
   HOLE_COLOR,
   HOLE_OPACITY,
   HOLE_PAD_RADIUS_CELLS,
   HOLE_RADIUS_CELLS,
   holeCells,
+  isFootprint,
   strokeWidthCells,
   type ComponentDefinition,
   type FieldValues,
@@ -21,6 +23,7 @@ import {
   textStyleAttrs,
   textTransform
 } from './component'
+import { boardFootprints } from './boardCarry'
 import {
   boardFaces,
   THROUGH_MARK_COLOR,
@@ -34,6 +37,7 @@ import { crossingPieceEnds, crossingPieces } from './crossings'
 import { QUARTERS_PER_CELL, type LocalPoint } from './grid'
 import {
   facesFlip,
+  facesGap,
   facesHinge,
   HINGE_STYLE,
   instanceBounds,
@@ -238,7 +242,9 @@ export function primitiveSvg(
     fill: primitive.style.fill,
     'fill-opacity': primitive.style.fillOpacity < 1 ? primitive.style.fillOpacity : undefined,
     'stroke-linecap': 'round',
-    'stroke-linejoin': 'round'
+    'stroke-linejoin': 'round',
+    // Une empreinte : en pointillés.
+    'stroke-dasharray': primitive.footprint === true ? footprintDash(width) : undefined
   }
   switch (primitive.kind) {
     case 'rect':
@@ -278,15 +284,21 @@ export function primitiveSvg(
   }
 }
 
-/** Contenu d'un composant dans son repère local (cellules) : ses formes, images comprises. */
+/**
+ * Contenu d'un composant dans son repère local (cellules) : ses formes, images comprises, sans
+ * ses empreintes ; avec `footprints`, ses empreintes seules, telles qu'elles se dessinent sur
+ * l'autre face d'une plaque.
+ */
 export function componentSvg(
   def: ComponentDefinition,
   componentStroke: number,
   fields?: FieldValues,
-  options: { skipTexts?: boolean } = {}
+  options: { skipTexts?: boolean; footprints?: boolean } = {}
 ): string {
   const shown = def.visual.primitives.filter(
-    (primitive) => !(options.skipTexts && primitive.kind === 'text')
+    (primitive) =>
+      !(options.skipTexts && primitive.kind === 'text') &&
+      isFootprint(primitive) === (options.footprints === true)
   )
   const lapped = abuttingImages(shown)
   return shown
@@ -311,6 +323,17 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
       const box = instanceBounds(instance, def)
       bounds = unionRects(bounds, { x: box.x, y: box.y - 1, width: 1, height: 1 })
     }
+  }
+  // Plaques à deux faces, et les composants qui montrent leur empreinte sur l'autre face de la
+  // leur : l'image garde la place de ces empreintes.
+  const faces = boardFaces(project)
+  const footprints = boardFootprints(project, faces)
+  for (const instance of project.components) {
+    const carrier = footprints.get(instance.id)
+    const def = carrier ? instanceDefinition(project, instance) : undefined
+    if (!carrier || !def) continue
+    const box = instanceBounds(instance, def)
+    bounds = unionRects(bounds, { ...box, x: carrier.flip - box.x - box.width })
   }
   const margin = options.marginCells
   const x0 = bounds.x - margin
@@ -344,7 +367,6 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
   }
 
   // Plaques à deux faces : ce qui relie leurs faces, et ce qui ressort de l'une sur l'autre.
-  const faces = boardFaces(project)
   const pins = projectPins(project, faces)
   const connectivity = computeConnectivity(project.wires, pins, faces.twins)
   const through = throughMarks(project.wires, pins, faces)
@@ -364,10 +386,23 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
       instanceParts.push(drawing)
       if (showsUnderside(instance, def)) {
         // Le dessous d'une plaque, à sa droite : le même dessin retourné, sans ses textes.
-        const flip = facesFlip(instanceBounds(instance, def))
+        const flip = facesFlip(instanceBounds(instance, def), facesGap(instance))
         instanceParts.push(
           `<g ${attrs({ class: 'underside', transform: `matrix(-1 0 0 1 ${fmt(flip)} 0)` })}>${drawing}</g>`
         )
+        // Sur l'autre face, l'empreinte des composants que la plaque porte : leurs formes
+        // d'empreinte, en pointillés, sous les pattes qui y ressortent.
+        for (const part of project.components) {
+          if (footprints.get(part.id)?.id !== instance.id) continue
+          const partDef = instanceDefinition(project, part)
+          if (!partDef) continue
+          const shadow = componentSvg(partDef, styleOf(sheet, part).componentStroke, part.fields, {
+            footprints: true
+          })
+          instanceParts.push(
+            `<g ${attrs({ class: 'footprint', transform: `matrix(-1 0 0 1 ${fmt(flip)} 0)` })}><g ${attrs({ transform: matrixToSvg(instanceMatrix(part, partDef)) })}>${shadow}</g></g>`
+          )
+        }
       }
       // Sur ses pastilles, ce qui ressort de l'autre face : un point de couleur vive.
       const marks = through.filter((mark) => mark.board === instance.id)
@@ -422,7 +457,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
   const hingeParts = project.components.flatMap((instance) => {
     const def = instanceDefinition(project, instance)
     if (!def || !showsUnderside(instance, def)) return []
-    const hinge = facesHinge(instanceBounds(instance, def))
+    const hinge = facesHinge(instanceBounds(instance, def), facesGap(instance))
     const lines = hinge.spans.map(
       ([y1, y2]) =>
         `<line ${attrs({ x1: hinge.x, y1, x2: hinge.x, y2, 'stroke-width': HINGE_STYLE.width, 'stroke-dasharray': HINGE_STYLE.dash })}/>`

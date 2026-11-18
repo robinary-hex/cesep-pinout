@@ -180,7 +180,14 @@ describe('éditeur de composants : menu contextuel', () => {
     await flushPromises()
     // La forme visée entre dans la sélection.
     expect(store.selectedIndexes).toEqual([0])
-    expect(menuLabels()).toEqual(['Ordre', 'Dupliquer', 'Copier', 'Propriétés', 'Supprimer'])
+    expect(menuLabels()).toEqual([
+      'Empreinte sur l’autre face',
+      'Ordre',
+      'Dupliquer',
+      'Copier',
+      'Propriétés',
+      'Supprimer'
+    ])
     menuEntry('Ordre').click()
     await flushPromises()
     expect(subMenuLabels()).toEqual(['Avancer', 'Reculer', 'Premier plan', 'Arrière-plan'])
@@ -195,6 +202,33 @@ describe('éditeur de composants : menu contextuel', () => {
     expect(wrapper.get('.inspector').text()).not.toContain('Ordre')
     const titles = wrapper.findAll('.inspector button').map((button) => button.attributes('title'))
     expect(titles.filter((title) => /avancer|reculer|plan/i.test(title ?? ''))).toEqual([])
+    wrapper.unmount()
+  })
+
+  it('une forme devient une empreinte par le menu ou le panneau : elle passe en pointillés', async () => {
+    const store = withRectangle()
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    const dash = (): string | undefined =>
+      wrapper.get('.component-graphic rect').attributes('stroke-dasharray')
+    expect(dash()).toBeUndefined()
+    rightClick(wrapper.get('.component-graphic .interactive').element)
+    await flushPromises()
+    menuEntry('Empreinte sur l’autre face').click()
+    await flushPromises()
+    expect(store.doc.visual.primitives[0]).toMatchObject({ kind: 'rect', footprint: true })
+    expect(dash()).toBeDefined()
+    // Le panneau le dit, et le défait : la forme revient au dessin.
+    store.selectPrimitives([0])
+    store.inspectorOpen = true
+    await flushPromises()
+    const check = wrapper.get('.inspector .footprint input')
+    expect((check.element as HTMLInputElement).checked).toBe(true)
+    await check.setValue(false)
+    expect(store.doc.visual.primitives[0]).not.toHaveProperty('footprint')
+    expect(dash()).toBeUndefined()
+    // Une annulation la refait empreinte.
+    store.undo()
+    expect(store.doc.visual.primitives[0]).toMatchObject({ footprint: true })
     wrapper.unmount()
   })
 

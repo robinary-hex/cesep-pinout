@@ -6,6 +6,7 @@ import { nextTick } from 'vue'
 import {
   createEmptyComponent,
   DEFAULT_PROFILE,
+  DEFAULT_SHAPE_STYLE,
   type ComponentDefinition,
   type Primitive
 } from '@/domain'
@@ -1282,6 +1283,107 @@ describe('canevas du montage : plaque à deux faces', () => {
     ])
     expect(store.doc.wires[0]?.points.at(0)).toEqual([16, 4])
     expect(store.connectivity.unconnectedPinKeys.size).toBe(0)
+  })
+
+  it('Ctrl pendant qu’on glisse la plaque : elle s’écarte de son pli, son dessous autant', async () => {
+    const { store, plate } = withBoard()
+    store.addWire([
+      [13, 2],
+      [13, 3],
+      [11, 3],
+      [11, 2]
+    ])
+    store.clearSelection()
+    const wrapper = mount(SchematicCanvas)
+    const svg = wrapper.get('svg.schematic')
+    const flip = (): string | undefined => wrapper.get('g.underside').attributes('transform')
+    const shown = (): (string | undefined)[] =>
+      wrapper.findAll('g.instance').map((group) => group.attributes('transform'))
+    await fire(wrapper.get('g.instance.board .hit'), 'pointerdown', at(store, 4.5, 0.5))
+    // Sans Ctrl, deux cellules à gauche et une plus bas : les deux faces vont ensemble.
+    await fire(svg, 'pointermove', at(store, 2.5, 1.5))
+    expect(flip()).toBe('matrix(-1 0 0 1 10 0)')
+    // Ctrl enfoncée en cours de geste : le pli reste en x = 7 ; le dessus et la LED vont à
+    // gauche, le dessous et son fil à droite, d'autant.
+    await fire(svg, 'pointermove', at(store, 2.5, 1.5), CTRL)
+    expect(flip()).toBe('matrix(-1 0 0 1 14 0)')
+    expect(wrapper.get('.faces-hinge line').attributes('x1')).toBe('7')
+    expect(shown()).toContain('matrix(1 0 0 1 -2 1)')
+    expect(shown()).toContain('matrix(1 0 0 1 -1 2)')
+    expect(wrapper.get('.wires .wire').attributes('d')).toContain('M 15 3')
+    // Un cadre par face, là où elles vont.
+    expect(
+      wrapper.findAll('rect.selection').map((frame) => Number(frame.attributes('width')))
+    ).toHaveLength(2)
+    await fire(svg, 'pointerup', at(store, 2.5, 1.5), CTRL)
+    expect(store.selection).toEqual([plate])
+    expect(store.doc.components.map((instance) => [instance.x, instance.y])).toEqual([
+      [-2, 1],
+      [-1, 2]
+    ])
+    expect(store.doc.components[0]?.facesGap).toBe(6)
+    expect(store.doc.wires[0]?.points.at(0)).toEqual([15, 3])
+    expect(store.connectivity.unconnectedPinKeys.size).toBe(0)
+    // Par son dessous, le geste se lit de l'autre côté du pli : le tirer à droite écarte encore.
+    await nextTick()
+    await fire(wrapper.get('g.underside .hit'), 'pointerdown', at(store, 11, 2.5))
+    await fire(svg, 'pointermove', at(store, 12, 2.5), CTRL)
+    expect(flip()).toBe('matrix(-1 0 0 1 14 0)')
+    await fire(svg, 'pointerup', at(store, 12, 2.5), CTRL)
+    expect(store.doc.components[0]).toMatchObject({ x: -3, y: 1, facesGap: 8 })
+    // Relâchée sans Ctrl, c'est un déplacement ordinaire : l'écart ne change pas.
+    await nextTick()
+    await fire(wrapper.get('g.instance.board .hit'), 'pointerdown', at(store, -1.5, 1.5))
+    await fire(svg, 'pointermove', at(store, 0.5, 1.5), CTRL)
+    await fire(svg, 'pointermove', at(store, 0.5, 1.5))
+    await fire(svg, 'pointerup', at(store, 0.5, 1.5))
+    expect(store.doc.components[0]).toMatchObject({ x: -1, y: 1, facesGap: 8 })
+  })
+
+  it('montre sur l’autre face l’empreinte d’un composant enfiché, en pointillés', async () => {
+    const store = useSchematicStore()
+    store.startPlacing(board())
+    const plate = store.placeAt(0, 0)
+    const part = led()
+    part.visual = {
+      kind: 'drawing',
+      primitives: [
+        { kind: 'rect', x: 0, y: 0, w: 8, h: 8, rx: 0, style: DEFAULT_SHAPE_STYLE },
+        { kind: 'rect', x: 0, y: 2, w: 8, h: 4, rx: 0, style: DEFAULT_SHAPE_STYLE, footprint: true }
+      ]
+    }
+    store.startPlacing(part)
+    const id = store.placeAt(1, 1)
+    store.stopPlacing()
+    if (!plate || !id) throw new Error('pose refusée')
+    store.clearSelection()
+    const wrapper = mount(SchematicCanvas)
+    await nextTick()
+    const drawn = (): (string | undefined)[] =>
+      wrapper
+        .findAll('g.instance:not(.board) .component-graphic rect')
+        .map((rect) => rect.attributes('stroke-dasharray'))
+    // Sans dessous montré : le composant seul, sans son empreinte.
+    expect(wrapper.find('g.footprint').exists()).toBe(false)
+    expect(drawn()).toEqual([undefined])
+    store.setInstanceUnderside(plate, true)
+    await nextTick()
+    // L'empreinte : le dessin d'empreinte du composant, retourné sur l'autre face (x devient
+    // 14 − x), en pointillés ; le composant lui-même ne change pas.
+    const footprint = wrapper.get('g.footprint')
+    expect(footprint.attributes('transform')).toBe('matrix(-1 0 0 1 14 0)')
+    expect(footprint.get('g').attributes('transform')).toBe('matrix(1 0 0 1 1 1)')
+    expect(
+      footprint
+        .findAll('.component-graphic rect')
+        .map((rect) => rect.attributes('stroke-dasharray'))
+    ).toEqual(['0.2 0.3'])
+    expect(drawn()).toEqual([undefined])
+    // Elle suit le composant qu'on glisse sur la plaque.
+    await fire(wrapper.get('g.instance:not(.board) .hit'), 'pointerdown', at(store, 2, 1.5))
+    await fire(wrapper.get('svg.schematic'), 'pointermove', at(store, 3, 1.5))
+    expect(footprint.get('g').attributes('transform')).toBe('matrix(1 0 0 1 2 1)')
+    await fire(wrapper.get('svg.schematic'), 'pointerup', at(store, 3, 1.5))
   })
 
   it('sur la plaque, près du bout d’un fil : c’est le bout qu’on saisit, pas la plaque', async () => {

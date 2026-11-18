@@ -1,5 +1,5 @@
-import { boardFace, otherFacePoint, type BoardFace } from './boardFaces'
-import { isBoard } from './component'
+import { boardFace, otherFacePoint, type BoardFace, type BoardFaces } from './boardFaces'
+import { hasFootprint, isBoard } from './component'
 import type { GridPoint } from './grid'
 import type { Box } from './handles'
 import {
@@ -118,6 +118,37 @@ export function boardLoad(project: Project, face: BoardFace, taken: TakenElement
     if (side) side.load.labels.push(label.id)
   }
   return load
+}
+
+const NOTHING_TAKEN: TakenElements = {
+  instances: new Set(),
+  wires: new Set(),
+  labels: new Set()
+}
+
+/**
+ * Empreintes (décision du 18 novembre 2026) : un composant porté par une plaque à deux faces
+ * montre sur l'autre face ses formes d'empreinte (`footprint`), la place qu'il y prend. Pour
+ * chaque composant qui en a et qu'une plaque porte, cette plaque : son miroir (`flip`) mène le
+ * dessin sur l'autre face. Un composant est porté selon la règle de `boardLoad` : une broche
+ * dans un trou, ou posé en entier sur une face.
+ */
+export function boardFootprints(project: Project, faces: BoardFaces): Map<string, BoardFace> {
+  const shown = new Map<string, BoardFace>()
+  if (faces.boards.length === 0) return shown
+  const drawn = new Set<string>()
+  for (const instance of project.components) {
+    const def = instanceDefinition(project, instance)
+    if (def && hasFootprint(def)) drawn.add(instance.id)
+  }
+  if (drawn.size === 0) return shown
+  for (const face of faces.boards) {
+    const load = boardLoad(project, face, NOTHING_TAKEN)
+    for (const id of [...load.top.instances, ...load.bottom.instances]) {
+      if (drawn.has(id) && !shown.has(id)) shown.set(id, face)
+    }
+  }
+  return shown
 }
 
 /**

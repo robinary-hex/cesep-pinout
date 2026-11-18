@@ -802,6 +802,23 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   }
 
   /**
+   * Fait d'une forme une empreinte, ou la rend au dessin (décision du 18 novembre 2026). Une
+   * empreinte ne se dessine pas sur le composant posé : elle dit la place qu'il prend de l'autre
+   * côté d'une plaque à trous, et s'y dessine en pointillés quand la plaque montre ses deux faces.
+   */
+  function setFootprint(index: number, on: boolean): void {
+    updatePrimitive(
+      index,
+      on ? 'Forme en empreinte' : 'Empreinte rendue au dessin',
+      (primitive) => {
+        if (!('style' in primitive)) return
+        if (on) primitive.footprint = true
+        else delete primitive.footprint
+      }
+    )
+  }
+
+  /**
    * Déplace des formes et des broches d'un même vecteur, en quarts de cellule, en une commande.
    * Avec des broches, le vecteur doit tomber sur des cellules entières, et une broche qui
    * sortirait du composant ou en rejoindrait une autre annule tout. Vrai si le déplacement est
@@ -1445,6 +1462,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     updatePrimitive,
     setPrimitive,
     updateStyle,
+    setFootprint,
     moveSelection,
     movePrimitives,
     removePrimitives,

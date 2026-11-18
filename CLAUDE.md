@@ -117,6 +117,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     2026). Sans Ctrl, glisser un élément le déplace, toujours.
     Dans le même esprit, Ctrl+clic sur un élément groupé le prend seul, au lieu de son groupe ;
     un fil ou un lien groupé est d'abord pris seul, le Ctrl+clic suivant touche à ses sommets.
+    Une exception, dans le montage : pendant qu'on glisse une plaque à deux faces, Ctrl
+    maintenue la déplace par rapport à son pli (décision du 18 novembre 2026, voir « Plaques
+    à trous »).
   - Molette = zoom autour du curseur ; Espace + glisser ou bouton du milieu = déplacer la vue ;
     double-clic du bouton du milieu ou 0 = ajuster la vue.
   - Flèches = déplacer la sélection d'un pas de grille, de cinq pas avec Maj (décision du 14
@@ -934,7 +937,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   - Les deux faces (`src/domain/boardFaces.ts`) : une plaque posée peut montrer son dessous
     à sa droite (`underside` de l'exemplaire ; case « Montrer le dessous » du panneau, sous
     le libellé, et entrée du clic droit, `setInstanceUnderside`). Le dessous est le dessus retourné comme
-    une page qu'on tourne, à `BOARD_FACES_GAP` (2) cellules : un point d'abscisse x s'y voit
+    une page qu'on tourne, à `facesGap` cellules (2 au départ, `BOARD_FACES_GAP`) : un point d'abscisse x s'y voit
     en `facesFlip − x`, à la même hauteur (`undersideBounds`, `facesFlip`, `showsUnderside`
     de placement.ts). C'est le dessin de la plaque, sans ses textes, à l'écran
     (`g.underside` du canevas) comme à l'export ; `projectBounds` compte sa place. Entre
@@ -956,6 +959,33 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     (`throughMarks`, `.through` ; la même marque que le point de soudure d'un fil nu : une
     patte se voit pareil, soudée ou non) ; le trou survolé se
     montre d'un anneau sur l'autre face (`twinMark`).
+  - Écart des faces (décision du 18 novembre 2026) : Ctrl maintenue pendant qu'on glisse une
+    plaque à deux faces, seule sélectionnée, la déplace par rapport à son pli. Le pli reste
+    où il est ; la face qu'on tient suit le pointeur, l'autre fait le geste en miroir : les
+    deux s'écartent du pli, ou s'en rapprochent, d'autant l'une que l'autre (de haut en bas,
+    elles vont ensemble). L'écart est enregistré dans l'exemplaire (`facesGap`, absent = 2,
+    qui est aussi le plus petit permis ; il change de deux cellules par cellule glissée, donc
+    le pli reste sur la grille). `spreadBoard` de placement.ts rend la plaque à sa nouvelle
+    place ; `spreadBoardFaces` du store en fait une commande, où `boardsCarry` mène ce que
+    porte chaque face avec elle ; `spreading` du canevas montre la même chose pendant le
+    geste. La touche se lit à chaque instant (`ctrlHeld`) : la relâcher avant le bouton rend
+    un déplacement ordinaire. Ctrl dès l'appui fait de même, sauf à portée d'une broche, où
+    elle tire un fil comme partout (`pinGrab`).
+  - Empreintes (décision du 18 novembre 2026) : la place qu'un composant prend de l'autre
+    côté de la plaque. Dans l'éditeur de composants, un rectangle, une ellipse, une ligne ou
+    une polyligne devient une empreinte par la case « Empreinte sur l'autre face d'une
+    plaque » de son panneau ou l'entrée du clic droit (`footprint` de la forme,
+    `setFootprint` du store ; `isFootprint`, `hasFootprint`). Une empreinte se dessine en
+    pointillés (`footprintDash` : des tirets à la mesure du trait), avec son trait, son
+    épaisseur et son remplissage. Elle ne fait pas partie du composant posé : ni sur le
+    montage, ni dans la bibliothèque. Seuls la montrent l'éditeur de composants, et l'autre
+    face de la plaque à deux faces qui porte le composant (`boardFootprints` de
+    boardCarry.ts, selon la règle de `boardLoad` ; `footprints` du store) : elle s'y dessine
+    avec la plaque, par le miroir de son dessous, sous les marques des pattes
+    (`footprintsByBoard`, `g.footprint` du canevas), à l'écran comme à l'export, qui lui
+    garde sa place dans l'image. `ComponentGraphic` a pour cela `footprints` (`hidden` par
+    défaut, `drawn` dans l'éditeur, `only` sur l'autre face) ; `componentSvg`, l'option du
+    même nom.
   - Une plaque emmène ce qu'elle porte (`src/domain/boardCarry.ts`), qu'elle montre son
     dessous ou non : les composants qui ont une broche dans un de ses trous ou sont posés en
     entier sur elle, les fils dont tous les sommets sont sur elle, les étiquettes qui y
@@ -1087,7 +1117,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
   par version dans `src/domain/fixtures/`. Versions courantes : composant 16, projet 24, paramètres 15,
   diagramme 6 (composant 16 et projet 24, du 17 novembre 2026, pas encore publiés, portent les
-  composants extensibles : `stretch`, `crop`, `count`, et la plaque à trous : forme `holes`, sorte d'un fil `kind`, `underside` d'une plaque posée ; le projet 24 donne l'étain aux fils nus du 23, qui se dessinaient tous ainsi ; un composant ou un montage qu'ils
+  composants extensibles : `stretch`, `crop`, `count`, et la plaque à trous : forme `holes`, sorte d'un fil `kind`, `underside` et `facesGap` d'une plaque posée, `footprint` d'une forme ; le projet 24 donne l'étain aux fils nus du 23, qui se dessinaient tous ainsi ; un composant ou un montage qu'ils
   enregistrent ne s'ouvrira plus dans la 1.9.1 ni avant ; paramètres 15 et diagramme 5 sont ceux de la 1.6.0, publiée le 11 novembre
   2026 : palette des diagrammes et dossier de Pinout dans les paramètres, couleur du texte
   d'un nœud dans le diagramme ; un diagramme enregistré par la 1.6.0 ne s'ouvre plus dans une

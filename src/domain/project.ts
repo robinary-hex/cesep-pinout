@@ -45,6 +45,11 @@ export const componentInstanceSchema = z.object({
    * dessus seul. Sans effet sur un composant qui n'est pas une plaque.
    */
   underside: z.boolean().optional(),
+  /**
+   * Écart entre les deux faces d'une plaque qui montre son dessous, en cellules, quand on l'a
+   * écartée de son pli (`spreadBoard` de placement.ts) ; absent : l'écart d'origine.
+   */
+  facesGap: z.number().int().positive().optional(),
   defId: z.string().min(1),
   x: gridCoordSchema,
   y: gridCoordSchema,

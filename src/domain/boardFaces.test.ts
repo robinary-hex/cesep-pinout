@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { boardLoad, boardsCarry, loadOfBoards } from './boardCarry'
+import { boardFootprints, boardLoad, boardsCarry, loadOfBoards } from './boardCarry'
 import { boardFace, boardFaces, NO_BOARD_FACES, OTHER_FACE_PIN, throughMarks } from './boardFaces'
 import { createEmptyComponent, DEFAULT_SHAPE_STYLE, type ComponentDefinition } from './component'
 import { computeConnectivity, projectPins, type Connectivity } from './connectivity'
@@ -7,6 +7,7 @@ import { wiresFollowingPins } from './elastic'
 import type { GridPoint, Rotation } from './grid'
 import {
   applyMatrix,
+  facesGap,
   facesHinge,
   flippedInstance,
   instanceMatrix,
@@ -14,6 +15,7 @@ import {
   multiplyMatrices,
   projectBounds,
   rotatedInstance,
+  spreadBoard,
   transformedInstance,
   transformedPoint,
   type Matrix
@@ -624,5 +626,149 @@ describe('plaque à trous : ce qu’elle emmène', () => {
         )
       })
     ).toBeNull()
+  })
+})
+
+describe('plaque à deux faces : l’écart entre les faces', () => {
+  function plateOf(doc: Project): { plate: ComponentInstance; def: ComponentDefinition } {
+    const plate = doc.components[0]
+    const def = plate ? instanceDefinition(doc, plate) : undefined
+    if (!plate || !def) throw new Error('plaque absente')
+    return { plate, def }
+  }
+
+  it('écartée de son pli, la plaque s’en éloigne, et son dessous autant de l’autre côté', () => {
+    const doc = montage()
+    const { plate, def } = plateOf(doc)
+    // Deux cellules vers la gauche, une vers le bas : l'écart passe de 2 à 6.
+    const moved = spreadBoard(plate, def, -2, 1)
+    if (!moved) throw new Error('plaque immobile')
+    expect(moved).toMatchObject({ x: 8, y: 11, facesGap: 6 })
+    expect(facesGap(plate)).toBe(2)
+    expect(facesGap(moved)).toBe(6)
+    // Le pli n'a pas bougé (x + x' = 38 comme avant) ; le dessous est allé de deux cellules à
+    // droite, et d'une vers le bas.
+    const face = boardFace(moved, def)
+    expect(face).toMatchObject({
+      top: { x: 8, y: 11, width: 8, height: 6 },
+      bottom: { x: 22, y: 11, width: 8, height: 6 },
+      flip: 38
+    })
+    expect(facesHinge({ x: 8, y: 11, width: 8, height: 6 }, 6).x).toBe(19)
+    // Le montage tient compte de l'écart, et l'enregistre.
+    const spread: Project = { ...doc, components: [moved, ...doc.components.slice(1)] }
+    expect(projectBounds(spread)).toEqual({ x: 8, y: 10.5, width: 22, height: 7 })
+    expect(parseProject(serializeProject(spread)).components[0]?.facesGap).toBe(6)
+    const svg = buildProjectSvg(spread, DEFAULT_EXPORT)?.svg ?? ''
+    expect(svg).toContain('class="underside" transform="matrix(-1 0 0 1 38 0)"')
+    expect(svg).toContain('x1="19" y1="10.5"')
+  })
+
+  it('ne se rapproche pas du pli plus près que l’écart d’origine', () => {
+    const doc = montage()
+    const { plate, def } = plateOf(doc)
+    // Vers le pli, à l'écart d'origine : rien ne bouge ; de haut en bas, elle glisse.
+    expect(spreadBoard(plate, def, 1, 0)).toBeNull()
+    const down = spreadBoard(plate, def, 3, 2)
+    expect(down).toMatchObject({ x: 10, y: 12 })
+    expect(down?.facesGap).toBeUndefined()
+    // Écartée de 6, elle revient de deux cellules au plus, et retrouve l'écart d'origine.
+    const wide: ComponentInstance = { ...plate, x: 8, facesGap: 6 }
+    expect(spreadBoard(wide, def, 1, 0)).toMatchObject({ x: 9, facesGap: 4 })
+    const back = spreadBoard(wide, def, 5, 0)
+    expect(back).toMatchObject({ x: 10, y: 10 })
+    expect(back?.facesGap).toBeUndefined()
+    // Sans dessous montré, pas de pli.
+    const plain = montage([], false).components[0]
+    expect(plain ? spreadBoard(plain, def, -2, 0) : undefined).toBeNull()
+  })
+
+  it('ce que la plaque porte suit sa face : le dessus d’un côté, le dessous de l’autre', () => {
+    const doc = montage([
+      wire('dessous', [
+        [26, 12],
+        [26, 14],
+        [24, 14]
+      ])
+    ])
+    const { plate, def } = plateOf(doc)
+    const moved = spreadBoard(plate, def, -2, 1)
+    if (!moved) throw new Error('plaque immobile')
+    const after: Project = {
+      ...doc,
+      components: doc.components.map((instance) => (instance.id === 'b' ? moved : instance))
+    }
+    const carried = boardsCarry(doc, after)
+    // La LED, dessus, va avec le dessus ; le fil du dessous fait le geste en miroir.
+    expect(carried?.instances.get('c')).toMatchObject({ x: 10, y: 12, rotation: 0, mirror: false })
+    expect(carried?.wires.get('dessous')).toEqual([
+      [28, 13],
+      [28, 15],
+      [26, 15]
+    ])
+  })
+})
+
+describe('empreinte d’un composant sur l’autre face de sa plaque', () => {
+  /** La LED du montage, dessinée : son contour, et une empreinte plus étroite. */
+  function withFootprint(doc: Project): Project {
+    const led = part()
+    led.visual = {
+      kind: 'drawing',
+      primitives: [
+        { kind: 'rect', x: 0, y: 0, w: 8, h: 8, rx: 0, style: DEFAULT_SHAPE_STYLE },
+        { kind: 'rect', x: 0, y: 2, w: 8, h: 4, rx: 0, style: DEFAULT_SHAPE_STYLE, footprint: true }
+      ]
+    }
+    return { ...doc, embeddedDefs: { ...doc.embeddedDefs, led } }
+  }
+
+  const shownOn = (doc: Project): Map<string, { id: string; flip: number }> =>
+    boardFootprints(doc, boardFaces(doc))
+
+  it('se montre pour un composant enfiché dans une plaque à deux faces, pas ailleurs', () => {
+    const doc = withFootprint(montage())
+    expect([...shownOn(doc).keys()]).toEqual(['c'])
+    expect(shownOn(doc).get('c')).toMatchObject({ id: 'b', flip: 38 })
+    // Sans forme d'empreinte, sans dessous montré, ou hors de la plaque : rien.
+    expect(shownOn(montage()).size).toBe(0)
+    expect(shownOn(withFootprint(montage([], false))).size).toBe(0)
+    const away: Project = {
+      ...doc,
+      components: doc.components.map((instance) =>
+        instance.id === 'c' ? { ...instance, x: 40 } : instance
+      )
+    }
+    expect(shownOn(away).size).toBe(0)
+    // L'empreinte s'enregistre avec le composant.
+    const reread = parseProject(serializeProject(doc))
+    expect(reread.embeddedDefs['led']?.visual.primitives[1]).toMatchObject({ footprint: true })
+  })
+
+  it('s’exporte en pointillés sur l’autre face, et pas sur le composant', () => {
+    const doc = withFootprint(montage())
+    const svg = buildProjectSvg(doc, DEFAULT_EXPORT)
+    expect(svg?.svg).toContain(
+      '<g class="footprint" transform="matrix(-1 0 0 1 38 0)"><g transform="matrix(1 0 0 1 12 11)">'
+    )
+    // Une seule forme en pointillés : l'empreinte, vue de l'autre face.
+    expect(svg?.svg.match(/stroke-dasharray="0\.2 0\.3"/g)).toHaveLength(1)
+    expect(svg?.widthCells).toBe(18 + 2 * DEFAULT_EXPORT.marginCells)
+    // Sans dessous montré, l'empreinte ne se dessine nulle part.
+    const plain = buildProjectSvg(withFootprint(montage([], false)), DEFAULT_EXPORT)
+    expect(plain?.svg).not.toContain('footprint')
+    expect(plain?.svg).not.toContain('stroke-dasharray')
+    // Un composant qui dépasse de la plaque : son empreinte dépasse d'autant de l'autre face, et
+    // l'image lui garde sa place.
+    const edge: Project = {
+      ...doc,
+      components: doc.components.map((instance) =>
+        instance.id === 'c' ? { ...instance, x: 9 } : instance
+      )
+    }
+    expect(shownOn(edge).has('c')).toBe(true)
+    expect(buildProjectSvg(edge, DEFAULT_EXPORT)?.widthCells).toBe(
+      20 + 2 * DEFAULT_EXPORT.marginCells
+    )
   })
 })

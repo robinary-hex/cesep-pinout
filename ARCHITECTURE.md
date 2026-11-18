@@ -218,6 +218,12 @@ enfichée dans une plaque, la même broche vue de l'autre face (`of`), et `compu
 relie par les trous ce qui est soudé de part et d'autre. L'élasticité n'a rien à savoir de plus :
 la broche vue de dessous bouge quand le composant bouge, le fil soudé là la suit.
 
+L'écart entre les deux faces est le seul réglage de cette vue (`facesGap` de la plaque posée) :
+`spreadBoard` déplace la plaque par rapport à son pli, qui reste en place, et `boardsCarry` mène
+ce que porte chaque face avec elle, le dessous en miroir. Une forme d'un composant peut être une
+empreinte (`footprint`) : elle ne se dessine pas sur le composant posé, mais en pointillés sur
+l'autre face de la plaque à deux faces qui le porte (`boardFootprints`), avec la plaque.
+
 ## Export
 
 `src/domain/svg.ts` construit un SVG autonome : viewBox en cellules (étendue du contenu plus une
