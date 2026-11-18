@@ -1369,11 +1369,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
   par version dans `src/domain/fixtures/`. Versions courantes : composant 18, projet 28, paramètres 16,
-  diagramme 6 (composant 18 et projet 28, du 18 novembre 2026, pas encore publiés : le composant
-  18 porte la rotation d'une image, `rotation` ; le projet 28, ce que range le dessous masqué
-  d'une plaque, `stowed`, et ses définitions embarquées en version 18 ; rien à convertir dans
-  l'un ni l'autre, mais un composant ou un montage qu'ils enregistrent ne s'ouvrira plus dans
-  la 1.11.0 ni avant ; le projet 27 est celui de la 1.11.0, publiée le 18 novembre 2026 : il porte le
+  diagramme 6 (composant 18 et projet 28 sont ceux de la 1.12.0, publiée le 18 novembre 2026 :
+  le composant 18 porte la rotation d'une image, `rotation` ; le projet 28, ce que range le
+  dessous masqué d'une plaque, `stowed`, et ses définitions embarquées en version 18 ; rien à
+  convertir dans l'un ni l'autre, mais un composant ou un montage qu'elle enregistre ne
+  s'ouvre plus dans la 1.11.0 ni avant ; le projet 27 est celui de la 1.11.0, publiée le 18 novembre 2026 : il porte le
   bombé d'un pont, `bulge` ; rien à convertir, la version ne monte que pour qu'une application
   plus ancienne refuse le fichier au lieu de perdre ce bombé : un montage qu'elle enregistre
   ne s'ouvre plus dans la 1.10.0 ni avant ; composant 17, projet 26 et paramètres 16 sont ceux de la 1.10.0, publiée le 18
