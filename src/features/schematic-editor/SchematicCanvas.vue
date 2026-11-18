@@ -9,6 +9,7 @@ import {
   componentImages,
   CROSSING_OVERLAP,
   crossingPieceEnds,
+  crossingPieceKey,
   distanceToSegment,
   facesFlip,
   facesGap,
@@ -984,7 +985,9 @@ const crossingMarks = computed(() =>
       return { x1, y1, x2, y2 }
     }
     return {
-      key: `${piece.point[0]},${piece.point[1]}`,
+      // Un point peut porter plusieurs morceaux (trois fils qui s'y croisent) : la clé les
+      // distingue, sans quoi un morceau orphelin restait à l'écran quand la liste changeait.
+      key: crossingPieceKey(piece),
       ...span(0.5),
       // Bordé, le fil dépasse un peu sa bordure à chaque bout : pas de filet en travers.
       line: span(border ? 0.5 + CROSSING_OVERLAP : 0.5),

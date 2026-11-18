@@ -684,6 +684,58 @@ describe('canevas du montage : styles propres', () => {
   })
 })
 
+describe('canevas du montage : croisements de fils superposés', () => {
+  it('ne laisse aucun morceau de fil derrière lui quand des croisements s’en vont', async () => {
+    const store = useSchematicStore()
+    // Deux fils couchés l'un sur l'autre (un bus), qu'un fil vertical croise au même point :
+    // deux croisements en (8, 4). Deux autres croisements, avant et après eux dans la liste.
+    const first = store.addWire([
+      [3, 1],
+      [3, 8]
+    ])
+    store.addWire([
+      [2, 4],
+      [12, 4]
+    ])
+    store.addWire([
+      [5, 4],
+      [12, 4]
+    ])
+    store.addWire([
+      [8, 1],
+      [8, 8]
+    ])
+    const last = store.addWire([
+      [7, 6],
+      [10, 6]
+    ])
+    if (!first || !last) throw new Error('fil refusé')
+    store.clearSelection()
+    const wrapper = mount(SchematicCanvas, { attachTo: document.body })
+    await nextTick()
+    /** Les morceaux redessinés : où ils sont, de quelle couleur. */
+    const pieces = (): string[] =>
+      wrapper
+        .findAll('.crossings line:not(.halo)')
+        .map((line) => `${line.attributes('x1')},${line.attributes('y1')}`)
+    // Un seul morceau au point où le fil vertical croise les deux fils superposés.
+    expect(pieces()).toEqual(['2.5,4', '8,3.5', '7.5,6'])
+    // Les croisements d'avant et d'après s'en vont : il ne reste que celui du milieu, sans
+    // morceau orphelin.
+    store.selectedWires = [first, last]
+    store.removeSelection()
+    await nextTick()
+    expect(pieces()).toEqual(['8,3.5'])
+    expect(wrapper.findAll('.crossings line')).toHaveLength(2)
+    // Le dernier s'en va : plus rien.
+    store.selectAll()
+    store.removeSelection()
+    await nextTick()
+    expect(wrapper.findAll('.crossings line')).toHaveLength(0)
+    wrapper.unmount()
+  })
+})
+
 describe('canevas du montage : saisir le bout d’un fil', () => {
   /** Un fil en L, de (2, 2) à (8, 6) par (8, 2), rien de sélectionné. */
   function withElbow(): { store: ReturnType<typeof useSchematicStore>; id: string } {

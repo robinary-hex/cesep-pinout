@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   computeCrossings,
   crossingPieceEnds,
+  crossingPieceKey,
   crossingPieces,
   crossingTop,
   nearestCrossing,
@@ -98,6 +99,42 @@ describe('croisements', () => {
       { x: 3, y: 3, topWireId: 'h' }
     ]
     expect(pruneCrossingOverrides(overrides, crossings)).toEqual([{ x: 10, y: 5, topWireId: 'h' }])
+  })
+
+  it('ne redessine qu’un morceau là où un fil croise deux fils couchés l’un sur l’autre', () => {
+    // Un bus : un second fil horizontal sur le premier. Le fil vertical les croise au même
+    // point : deux croisements, mais le même morceau à redessiner.
+    const bus = wire(
+      'h2',
+      [
+        [4, 5],
+        [20, 5]
+      ],
+      0
+    )
+    expect(computeCrossings([horizontal, bus, vertical])).toHaveLength(2)
+    expect(crossingPieces([horizontal, bus, vertical], [])).toEqual([
+      { point: [10, 5], topWireId: 'v', step: [0, 1] }
+    ])
+    // Trois fils de directions différentes par le même point : un morceau par fil du dessus,
+    // et chacun sa clé.
+    const slanted = wire(
+      'd',
+      [
+        [7, 2],
+        [13, 8]
+      ],
+      2
+    )
+    const pieces = crossingPieces([horizontal, vertical, slanted], [])
+    expect(pieces).toEqual([
+      { point: [10, 5], topWireId: 'v', step: [0, 1] },
+      { point: [10, 5], topWireId: 'd', step: [1, 1] }
+    ])
+    expect(new Set(pieces.map(crossingPieceKey)).size).toBe(pieces.length)
+    expect(crossingPieceKey({ point: [1.5, 2], topWireId: 'w7', step: [1, -1] })).toBe(
+      '1.5,2:w7:1,-1'
+    )
   })
 
   it('décrit le morceau à redessiner et retrouve le croisement proche', () => {

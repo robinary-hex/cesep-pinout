@@ -154,17 +154,35 @@ export function toggledOverrides(
   return [...others, { x: crossing.point[0], y: crossing.point[1], topWireId: wanted }]
 }
 
+/**
+ * Ce qui distingue un morceau d'un autre : son point, son fil et sa direction. C'est sa clé à
+ * l'écran ; deux morceaux de même clé seraient le même trait.
+ */
+export function crossingPieceKey(piece: CrossingPiece): string {
+  return `${piece.point[0]},${piece.point[1]}:${piece.topWireId}:${piece.step[0]},${piece.step[1]}`
+}
+
+/**
+ * Les morceaux de fil à redessiner sur les croisements, sans doublon. Un fil qui croise au même
+ * point deux fils couchés l'un sur l'autre (un bus) y fait deux croisements, mais un seul
+ * morceau à redessiner : le même trait deux fois ne servirait à rien, et deux éléments de même
+ * clé laissaient des morceaux orphelins à l'écran quand la liste changeait.
+ */
 export function crossingPieces(
   wires: readonly Wire[],
   overrides: readonly CrossingOverride[]
 ): CrossingPiece[] {
   const stacks = new Map(wires.map((wire) => [wire.id, wire.stack]))
   const stackOf = (id: string): number => stacks.get(id) ?? 0
-  return computeCrossings(wires).map((crossing) => {
+  const pieces = new Map<string, CrossingPiece>()
+  for (const crossing of computeCrossings(wires)) {
     const topWireId = crossingTop(crossing, overrides, stackOf)
     const step = topWireId === crossing.wireIds[0] ? crossing.steps[0] : crossing.steps[1]
-    return { point: crossing.point, topWireId, step }
-  })
+    const piece: CrossingPiece = { point: crossing.point, topWireId, step }
+    const key = crossingPieceKey(piece)
+    if (!pieces.has(key)) pieces.set(key, piece)
+  }
+  return [...pieces.values()]
 }
 
 /**

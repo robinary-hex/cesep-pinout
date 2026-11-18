@@ -1273,7 +1273,14 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   différentes, fil du dessus redessiné dans sa direction par `crossingPieceEnds`, sur un
   liseré de la couleur du papier s'il n'a pas de bordure, avec sa bordure sinon, exceptions
   Alt+clic élaguées à chaque commande ; deux diagonales peuvent se croiser au milieu d'une
-  cellule, les exceptions vont donc par demi-pas). Broches reliées à rien : `unconnectedPinKeys` de la connectivité.
+  cellule, les exceptions vont donc par demi-pas). Un fil qui croise au même point deux fils
+  couchés l'un sur l'autre (un bus) y fait deux croisements, mais un seul morceau à redessiner
+  (`crossingPieces`, sans doublon), et chaque morceau a sa clé : son point, son fil, sa
+  direction (`crossingPieceKey`). Leur clé n'était que le point (correction du 18 novembre 2026) : deux éléments de même clé dans une liste de Vue laissent à l'écran des éléments
+  orphelins quand la liste change, ici des bouts de fil qui restaient après des manipulations
+  et ne partaient qu'en relançant l'application. Toute clé d'un `v-for` doit être unique dans
+  sa liste ; Vue le dit dans les tests (« Duplicate keys »).
+  Broches reliées à rien : `unconnectedPinKeys` de la connectivité.
 - Exécutable : `pnpm icon` régénère `build/icon.png` (script sans dépendance), `pnpm build:win`
   produit l'installeur NSIS et l'exe portable dans `release/` (non signés : avertissement
   SmartScreen au premier lancement, normal). Les montages s'enregistrent en `.pinout` (du JSON ;
