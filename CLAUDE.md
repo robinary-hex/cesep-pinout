@@ -642,8 +642,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     `<OneDrive>\(Cours)\Robotique\(Ressources)\Pinout` : il n'est plus proposé que s'il a déjà
     ses données alors que `(Pinout)` n'en a pas encore.
     Cette boîte cache la barre d'application, donc son bouton de mise à jour : elle le porte
-    elle-même (décision du 18 novembre 2026 ; `src/app/UpdateButton.vue`, le même bouton aux
-    deux endroits, `update` et `checking` passés par `App.vue`). Une 1.9.1 lancée pour la
+    elle-même (décision du 18 novembre 2026, depuis la 1.11.0 ; `src/app/UpdateButton.vue`, le
+    même bouton aux deux endroits, `update` et `checking` passés par `App.vue`). Une 1.9.1 lancée pour la
     première fois sur un dossier dont la 1.10.0 se servait déjà restait bloquée : dossier
     refusé, « mets l'application à jour », et le bouton pour le faire hors d'atteinte. Dès
     qu'une mise à jour s'annonce, la boîte la montre (« Une nouvelle version de Pinout est
@@ -696,8 +696,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   écrit par une version plus récente de Pinout (`NewerFormatError` de migrations.ts : le refus
   d'un fichier trop récent, à part des autres) n'est ni lu ni réécrit (décision du 18 novembre
   2026 ; `fromNewerVersion` dans `saveSettings`) : la machine en retard garde ses réglages dans
-  son fichier local, le dit, et ne défait pas ceux des machines à jour. Jusqu'à la 1.10.0
-  comprise, une version en retard le réécrivait à son format au premier réglage enregistré.
+  son fichier local, le dit, et ne défait pas ceux des machines à jour (depuis la 1.11.0).
+  Jusqu'à la 1.10.0 comprise, une version en retard le réécrivait à son format au premier
+  réglage enregistré.
   La boîte des paramètres
   n'enregistre que ses propres réglages : le dossier de Pinout change dès qu'on le choisit
   (`relocateSharedSettings`).
@@ -1317,10 +1318,10 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
   par version dans `src/domain/fixtures/`. Versions courantes : composant 17, projet 27, paramètres 16,
-  diagramme 6 (le projet 27, du 18 novembre 2026, pas encore publié, porte le bombé d'un pont,
-  `bulge` ; rien à convertir, la version ne monte que pour qu'une application plus ancienne
-  refuse le fichier au lieu de perdre ce bombé : un montage qu'il enregistre ne s'ouvrira plus
-  dans la 1.10.0 ni avant ; composant 17, projet 26 et paramètres 16 sont ceux de la 1.10.0, publiée le 18
+  diagramme 6 (le projet 27 est celui de la 1.11.0, publiée le 18 novembre 2026 : il porte le
+  bombé d'un pont, `bulge` ; rien à convertir, la version ne monte que pour qu'une application
+  plus ancienne refuse le fichier au lieu de perdre ce bombé : un montage qu'elle enregistre
+  ne s'ouvre plus dans la 1.10.0 ni avant ; composant 17, projet 26 et paramètres 16 sont ceux de la 1.10.0, publiée le 18
   novembre 2026 : un composant, un montage ou des réglages qu'elle enregistre ne se lisent
   plus dans la 1.9.1 ni avant. Projet 26 et paramètres 16 portent la bordure des fils du
   profil de style, `wireBorder` et `wireBorderColor` ; composant 17 et projet 25 portent les
