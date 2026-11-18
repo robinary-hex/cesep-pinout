@@ -342,14 +342,10 @@ describe('bordure des fils', () => {
     }
   })
 
-  it('s’exporte sous tous les fils, autour des pointes, des jonctions et des croisements', () => {
-    const project = createEmptyProject('Bordé', {
-      ...DEFAULT_PROFILE,
-      wireBorder: 0.05,
-      wireBorderColor: '#1d4ed8'
-    })
+  /** Un fil en flèche, croisé par un autre, un troisième raccordé au premier, et un pont. */
+  function crossed(profile = DEFAULT_PROFILE): Document {
+    const project = createEmptyProject('Bordé', profile)
     project.wires = [
-      // Un fil en flèche, croisé par un autre, et un troisième raccordé au premier.
       {
         ...wire('a', [
           [0, 2],
@@ -362,66 +358,135 @@ describe('bordure des fils', () => {
           [4, 0],
           [4, 4]
         ]),
+        stack: 3
+      },
+      {
+        ...wire('c', [
+          [6, 2],
+          [6, 5]
+        ]),
         stack: 1
       },
-      wire('c', [
-        [6, 2],
-        [6, 5]
-      ]),
-      wire(
-        'j',
-        [
-          [0, 6],
-          [5, 8]
-        ],
-        'jumper'
-      )
+      {
+        ...wire(
+          'j',
+          [
+            [0, 6],
+            [5, 8]
+          ],
+          'jumper'
+        ),
+        stack: 2
+      }
     ]
     const svg = buildProjectSvg(project, DEFAULT_EXPORT)?.svg ?? ''
-    const document = new DOMParser().parseFromString(svg, 'image/svg+xml')
-    const borders = document.querySelector('g.wire-borders')
-    if (!borders) throw new Error('bordures attendues')
-    // Les bordures viennent avant les fils, toutes de la couleur du style.
-    const groups = [...document.querySelectorAll('g')].map((group) => group.getAttribute('class'))
-    expect(groups.indexOf('wire-borders')).toBeLessThan(groups.indexOf('wires'))
-    const strokes = new Set(
-      [...borders.querySelectorAll('path')].map((path) => path.getAttribute('stroke'))
-    )
-    expect([...strokes]).toEqual(['#1d4ed8'])
-    // Un tracé par fil, plus large que lui de deux bordures, aux bouts ronds comme le fil.
-    const paths = [...borders.querySelectorAll('path')]
-    expect(paths).toHaveLength(4)
-    expect(paths.map((path) => Number(path.getAttribute('stroke-width')))).toEqual([
-      0.25, 0.25, 0.25, 0.25
-    ])
-    expect(paths[0]?.getAttribute('stroke-linecap')).toBe('round')
-    // Les pointes de flèche ont leur bordure, et le point de jonction la sienne.
-    expect(borders.querySelectorAll('polygon')).toHaveLength(2)
-    expect(borders.querySelector('polygon')?.getAttribute('stroke-width')).toBe('0.1')
-    const junction = borders.querySelector('circle')
-    expect(junction?.getAttribute('fill')).toBe('#1d4ed8')
-    expect(Number(junction?.getAttribute('r'))).toBeCloseTo(0.15 + 0.05)
-    // Au croisement, le fil du dessus se redessine avec sa bordure, sur un liseré plus large.
-    const crossing = [...(document.querySelector('g.crossings')?.querySelectorAll('line') ?? [])]
-    expect(crossing.map((line) => line.getAttribute('stroke'))).toEqual([
-      '#ffffff',
+    return new DOMParser().parseFromString(svg, 'image/svg+xml')
+  }
+
+  it('s’exporte sous chaque fil, dans l’ordre des fils : celui du dessus garde la sienne', () => {
+    const document = crossed({ ...DEFAULT_PROFILE, wireBorder: 0.05, wireBorderColor: '#1d4ed8' })
+    const wires = document.querySelector('g.wires')
+    if (!wires) throw new Error('fils attendus')
+    // Fil après fil, la bordure puis le trait : la bordure d'un fil passe sur le fil d'avant.
+    const paths = [...wires.querySelectorAll(':scope > path')]
+    expect(paths.map((path) => path.getAttribute('stroke'))).toEqual([
+      '#1d4ed8',
+      '#d62828',
+      '#1d4ed8',
+      '#d62828',
+      '#1d4ed8',
+      '#d62828',
       '#1d4ed8',
       '#d62828'
     ])
-    expect(crossing.map((line) => Number(line.getAttribute('stroke-width')))).toEqual([
-      0.43, 0.25, 0.15
+    // Plus large que le fil de deux bordures, aux bouts ronds comme lui.
+    expect(paths.map((path) => Number(path.getAttribute('stroke-width')))).toEqual([
+      0.25, 0.15, 0.25, 0.15, 0.25, 0.15, 0.25, 0.15
     ])
-    // Chaque trait dépasse un peu le précédent : leurs bouts ne laissent pas de filet.
-    expect(crossing.map((line) => Number(line.getAttribute('y1')))).toEqual([1.5, 1.48, 1.46])
-    // Sans bordure dans le style et sans fil nu : pas de bordures du tout.
-    const bare = createEmptyProject('Nu', DEFAULT_PROFILE)
-    bare.wires = [
-      wire('w', [
-        [0, 0],
-        [4, 0]
-      ])
-    ]
-    expect(buildProjectSvg(bare, DEFAULT_EXPORT)?.svg).not.toContain('wire-borders')
+    expect(paths[0]?.getAttribute('stroke-linecap')).toBe('round')
+    expect(paths[1]?.getAttribute('stroke-linecap')).toBe('round')
+    // Le pont, troisième dans l'ordre, a la sienne comme les autres.
+    expect(paths[4]?.getAttribute('d')).toMatch(/^M 0 6 Q /)
+    expect(paths[5]?.getAttribute('d')).toBe(paths[4]?.getAttribute('d'))
+    // Les pointes de flèche du premier fil : leur bordure avant son trait.
+    const first = [...wires.children].slice(0, 6).map((element) => element.tagName)
+    expect(first).toEqual(['path', 'polygon', 'polygon', 'path', 'polygon', 'polygon'])
+    expect(wires.querySelector('polygon')?.getAttribute('stroke-width')).toBe('0.1')
+    expect(document.querySelector('g.wire-borders')).toBeNull()
+  })
+
+  it('au raccord, les fils sont repeints dans un disque : leurs bordures ne font qu’un contour', () => {
+    const document = crossed({ ...DEFAULT_PROFILE, wireBorder: 0.05, wireBorderColor: '#1d4ed8' })
+    const joints = document.querySelector('g.wire-joints')
+    if (!joints) throw new Error('raccord attendu')
+    // Un seul raccord : le bout du troisième fil sur le premier. Le croisement n'en est pas un.
+    const clips = [...joints.querySelectorAll('clipPath')]
+    expect(clips).toHaveLength(1)
+    const disc = clips[0]?.querySelector('circle')
+    expect([disc?.getAttribute('cx'), disc?.getAttribute('cy')]).toEqual(['6', '2'])
+    // Le disque contient le point de jonction (rayon 0,15) et sa bordure.
+    expect(Number(disc?.getAttribute('r'))).toBeCloseTo(0.21)
+    const ring = joints.querySelector(':scope > circle')
+    expect(ring?.getAttribute('fill')).toBe('#1d4ed8')
+    expect(Number(ring?.getAttribute('r'))).toBeCloseTo(0.2)
+    // Dedans : les traits des deux fils, sans bordure.
+    const patch = joints.querySelector('g')
+    expect(patch?.getAttribute('clip-path')).toBe(`url(#${clips[0]?.getAttribute('id')})`)
+    expect(
+      [...(patch?.querySelectorAll('path') ?? [])].map((path) => path.getAttribute('stroke'))
+    ).toEqual(['#d62828', '#d62828'])
+    // Le point de jonction reste au-dessus, de la couleur du fil.
+    expect(document.querySelector('g.junctions circle')?.getAttribute('fill')).toBe('#d62828')
+    // Sans bordure, rien à repeindre.
+    expect(crossed().querySelector('g.wire-joints')).toBeNull()
+  })
+
+  it('au croisement, le fil du dessus passe avec sa bordure ; sans bordure, avec son liseré', () => {
+    const bordered = crossed({ ...DEFAULT_PROFILE, wireBorder: 0.05, wireBorderColor: '#1d4ed8' })
+    const lines = [...(bordered.querySelector('g.crossings')?.querySelectorAll('line') ?? [])]
+    // Pas de liseré de la couleur du fond : la bordure détache le fil, et celui du dessous va
+    // jusqu'à elle.
+    expect(lines.map((line) => line.getAttribute('stroke'))).toEqual(['#1d4ed8', '#d62828'])
+    expect(lines.map((line) => Number(line.getAttribute('stroke-width')))).toEqual([0.25, 0.15])
+    // Le fil dépasse un peu sa bordure à chaque bout : leurs bouts ne laissent pas de filet.
+    expect(lines.map((line) => Number(line.getAttribute('y1')))).toEqual([1.5, 1.48])
+    // Sans bordure : le liseré, comme toujours.
+    const plain = [...(crossed().querySelector('g.crossings')?.querySelectorAll('line') ?? [])]
+    expect(plain.map((line) => line.getAttribute('stroke'))).toEqual(['#ffffff', '#d62828'])
+    expect(plain.map((line) => Number(line.getAttribute('stroke-width')))).toEqual([0.33, 0.15])
+  })
+
+  it('compte un raccord là où le bout d’un fil touche un autre fil, ou son bout', () => {
+    const joined = computeConnectivity(
+      [
+        wire('a', [
+          [0, 0],
+          [4, 0]
+        ]),
+        // Bout sur le milieu d'un fil, bout sur un bout, et un croisement, qui n'en est pas un.
+        wire('b', [
+          [2, 0],
+          [2, 3]
+        ]),
+        wire('c', [
+          [4, 0],
+          [4, 3]
+        ]),
+        wire('d', [
+          [3, -1],
+          [3, 2]
+        ])
+      ],
+      []
+    )
+    expect(
+      joined.joints.map((joint) => [joint.point.join(','), [...joint.wireIds].sort().join('')])
+    ).toEqual([
+      ['4,0', 'ac'],
+      ['2,0', 'ab']
+    ])
+    // Un seul point de jonction s'y dessine, mais les deux sont des raccords.
+    expect(joined.junctions.map((junction) => junction.point)).toEqual([[2, 0]])
   })
 })
 
@@ -488,8 +553,8 @@ describe('goutte de soudure d’un fil nu', () => {
     expect(glint?.getAttribute('fill')).toBe('#ffffff')
     expect(solders.querySelector('path')?.getAttribute('stroke-opacity')).toBe('0.16')
     expect(svg).not.toContain('#f5a524')
-    // Son cerne est dans les bordures, avec le liseré du fil : ils ne font qu'un contour.
-    const ring = document.querySelector('g.wire-borders circle')
+    // Son cerne se dessine avec le liseré du fil, sous lui : ils ne font qu'un contour.
+    const ring = document.querySelector('g.wires circle')
     expect(ring?.getAttribute('fill')).toBe('#59616a')
     expect(Number(ring?.getAttribute('r'))).toBeCloseTo(0.225 + 0.045)
   })

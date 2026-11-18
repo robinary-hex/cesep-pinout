@@ -43,15 +43,17 @@ export const componentInstanceSchema = z.object({
   countX: z.number().int().positive().optional(),
   countY: z.number().int().positive().optional(),
   /**
-   * Une plaque à trous montre aussi son dessous, à sa droite (voir boardFaces.ts) ; absent : son
-   * dessus seul. Sans effet sur un composant qui n'est pas une plaque.
+   * Une plaque à trous montre aussi son dessous, à côté d'elle (voir boardFaces.ts) ; absent :
+   * son dessus seul. Sans effet sur un composant qui n'est pas une plaque.
    */
   underside: z.boolean().optional(),
   /**
    * Écart entre les deux faces d'une plaque qui montre son dessous, en cellules, quand on l'a
-   * écartée de son pli (`spreadBoard` de placement.ts) ; absent : l'écart d'origine.
+   * déplacée par rapport à son pli (`spreadBoard` de placement.ts) ; absent : l'écart d'origine,
+   * le dessous à droite. Négatif : le dessous est à gauche du dessus (`facesGap` de
+   * placement.ts).
    */
-  facesGap: z.number().int().positive().optional(),
+  facesGap: z.number().int().optional(),
   defId: z.string().min(1),
   x: gridCoordSchema,
   y: gridCoordSchema,

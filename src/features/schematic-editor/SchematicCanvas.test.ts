@@ -1132,9 +1132,9 @@ describe('canevas du montage : fil nu et pont', () => {
     const wrapper = mount(SchematicCanvas, { attachTo: document.body })
     await nextTick()
     // Le fil nu : un liseré sombre sous un trait d'étain, et une soudure par broche.
-    const edge = wrapper.get('.wire-borders .wire-border')
+    const edge = wrapper.get('.wires .wire-border path')
     expect(edge.attributes('stroke')).toBe('#59616a')
-    expect(wrapper.findAll('.wire-borders .wire-border')).toHaveLength(1)
+    expect(wrapper.findAll('.wires .wire-border')).toHaveLength(1)
     expect(wrapper.get('.wires .wire-bare').attributes('stroke')).toBe('#dfe5ea')
     expect(wrapper.findAll('.solders .solder')).toHaveLength(2)
     // Une broche soudée : une goutte de la couleur du fil, avec son ombre et son reflet, cernée
@@ -1146,7 +1146,7 @@ describe('canevas du montage : fil nu et pont', () => {
     ])
     expect(drop.find('.solder-shade').exists()).toBe(true)
     expect(
-      wrapper.findAll('.wire-borders circle').map((circle) => circle.attributes('fill'))
+      wrapper.findAll('.wires .wire-border circle').map((circle) => circle.attributes('fill'))
     ).toEqual(['#59616a', '#59616a'])
     // Le pont : une courbe de A à B, dans sa couleur, bombée vers le haut.
     const jumper = wrapper.get('.wires .wire-jumper')
@@ -1158,12 +1158,12 @@ describe('canevas du montage : fil nu et pont', () => {
     store.setCurrentColor('#b45309')
     await nextTick()
     expect(wrapper.get('.wires .wire-bare').attributes('stroke')).toBe('#b45309')
-    expect(wrapper.get('.wire-borders .wire-border').attributes('stroke')).toBe('#59616a')
+    expect(wrapper.get('.wires .wire-border path').attributes('stroke')).toBe('#59616a')
     expect(wrapper.get('.solders .solder circle').attributes('fill')).toBe('#b45309')
     wrapper.unmount()
   })
 
-  it('le style du montage donne une bordure à tous les fils, sous eux', async () => {
+  it('le style du montage donne une bordure à tous les fils, chacun sous son fil', async () => {
     const store = useSchematicStore()
     store.addWire([
       [0, 2],
@@ -1188,12 +1188,12 @@ describe('canevas du montage : fil nu et pont', () => {
     const wrapper = mount(SchematicCanvas, { attachTo: document.body })
     await nextTick()
     // Au départ : pas de bordure, sauf le liseré du fil nu.
-    expect(wrapper.findAll('.wire-borders .wire-border')).toHaveLength(1)
+    expect(wrapper.findAll('.wires .wire-border')).toHaveLength(1)
     store.setProfile({ ...store.profile, wireBorder: 0.05, wireBorderColor: '#1d4ed8' })
     await nextTick()
     // Tous les fils ont la bordure du style, fil nu et pont compris : plus large qu'eux de
     // deux bordures, dans sa couleur.
-    const borders = wrapper.findAll('.wire-borders .wire-border')
+    const borders = wrapper.findAll('.wires .wire-border path')
     expect(borders.map((border) => border.attributes('stroke'))).toEqual([
       '#1d4ed8',
       '#1d4ed8',
@@ -1202,9 +1202,20 @@ describe('canevas du montage : fil nu et pont', () => {
     expect(borders.map((border) => Number(border.attributes('stroke-width')))).toEqual([
       0.25, 0.25, 0.25
     ])
-    // Les bordures sont dessinées avant les fils : elles restent dessous.
-    const groups = wrapper.findAll('svg.schematic g').map((group) => group.classes()[0])
-    expect(groups.indexOf('wire-borders')).toBeLessThan(groups.indexOf('wires'))
+    // Fil après fil : sa bordure, son trait, sa zone de saisie. La bordure d'un fil passe donc
+    // sur le fil d'avant : celui du dessus la garde.
+    const order = [...wrapper.get('.wires').element.children].map((element) => element.classList[0])
+    expect(order).toEqual([
+      'wire-border',
+      'wire',
+      'wire-hit',
+      'wire-border',
+      'wire',
+      'wire-hit',
+      'wire-border',
+      'wire',
+      'wire-hit'
+    ])
     // Un fil sélectionné : son liseré de sélection entoure aussi la bordure.
     store.selectedWires = [store.doc.wires[0]?.id ?? '']
     await nextTick()
@@ -1214,7 +1225,51 @@ describe('canevas du montage : fil nu et pont', () => {
     // Une annulation retire la bordure.
     store.undo()
     await nextTick()
-    expect(wrapper.findAll('.wire-borders .wire-border')).toHaveLength(1)
+    expect(wrapper.findAll('.wires .wire-border')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('bordés, deux fils qui se croisent gardent leur bordure ; raccordés, ils n’ont qu’un contour', async () => {
+    const store = useSchematicStore()
+    store.addWire([
+      [0, 2],
+      [8, 2]
+    ])
+    // Un fil qui croise le premier, un autre dont le bout s'y raccorde.
+    store.addWire([
+      [4, 0],
+      [4, 4]
+    ])
+    store.addWire([
+      [6, 2],
+      [6, 5]
+    ])
+    const wrapper = mount(SchematicCanvas, { attachTo: document.body })
+    await nextTick()
+    // Sans bordure : au croisement, le liseré de la couleur du papier ; rien à repeindre.
+    expect(wrapper.findAll('.crossings .halo')).toHaveLength(1)
+    expect(wrapper.findAll('.crossings line')).toHaveLength(2)
+    expect(wrapper.find('.wire-joints clipPath').exists()).toBe(false)
+    store.setProfile({ ...store.profile, wireBorder: 0.05, wireBorderColor: '#1d4ed8' })
+    await nextTick()
+    // Bordé : le fil du dessus passe avec sa bordure, sans liseré.
+    expect(wrapper.find('.crossings .halo').exists()).toBe(false)
+    const lines = wrapper.findAll('.crossings line')
+    expect(lines.map((line) => line.attributes('stroke'))).toEqual(['#1d4ed8', 'var(--ink)'])
+    expect(lines.map((line) => Number(line.attributes('stroke-width')))).toEqual([0.25, 0.15])
+    // Au raccord : les deux fils repeints dans un disque, autour du point de jonction, qui a
+    // sa bordure.
+    const joints = wrapper.get('.wire-joints')
+    const disc = joints.get('clipPath circle')
+    expect([disc.attributes('cx'), disc.attributes('cy')]).toEqual(['6', '2'])
+    expect(Number(disc.attributes('r'))).toBeCloseTo(0.21)
+    const ring = joints
+      .findAll('circle')
+      .find((circle) => circle.element.parentElement?.tagName !== 'clipPath')
+    expect(ring?.attributes('fill')).toBe('#1d4ed8')
+    const patch = joints.get('g')
+    expect(patch.attributes('clip-path')).toBe(`url(#${joints.get('clipPath').attributes('id')})`)
+    expect(patch.findAll('path')).toHaveLength(2)
     wrapper.unmount()
   })
 
@@ -1452,6 +1507,39 @@ describe('canevas du montage : plaque à deux faces', () => {
     await fire(svg, 'pointermove', at(store, 0.5, 1.5))
     await fire(svg, 'pointerup', at(store, 0.5, 1.5))
     expect(store.doc.components[0]).toMatchObject({ x: -1, y: 1, facesGap: 8 })
+  })
+
+  it('Ctrl et la plaque glissée au-delà du pli : le dessous passe à gauche, la flèche se retourne', async () => {
+    const { store, plate } = withBoard()
+    const wrapper = mount(SchematicCanvas)
+    const svg = wrapper.get('svg.schematic')
+    const arrow = (): string | undefined => wrapper.get('.faces-hinge path').attributes('d')
+    const boardAt = (): string | undefined =>
+      wrapper.get('g.instance.board').attributes('transform')
+    await nextTick()
+    // Au départ : le pli en x = 7, la flèche du dessus (à gauche) vers le dessous.
+    expect(arrow()).toBe('M 6.4 2 Q 7 1.4 7.6 2')
+    await fire(wrapper.get('g.instance.board .hit'), 'pointerdown', at(store, 2.5, 0.5), CTRL)
+    // Trois cellules vers le pli : au plus près déjà, la plaque ne bouge pas.
+    await fire(svg, 'pointermove', at(store, 5.5, 0.5), CTRL)
+    expect(boardAt()).toBe('matrix(1 0 0 1 0 0)')
+    // Son milieu a franchi le pli : elle est à droite, son dessous à gauche, autour du même pli.
+    await fire(svg, 'pointermove', at(store, 7.5, 0.5), CTRL)
+    expect(boardAt()).toBe('matrix(1 0 0 1 8 0)')
+    expect(wrapper.get('g.underside').attributes('transform')).toBe('matrix(-1 0 0 1 14 0)')
+    expect(wrapper.get('.faces-hinge line').attributes('x1')).toBe('7')
+    // La flèche va toujours du dessus vers le dessous : maintenant vers la gauche.
+    expect(arrow()).toBe('M 7.6 2 Q 7 1.4 6.4 2')
+    await fire(svg, 'pointerup', at(store, 7.5, 0.5), CTRL)
+    expect(store.selection).toEqual([plate])
+    expect(store.doc.components[0]).toMatchObject({ x: 8, y: 0, facesGap: -2 })
+    // Saisie par son dessous, à gauche maintenant : le tirer à gauche écarte les deux faces.
+    await nextTick()
+    await fire(wrapper.get('g.underside .hit'), 'pointerdown', at(store, 2.5, 2.5))
+    await fire(svg, 'pointermove', at(store, 1.5, 2.5), CTRL)
+    await fire(svg, 'pointerup', at(store, 1.5, 2.5), CTRL)
+    expect(store.doc.components[0]).toMatchObject({ x: 9, y: 0, facesGap: -4 })
+    expect(arrow()).toBe('M 7.6 2 Q 7 1.4 6.4 2')
   })
 
   it('montre sur l’autre face l’empreinte d’un composant enfiché, en une silhouette', async () => {

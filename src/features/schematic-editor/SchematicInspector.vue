@@ -567,7 +567,11 @@ function setLabelVertical(event: Event): void {
             @change="store.setInstanceLabel(single.instance.id, inputValue($event).trim())"
           />
         </label>
-        <label v-if="isBoard(single.def)" class="check underside" title="À droite, vu retourné">
+        <label
+          v-if="isBoard(single.def)"
+          class="check underside"
+          title="À côté d’elle, vu retourné"
+        >
           <input
             type="checkbox"
             :checked="single.instance.underside === true"

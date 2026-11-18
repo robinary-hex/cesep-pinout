@@ -683,6 +683,71 @@ describe('plaque à deux faces : l’écart entre les faces', () => {
     expect(plain ? spreadBoard(plain, def, -2, 0) : undefined).toBeNull()
   })
 
+  it('poussée au-delà de son pli, elle passe de l’autre côté : son dessous prend sa place', () => {
+    const doc = montage([
+      wire('dessous', [
+        [26, 12],
+        [26, 14],
+        [24, 14]
+      ])
+    ])
+    const { plate, def } = plateOf(doc)
+    // Le pli est en x = 19. Tant que le milieu de la plaque (x = 14) ne l'a pas franchi, elle
+    // reste de son côté, au plus près.
+    expect(spreadBoard(plate, def, 5, 0)).toBeNull()
+    // Le milieu passé : le dessus est à droite du pli, au plus près, le dessous à gauche.
+    const crossed = spreadBoard(plate, def, 6, 0)
+    if (!crossed) throw new Error('plaque immobile')
+    expect(crossed).toMatchObject({ x: 20, y: 10, facesGap: -2 })
+    expect(facesGap(crossed)).toBe(-2)
+    expect(boardFace(crossed, def)).toMatchObject({
+      top: { x: 20, y: 10, width: 8, height: 6 },
+      bottom: { x: 10, y: 10, width: 8, height: 6 },
+      flip: 38
+    })
+    // Plus loin : elle s'écarte du pli de ce côté-là, son dessous autant de l'autre.
+    const far = spreadBoard(plate, def, 12, 1)
+    if (!far) throw new Error('plaque immobile')
+    expect(far).toMatchObject({ x: 22, y: 11, facesGap: -6 })
+    expect(boardFace(far, def)?.bottom).toMatchObject({ x: 8, y: 11 })
+    // Le pli garde sa place ; sa flèche change de sens : du dessus, à droite, vers le dessous.
+    const hinge = facesHinge({ x: 20, y: 10, width: 8, height: 6 }, -2)
+    expect(hinge.x).toBe(19)
+    expect(hinge.arc).toBe('M 19.6 13 Q 19 12.4 18.4 13')
+    expect(hinge.head.startsWith('18.301,13.099')).toBe(true)
+    // Ce que chaque face porte la suit : la LED avec le dessus, le fil avec le dessous.
+    const turned: Project = {
+      ...doc,
+      components: doc.components.map((instance) => (instance.id === 'b' ? crossed : instance))
+    }
+    const carried = boardsCarry(doc, turned)
+    expect(carried?.instances.get('c')).toMatchObject({ x: 22, y: 11 })
+    expect(carried?.wires.get('dessous')).toEqual([
+      [16, 12],
+      [16, 14],
+      [14, 14]
+    ])
+    // Le montage en tient compte, l'enregistre et l'exporte.
+    expect(projectBounds({ ...turned, wires: [] })).toMatchObject({ x: 10, y: 9.5, height: 7 })
+    expect(parseProject(serializeProject(turned)).components[0]?.facesGap).toBe(-2)
+    const svg = buildProjectSvg(turned, DEFAULT_EXPORT)?.svg ?? ''
+    expect(svg).toContain('class="underside" transform="matrix(-1 0 0 1 38 0)"')
+    expect(svg).toContain(`d="${hinge.arc}"`)
+    // Ramenée de l'autre côté, elle retrouve son écart d'origine, qui ne s'enregistre pas.
+    const back = spreadBoard(crossed, def, -6, 0)
+    expect(back).toMatchObject({ x: 10, y: 10 })
+    expect(back?.facesGap).toBeUndefined()
+    // De ce côté-là aussi, elle ne vient pas plus près du pli que l'écart d'origine.
+    expect(spreadBoard(crossed, def, -1, 0)).toBeNull()
+    expect(spreadBoard({ ...crossed, x: 22, facesGap: -6 }, def, -1, 0)).toMatchObject({
+      x: 21,
+      facesGap: -4
+    })
+    // Un écart trop petit, d'un côté comme de l'autre, est ramené à l'écart d'origine.
+    expect(facesGap({ facesGap: -1 })).toBe(-2)
+    expect(facesGap({ facesGap: 0 })).toBe(2)
+  })
+
   it('ce que la plaque porte suit sa face : le dessus d’un côté, le dessous de l’autre', () => {
     const doc = montage([
       wire('dessous', [

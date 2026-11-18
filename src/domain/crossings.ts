@@ -168,9 +168,9 @@ export function crossingPieces(
 }
 
 /**
- * Ce dont la bordure d'un fil redessiné sur un croisement dépasse le liseré, et le fil sa
- * bordure, à chaque bout (en cellules) : trois traits qui finiraient au même endroit
- * laisseraient un filet en travers du fil, là où leurs bords se mêlent.
+ * Ce dont un fil bordé, redessiné sur un croisement, dépasse sa bordure à chaque bout (en
+ * cellules) : deux traits qui finiraient au même endroit laisseraient un filet en travers du
+ * fil, là où leurs bords se mêlent.
  */
 export const CROSSING_OVERLAP = 0.02
 

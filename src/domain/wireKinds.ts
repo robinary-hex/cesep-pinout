@@ -40,7 +40,9 @@ export interface WireBorder {
  * Bordure avec laquelle un fil se dessine (décision du 18 novembre 2026) : celle de son style
  * (`wireBorder`, `wireBorderColor`) quand il en définit une, pour tous les fils, nus et ponts
  * compris. Sans elle, un fil n'a pas de bordure, sauf le fil nu, qui garde son liseré sombre :
- * en étain sur le papier, on ne le verrait pas.
+ * en étain sur le papier, on ne le verrait pas. Elle se dessine juste sous son fil, dans l'ordre
+ * des fils : un fil qui passe sur un autre, un pont par-dessus des fils, garde la sienne, et
+ * l'on voit lequel est dessus.
  */
 export function wireBorder(
   style: Pick<StyleProfile, 'wireWidth' | 'wireBorder' | 'wireBorderColor'>,
@@ -49,6 +51,19 @@ export function wireBorder(
   if (style.wireBorder > 0) return { width: style.wireBorder, color: style.wireBorderColor }
   if (wire.kind !== 'bare') return null
   return { width: (style.wireWidth * (BARE_WIRE_EDGE_SCALE - 1)) / 2, color: BARE_WIRE_EDGE }
+}
+
+/**
+ * Rayon du disque où, à un raccord, les fils qui se touchent sont redessinés par-dessus leurs
+ * bordures (décision du 18 novembre 2026). Chaque fil a sa bordure juste sous lui, pour la garder
+ * quand il passe sur un autre ; là où deux fils se raccordent, la bordure de l'un couperait
+ * l'autre : on y repeint les fils seuls, dans ce disque, et leurs bordures ne font plus qu'un
+ * contour. `outers` : la largeur de chaque fil du raccord, bordure comprise ; `dotRadius` : le
+ * rayon du point de jonction et de sa bordure, s'il y en a un, qui doit y tenir aussi.
+ */
+export function jointRadius(outers: readonly number[], dotRadius = 0): number {
+  // La bordure d'un fil coupe l'autre jusqu'à une demi-diagonale de leur largeur.
+  return rounded(Math.max(Math.max(0, ...outers) * 0.75, dotRadius) + 0.01)
 }
 
 /**

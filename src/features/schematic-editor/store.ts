@@ -809,7 +809,7 @@ export const useSchematicStore = defineStore('schematic', () => {
       else delete instance.underside
     })
     status.value = shown
-      ? 'Dessous de la plaque montré à sa droite, vu retourné : les fils s’y soudent.'
+      ? 'Dessous de la plaque montré à côté d’elle, vu retourné : les fils s’y soudent.'
       : 'Dessous de la plaque masqué.'
   }
 
@@ -817,7 +817,8 @@ export const useSchematicStore = defineStore('schematic', () => {
    * Déplace une plaque à deux faces par rapport à son pli (décision du 18 novembre 2026 : Ctrl
    * pendant qu'on la glisse). Le pli reste où il est : le dessus va de (`dx`, `dy`), le dessous
    * fait le geste en miroir, et les deux faces s'écartent du pli, ou s'en rapprochent, d'autant
-   * l'une que l'autre (`spreadBoard`). Ce que la plaque porte suit sa face. Faux si rien ne change.
+   * l'une que l'autre ; poussée au-delà du pli, la plaque passe de l'autre côté et son dessous
+   * prend sa place (`spreadBoard`). Ce que la plaque porte suit sa face. Faux si rien ne change.
    */
   function spreadBoardFaces(id: string, dx: number, dy: number): boolean {
     const instance = doc.value.components.find((candidate) => candidate.id === id)
@@ -825,16 +826,25 @@ export const useSchematicStore = defineStore('schematic', () => {
     const moved = instance && def ? spreadBoard(instance, def, dx, dy) : null
     if (!instance || !moved) return false
     const gap = facesGap(moved)
-    const spread = gap !== facesGap(instance)
+    const before = facesGap(instance)
+    const spread = gap !== before
+    // Le dessous a changé de côté : la plaque a franchi son pli.
+    const crossed = gap < 0 !== before < 0
     const done = applyWithElasticWires(
-      spread ? 'Écarter les faces de la plaque' : 'Déplacer la sélection',
+      crossed
+        ? 'Passer la plaque de l’autre côté du pli'
+        : spread
+          ? 'Écarter les faces de la plaque'
+          : 'Déplacer la sélection',
       (draft) => {
         const index = draft.components.findIndex((candidate) => candidate.id === id)
         if (index >= 0) draft.components[index] = castDraft(moved)
       }
     )
-    if (done && spread) {
-      status.value = `Faces de la plaque à ${gap} cellules l’une de l’autre.`
+    if (done && crossed) {
+      status.value = `Dessous de la plaque à ${gap < 0 ? 'gauche' : 'droite'}, à ${Math.abs(gap)} cellules.`
+    } else if (done && spread) {
+      status.value = `Faces de la plaque à ${Math.abs(gap)} cellules l’une de l’autre.`
     }
     return done
   }

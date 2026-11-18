@@ -553,15 +553,25 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   chaque côté du fil (0 au départ : pas de bordure), et sa couleur, proposée dès qu'il y en
   a une (`ProfileFields.vue`). Sans bordure dans le style, seul le fil nu garde la sienne,
   son liseré sombre : en étain sur le papier, on ne le verrait pas ; avec, il prend celle du
-  style comme les autres. Toutes les bordures se dessinent ensemble, sous tous les fils
-  (`g.wire-borders`, à l'écran comme à l'export), et non chacune sous son fil : des fils
-  qui se touchent n'ont ainsi qu'un contour, sans trait en travers d'une jonction. Y ont
-  aussi la leur les pointes de flèche, les pointillés, les points de jonction (`junctionDot`
-  rend celle du fil porteur), les gouttes de soudure et les points d'étiquette d'extrémité.
-  À un croisement, le fil du dessus se redessine avec sa bordure, chaque trait dépassant un
-  peu le précédent pour ne pas laisser de filet (`CROSSING_OVERLAP`). Bordé, un fil a les
-  bouts ronds à l'export aussi, comme à l'écran. Un noir pur prend l'encre du thème, comme
-  celui des fils. Le liseré de sélection entoure la bordure.
+  style comme les autres. Chaque fil a sa bordure juste sous lui, dans l'ordre des fils
+  (`g.wire-border` dans `g.wires`, à l'écran comme à l'export ; même jour, après un premier
+  essai où toutes les bordures étaient sous tous les fils : deux fils qui se croisaient, un
+  pont sur des fils, se fondaient l'un dans l'autre) : un fil qui passe sur un autre garde
+  sa bordure, et l'on voit lequel est dessus. Avec elle, sous le fil : celle de ses pointes
+  de flèche, de ses pointillés, de ses gouttes de soudure et de ses points d'étiquette
+  d'extrémité (`dotBorders` du canevas).
+  - Raccords (`joints` de la connectivité : le bout d'un fil posé sur un autre, ou sur son
+    bout, avec ou sans point de jonction) : là, la bordure de l'un couperait l'autre. Les
+    fils du raccord y sont repeints seuls, dans un petit disque (`g.wire-joints`, un
+    `clipPath` par raccord, `jointRadius`), par-dessus ces bordures : elles ne font plus
+    qu'un contour, sans trait en travers. Le point de jonction y a la sienne (`junctionDot`
+    rend celle du fil porteur), sous les fils repeints.
+  - Croisements : le fil du dessus se redessine avec sa bordure, qu'il dépasse un peu à
+    chaque bout pour ne pas laisser de filet (`CROSSING_OVERLAP`), et sans le liseré de la
+    couleur du papier, qui ne sert qu'aux fils sans bordure : le fil du dessous va jusqu'à
+    la bordure de l'autre.
+  - Bordé, un fil a les bouts ronds à l'export aussi, comme à l'écran. Un noir pur prend
+    l'encre du thème, comme celui des fils. Le liseré de sélection entoure la bordure.
 - Profil de style : l'application a un profil général (`defaultProfile` des paramètres) et chaque
   montage a le sien, enregistré dans son fichier, avec lequel il se dessine. Une seule boîte,
   `settings/ProfileDialog.vue`, pour les deux : `target="general"` (bouton de la barre
@@ -1042,17 +1052,18 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     la compte en trous, et elle se pose sous les composants déjà là (`placeAt` : en tête de
     `components`).
   - Les deux faces (`src/domain/boardFaces.ts`) : une plaque posée peut montrer son dessous
-    à sa droite (`underside` de l'exemplaire ; case « Montrer le dessous » du panneau, sous
-    le libellé, et entrée du clic droit, `setInstanceUnderside`). Le dessous est le dessus retourné comme
-    une page qu'on tourne, à `facesGap` cellules (2 au départ, `BOARD_FACES_GAP`) : un point d'abscisse x s'y voit
+    à côté d'elle (`underside` de l'exemplaire ; case « Montrer le dessous » du panneau, sous
+    le libellé, et entrée du clic droit, `setInstanceUnderside`) : à sa droite au départ, à sa
+    gauche quand on l'a fait passer de l'autre côté de son pli (voir « Écart des faces »). Le dessous est le dessus retourné comme
+    une page qu'on tourne, à `facesGap` cellules (2 au départ, `BOARD_FACES_GAP` ; négatif quand le dessous est à gauche) : un point d'abscisse x s'y voit
     en `facesFlip − x`, à la même hauteur (`undersideBounds`, `facesFlip`, `showsUnderside`
     de placement.ts). C'est le dessin de la plaque, sans ses textes, à l'écran
     (`g.underside` du canevas) comme à l'export ; `projectBounds` compte sa place. Entre
     les deux faces, un pli (décision du 17 novembre 2026 ; `facesHinge`, `HINGE_STYLE`,
     `.faces-hinge`) : un trait pointillé sur l'axe du miroir, qui dépasse la plaque d'une
     demi-cellule en haut et en bas, coupé à mi-hauteur par une petite flèche courbe qui va
-    du dessus vers le dessous ; il dit que la plaque de droite est celle de gauche,
-    retournée. Dessiné en cellules, sous tout le reste, à l'écran comme à l'export. Rien
+    du dessus vers le dessous (vers la gauche quand le dessous est de ce côté) ; il dit que
+    l'une des deux plaques est l'autre, retournée. Dessiné en cellules, sous tout le reste, à l'écran comme à l'export. Rien
     d'autre n'est stocké : un fil du dessous est un fil du montage comme un autre, posé
     dans la zone du dessous. Ce qui relie les faces se déduit de la géométrie, les trous
     étant métallisés (`boardFaces` : `twins`, le même trou sur l'autre face). La broche
@@ -1078,6 +1089,14 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     geste. La touche se lit à chaque instant (`ctrlHeld`) : la relâcher avant le bouton rend
     un déplacement ordinaire. Ctrl dès l'appui fait de même, sauf à portée d'une broche, où
     elle tire un fil comme partout (`pinGrab`).
+    Poussée au-delà de son pli, la plaque passe de l'autre côté (même jour) : tant que son
+    milieu n'a pas franchi le pli, elle reste au plus près, de son côté ; dès qu'il l'a
+    franchi, le dessus est de l'autre côté, au plus près, et le dessous a pris sa place ;
+    plus loin, ils s'écartent de nouveau. Jamais à cheval sur le pli. L'écart porte alors un
+    signe : `facesGap` négatif, le dessous est à gauche du dessus (`facesGap()`,
+    `undersideBounds` et `facesFlip` le lisent ; la flèche du pli se retourne ; le signe a été
+    ajouté au projet 26 avant sa publication, sans autre montée de version). Ce que porte
+    chaque face la suit de l'autre côté. La barre d'état dit de quel côté est le dessous.
   - Empreintes (décision du 18 novembre 2026) : la place qu'un composant prend de l'autre
     côté de la plaque. Dans l'éditeur de composants, un rectangle, une ellipse, une ligne ou
     une polyligne devient une empreinte par la case « Empreinte sur l'autre face d'une
@@ -1169,7 +1188,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   composant se dessinent juste après lui (`textsByInstance`), pas au-dessus de toute sa
   couche : un composant posé sur un autre cache aussi ses textes.
 - Croisements : `src/domain/crossings.ts` (croisements stricts entre deux segments de directions
-  différentes, fil du dessus redessiné dans sa direction par `crossingPieceEnds`, exceptions
+  différentes, fil du dessus redessiné dans sa direction par `crossingPieceEnds`, sur un
+  liseré de la couleur du papier s'il n'a pas de bordure, avec sa bordure sinon, exceptions
   Alt+clic élaguées à chaque commande ; deux diagonales peuvent se croiser au milieu d'une
   cellule, les exceptions vont donc par demi-pas). Broches reliées à rien : `unconnectedPinKeys` de la connectivité.
 - Exécutable : `pnpm icon` régénère `build/icon.png` (script sans dépendance), `pnpm build:win`

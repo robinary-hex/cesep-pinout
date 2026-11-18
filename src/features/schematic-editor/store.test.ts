@@ -2162,6 +2162,39 @@ describe('montage : plaque à trous', () => {
     expect(store.doc.wires[0]?.points.at(0)).toEqual([16, 3])
   })
 
+  it('poussée au-delà du pli, la plaque passe à droite et son dessous à gauche, avec leur charge', () => {
+    const { store, plate } = soldered()
+    // Le pli est en x = 7, le milieu de la plaque en x = 3 : cinq cellules à droite le franchissent.
+    expect(store.spreadBoardFaces(plate, 5, 0)).toBe(true)
+    expect(store.undoLabel).toBe('Passer la plaque de l’autre côté du pli')
+    expect(store.status).toBe('Dessous de la plaque à gauche, à 2 cellules.')
+    // Le dessus et la LED sont à droite du pli, au plus près ; le dessous a pris leur place.
+    expect(store.doc.components.map((instance) => [instance.x, instance.y])).toEqual([
+      [8, 0],
+      [9, 1]
+    ])
+    expect(store.doc.components[0]?.facesGap).toBe(-2)
+    expect(store.faces.boards[0]).toMatchObject({ top: { x: 8 }, bottom: { x: 0 }, flip: 14 })
+    // Le fil du dessous a suivi, et relie toujours les deux pattes.
+    expect(store.doc.wires[0]?.points).toEqual([
+      [5, 2],
+      [5, 3],
+      [3, 3],
+      [3, 2]
+    ])
+    expect(store.connectivity.unconnectedPinKeys.size).toBe(0)
+    // Plus loin de ce côté : les faces s'écartent, sans changer de côté.
+    expect(store.spreadBoardFaces(plate, 2, 0)).toBe(true)
+    expect(store.undoLabel).toBe('Écarter les faces de la plaque')
+    expect(store.doc.components[0]).toMatchObject({ x: 10, facesGap: -6 })
+    // Ramenée à gauche : l'écart d'origine, qui ne s'enregistre pas.
+    expect(store.spreadBoardFaces(plate, -9, 0)).toBe(true)
+    expect(store.status).toBe('Dessous de la plaque à droite, à 2 cellules.')
+    expect(store.doc.components[0]).toMatchObject({ x: 0, y: 0 })
+    expect(store.doc.components[0]).not.toHaveProperty('facesGap')
+    expect(store.doc.wires[0]?.points.at(0)).toEqual([13, 2])
+  })
+
   it('un composant enfiché montre son empreinte sur l’autre face d’une plaque à deux faces', () => {
     const store = useSchematicStore()
     store.startPlacing(board())

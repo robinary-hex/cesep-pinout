@@ -50,8 +50,20 @@ export interface Solder {
   point: GridPoint
 }
 
+/**
+ * Raccord : là où des fils se touchent, le bout de l'un posé sur un autre ou sur son bout, qu'un
+ * point de jonction s'y dessine ou non. C'est là que les bordures des fils se rejoignent en un
+ * seul contour (voir `jointRadius` de wireKinds.ts).
+ */
+export interface WireJoint {
+  point: GridPoint
+  wireIds: string[]
+}
+
 export interface Connectivity {
   junctions: Junction[]
+  /** Les raccords entre fils, avec ou sans point de jonction. */
+  joints: WireJoint[]
   freeEnds: FreeEnd[]
   /** Soudures des fils nus sur les broches de leur trajet. */
   solders: Solder[]
@@ -144,6 +156,8 @@ export function computeConnectivity(
 
   const freeEnds: FreeEnd[] = []
   const junctionAt = new Map<string, Junction>()
+  /** Raccords, par point : les fils qui s'y touchent. */
+  const jointAt = new Map<string, { point: GridPoint; wireIds: Set<string> }>()
   /** Soudures des fils nus, sans doublon : fil et point. */
   const soldered = new Map<string, Solder>()
   const solder = (wireId: string, point: GridPoint): void => {
@@ -168,6 +182,9 @@ export function computeConnectivity(
         if (other.kind === 'jumper' && location.kind !== 'end') continue
         uf.union(`w:${wire.id}`, `w:${other.id}`)
         touched = true
+        const joint = jointAt.get(pointKey(point)) ?? { point, wireIds: new Set<string>() }
+        joint.wireIds.add(wire.id).add(other.id)
+        jointAt.set(pointKey(point), joint)
         const passing = location.kind !== 'end'
         branches += passing ? 2 : 1
         candidates.push({ id: other.id, stack: other.stack, passing })
@@ -240,6 +257,10 @@ export function computeConnectivity(
 
   return {
     junctions: [...junctionAt.values()],
+    joints: [...jointAt.values()].map((joint) => ({
+      point: joint.point,
+      wireIds: [...joint.wireIds]
+    })),
     freeEnds,
     solders,
     wireNet,

@@ -56,8 +56,10 @@ export function rectContainsRect(outer: GridRect, inner: GridRect): boolean {
   )
 }
 
-// Les deux faces d'une plaque à trous (voir boardFaces.ts) : le dessous se dessine à droite du
-// dessus, retourné comme une page qu'on tourne.
+// Les deux faces d'une plaque à trous (voir boardFaces.ts) : le dessous se dessine à côté du
+// dessus, retourné comme une page qu'on tourne. À sa droite au départ ; à sa gauche quand on a
+// fait passer la plaque de l'autre côté de son pli (décision du 18 novembre 2026 : l'écart entre
+// les faces porte un signe, négatif quand le dessous est à gauche).
 
 /**
  * Écart entre le dessus et le dessous d'une plaque qui montre ses deux faces, en cellules : celui
@@ -76,34 +78,40 @@ export function showsUnderside(
 /**
  * Écart entre les deux faces d'une plaque posée, en cellules : le sien si on l'a écartée de son
  * pli (`facesGap`, décision du 18 novembre 2026 ; voir `spreadBoard`), sinon `BOARD_FACES_GAP`.
+ * Positif, le dessous est à droite du dessus ; négatif, à sa gauche. Jamais plus petit, d'un côté
+ * comme de l'autre, que `BOARD_FACES_GAP`.
  */
 export function facesGap(instance: Pick<ComponentInstance, 'facesGap'>): number {
-  return Math.max(BOARD_FACES_GAP, instance.facesGap ?? BOARD_FACES_GAP)
+  const gap = instance.facesGap ?? BOARD_FACES_GAP
+  return gap < 0 ? Math.min(-BOARD_FACES_GAP, gap) : Math.max(BOARD_FACES_GAP, gap)
 }
 
 /**
- * Boîte du dessous d'une plaque dont `top` est la boîte : à sa droite, de la même taille, à `gap`
- * cellules.
+ * Boîte du dessous d'une plaque dont `top` est la boîte : de la même taille, à `gap` cellules,
+ * à sa droite, ou à sa gauche quand `gap` est négatif.
  */
 export function undersideBounds(top: GridRect, gap = BOARD_FACES_GAP): GridRect {
-  return { ...top, x: top.x + top.width + gap }
+  return { ...top, x: gap < 0 ? top.x + gap - top.width : top.x + top.width + gap }
 }
 
 /**
  * Le miroir entre les deux faces : un point d'abscisse x du dessus se voit de dessous à
- * l'abscisse `facesFlip − x`, à la même hauteur (l'axe du miroir est au milieu de l'écart).
+ * l'abscisse `facesFlip − x`, à la même hauteur (l'axe du miroir est au milieu de l'écart, du
+ * côté où est le dessous).
  */
 export function facesFlip(top: GridRect, gap = BOARD_FACES_GAP): number {
-  return 2 * (top.x + top.width) + gap
+  return gap < 0 ? 2 * top.x + gap : 2 * (top.x + top.width) + gap
 }
 
 /**
  * Une plaque à deux faces déplacée par rapport à son pli (décision du 18 novembre 2026 : Ctrl
  * pendant qu'on la glisse). Le pli, l'axe du miroir, reste où il est : le dessus va de
  * (`dx`, `dy`) et le dessous, son reflet, de (−`dx`, `dy`). L'écart entre les faces change donc
- * du double de `dx` : la plaque s'écarte de son pli ou s'en rapproche, sans que l'écart descende
- * sous `BOARD_FACES_GAP`. Rend la plaque à sa nouvelle place, avec son nouvel écart ; null si
- * elle ne montre pas son dessous ou si rien ne change.
+ * du double de `dx` : la plaque s'écarte de son pli ou s'en rapproche, sans venir plus près que
+ * `BOARD_FACES_GAP`. Poussée au-delà, elle passe de l'autre côté du pli dès que son milieu le
+ * franchit : le dessus et le dessous échangent leurs côtés, au plus près du pli, puis s'en
+ * écartent de nouveau. Rend la plaque à sa nouvelle place, avec son nouvel écart, dont le signe
+ * dit de quel côté est le dessous ; null si elle ne montre pas son dessous ou si rien ne change.
  */
 export function spreadBoard(
   instance: ComponentInstance,
@@ -112,12 +120,22 @@ export function spreadBoard(
   dy: number
 ): ComponentInstance | null {
   if (!showsUnderside(instance, def)) return null
+  const top = instanceBounds(instance, def)
   const gap = facesGap(instance)
-  // Vers le pli (le dessus est à sa gauche), jamais plus près que l'écart d'origine.
-  const shift = Math.min(dx, Math.floor((gap - BOARD_FACES_GAP) / 2))
+  const hinge = facesFlip(top, gap) / 2
+  const reach = BOARD_FACES_GAP / 2
+  const wanted = top.x + dx
+  // De quel côté du pli le dessus se retrouve : celui de son milieu ; pile dessus, il y reste.
+  const middle = wanted + top.width / 2
+  const left = middle === hinge ? gap > 0 : middle < hinge
+  // Jamais à cheval sur le pli : au plus près, de son côté.
+  const x = left
+    ? Math.min(wanted, Math.floor(hinge - reach) - top.width)
+    : Math.max(wanted, Math.ceil(hinge + reach))
+  const shift = x - top.x
   if (shift === 0 && dy === 0) return null
   const moved: ComponentInstance = { ...instance, x: instance.x + shift, y: instance.y + dy }
-  const next = gap - 2 * shift
+  const next = left ? 2 * (hinge - (x + top.width)) : -2 * (x - hinge)
   if (next === BOARD_FACES_GAP) delete moved.facesGap
   else moved.facesGap = next
   return moved
@@ -126,8 +144,9 @@ export function spreadBoard(
 /**
  * Le pli entre les deux faces d'une plaque (décision du 17 novembre 2026) : un trait pointillé
  * au milieu de l'écart, sur l'axe du miroir, qui dépasse un peu la plaque en haut et en bas ; à
- * mi-hauteur, une petite flèche courbe va du dessus vers le dessous. Elle dit que la plaque de
- * droite est celle de gauche, retournée comme une page. Dessiné pareil à l'écran et à l'export.
+ * mi-hauteur, une petite flèche courbe va du dessus vers le dessous : vers la droite, ou vers la
+ * gauche quand le dessous est de ce côté. Elle dit que l'une des deux plaques est l'autre,
+ * retournée comme une page. Dessiné pareil à l'écran et à l'export.
  */
 export interface FacesHinge {
   /** Abscisse du trait : l'axe du miroir entre les deux faces. */
@@ -150,26 +169,35 @@ export const HINGE_STYLE = {
   color: '#6e7781'
 } as const
 
-/** Le pli d'une plaque dont `top` est la boîte du dessus, ses faces à `gap` cellules. */
+/**
+ * Le pli d'une plaque dont `top` est la boîte du dessus, ses faces à `gap` cellules (négatif :
+ * le dessous est à gauche, et la flèche pointe de ce côté).
+ */
 export function facesHinge(top: GridRect, gap = BOARD_FACES_GAP): FacesHinge {
   const round = (value: number): number => Math.round(value * 1000) / 1000
-  const x = top.x + top.width + gap / 2
+  const x = facesFlip(top, gap) / 2
   const middle = top.y + top.height / 2
+  // Le sens de la flèche : du dessus vers le dessous.
+  const side = gap < 0 ? -1 : 1
   // La flèche : un arc de 1,2 cellule, bombé vers le haut ; au bout, il descend à 45°.
   const half = 0.6
   const slope = Math.SQRT1_2
-  const end = { x: x + half, y: middle }
-  const tip = { x: end.x + 0.14 * slope, y: end.y + 0.14 * slope }
-  const back = { x: end.x - 0.1 * slope, y: end.y - 0.1 * slope }
+  const end = { x: x + side * half, y: middle }
+  const tip = { x: end.x + side * 0.14 * slope, y: end.y + 0.14 * slope }
+  const back = { x: end.x - side * 0.1 * slope, y: end.y - 0.1 * slope }
   const wing = 0.16 * slope
-  const head = [tip, { x: back.x - wing, y: back.y + wing }, { x: back.x + wing, y: back.y - wing }]
+  const head = [
+    tip,
+    { x: back.x - side * wing, y: back.y + wing },
+    { x: back.x + side * wing, y: back.y - wing }
+  ]
   return {
     x,
     spans: [
       [top.y - HINGE_OVERSHOOT, round(middle - 0.7)],
       [round(middle + 0.5), top.y + top.height + HINGE_OVERSHOOT]
     ],
-    arc: `M ${round(x - half)} ${round(middle)} Q ${round(x)} ${round(middle - half)} ${round(end.x)} ${round(end.y)}`,
+    arc: `M ${round(x - side * half)} ${round(middle)} Q ${round(x)} ${round(middle - half)} ${round(end.x)} ${round(end.y)}`,
     head: head.map((point) => `${round(point.x)},${round(point.y)}`).join(' ')
   }
 }
@@ -220,9 +248,9 @@ export function projectBounds(project: Project): GridRect | null {
       const gap = facesGap(instance)
       include(undersideBounds(bounds, gap))
       include({
-        x: bounds.x + bounds.width,
+        x: gap < 0 ? bounds.x + gap : bounds.x + bounds.width,
         y: bounds.y - HINGE_OVERSHOOT,
-        width: gap,
+        width: Math.abs(gap),
         height: bounds.height + 2 * HINGE_OVERSHOOT
       })
     }

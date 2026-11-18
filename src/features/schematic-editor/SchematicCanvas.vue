@@ -62,6 +62,7 @@ import {
   wireIntersectsRect,
   wirePathData,
   wireRenderParts,
+  jointRadius,
   jumperPathData,
   movedWireVertex,
   SOLDER_GLINT,
@@ -90,7 +91,8 @@ import {
   type TextLabel,
   type ThroughMark,
   type Wire,
-  type WireEndFlags
+  type WireEndFlags,
+  type WireJoint
 } from '@/domain'
 import ComponentGraphic from '@/render/ComponentGraphic.vue'
 import FootprintGraphic from '@/render/FootprintGraphic.vue'
@@ -298,7 +300,8 @@ const selectedLabelSet = computed(() => new Set(store.selectedLabels))
  * Plaque à deux faces qu'on glisse seule, Ctrl enfoncée (décision du 18 novembre 2026) : elle
  * bouge par rapport à son pli, qui reste en place. La face saisie suit le pointeur, l'autre fait
  * le geste en miroir : les deux s'écartent du pli, ou s'en rapprochent, d'autant l'une que
- * l'autre. Ce que la plaque porte suit sa face (`boardsCarry`, comme à la commande). Rend la
+ * l'autre ; poussée au-delà du pli, la face saisie passe de l'autre côté, et l'autre prend sa
+ * place. Ce que la plaque porte suit sa face (`boardsCarry`, comme à la commande). Rend la
  * plaque à sa nouvelle place et ce qu'elle emmène ; null hors de ce geste.
  */
 const spreading = computed(() => {
@@ -407,6 +410,7 @@ function baseOf(item: PlacedInstance): ComponentDefinition {
 const dragPreview = computed<{
   wires: Map<string, readonly GridPoint[]>
   junctions: Junction[]
+  joints: WireJoint[]
   solders: Solder[]
   marks: ThroughMark[]
 } | null>(() => {
@@ -490,6 +494,7 @@ const dragPreview = computed<{
   return {
     wires: new Map(followed.map((wire) => [wire.id, wire.points])),
     junctions: connectivity.junctions,
+    joints: connectivity.joints,
     solders: connectivity.solders,
     marks: throughMarks(followed, pins, faces)
   }
@@ -952,9 +957,8 @@ const crossingMarks = computed(() =>
     return {
       key: `${piece.point[0]},${piece.point[1]}`,
       ...span(0.5),
-      // Bordé, chaque trait dépasse un peu le précédent : pas de filet en travers du fil.
-      edge: span(0.5 + CROSSING_OVERLAP),
-      line: span(border ? 0.5 + 2 * CROSSING_OVERLAP : 0.5),
+      // Bordé, le fil dépasse un peu sa bordure à chaque bout : pas de filet en travers.
+      line: span(border ? 0.5 + CROSSING_OVERLAP : 0.5),
       width,
       border,
       outer: border ? width + 2 * border.width : width,
@@ -992,6 +996,7 @@ const solders = computed(() =>
     const [x, y] = solder.point
     return {
       key: `${solder.wireId}:${x},${y}`,
+      wireId: solder.wireId,
       x,
       y,
       r,
@@ -1001,6 +1006,71 @@ const solders = computed(() =>
     }
   })
 )
+
+/**
+ * Raccords entre fils bordés : là où ils se touchent, leurs traits sont repeints dans un petit
+ * disque, par-dessus les bordures qui les couperaient (chaque fil a la sienne juste sous lui) ;
+ * le point de jonction y a sa bordure. Dans l'ordre des fils, comme leur dessin.
+ */
+const joints = computed(() => {
+  const order = new Map(renderedWires.value.map((item, index) => [item.wire.id, index]))
+  const items = new Map(renderedWires.value.map((item) => [item.wire.id, item]))
+  const dots = new Map(junctions.value.map((dot) => [dot.key, dot]))
+  return (dragPreview.value?.joints ?? store.connectivity.joints).flatMap((joint) => {
+    const wires = joint.wireIds
+      .flatMap((id) => {
+        const item = items.get(id)
+        return item ? [item] : []
+      })
+      .sort((a, b) => (order.get(a.wire.id) ?? 0) - (order.get(b.wire.id) ?? 0))
+    if (!wires.some((item) => item.border)) return []
+    const [x, y] = joint.point
+    const key = `${x},${y}`
+    const dot = dots.get(key)
+    const ring = dot?.border ? { r: dot.r + dot.border.width, color: dot.border.color } : null
+    return [
+      {
+        key,
+        clip: `raccord-ecran-${key}`,
+        x,
+        y,
+        r: jointRadius(
+          wires.map((item) => item.outer),
+          ring?.r ?? 0
+        ),
+        ring,
+        wires
+      }
+    ]
+  })
+})
+
+/**
+ * Cernes des gouttes de soudure et des points d'étiquette d'un fil bordé, par fil : ils se
+ * dessinent avec sa bordure, sous lui.
+ */
+const dotBorders = computed(() => {
+  const byWire = new Map<string, { key: string; x: number; y: number; r: number }[]>()
+  const add = (wireId: string, key: string, x: number, y: number, r: number): void => {
+    const list = byWire.get(wireId) ?? []
+    list.push({ key, x, y, r })
+    byWire.set(wireId, list)
+  }
+  for (const dot of solders.value) {
+    if (dot.border) add(dot.wireId, `solder:${dot.key}`, dot.x, dot.y, dot.r + dot.border.width)
+  }
+  for (const entry of endLabels.value) {
+    if (!entry.border) continue
+    add(
+      entry.wireId,
+      `end:${entry.key}`,
+      entry.dotX,
+      entry.dotY,
+      entry.dotRadius + entry.border.width
+    )
+  }
+  return byWire
+})
 
 function endLabelText(wire: Wire, endIndex: number): string {
   return endIndex === 0 ? wire.endLabels.start : wire.endLabels.end
@@ -1337,8 +1407,10 @@ function spreadableBoard(start: LocalPoint): { id: string; bottom: boolean } | n
   }
   const item = store.placed.find((candidate) => candidate.instance.id === id)
   if (!item || !showsUnderside(item.instance, item.def)) return null
-  const bounds = instanceBounds(item.instance, item.def)
-  return { id, bottom: start.x > bounds.x + bounds.width + facesGap(item.instance) / 2 }
+  // La face saisie : le dessous est du côté du pli où il se dessine, à droite ou à gauche.
+  const gap = facesGap(item.instance)
+  const hinge = facesFlip(instanceBounds(item.instance, item.def), gap) / 2
+  return { id, bottom: gap < 0 ? start.x < hinge : start.x > hinge }
 }
 
 function startMove(event: PointerEvent): void {
@@ -2097,15 +2169,12 @@ const cursorClass = computed(() => {
                 </template>
               </g>
 
-              <!-- Bordures des fils : toutes sous tous les fils, pour que des fils qui se
-                   touchent n'aient qu'un contour ; jonctions, soudures et points d'étiquette
-                   y ont la leur. -->
-              <g class="wire-borders">
+              <g class="wires">
                 <template v-for="item in renderedWires" :key="item.wire.id">
-                  <template v-if="item.border">
+                  <!-- Sa bordure, juste sous lui : un fil qui passe sur un autre la garde. -->
+                  <g v-if="item.border" class="wire-border">
                     <path
                       v-if="item.body"
-                      class="wire-border"
                       :d="item.body"
                       :stroke="screenColor(item.border.color)"
                       :stroke-width="item.outer"
@@ -2113,7 +2182,6 @@ const cursorClass = computed(() => {
                     <path
                       v-for="(tail, t) in item.dotted"
                       :key="`tail${t}`"
-                      class="wire-border"
                       :d="tail"
                       :stroke="screenColor(item.border.color)"
                       :stroke-width="item.outer"
@@ -2127,39 +2195,15 @@ const cursorClass = computed(() => {
                       :stroke="screenColor(item.border.color)"
                       :stroke-width="item.border.width * 2"
                     />
-                  </template>
-                </template>
-                <template v-for="dot in junctions" :key="`junction:${dot.key}`">
-                  <circle
-                    v-if="dot.border"
-                    :cx="dot.x"
-                    :cy="dot.y"
-                    :r="dot.r + dot.border.width"
-                    :fill="screenColor(dot.border.color)"
-                  />
-                </template>
-                <template v-for="dot in solders" :key="`solder:${dot.key}`">
-                  <circle
-                    v-if="dot.border"
-                    :cx="dot.x"
-                    :cy="dot.y"
-                    :r="dot.r + dot.border.width"
-                    :fill="screenColor(dot.border.color)"
-                  />
-                </template>
-                <template v-for="entry in endLabels" :key="`end:${entry.key}`">
-                  <circle
-                    v-if="entry.border"
-                    :cx="entry.dotX"
-                    :cy="entry.dotY"
-                    :r="entry.dotRadius + entry.border.width"
-                    :fill="screenColor(entry.border.color)"
-                  />
-                </template>
-              </g>
-
-              <g class="wires">
-                <template v-for="item in renderedWires" :key="item.wire.id">
+                    <circle
+                      v-for="dot in dotBorders.get(item.wire.id)"
+                      :key="dot.key"
+                      :cx="dot.x"
+                      :cy="dot.y"
+                      :r="dot.r"
+                      :fill="screenColor(item.border.color)"
+                    />
+                  </g>
                   <path
                     v-if="item.body"
                     class="wire"
@@ -2196,19 +2240,51 @@ const cursorClass = computed(() => {
                 </template>
               </g>
 
+              <!-- Raccords : les fils qui se touchent, repeints dans un petit disque
+                   par-dessus les bordures qui les couperaient. -->
+              <g class="wire-joints">
+                <template v-for="joint in joints" :key="joint.key">
+                  <clipPath :id="joint.clip">
+                    <circle :cx="joint.x" :cy="joint.y" :r="joint.r" />
+                  </clipPath>
+                  <circle
+                    v-if="joint.ring"
+                    :cx="joint.x"
+                    :cy="joint.y"
+                    :r="joint.ring.r"
+                    :fill="screenColor(joint.ring.color)"
+                  />
+                  <g :clip-path="`url(#${joint.clip})`">
+                    <path
+                      v-for="item in joint.wires"
+                      :key="item.wire.id"
+                      :d="item.body || item.d"
+                      :stroke="screenColor(item.color)"
+                      :stroke-width="item.width"
+                    />
+                  </g>
+                </template>
+              </g>
+
               <g class="crossings">
                 <template v-for="mark in crossingMarks" :key="mark.key">
+                  <!-- Sans bordure, un liseré de la couleur du papier détache le fil du
+                       dessus ; bordé, sa bordure le fait. -->
                   <line
+                    v-if="!mark.border"
                     class="halo"
                     :x1="mark.x1"
                     :y1="mark.y1"
                     :x2="mark.x2"
                     :y2="mark.y2"
-                    :stroke-width="mark.outer + mark.width * 1.2"
+                    :stroke-width="mark.width * 2.2"
                   />
                   <line
-                    v-if="mark.border"
-                    v-bind="mark.edge"
+                    v-else
+                    :x1="mark.x1"
+                    :y1="mark.y1"
+                    :x2="mark.x2"
+                    :y2="mark.y2"
                     :stroke="screenColor(mark.border.color)"
                     :stroke-width="mark.outer"
                   />
@@ -2748,18 +2824,19 @@ const cursorClass = computed(() => {
 }
 
 .wires path,
-.wire-borders path {
+.wire-joints path {
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-/* Bordures des fils : sous eux, elles ne prennent pas les clics. */
-.wire-borders {
+/* La bordure d'un fil, sous lui, et les raccords repeints : ils ne prennent pas les clics. */
+.wire-border,
+.wire-joints {
   pointer-events: none;
 }
 
-.wire-borders polygon {
+.wire-border polygon {
   stroke-linejoin: round;
 }
 
