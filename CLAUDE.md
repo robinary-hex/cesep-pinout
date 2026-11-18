@@ -1280,9 +1280,18 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
   par version dans `src/domain/fixtures/`. Versions courantes : composant 17, projet 26, paramètres 16,
-  diagramme 6 (projet 26 et paramètres 16, du 18 novembre 2026, pas encore publiés, portent la bordure des fils du profil de style, `wireBorder` et `wireBorderColor` : les réglages qu'ils enregistrent ne se liront plus dans la 1.9.1 ni avant ; composant 17 et projet 25, du même jour, pas publiés non plus, portent les
-  composants extensibles : `stretch` rangé par sens, `crop`, `countX` et `countY` d'un composant posé, et la plaque à trous : forme `holes`, sorte d'un fil `kind`, `underside` et `facesGap` d'une plaque posée, `footprint` d'une forme ; les versions 16 et 24, de la veille, n'ont pas été publiées non plus : elles n'avaient qu'un sens d'étirement (`stretch.axis`, `count`), que leurs migrations rangent sous le bon sens ; le projet 24 donne l'étain aux fils nus du 23, qui se dessinaient tous ainsi, et le 25 donne son propre champ à chaque texte variable, avec la valeur que partageaient ceux du même nom ; un composant ou un montage qu'ils
-  enregistrent ne s'ouvrira plus dans la 1.9.1 ni avant ; paramètres 15 et diagramme 5 sont ceux de la 1.6.0, publiée le 11 novembre
+  diagramme 6 (composant 17, projet 26 et paramètres 16 sont ceux de la 1.10.0, publiée le 18
+  novembre 2026 : un composant, un montage ou des réglages qu'elle enregistre ne se lisent
+  plus dans la 1.9.1 ni avant. Projet 26 et paramètres 16 portent la bordure des fils du
+  profil de style, `wireBorder` et `wireBorderColor` ; composant 17 et projet 25 portent les
+  composants extensibles : `stretch` rangé par sens, `crop`, `countX` et `countY` d'un
+  composant posé, et la plaque à trous : forme `holes`, sorte d'un fil `kind`, `underside` et
+  `facesGap` d'une plaque posée, `footprint` d'une forme. Les versions intermédiaires,
+  composant 16 et projets 23 à 25, n'ont jamais été publiées, mais gardent leurs migrations :
+  16 et 24 n'avaient qu'un sens d'étirement (`stretch.axis`, `count`), rangé depuis sous le
+  bon sens ; le projet 24 donne l'étain aux fils nus du 23, qui se dessinaient tous ainsi, et
+  le 25 donne son propre champ à chaque texte variable, avec la valeur que partageaient ceux
+  du même nom ; paramètres 15 et diagramme 5 sont ceux de la 1.6.0, publiée le 11 novembre
   2026 : palette des diagrammes et dossier de Pinout dans les paramètres, couleur du texte
   d'un nœud dans le diagramme ; un diagramme enregistré par la 1.6.0 ne s'ouvre plus dans une
   version antérieure ; le diagramme 6 est celui de la 1.9.0, publiée le 16 novembre 2026 : il
