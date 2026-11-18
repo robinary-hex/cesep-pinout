@@ -175,6 +175,129 @@ describe('montage : poser, déplacer, orienter', () => {
   })
 })
 
+describe('montage : une sélection tourne et se retourne d’un bloc', () => {
+  /**
+   * Deux résistances sur une ligne, reliées par un fil : broches en (2, 4), (6, 4), (10, 4) et
+   * (14, 4). Un autre fil part de la dernière broche vers la droite.
+   */
+  function row(): {
+    store: ReturnType<typeof useSchematicStore>
+    left: string
+    right: string
+    link: string
+    out: string
+  } {
+    const store = useSchematicStore()
+    store.startPlacing(resistor())
+    const left = store.placeAt(2, 3)
+    store.startPlacing(resistor())
+    const right = store.placeAt(10, 3)
+    store.stopPlacing()
+    const link = store.addWire([
+      [6, 4],
+      [10, 4]
+    ])
+    const out = store.addWire([
+      [14, 4],
+      [18, 4]
+    ])
+    if (!left || !right || !link || !out) throw new Error('pose refusée')
+    store.clearSelection()
+    return { store, left, right, link, out }
+  }
+
+  it('plusieurs éléments tournent autour d’un même point, et restent reliés', () => {
+    const { store, left, right, link, out } = row()
+    const pins = (): unknown => store.pinRefs.map((pin) => pin.point)
+    const wire = (id: string): unknown => store.doc.wires.find((entry) => entry.id === id)?.points
+    const before = store.doc
+    store.selection = [left, right]
+    store.selectedWires = [link]
+    store.rotateSelection('cw')
+    expect(store.undoLabel).toBe('Rotation horaire')
+    // Le bloc occupait x de 2 à 14, y de 3 à 5 : il tourne autour de (8, 4), d'une pièce.
+    expect(store.doc.components.map((instance) => instance.rotation)).toEqual([90, 90])
+    expect(pins()).toEqual([
+      [8, -2],
+      [8, 2],
+      [8, 6],
+      [8, 10]
+    ])
+    // Le fil du bloc a tourné avec lui : il relie toujours les deux mêmes broches.
+    expect(wire(link)).toEqual([
+      [8, 2],
+      [8, 6]
+    ])
+    // Le fil resté hors du bloc suit sa broche et garde son autre bout.
+    expect((wire(out) as number[][]).at(0)).toEqual([8, 10])
+    expect((wire(out) as number[][]).at(-1)).toEqual([18, 4])
+    expect(store.connectivity.wireNet.get(link)).toBeDefined()
+    expect(store.connectivity.unconnectedPinKeys.size).toBe(1)
+    // Une seule commande ; quatre quarts de tour ramènent le bloc à sa place.
+    store.undo()
+    expect(store.doc).toEqual(before)
+    for (let turn = 0; turn < 4; turn++) store.rotateSelection('ccw')
+    expect(store.doc.components).toEqual(before.components)
+    expect(wire(link)).toEqual([
+      [6, 4],
+      [10, 4]
+    ])
+  })
+
+  it('un composant seul tourne sur lui-même, comme avant', () => {
+    const { store, left } = row()
+    store.selection = [left]
+    store.rotateSelection('cw')
+    // La boîte de 4 × 2 devient 2 × 4, autour de son centre : il ne va pas ailleurs.
+    expect(store.doc.components[0]).toMatchObject({ rotation: 90, x: 3, y: 2 })
+    expect(store.doc.components[1]).toMatchObject({ rotation: 0, x: 10, y: 3 })
+  })
+
+  it('un bloc se retourne autour de son axe : étiquettes et ponts compris', () => {
+    const { store, left, link } = row()
+    const jumper = store.addWire(
+      [
+        [6, 4],
+        [12, 8]
+      ],
+      '#d62828',
+      'jumper'
+    )
+    const label = store.addLabelBox({ x: 2, y: 7, w: 4, h: 1 })
+    if (!jumper) throw new Error('pont refusé')
+    store.setWireEndLabel(jumper, 0, 'A')
+    store.setJumperBulge(jumper, 2)
+    store.clearSelection()
+    store.selection = [left]
+    store.selectedWires = [jumper]
+    store.selectedLabels = [label]
+    // Le bloc va de x = 2 à x = 12 : il se retourne autour de x = 7.
+    store.flipSelection('horizontal')
+    expect(store.undoLabel).toBe('Miroir horizontal')
+    expect(store.doc.components[0]).toMatchObject({ mirror: true, x: 8, y: 3 })
+    expect(store.pinRefs.slice(0, 2).map((pin) => pin.point)).toEqual([
+      [12, 4],
+      [8, 4]
+    ])
+    expect(store.doc.labels[0]).toMatchObject({ x: 8, y: 7, w: 4, h: 1, vertical: false })
+    // Le pont est l'image de ce qu'il était : ses bouts échangés, il se bombe du même côté vu
+    // dans le miroir, et son étiquette reste au bout qui la portait.
+    expect(store.doc.wires.find((entry) => entry.id === jumper)).toMatchObject({
+      bulge: 2,
+      points: [
+        [2, 8],
+        [8, 4]
+      ],
+      endLabels: { start: '', end: 'A' }
+    })
+    // Le fil hors du bloc, posé sur la broche de droite de la résistance, l'a suivie.
+    expect(store.doc.wires.find((entry) => entry.id === link)?.points.at(0)).toEqual([8, 4])
+    // Un quart de tour couche l'étiquette avec le bloc.
+    store.rotateSelection('cw')
+    expect(store.doc.labels[0]).toMatchObject({ w: 1, h: 4, vertical: true })
+  })
+})
+
 describe('montage : fils', () => {
   it('trace un fil par étapes, le simplifie et le relie aux broches', () => {
     const store = useSchematicStore()
@@ -2269,6 +2392,135 @@ describe('montage : plaque à trous', () => {
     const moved = store.doc.wires.find((entry) => entry.id === leaving)
     expect(moved?.points.at(0)).toEqual([7, 3])
     expect(moved?.points.at(-1)).toEqual([5, 9])
+  })
+
+  it('tout sélectionné, la plaque tourne d’un bloc avec ce qu’elle porte, son dessous avec elle', () => {
+    const { store, wire } = soldered()
+    const soldier = (): unknown => store.doc.wires.find((entry) => entry.id === wire)?.points
+    const start = { components: store.doc.components, wire: soldier() }
+    store.selectAll()
+    store.rotateSelection('cw')
+    expect(store.doc.components.map((instance) => instance.rotation)).toEqual([90, 90])
+    // Le fil du dessous n'a pas tourné avec le bloc : il a suivi sa plaque, vu de dessous, et
+    // relie toujours les deux pattes.
+    expect(store.pinRefs).toHaveLength(4)
+    expect(store.connectivity.unconnectedPinKeys.size).toBe(0)
+    expect(store.connectivity.freeEnds).toEqual([])
+    for (let turn = 0; turn < 3; turn++) store.rotateSelection('cw')
+    expect(store.doc.components).toEqual(start.components)
+    expect(soldier()).toEqual(start.wire)
+  })
+
+  it('masquer le dessous masque ce qu’il porte ; le remontrer le rend, où que soit la plaque', () => {
+    const { store, plate, wire } = soldered()
+    const shown = store.doc
+    store.setInstanceUnderside(plate, false)
+    expect(store.undoLabel).toBe('Masquer le dessous')
+    expect(store.status).toBe('Dessous de la plaque masqué, avec l’élément qu’il porte.')
+    // Le fil soudé dessous a quitté le montage : il est rangé dans la plaque.
+    expect(store.doc.wires).toEqual([])
+    expect(store.doc.components[0]?.stowed?.wires.map((entry) => entry.id)).toEqual([wire])
+    expect(store.faces.boards).toEqual([])
+    expect(store.pinRefs).toHaveLength(2)
+    // Il relie toujours les deux pattes : rien n'est dessoudé.
+    expect(store.connectivity.unconnectedPinKeys.size).toBe(0)
+    expect(store.connectivity.wireNet.size).toBe(0)
+    // La plaque s'en va ailleurs, dessous masqué ; remontré, il est sous elle, avec son fil.
+    store.selection = [plate]
+    store.moveSelection(3, 1)
+    store.setInstanceUnderside(plate, true)
+    expect(store.status).toBe('Dessous de la plaque montré, avec l’élément qu’il porte.')
+    expect(store.doc.components[0]).not.toHaveProperty('stowed')
+    expect(store.doc.wires[0]).toMatchObject({
+      id: wire,
+      points: [
+        [16, 3],
+        [16, 4],
+        [14, 4],
+        [14, 3]
+      ]
+    })
+    expect(store.connectivity.unconnectedPinKeys.size).toBe(0)
+    // Chaque étape s'annule.
+    store.undo()
+    expect(store.doc.wires).toEqual([])
+    store.undo()
+    store.undo()
+    expect(store.doc).toEqual(shown)
+  })
+
+  it('un pont soudé dessous reste l’image de ce qu’il était quand la plaque se retourne', () => {
+    const store = useSchematicStore()
+    store.startPlacing(board())
+    const plate = store.placeAt(0, 0)
+    store.stopPlacing()
+    if (!plate) throw new Error('pose refusée')
+    store.setInstanceUnderside(plate, true)
+    // Dessous (x de 8 à 14) : un pont du trou (9, 1) au trou (13, 3), étiqueté à son départ.
+    const jumper = store.addWire(
+      [
+        [9, 1],
+        [13, 3]
+      ],
+      '#d62828',
+      'jumper'
+    )
+    if (!jumper) throw new Error('pont refusé')
+    store.setWireEndLabel(jumper, 0, 'A')
+    const pont = (): unknown => store.doc.wires.find((entry) => entry.id === jumper)
+    // La plaque retournée de gauche à droite : son dessous l'est aussi. Le pont échange ses
+    // bouts, pour se bomber du même côté vu dans le miroir, et garde son étiquette à son bout.
+    store.clearSelection()
+    store.selection = [plate]
+    store.flipSelection('horizontal')
+    expect(pont()).toMatchObject({
+      points: [
+        [9, 3],
+        [13, 1]
+      ],
+      endLabels: { start: '', end: 'A' }
+    })
+    // Retournée de nouveau : il revient comme il était.
+    store.flipSelection('horizontal')
+    expect(pont()).toMatchObject({
+      points: [
+        [9, 1],
+        [13, 3]
+      ],
+      endLabels: { start: 'A', end: '' }
+    })
+    // Dessous masqué, plaque retournée, dessous remontré : le pont revient retourné lui aussi.
+    store.setInstanceUnderside(plate, false)
+    store.flipSelection('horizontal')
+    store.setInstanceUnderside(plate, true)
+    expect(pont()).toMatchObject({
+      points: [
+        [9, 3],
+        [13, 1]
+      ],
+      endLabels: { start: '', end: 'A' }
+    })
+    // Masqué puis remontré sans que la plaque bouge : il revient tel quel.
+    store.setInstanceUnderside(plate, false)
+    store.setInstanceUnderside(plate, true)
+    expect(pont()).toMatchObject({
+      points: [
+        [9, 3],
+        [13, 1]
+      ],
+      endLabels: { start: '', end: 'A' }
+    })
+  })
+
+  it('une plaque copiée dessous masqué ne copie pas ce qu’il a rangé', () => {
+    const { store, plate } = soldered()
+    store.setInstanceUnderside(plate, false)
+    store.selection = [plate]
+    store.duplicateSelection()
+    const copy = store.doc.components.at(-1)
+    expect(copy?.defId).toBe('plaque')
+    expect(copy).not.toHaveProperty('stowed')
+    expect(store.doc.components[0]?.stowed?.wires).toHaveLength(1)
   })
 
   it('tournée ou retournée, la plaque garde tout en place sur elle, et tout reste relié', () => {

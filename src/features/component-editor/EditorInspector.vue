@@ -6,6 +6,7 @@ import {
   holeCounts,
   isFootprint,
   naturalImageSize,
+  ROTATIONS,
   PIN_KIND_LABELS,
   PIN_KINDS,
   pinSections,
@@ -20,6 +21,7 @@ import {
   type Arrows,
   type PinKind,
   type PinSection,
+  type Rotation,
   type StretchAxis,
   type StretchCounts,
   type StretchSpan
@@ -407,6 +409,11 @@ const imageSize = computed(() => {
   }
 })
 
+function setImageRotation(event: Event): void {
+  const rotation = Number((event.target as HTMLSelectElement).value) as Rotation
+  store.setImageRotation(primitiveIndex.value, rotation)
+}
+
 function setStroke(color: string): void {
   store.updateStyle(primitiveIndex.value, { stroke: color })
 }
@@ -708,6 +715,14 @@ function setClosed(event: Event): void {
       </template>
 
       <template v-else-if="primitive.kind === 'image' && imageSize">
+        <label class="field image-rotation">
+          <span>Rotation</span>
+          <select :value="primitive.rotation ?? 0" @change="setImageRotation">
+            <option v-for="rotation in ROTATIONS" :key="rotation" :value="rotation">
+              {{ rotation }}°
+            </option>
+          </select>
+        </label>
         <p class="hint">
           {{ imageSize.shown
           }}{{ imageSize.resized ? ` (taille d’origine : ${imageSize.natural})` : '' }}

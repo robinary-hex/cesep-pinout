@@ -21,7 +21,7 @@ import { stretchedDefinition } from './stretch'
 import { JUMPER_BULGE_LIMITS } from './wireKinds'
 import { isUTurn, segmentStep } from './wires'
 
-export const PROJECT_SCHEMA_VERSION = 27
+export const PROJECT_SCHEMA_VERSION = 28
 
 /**
  * Style propre à un élément du montage (voir styles.ts) : le nom d'un des `styles` du montage ;
@@ -29,8 +29,11 @@ export const PROJECT_SCHEMA_VERSION = 27
  */
 export const elementStyleSchema = z.string().min(1).optional()
 
-/** Composant posé sur le montage ; (x, y) = coin supérieur gauche de sa boîte, en grille. */
-export const componentInstanceSchema = z.object({
+/**
+ * Composant posé sur le montage ; (x, y) = coin supérieur gauche de sa boîte, en grille. Ici
+ * sans ce qu'une plaque range (`stowed`), qui s'ajoute plus bas : `componentInstanceSchema`.
+ */
+const plainInstanceSchema = z.object({
   id: z.string().min(1),
   group: groupSchema,
   style: elementStyleSchema,
@@ -70,7 +73,6 @@ export const componentInstanceSchema = z.object({
    */
   behindWires: z.boolean()
 })
-export type ComponentInstance = z.infer<typeof componentInstanceSchema>
 
 /** Extrémités libres d'un fil, à l'écran comme à l'export : nettes, en flèche ou en pointillés. */
 export const freeEndStyleSchema = z.enum(['flat', 'arrow', 'dotted'])
@@ -196,6 +198,26 @@ export const textLabelSchema = z.object({
 })
 export type TextLabel = z.infer<typeof textLabelSchema>
 
+/**
+ * Ce que le dessous d'une plaque portait quand on l'a masqué (décision du 18 novembre 2026, voir
+ * boardStow.ts) : composants, fils et étiquettes quittent le montage et se rangent dans la
+ * plaque, pour revenir quand on remontre son dessous. Ils sont notés dans le repère de la
+ * plaque, comme s'ils étaient posés sur son dessin : où qu'elle aille entre-temps, ils
+ * retrouvent leur place sous elle.
+ */
+export const stowedLoadSchema = z.object({
+  components: z.array(plainInstanceSchema),
+  wires: z.array(wireSchema),
+  labels: z.array(textLabelSchema)
+})
+export type StowedLoad = z.infer<typeof stowedLoadSchema>
+
+export const componentInstanceSchema = plainInstanceSchema.extend({
+  /** Ce que portait le dessous de cette plaque, tant qu'il est masqué ; absent : rien de rangé. */
+  stowed: stowedLoadSchema.optional()
+})
+export type ComponentInstance = z.infer<typeof componentInstanceSchema>
+
 const projectShape = z.object({
   schemaVersion: z.literal(PROJECT_SCHEMA_VERSION),
   name: z.string(),
@@ -252,6 +274,27 @@ export const projectSchema = projectShape.superRefine((project, ctx) => {
         'defId'
       ])
     }
+    // Ce qu'une plaque a rangé reviendra sur le montage : il lui faut sa définition et son style.
+    const stowed = instance.stowed
+    if (!stowed) return
+    const path = ['components', i, 'stowed']
+    stowed.components.forEach((kept, k) => {
+      checkStyle(`Composant rangé ${kept.id}`, kept.style, [...path, 'components', k])
+      if (!Object.hasOwn(project.embeddedDefs, kept.defId)) {
+        addIssue(`Composant rangé ${kept.id} : définition ${kept.defId} absente de embeddedDefs`, [
+          ...path,
+          'components',
+          k,
+          'defId'
+        ])
+      }
+    })
+    stowed.wires.forEach((kept, k) => {
+      checkStyle(`Fil rangé ${kept.id}`, kept.style, [...path, 'wires', k])
+    })
+    stowed.labels.forEach((kept, k) => {
+      checkStyle(`Étiquette rangée ${kept.id}`, kept.style, [...path, 'labels', k])
+    })
   })
 
   const wireIds = new Set<string>()

@@ -148,6 +148,15 @@ function shapeItems(index: number, primitive: Primitive): MenuItem[] {
   if (primitive.kind === 'image') {
     const natural = naturalImageSize(primitive)
     items.push(
+      submenu(
+        'Rotation',
+        [
+          item('Quart de tour à droite', () => store.turnImage(index, 1), { icon: 'rotate-cw' }),
+          item('Quart de tour à gauche', () => store.turnImage(index, -1), { icon: 'rotate-ccw' }),
+          item('Demi-tour', () => store.turnImage(index, 2))
+        ],
+        { icon: 'rotate-cw' }
+      ),
       item('Taille d’origine', () => store.resetImageSize(index), {
         icon: 'fit',
         disabled: !natural || (natural.w === primitive.w && natural.h === primitive.h)

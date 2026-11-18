@@ -391,6 +391,34 @@ export function invertMatrix(m: Matrix): Matrix {
   }
 }
 
+/** Ce qu'on fait d'un bloc d'éléments : un quart de tour, ou un miroir. */
+export type BlockTurn = RotateDirection | FlipAxis
+
+/**
+ * Isométrie de la grille qui tourne d'un quart de tour, ou retourne, tout ce que contient une
+ * boîte, d'un bloc (décision du 18 novembre 2026 : une sélection de plusieurs éléments tourne
+ * autour d'un même point, et non chacun sur soi). Un miroir se fait autour de l'axe de la
+ * boîte. Un quart de tour se fait autour de son centre quand la grille le permet ; quand sa
+ * largeur et sa hauteur n'ont pas la même parité, autour de l'intersection voisine du centre
+ * dont la somme des coordonnées est paire : ce pivot est le même au quart de tour suivant, donc
+ * quatre quarts de tour ramènent le bloc à sa place.
+ */
+export function blockMatrix(bounds: GridRect, turn: BlockTurn): Matrix {
+  let cx = bounds.x + bounds.width / 2
+  let cy = bounds.y + bounds.height / 2
+  if (turn === 'horizontal') return { a: -1, b: 0, c: 0, d: 1, e: tidy(2 * cx), f: 0 }
+  if (turn === 'vertical') return { a: 1, b: 0, c: 0, d: -1, e: 0, f: tidy(2 * cy) }
+  if (!Number.isInteger(cx + cy)) {
+    // Une seule des deux coordonnées tombe au milieu d'une cellule : on la ramène sur la grille.
+    const even = (value: number): boolean => Math.abs(value % 2) === 0
+    if (Number.isInteger(cx)) cy = even(cx + Math.floor(cy)) ? Math.floor(cy) : Math.ceil(cy)
+    else cx = even(Math.floor(cx) + cy) ? Math.floor(cx) : Math.ceil(cx)
+  }
+  return turn === 'cw'
+    ? { a: 0, b: 1, c: -1, d: 0, e: tidy(cx + cy), f: tidy(cy - cx) }
+    : { a: 0, b: -1, c: 1, d: 0, e: tidy(cx - cy), f: tidy(cx + cy) }
+}
+
 export function isIdentityMatrix(m: Matrix): boolean {
   return m.a === 1 && m.b === 0 && m.c === 0 && m.d === 1 && m.e === 0 && m.f === 0
 }

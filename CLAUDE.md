@@ -91,9 +91,32 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   la bibliothèque, un PNG par image à côté de component.json (`saveComponent` retire ceux qui
   ne servent plus, `loadComponentFile` les rattache) ; `withFreeImageFiles` nomme les images
   ajoutées ou collées pour qu'un fichier ne porte qu'une image.
+  Une image se tourne par quarts de tour (décision du 18 novembre 2026 ; `rotation` de la
+  forme, 0, 90, 180 ou 270° sens horaire, absente = le sens du fichier) : sous-menu
+  « Rotation » de son clic droit (quart de tour à droite, à gauche, demi-tour : `turnImage`)
+  et liste « Rotation » de son panneau (`setImageRotation`). Sa boîte est celle de l'image
+  telle qu'on la voit : un quart de tour la couche autour de son centre (`turnedImage`), et
+  sa taille d'origine comme ses proportions se lisent couchées (`naturalImageSize`,
+  `imageRatio`). Le fichier PNG n'est pas touché. Une image qui est tout le composant (seule
+  forme, sans broche, de la taille de sa boîte, comme à l'import dans un composant vierge)
+  emmène la boîte du composant en tournant. Dessin, à l'écran comme à l'export : l'image
+  remplit un carré d'une unité où elle tourne autour du centre (`imageTurn`), que sa boîte
+  étire ensuite ; c'est le petit `<svg>` des tranches d'un composant étiré, dont la fenêtre
+  (`crop`) découpe l'image telle qu'on la voit, tournée s'il y a lieu.
 - Orientation d'une instance : miroir local puis rotation horaire (`transformLocalPoint`,
   `instanceMatrix`). Un miroir à l'écran bascule `mirror` et inverse la rotation
   (`flippedInstance`) ; une rotation à l'écran garde le centre de la boîte (`rotatedInstance`).
+  Plusieurs éléments sélectionnés tournent ou se retournent d'un bloc, autour d'un même point,
+  et non chacun sur soi (décision du 18 novembre 2026 ; `transformBlock` du store,
+  `blockMatrix` de placement.ts) : composants, fils et étiquettes sont menés par la même
+  isométrie de la grille, autour du milieu de leur boîte commune ; un quart de tour couche le
+  texte d'une étiquette avec sa boîte. Quand ce milieu n'est pas un pivot de la grille
+  (largeur et hauteur de parités différentes), le pivot est l'intersection voisine dont la
+  somme des coordonnées est paire : la même d'un quart de tour au suivant, donc quatre quarts
+  de tour ramènent le bloc à sa place. Un seul composant sélectionné tourne sur lui-même,
+  comme avant. Les fils hors du bloc posés sur ses broches suivent (élasticité) ; un fil du
+  bloc garde ses bouts sur les broches restées immobiles (`placedWires` de `settleWires`). Le
+  dessous d'une plaque du bloc n'est pas du bloc : il suit sa plaque, vu de dessous.
 - Jonctions : dérivées de la géométrie (une extrémité de fil sur un autre fil), jamais stockées ;
   un croisement en milieu de segment ne connecte pas.
 - Touches de modification et gestes de souris : le même sens dans les trois éditeurs (décision du
@@ -829,8 +852,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   Type, Extrémités libres. Un texte se saisit dans `PromptDialog` avec `multiline` (Maj+Entrée va à
   la ligne).
   - Éditeur de composants (`openMenu` de `ComponentEditor.vue`, demande émise par
-    `EditorCanvas`, types dans `menu.ts`) : forme (texte, flèches, fermeture, taille d'origine
-    d'une image), broche (renommer, type), vide (coller ici : `pasteClipboardAt`, importer une
+    `EditorCanvas`, types dans `menu.ts`) : forme (texte, flèches, fermeture, rotation et
+    taille d'origine d'une image), broche (renommer, type), vide (coller ici : `pasteClipboardAt`, importer une
     image, vue, panneau). Un clic droit pendant un tracé le termine, sans menu.
   - Onglets (`openTabMenu` de `App.vue`) : enregistrer, enregistrer sous, afficher dans
     l'Explorateur (`showInFolder` du pont), fermer, fermer les autres.
@@ -1115,6 +1138,23 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     (`throughMarks`, `.through`) ; une patte soudée à un fil nu ne la montre pas, la goutte
     de soudure du fil la remplace (`unsolderedMarks`) ; le trou survolé se
     montre d'un anneau sur l'autre face (`twinMark`).
+  - Dessous masqué (décision du 18 novembre 2026 ; `src/domain/boardStow.ts`) : masquer le
+    dessous d'une plaque masque aussi ce qu'il porte. Les composants, fils et étiquettes du
+    dessous (la charge `bottom` de `boardLoad`) quittent le montage et se rangent dans la
+    plaque (`stowed` de l'exemplaire, `stowUnderside`) ; ils reviennent quand on remontre le
+    dessous (`unstowUnderside`), en une commande à chaque fois (`setInstanceUnderside`).
+    Rangés, ils ne sont plus nulle part : ni dessinés, ni saisis, ni exportés, ni comptés
+    dans la boîte du montage, sans que le reste du code ait à le savoir. Ils sont notés dans
+    le repère de la plaque, comme posés sur son dessin : elle peut bouger, tourner ou se
+    retourner dessous masqué, ils reviennent à leur place sous elle. Un identifiant pris
+    entre-temps : l'élément rangé en reçoit un libre. Une plaque copiée ne copie pas ce
+    qu'elle a rangé (`withoutStowed`) ; le style propre d'un élément rangé reste dans le
+    montage (`prunedStyles`). Un fil dont un seul bout est sur le dessous reste visible.
+    Masquer ne dessoude rien : la connectivité compte toujours ce que le dessous relie
+    (`projectConnectivity`, que le store et l'export prennent à la place de
+    `computeConnectivity`). Pour ce seul calcul, le dessous masqué est remontré très loin
+    (`wiredProject`, `HIDDEN_FACES_GAP`) avec ce qu'il portait, sous des identifiants marqués ;
+    seul ce qu'on voit en ressort (jonctions, bouts libres, nets, broches reliées à rien).
   - Écart des faces (décision du 18 novembre 2026) : Ctrl maintenue pendant qu'on glisse une
     plaque à deux faces, seule sélectionnée, la déplace par rapport à son pli. Le pli reste
     où il est ; la face qu'on tient suit le pointeur, l'autre fait le geste en miroir : les
@@ -1175,7 +1215,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     isométrie vue de dessous ; ce que porte une plaque tourne donc autour d'elle, pas sur
     soi-même, même sélectionné avec elle. Une plaque étirée laisse en place ce qu'elle
     porte dessus et emmène son dessous, qui s'écarte avec son bord. Pendant le glisser, le
-    canevas montre la même chose (`selectionLoad`, `ends` du geste). Un lasso ne prend une
+    canevas montre la même chose (`selectionLoad`, `ends` du geste). Un pont emmené par un
+    miroir (plaque retournée, dessous rangé puis remontré sous une plaque retournée, bloc
+    retourné) échange ses bouts, son étiquette avec eux : il reste l'image de ce qu'il était,
+    bombé du même côté vu dans le miroir (`mirrored` de `Carried`, `flipJumpers` du store,
+    `movedLoad` de boardStow.ts ; après l'élasticité, qui suit les bouts par leur rang). Un lasso ne prend une
     plaque que s'il entoure une de ses faces en entier (`bandTakes`) : ce qu'elle porte se
     prend au lasso sans elle. Et près d'un bout de fil, un appui sur la plaque saisit ce
     bout, comme dans le vide, au lieu de la plaque (`onInstanceDown`,
@@ -1317,8 +1361,12 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     composant posé s'appelle « libellé » dans l'interface.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 17, projet 27, paramètres 16,
-  diagramme 6 (le projet 27 est celui de la 1.11.0, publiée le 18 novembre 2026 : il porte le
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 18, projet 28, paramètres 16,
+  diagramme 6 (composant 18 et projet 28, du 18 novembre 2026, pas encore publiés : le composant
+  18 porte la rotation d'une image, `rotation` ; le projet 28, ce que range le dessous masqué
+  d'une plaque, `stowed`, et ses définitions embarquées en version 18 ; rien à convertir dans
+  l'un ni l'autre, mais un composant ou un montage qu'ils enregistrent ne s'ouvrira plus dans
+  la 1.11.0 ni avant ; le projet 27 est celui de la 1.11.0, publiée le 18 novembre 2026 : il porte le
   bombé d'un pont, `bulge` ; rien à convertir, la version ne monte que pour qu'une application
   plus ancienne refuse le fichier au lieu de perdre ce bombé : un montage qu'elle enregistre
   ne s'ouvre plus dans la 1.10.0 ni avant ; composant 17, projet 26 et paramètres 16 sont ceux de la 1.10.0, publiée le 18

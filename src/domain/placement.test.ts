@@ -3,6 +3,7 @@ import { createEmptyComponent, type ComponentDefinition } from './component'
 import { ROTATIONS, type Rotation } from './grid'
 import {
   applyMatrix,
+  blockMatrix,
   flippedInstance,
   instanceBounds,
   instanceMatrix,
@@ -13,6 +14,9 @@ import {
   rotatedInstance,
   instanceTextPlacements,
   textPlacementTransform,
+  transformedPoint,
+  transformedRect,
+  type GridRect,
   type InstanceTextPlacement
 } from './placement'
 import { DEFAULT_PROFILE } from './profile'
@@ -135,6 +139,50 @@ describe('rotation et miroir à l’écran', () => {
 })
 
 describe('repères et identifiants', () => {
+  it('un bloc tourne d’un quart de tour autour du milieu de sa boîte', () => {
+    // Largeur et hauteur de même parité : le centre exact, (2, 1).
+    const bounds: GridRect = { x: 0, y: 0, width: 4, height: 2 }
+    const cw = blockMatrix(bounds, 'cw')
+    expect(transformedPoint(cw, [0, 0])).toEqual([3, -1])
+    expect(transformedPoint(cw, [4, 2])).toEqual([1, 3])
+    expect(transformedRect(bounds, cw)).toEqual({ x: 1, y: -1, width: 2, height: 4 })
+    // Dans l'autre sens : le quart de tour inverse.
+    const ccw = blockMatrix(transformedRect(bounds, cw), 'ccw')
+    expect(transformedPoint(ccw, transformedPoint(cw, [4, 0]))).toEqual([4, 0])
+  })
+
+  it('quatre quarts de tour ramènent un bloc à sa place, même quand son centre est hors grille', () => {
+    // 3 × 2 : le centre (1,5 ; 1) n'est pas un pivot de la grille ; son voisin (1, 1) l'est.
+    const start: GridRect = { x: 0, y: 0, width: 3, height: 2 }
+    const corner: [number, number] = [3, 0]
+    let bounds = start
+    let point = corner
+    const seen: GridRect[] = []
+    for (let turn = 0; turn < 4; turn++) {
+      const matrix = blockMatrix(bounds, 'cw')
+      point = transformedPoint(matrix, point)
+      bounds = transformedRect(bounds, matrix)
+      seen.push(bounds)
+    }
+    expect(seen[0]).toEqual({ x: 0, y: 0, width: 2, height: 3 })
+    expect(bounds).toEqual(start)
+    expect(point).toEqual(corner)
+    // De même pour une boîte posée ailleurs, plus haute que large.
+    let other: GridRect = { x: 7, y: -4, width: 2, height: 5 }
+    for (let turn = 0; turn < 4; turn++) other = transformedRect(other, blockMatrix(other, 'ccw'))
+    expect(other).toEqual({ x: 7, y: -4, width: 2, height: 5 })
+  })
+
+  it('un bloc se retourne autour de l’axe de sa boîte', () => {
+    const bounds: GridRect = { x: 2, y: 1, width: 3, height: 4 }
+    const mirror = blockMatrix(bounds, 'horizontal')
+    expect(transformedPoint(mirror, [2, 1])).toEqual([5, 1])
+    expect(transformedRect(bounds, mirror)).toEqual(bounds)
+    const upside = blockMatrix(bounds, 'vertical')
+    expect(transformedPoint(upside, [2, 1])).toEqual([2, 5])
+    expect(transformedRect(bounds, upside)).toEqual(bounds)
+  })
+
   it('numérote les repères par préfixe', () => {
     expect(nextLabel('R', ['R1', 'R3'])).toBe('R2')
     expect(nextLabel('', ['R1'])).toBe('')

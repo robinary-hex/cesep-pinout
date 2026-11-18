@@ -83,13 +83,21 @@ export function styleCounts(project: StyledContent): Map<string, number> {
 
 /**
  * Les styles du montage qui servent encore à un élément ; la liste elle-même s'ils servent tous.
- * Un style que plus rien ne porte n'a pas à rester dans le fichier.
+ * Un style que plus rien ne porte n'a pas à rester dans le fichier. Ce qu'une plaque a rangé
+ * avec son dessous masqué compte : il reviendra avec son style.
  */
 export function prunedStyles(
   project: StyledContent & Pick<Project, 'styles'>
 ): readonly StyleProfile[] {
   if (project.styles.length === 0) return project.styles
   const used = styleCounts(project)
+  for (const instance of project.components) {
+    const stowed = instance.stowed
+    if (!stowed) continue
+    for (const kept of [...stowed.components, ...stowed.wires, ...stowed.labels]) {
+      if (kept.style !== undefined) used.set(kept.style, (used.get(kept.style) ?? 0) + 1)
+    }
+  }
   const kept = project.styles.filter((style) => used.has(style.name))
   return kept.length === project.styles.length ? project.styles : kept
 }

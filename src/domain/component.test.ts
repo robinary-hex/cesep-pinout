@@ -13,6 +13,8 @@ import {
   holeCells,
   holeCounts,
   imageRatio,
+  imageTurn,
+  turnedImage,
   importedImageSize,
   isBoard,
   naturalImageSize,
@@ -279,6 +281,26 @@ describe('images du mini-éditeur', () => {
     expect(imageRatio({ ...led, w: 4, h: 4 })).toBeCloseTo(2 / 3)
     expect(naturalImageSize(lost)).toBeNull()
     expect(imageRatio({ ...lost, w: 3, h: 6 })).toBe(0.5)
+  })
+
+  it('se tourne par quarts de tour : sa boîte se couche autour de son centre', () => {
+    // 8 × 12 quarts en (4, 0) : couchée, 12 × 8, décalée de deux quarts pour garder son centre.
+    const lying = turnedImage(led, 90)
+    expect(lying).toMatchObject({ rotation: 90, x: 2, y: 2, w: 12, h: 8 })
+    expect(imageTurn(lying)).toBe('rotate(90 0.5 0.5)')
+    // Sa taille d'origine et ses proportions sont celles qu'on voit : couchées elles aussi.
+    expect(naturalImageSize(lying)).toEqual({ w: 12, h: 8 })
+    expect(imageRatio(lying)).toBeCloseTo(3 / 2)
+    // Un demi-tour ne change pas sa boîte ; un quart de plus la redresse où elle était.
+    const upside = turnedImage(led, 180)
+    expect(upside).toMatchObject({ rotation: 180, x: 4, y: 0, w: 8, h: 12 })
+    expect(naturalImageSize(upside)).toEqual({ w: 8, h: 12 })
+    expect(turnedImage(lying, 180)).toMatchObject({ rotation: 180, x: 4, y: 0, w: 8, h: 12 })
+    expect(turnedImage(lying, 270)).toMatchObject({ rotation: 270, x: 2, y: 2, w: 12, h: 8 })
+    // Revenue dans le sens de son fichier, elle ne porte plus de rotation.
+    const back = turnedImage(lying, 0)
+    expect(back).toEqual(led)
+    expect(imageTurn(back)).toBeUndefined()
   })
 
   it('repère les images suivies d’une autre, bord à bord', () => {

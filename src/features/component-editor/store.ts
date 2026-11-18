@@ -27,6 +27,7 @@ import {
   isFootprint,
   isInsideBox,
   naturalImageSize,
+  turnedImage,
   nextGroupId,
   nextPinGroupId,
   nextPinGroupName,
@@ -51,6 +52,7 @@ import {
   type Pin,
   type Primitive,
   type Readout,
+  type Rotation,
   type ShapeStyle,
   type Size,
   type StackMove,
@@ -878,6 +880,51 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     })
   }
 
+  /**
+   * Tourne une image (décision du 18 novembre 2026 : clic droit, ou liste « Rotation » de son
+   * panneau) : `rotation` est son nouveau sens, 0, 90, 180 ou 270°. Sa boîte se couche avec
+   * elle, autour de son centre ; si l'image est tout le composant, c'est la boîte du composant
+   * qui se couche.
+   */
+  function setImageRotation(index: number, rotation: Rotation): void {
+    const body = shown.value
+    const primitive = body.visual.primitives[index]
+    if (primitive?.kind !== 'image' || (primitive.rotation ?? 0) === rotation) return
+    const turned = turnedImage(primitive, rotation)
+    // Une image qui est tout le composant (seule forme, sans broche, de la taille de sa boîte) :
+    // la boîte du composant tourne avec elle, comme elle avait pris sa taille à l'import.
+    const whole =
+      body.visual.primitives.length === 1 &&
+      body.pins.length === 0 &&
+      body.stretch === undefined &&
+      primitive.x === 0 &&
+      primitive.y === 0 &&
+      primitive.w === body.size.widthCells * QUARTERS_PER_CELL &&
+      primitive.h === body.size.heightCells * QUARTERS_PER_CELL
+    if (!whole) {
+      setPrimitive(index, turned, 'Tourner l’image')
+      return
+    }
+    apply('Tourner l’image', (draft) => {
+      const list = drawing(draft)
+      if (!list[index]) return
+      list[index] = castDraft({ ...turned, x: 0, y: 0 })
+      bodyOf(draft).size = {
+        widthCells: turned.w / QUARTERS_PER_CELL,
+        heightCells: turned.h / QUARTERS_PER_CELL
+      }
+    })
+    fitToViewport()
+  }
+
+  /** Tourne une image d'un quart de tour (`turns` : 1 à droite, −1 à gauche, 2 pour un demi-tour). */
+  function turnImage(index: number, turns: number): void {
+    const primitive = shown.value.visual.primitives[index]
+    if (primitive?.kind !== 'image') return
+    const rotation = ((((primitive.rotation ?? 0) + turns * 90) % 360) + 360) % 360
+    setImageRotation(index, rotation as Rotation)
+  }
+
   // Commandes des formes
 
   function addPrimitive(primitive: Primitive, label: string): number {
@@ -1591,6 +1638,8 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     setStretchSpan,
     importImage,
     resetImageSize,
+    setImageRotation,
+    turnImage,
     addPrimitive,
     updatePrimitive,
     setPrimitive,

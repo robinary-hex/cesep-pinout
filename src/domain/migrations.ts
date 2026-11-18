@@ -388,7 +388,10 @@ export const componentMigrations: MigrationTable = {
     14: migrateComponentV14,
     // v15 → v16 : composants extensibles (`stretch`). Aucun ne l'est au départ.
     15: (raw) => raw,
-    16: migrateComponentV16
+    16: migrateComponentV16,
+    // v17 → v18 : une image peut être tournée (`rotation`). Rien à convertir ; la version monte
+    // pour qu'une application plus ancienne refuse le fichier au lieu de redresser l'image.
+    17: (raw) => raw
   }
 }
 
@@ -688,7 +691,11 @@ export const projectMigrations: MigrationTable = {
     // Projet v26 → v27 : un pont peut porter son bombé (`bulge`). Rien à convertir : sans lui,
     // un pont garde son bombé d'origine. La version ne monte que pour qu'une application plus
     // ancienne refuse le fichier, au lieu de perdre ce bombé en l'enregistrant.
-    26: (raw) => raw
+    26: (raw) => raw,
+    // Projet v27 → v28 : une plaque range ce que portait son dessous quand on le masque
+    // (`stowed`), et une image d'un composant peut être tournée (composant v18). Rien à
+    // convertir, sinon les définitions embarquées, qui passent à la version des composants.
+    27: migrateEmbeddedDefs
   }
 }
 

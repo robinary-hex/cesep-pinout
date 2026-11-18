@@ -5,14 +5,24 @@ import {
   anchorPins,
   BARE_WIRE_COLOR,
   BARE_WIRE_COLOR_NAME,
+  blockMatrix,
   boardFaces,
   boardFootprints,
+  boardLoad,
   boardsCarry,
   facesGap,
   loadOfBoards,
+  NOTHING_TAKEN,
+  projectConnectivity,
   spreadBoard,
+  stowedCount,
+  stowUnderside,
   throughMarks,
-  computeConnectivity,
+  transformedInstance,
+  transformedPoint,
+  transformedRect,
+  unstowUnderside,
+  withoutStowed,
   computeCrossings,
   createEmptyProject,
   crossingPieces,
@@ -87,6 +97,7 @@ import {
   type FaceLoad,
   type PinRef,
   type WireKind,
+  type BlockTurn,
   type FlipAxis,
   type FreeEndStyle,
   type GridPoint,
@@ -365,9 +376,8 @@ export const useSchematicStore = defineStore('schematic', () => {
   /** Les plaques qui montrent leurs deux faces, et la correspondance de leurs trous. */
   const faces = computed(() => boardFaces(doc.value))
   const pinRefs = computed(() => projectPins(doc.value, faces.value))
-  const connectivity = computed(() =>
-    computeConnectivity(doc.value.wires, pinRefs.value, faces.value.twins)
-  )
+  // Ce que relie le dessous masqué d'une plaque compte toujours (voir boardStow.ts).
+  const connectivity = computed(() => projectConnectivity(doc.value, pinRefs.value, faces.value))
   /** Ce qui traverse une plaque à deux faces : les pastilles où une patte ou un fil ressort. */
   const throughs = computed(() => throughMarks(doc.value.wires, pinRefs.value, faces.value))
   /**
@@ -506,6 +516,9 @@ export const useSchematicStore = defineStore('schematic', () => {
     })
   }
 
+  /** Rien à mener ailleurs : la valeur par défaut de `settleWires`. */
+  const NO_PLACED_WIRES: ReadonlyMap<string, GridPoint[]> = new Map()
+
   /**
    * Après qu'une commande a bougé des composants. D'abord les plaques emmènent ce qu'elles
    * portent (`boardsCarry` : composants enfichés, fils et étiquettes de leurs deux faces) ; puis
@@ -516,9 +529,18 @@ export const useSchematicStore = defineStore('schematic', () => {
     draft: Draft<Project>,
     before: Project,
     pinsBefore: readonly PinRef[],
-    translatedWires: ReadonlyMap<string, GridPoint> = new Map()
+    translatedWires: ReadonlyMap<string, GridPoint> = new Map(),
+    /**
+     * Fils que la commande mène elle-même à un nouveau tracé (un bloc qu'on tourne) : comme un
+     * fil déplacé en bloc, chacun garde ses bouts sur les broches restées immobiles.
+     */
+    placedWires: ReadonlyMap<string, GridPoint[]> = NO_PLACED_WIRES
   ): void {
-    const carried = boardsCarry(before, snapshot(draft) as Project, new Set(translatedWires.keys()))
+    const carried = boardsCarry(
+      before,
+      snapshot(draft) as Project,
+      new Set([...translatedWires.keys(), ...placedWires.keys()])
+    )
     if (carried) {
       draft.components.forEach((instance, index) => {
         const moved = carried.instances.get(instance.id)
@@ -535,11 +557,27 @@ export const useSchematicStore = defineStore('schematic', () => {
       [...pinsBefore, ...anchorPins(ends.map((end) => end.from))],
       [...projectPins(draft), ...anchorPins(ends.map((end) => end.to))],
       translatedWires,
-      carried?.wires
+      carried ? new Map([...placedWires, ...carried.wires]) : placedWires
     )
     if (adjusted.some((wire, index) => wire !== before.wires[index])) {
       draft.wires = castDraft(adjusted)
     }
+    // Un pont emmené par un miroir échange ses bouts : il reste bombé du même côté, vu dans le
+    // miroir. Après l'élasticité, qui suit les bouts par leur rang.
+    if (carried) flipJumpers(draft, carried.mirrored)
+  }
+
+  /** Échange les bouts de ceux de ces fils qui sont des ponts, leurs étiquettes avec eux. */
+  function flipJumpers(draft: Draft<Project>, ids: ReadonlySet<string>): void {
+    if (ids.size === 0) return
+    draft.wires.forEach((wire, index) => {
+      if (wire.kind !== 'jumper' || !ids.has(wire.id)) return
+      draft.wires[index] = {
+        ...wire,
+        points: [...wire.points].reverse(),
+        endLabels: { start: wire.endLabels.end, end: wire.endLabels.start }
+      }
+    })
   }
 
   /**
@@ -802,19 +840,39 @@ export const useSchematicStore = defineStore('schematic', () => {
     })
   }
 
-  /** Une plaque à trous montre son dessous à côté de son dessus, ou cesse de le montrer. */
+  /**
+   * Une plaque à trous montre son dessous à côté de son dessus, ou cesse de le montrer. Masqué,
+   * le dessous emporte ce qu'il porte : composants, fils et étiquettes se rangent dans la plaque
+   * et reviennent quand on le remontre (décision du 18 novembre 2026, voir boardStow.ts).
+   */
   function setInstanceUnderside(id: string, shown: boolean): void {
     const target = doc.value.components.find((instance) => instance.id === id)
     if (!target || (target.underside === true) === shown) return
+    const change = shown ? unstowUnderside(doc.value, id) : stowUnderside(doc.value, id)
+    const kept = shown
+      ? stowedCount(target)
+      : stowedCount(change?.components.find((instance) => instance.id === id) ?? {})
     apply(shown ? 'Montrer le dessous' : 'Masquer le dessous', (draft) => {
+      if (change) {
+        draft.components = castDraft(change.components)
+        draft.wires = castDraft(change.wires)
+        draft.labels = castDraft(change.labels)
+        return
+      }
+      // Pas une plaque : le réglage est sans effet, on le note seulement.
       const instance = draft.components.find((candidate) => candidate.id === id)
       if (!instance) return
       if (shown) instance.underside = true
       else delete instance.underside
     })
+    const what = kept > 1 ? `les ${kept} éléments qu’il porte` : 'l’élément qu’il porte'
     status.value = shown
-      ? 'Dessous de la plaque montré à côté d’elle, vu retourné : les fils s’y soudent.'
-      : 'Dessous de la plaque masqué.'
+      ? kept > 0
+        ? `Dessous de la plaque montré, avec ${what}.`
+        : 'Dessous de la plaque montré à côté d’elle, vu retourné : les fils s’y soudent.'
+      : kept > 0
+        ? `Dessous de la plaque masqué, avec ${what}.`
+        : 'Dessous de la plaque masqué.'
   }
 
   /**
@@ -1726,10 +1784,98 @@ export const useSchematicStore = defineStore('schematic', () => {
     )
   }
 
+  /**
+   * Plusieurs éléments sélectionnés tournent ou se retournent d'un bloc, autour d'un même point
+   * (décision du 18 novembre 2026), et non chacun sur soi : composants, fils et étiquettes sont
+   * menés par la même isométrie de la grille (`blockMatrix`, autour du milieu de leur boîte
+   * commune). Les fils non sélectionnés posés sur leurs broches suivent, comme toujours. Le
+   * dessous d'une plaque du bloc, et ce qu'il porte, n'est pas du bloc : il suit sa plaque, vu
+   * de dessous (`settleWires`).
+   */
+  function transformBlock(label: string, turn: BlockTurn): void {
+    const under = {
+      instances: new Set<string>(),
+      wires: new Set<string>(),
+      labels: new Set<string>()
+    }
+    for (const face of faces.value.boards) {
+      if (!selection.value.includes(face.id)) continue
+      const bottom = boardLoad(doc.value, face, NOTHING_TAKEN).bottom
+      for (const id of bottom.instances) under.instances.add(id)
+      for (const id of bottom.wires) under.wires.add(id)
+      for (const id of bottom.labels) under.labels.add(id)
+    }
+    const instances = selectedInstances.value.filter(
+      (instance) => !under.instances.has(instance.id)
+    )
+    const wires = doc.value.wires.filter(
+      (wire) => selectedWires.value.includes(wire.id) && !under.wires.has(wire.id)
+    )
+    const labels = doc.value.labels.filter(
+      (entry) => selectedLabels.value.includes(entry.id) && !under.labels.has(entry.id)
+    )
+    const rects: GridRect[] = []
+    const placedInstances: { instance: ComponentInstance; def: ComponentDefinition }[] = []
+    for (const instance of instances) {
+      const def = instanceDefinition(doc.value, instance)
+      if (!def) continue
+      placedInstances.push({ instance, def })
+      rects.push(instanceBounds(instance, def))
+    }
+    for (const wire of wires) {
+      const box = wireBounds(wire.points)
+      if (box) rects.push(box)
+    }
+    for (const entry of labels) rects.push(textLabelBounds(entry))
+    const [first, ...others] = rects
+    if (!first) return
+    const matrix = blockMatrix(others.reduce(unionRects, first), turn)
+    const mirrored = turn === 'horizontal' || turn === 'vertical'
+    const moved = new Map(
+      placedInstances.map(({ instance, def }) => [
+        instance.id,
+        transformedInstance(instance, def, matrix)
+      ])
+    )
+    const placedWires = new Map(
+      wires.map((wire) => [wire.id, wire.points.map((point) => transformedPoint(matrix, point))])
+    )
+    const boxes = new Map(
+      labels.map((entry) => [entry.id, transformedRect(textLabelBounds(entry), matrix)])
+    )
+    // Un pont retourné se bombe du même côté qu'avant, vu dans le miroir : ses bouts s'échangent.
+    const jumpers = new Set(
+      mirrored ? wires.filter((wire) => wire.kind === 'jumper').map((wire) => wire.id) : []
+    )
+    const before = doc.value
+    const pinsBefore = pinRefs.value
+    apply(label, (draft) => {
+      draft.components.forEach((instance, index) => {
+        const update = moved.get(instance.id)
+        if (update) draft.components[index] = castDraft(update)
+      })
+      for (const entry of draft.labels) {
+        const box = boxes.get(entry.id)
+        if (!box) continue
+        Object.assign(entry, { x: box.x, y: box.y, w: box.width, h: box.height })
+        // Un quart de tour couche l'étiquette : son texte se couche avec sa boîte.
+        if (!mirrored) entry.vertical = !entry.vertical
+      }
+      settleWires(draft, before, pinsBefore, new Map(), placedWires)
+      flipJumpers(draft, jumpers)
+    })
+  }
+
   function transformSelection(
     label: string,
-    transform: (instance: ComponentInstance, def: ComponentDefinition) => ComponentInstance
+    transform: (instance: ComponentInstance, def: ComponentDefinition) => ComponentInstance,
+    turn: BlockTurn
   ): void {
+    // Plusieurs éléments : ils tournent ensemble, autour d'un même point.
+    if (selection.value.length + selectedWires.value.length + selectedLabels.value.length > 1) {
+      transformBlock(label, turn)
+      return
+    }
     // Ce que porte une plaque sélectionnée tourne avec elle, autour d'elle, et non sur soi-même,
     // même sélectionné : la plaque l'emmène (`settleWires`).
     const boards = selectedInstances.value.filter((instance) => {
@@ -1761,14 +1907,16 @@ export const useSchematicStore = defineStore('schematic', () => {
   function rotateSelection(direction: RotateDirection): void {
     transformSelection(
       direction === 'cw' ? 'Rotation horaire' : 'Rotation antihoraire',
-      (instance, def) => rotatedInstance(instance, def, direction)
+      (instance, def) => rotatedInstance(instance, def, direction),
+      direction
     )
   }
 
   function flipSelection(axis: FlipAxis): void {
     transformSelection(
       axis === 'horizontal' ? 'Miroir horizontal' : 'Miroir vertical',
-      (instance) => flippedInstance(instance, axis)
+      (instance) => flippedInstance(instance, axis),
+      axis
     )
   }
 
@@ -1829,7 +1977,8 @@ export const useSchematicStore = defineStore('schematic', () => {
       copies.push({
         def: item.def,
         instance: {
-          ...styled(item.instance),
+          // Une plaque copiée ne copie pas ce que son dessous masqué a rangé.
+          ...withoutStowed(styled(item.instance)),
           id,
           x: item.instance.x + dx,
           y: item.instance.y + dy

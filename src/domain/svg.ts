@@ -2,6 +2,7 @@ import { arrowHeadPoints, middleArrowHead, pointsAttribute, trimForArrows } from
 import { wireEndLabelPlacement, wireRenderParts } from './wireEnds'
 import {
   abuttingImages,
+  imageTurn,
   discsPathData,
   dotRadiusCells,
   HOLE_COLOR,
@@ -32,7 +33,8 @@ import {
   throughMarks,
   unsolderedMarks
 } from './boardFaces'
-import { computeConnectivity, projectPins, type FreeEnd } from './connectivity'
+import { projectConnectivity } from './boardStow'
+import { projectPins, type FreeEnd } from './connectivity'
 import { CROSSING_OVERLAP, crossingPieceEnds, crossingPieces } from './crossings'
 import { FOOTPRINT_STYLE, footprintDashArray, footprintDrawing } from './footprint'
 import { QUARTERS_PER_CELL, type GridPoint, type LocalPoint } from './grid'
@@ -212,9 +214,11 @@ export function primitiveSvg(
     box.width += lap.right
     box.height += lap.below
     const crop = primitive.crop
-    if (crop) {
-      // Une tranche de l'image (composant étiré) : l'image remplit un carré d'une unité, dont
-      // la fenêtre de ce petit SVG ne montre que la tranche voulue.
+    const turn = imageTurn(primitive)
+    if (crop || turn) {
+      // Une tranche de l'image (composant étiré), ou une image tournée : l'image remplit un
+      // carré d'une unité, où elle tourne autour du centre ; la fenêtre de ce petit SVG n'en
+      // montre que la tranche voulue, et l'étire à la taille de la boîte.
       const whole = attrs({
         href: primitive.dataUrl,
         'xlink:href': primitive.dataUrl,
@@ -222,11 +226,13 @@ export function primitiveSvg(
         y: 0,
         width: 1,
         height: 1,
-        preserveAspectRatio: 'none'
+        preserveAspectRatio: 'none',
+        transform: turn
       })
+      const view = crop ? `${crop.x} ${crop.y ?? 0} ${crop.w} ${crop.h ?? 1}` : '0 0 1 1'
       return `<svg ${attrs({
         ...box,
-        viewBox: `${crop.x} ${crop.y ?? 0} ${crop.w} ${crop.h ?? 1}`,
+        viewBox: view,
         preserveAspectRatio: 'none'
       })}><image ${whole}/></svg>`
     }
@@ -404,7 +410,9 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
 
   // Plaques à deux faces : ce qui relie leurs faces, et ce qui ressort de l'une sur l'autre.
   const pins = projectPins(project, faces)
-  const connectivity = computeConnectivity(project.wires, pins, faces.twins)
+  // Ce qu'un dessous masqué relie compte toujours : la plaque n'a pas changé, on ne la voit
+  // que d'un côté.
+  const connectivity = projectConnectivity(project, pins, faces)
   // Une patte soudée à un fil nu montre la goutte de soudure du fil, pas sa marque.
   const through = unsolderedMarks(throughMarks(project.wires, pins, faces), connectivity.solders)
 

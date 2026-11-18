@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import {
   abuttingImages,
+  imageTurn,
   arrowHeadPoints,
   discsPathData,
   dotRadiusCells,
@@ -473,19 +474,30 @@ function menu(index: number, event: MouseEvent): void {
         </template>
 
         <template v-else-if="p.kind === 'image'">
-          <!-- Une tranche de l'image (composant étiré) : l'image remplit un carré d'une unité,
-             dont la fenêtre de ce petit SVG ne montre que la tranche voulue. -->
+          <!-- Une tranche de l'image (composant étiré), ou une image tournée : l'image remplit
+             un carré d'une unité, où elle tourne autour du centre ; la fenêtre de ce petit SVG
+             n'en montre que la tranche voulue, et l'étire à la taille de la boîte. -->
           <svg
-            v-if="p.dataUrl && p.crop"
+            v-if="p.dataUrl && (p.crop || p.rotation)"
             class="image-slice"
             :x="q(p.x)"
             :y="q(p.y)"
             :width="q(p.w) + lapRight(i)"
             :height="q(p.h) + lapBelow(i)"
-            :viewBox="`${p.crop.x} ${p.crop.y ?? 0} ${p.crop.w} ${p.crop.h ?? 1}`"
+            :viewBox="
+              p.crop ? `${p.crop.x} ${p.crop.y ?? 0} ${p.crop.w} ${p.crop.h ?? 1}` : '0 0 1 1'
+            "
             preserveAspectRatio="none"
           >
-            <image :href="p.dataUrl" x="0" y="0" width="1" height="1" preserveAspectRatio="none" />
+            <image
+              :href="p.dataUrl"
+              x="0"
+              y="0"
+              width="1"
+              height="1"
+              preserveAspectRatio="none"
+              :transform="imageTurn(p)"
+            />
           </svg>
           <image
             v-else-if="p.dataUrl"

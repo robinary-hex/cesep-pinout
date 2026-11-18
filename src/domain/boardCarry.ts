@@ -120,7 +120,7 @@ export function boardLoad(project: Project, face: BoardFace, taken: TakenElement
   return load
 }
 
-const NOTHING_TAKEN: TakenElements = {
+export const NOTHING_TAKEN: TakenElements = {
   instances: new Set(),
   wires: new Set(),
   labels: new Set()
@@ -188,10 +188,20 @@ export interface Carried {
   labels: Map<string, Box>
   /** Bouts de fil soudés à un trou d'une plaque : d'où ils partent, où ils arrivent. */
   ends: { from: GridPoint; to: GridPoint }[]
+  /**
+   * Fils emmenés par un miroir (une plaque qu'on retourne) : un pont parmi eux doit échanger ses
+   * bouts pour rester l'image de ce qu'il était, bombé du même côté vu dans le miroir.
+   */
+  mirrored: Set<string>
+}
+
+/** Une isométrie de la grille qui retourne ce qu'elle mène : un miroir, tourné ou non. */
+export function isMirrorMatrix(matrix: Matrix): boolean {
+  return matrix.a * matrix.d - matrix.b * matrix.c < 0
 }
 
 /** Le miroir d'une face à l'autre, en matrice : x devient `flip − x`. */
-function flipMatrix(flip: number): Matrix {
+export function flipMatrix(flip: number): Matrix {
   return { a: -1, b: 0, c: 0, d: 1, e: flip, f: 0 }
 }
 
@@ -265,7 +275,8 @@ export function boardsCarry(
     instances: new Map(),
     wires: new Map(),
     labels: new Map(),
-    ends: []
+    ends: [],
+    mirrored: new Set()
   }
   const instances = new Map(before.components.map((instance) => [instance.id, instance]))
   const wires = new Map(before.wires.map((wire) => [wire.id, wire]))
@@ -300,6 +311,7 @@ export function boardsCarry(
           id,
           wire.points.map((point) => transformedPoint(matrix, point))
         )
+        if (isMirrorMatrix(matrix)) carried.mirrored.add(id)
         taken.wires.add(id)
       }
       for (const id of part.labels) {

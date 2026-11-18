@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { createEmptyComponent, DEFAULT_SHAPE_STYLE } from '@/domain'
+import { pngHeaderDataUrl } from '@/domain/testing/pngHeader'
 import { useLibraryStore } from '@/features/library/store'
 import { setBridge } from '@/io/bridge'
 import type { LibraryEntry } from '@/io/library'
@@ -353,6 +354,50 @@ describe('éditeur de composants : menu contextuel', () => {
       x: (original?.kind === 'rect' ? original.x : 0) + 4,
       y: (original?.kind === 'rect' ? original.y : 0) + 4
     })
+    wrapper.unmount()
+  })
+})
+
+describe('éditeur de composants : rotation d’une image', () => {
+  it('se tourne par le clic droit, ou par la liste « Rotation » de son panneau', async () => {
+    const store = useComponentEditorStore()
+    store.importImage(pngHeaderDataUrl(160, 240), 160, 240)
+    store.inspectorOpen = true
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    await flushPromises()
+    const image = (): unknown => store.doc.visual.primitives[0]
+    rightClick(wrapper.get('.component-graphic .interactive').element)
+    await flushPromises()
+    expect(menuLabels()).toContain('Rotation')
+    menuEntry('Rotation').click()
+    await flushPromises()
+    expect(subMenuLabels()).toEqual([
+      'Quart de tour à droite',
+      'Quart de tour à gauche',
+      'Demi-tour'
+    ])
+    menuEntry('Quart de tour à droite').click()
+    await flushPromises()
+    expect(image()).toMatchObject({ rotation: 90, w: 12, h: 8 })
+    // À l'écran : sa boîte couchée, l'image tournée dedans.
+    expect(wrapper.get('svg.image-slice image').attributes('transform')).toBe('rotate(90 0.5 0.5)')
+    // Le panneau dit son sens, et le règle.
+    const list = wrapper.get<HTMLSelectElement>('.inspector .image-rotation select')
+    expect(list.element.value).toBe('90')
+    await list.setValue('180')
+    expect(image()).toMatchObject({ rotation: 180, w: 8, h: 12 })
+    await list.setValue('0')
+    expect(image()).not.toHaveProperty('rotation')
+    expect(wrapper.find('svg.image-slice').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('une autre forme n’a pas cette entrée', async () => {
+    withRectangle()
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    rightClick(wrapper.get('.component-graphic .interactive').element)
+    await flushPromises()
+    expect(menuLabels()).not.toContain('Rotation')
     wrapper.unmount()
   })
 })

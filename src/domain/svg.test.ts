@@ -178,6 +178,15 @@ describe('export SVG', () => {
       `<svg x="1" y="0" width="2" height="3" viewBox="0.25 0 0.5 1" preserveAspectRatio="none">` +
         `<image href="${dataUrl}" xlink:href="${dataUrl}" x="0" y="0" width="1" height="1" preserveAspectRatio="none"/></svg>`
     )
+    // Une image tournée : elle tourne dans le carré d'une unité, que sa boîte étire ensuite.
+    expect(primitiveSvg({ ...image, dataUrl, rotation: 90 }, 0.1)).toBe(
+      `<svg x="1" y="0" width="2" height="3" viewBox="0 0 1 1" preserveAspectRatio="none">` +
+        `<image href="${dataUrl}" xlink:href="${dataUrl}" x="0" y="0" width="1" height="1" preserveAspectRatio="none" transform="rotate(90 0.5 0.5)"/></svg>`
+    )
+    // Tournée et coupée (composant étiré) : la fenêtre découpe l'image telle qu'on la voit.
+    expect(
+      primitiveSvg({ ...image, dataUrl, rotation: 180, crop: { x: 0.25, w: 0.5 } }, 0.1)
+    ).toContain('viewBox="0.25 0 0.5 1" preserveAspectRatio="none"><image ')
     // Une tranche coupée dans la hauteur : la fenêtre la découpe de haut en bas.
     expect(
       primitiveSvg({ ...image, dataUrl, crop: { x: 0, w: 1, y: 0.25, h: 0.5 } }, 0.1)

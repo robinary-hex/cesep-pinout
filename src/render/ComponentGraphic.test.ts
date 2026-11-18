@@ -155,6 +155,37 @@ describe('ComponentGraphic', () => {
     })
   })
 
+  it('dessine une image tournée dans sa boîte, tournée autour du centre', () => {
+    const def = createEmptyComponent('n', 'N')
+    def.visual = {
+      kind: 'drawing',
+      primitives: [
+        {
+          kind: 'image',
+          x: 0,
+          y: 4,
+          w: 12,
+          h: 8,
+          file: 'image.png',
+          dataUrl: 'data:image/png;base64,AAAA',
+          rotation: 270
+        }
+      ]
+    }
+    const wrapper = mount(ComponentGraphic, { props: { def, cellPx: 20 } })
+    // Sa boîte est celle qu'on voit ; l'image y tourne dans un carré d'une unité.
+    const slice = wrapper.get('svg.image-slice')
+    expect(slice.attributes()).toMatchObject({
+      x: '0',
+      y: '20',
+      width: '60',
+      height: '40',
+      viewBox: '0 0 1 1',
+      preserveAspectRatio: 'none'
+    })
+    expect(slice.get('image').attributes('transform')).toBe('rotate(270 0.5 0.5)')
+  })
+
   it('fait déborder d’un pixel une image sur sa voisine de droite', () => {
     const def = createEmptyComponent('n', 'N')
     const image = {

@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 27,
+  "name": "Avant le dessous rangé",
+  "profile": {
+    "name": "Standard",
+    "cellPx": 20,
+    "wireWidth": 0.15,
+    "wireBorder": 0,
+    "wireBorderColor": "#000000",
+    "cornerRadius": 0.4,
+    "componentStroke": 0.1,
+    "junctionScale": 2,
+    "junctionColor": "wire",
+    "labelFont": {
+      "family": "Segoe UI",
+      "size": 11
+    },
+    "endLabelFont": {
+      "family": "Segoe UI",
+      "size": 14
+    }
+  },
+  "styles": [],
+  "components": [
+    {
+      "id": "c1",
+      "defId": "module",
+      "x": 2,
+      "y": 2,
+      "rotation": 0,
+      "mirror": false,
+      "label": "",
+      "fields": {},
+      "behindWires": true
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "color": "#1d4ed8",
+      "kind": "jumper",
+      "bulge": -3.25,
+      "points": [
+        [0, 3],
+        [10, 3]
+      ],
+      "stack": 0,
+      "freeEnds": "flat",
+      "endLabels": {
+        "start": "",
+        "end": ""
+      }
+    }
+  ],
+  "crossingOverrides": [],
+  "labels": [],
+  "customColors": [],
+  "embeddedDefs": {
+    "module": {
+      "schemaVersion": 17,
+      "id": "module",
+      "name": "Module",
+      "category": "Modules",
+      "description": "",
+      "size": { "widthCells": 4, "heightCells": 2 },
+      "visual": {
+        "kind": "drawing",
+        "primitives": [
+          {
+            "kind": "rect",
+            "x": 0,
+            "y": 0,
+            "w": 16,
+            "h": 8,
+            "rx": 0,
+            "style": { "stroke": "#000000", "weight": 1, "fill": "none", "fillOpacity": 1 }
+          }
+        ]
+      },
+      "pins": [{ "id": "p1", "name": "1", "kind": "io", "x": 0, "y": 1 }]
+    }
+  }
+}

@@ -377,6 +377,64 @@ describe('éditeur de composants : images', () => {
     expect(store.doc.visual.primitives[0]).toMatchObject({ w: 4, h: 6 })
   })
 
+  it('tourne une image par quarts de tour, sa boîte avec elle', () => {
+    const store = useComponentEditorStore()
+    store.setSize({ widthCells: 6, heightCells: 6 })
+    store.addPrimitive({ kind: 'dot', x: 4, y: 4, scale: 1, color: '#000000' }, 'Ajouter un point')
+    store.importImage(led, 160, 240)
+    const image = (): unknown => store.doc.visual.primitives[1]
+    expect(image()).toMatchObject({ x: 8, y: 8, w: 8, h: 12 })
+    // Un quart de tour à droite : couchée, autour de son centre.
+    store.turnImage(1, 1)
+    expect(image()).toMatchObject({ rotation: 90, x: 6, y: 10, w: 12, h: 8 })
+    expect(store.undoLabel).toBe('Tourner l’image')
+    // Le composant, qui a d'autres formes, garde sa boîte.
+    expect(store.doc.size).toEqual({ widthCells: 6, heightCells: 6 })
+    // Encore un : à l'envers, dans sa boîte d'origine ; puis à gauche, de nouveau couchée.
+    store.turnImage(1, 1)
+    expect(image()).toMatchObject({ rotation: 180, x: 8, y: 8, w: 8, h: 12 })
+    store.turnImage(1, -1)
+    expect(image()).toMatchObject({ rotation: 90 })
+    // Le panneau donne son sens tout droit ; le même ne fait rien.
+    store.setImageRotation(1, 270)
+    expect(image()).toMatchObject({ rotation: 270, w: 12, h: 8 })
+    const before = store.doc
+    store.setImageRotation(1, 270)
+    expect(store.doc).toBe(before)
+    // Couchée, sa taille d'origine l'est aussi.
+    const lying = store.doc.visual.primitives[1]
+    if (lying?.kind !== 'image') throw new Error('image attendue')
+    store.setPrimitive(1, { ...lying, w: 6, h: 4 }, 'Modifier')
+    store.resetImageSize(1)
+    expect(image()).toMatchObject({ w: 12, h: 8 })
+    // Redressée : plus de rotation dans le fichier.
+    store.setImageRotation(1, 0)
+    expect(image()).not.toHaveProperty('rotation')
+    // Une autre forme ne se tourne pas ainsi.
+    const dotted = store.doc
+    store.turnImage(0, 1)
+    expect(store.doc).toBe(dotted)
+  })
+
+  it('une image qui est tout le composant emmène sa boîte en tournant', () => {
+    const store = useComponentEditorStore()
+    // Importée dans un composant vierge, qui a pris sa taille : 2 × 3 cellules.
+    store.importImage(led, 160, 240)
+    expect(store.doc.size).toEqual({ widthCells: 2, heightCells: 3 })
+    store.turnImage(0, 1)
+    expect(store.doc.size).toEqual({ widthCells: 3, heightCells: 2 })
+    expect(store.doc.visual.primitives[0]).toMatchObject({ rotation: 90, x: 0, y: 0, w: 12, h: 8 })
+    // Une seule commande, qui s'annule d'un coup.
+    store.undo()
+    expect(store.doc.size).toEqual({ widthCells: 2, heightCells: 3 })
+    expect(store.doc.visual.primitives[0]).not.toHaveProperty('rotation')
+    // Dès qu'une broche est posée, la boîte ne bouge plus : l'image seule tourne.
+    store.addPin({ x: 0, y: 1 })
+    store.turnImage(0, 1)
+    expect(store.doc.size).toEqual({ widthCells: 2, heightCells: 3 })
+    expect(store.doc.visual.primitives[0]).toMatchObject({ rotation: 90, x: -2, y: 2, w: 12, h: 8 })
+  })
+
   it('colle une image d’un autre composant sans lui donner le fichier d’une image d’ici', () => {
     const store = useComponentEditorStore()
     store.importImage(led, 160, 240)

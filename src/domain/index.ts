@@ -2,6 +2,7 @@
 export * from './arrows'
 export * from './boardCarry'
 export * from './boardFaces'
+export * from './boardStow'
 export * from './color'
 export * from './component'
 export * from './connectivity'

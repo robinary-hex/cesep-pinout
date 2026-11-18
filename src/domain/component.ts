@@ -4,13 +4,15 @@ import {
   isInsideBox,
   PNG_PX_PER_CELL,
   QUARTERS_PER_CELL,
+  rotationSchema,
   sizeSchema,
   type LocalPoint,
+  type Rotation,
   type Size
 } from './grid'
 import { pngDataUrlDimensions } from './png'
 
-export const COMPONENT_SCHEMA_VERSION = 17
+export const COMPONENT_SCHEMA_VERSION = 18
 
 export const pinKindSchema = z.enum(['in', 'out', 'io', 'power'])
 export type PinKind = z.infer<typeof pinKindSchema>
@@ -193,8 +195,15 @@ export const primitiveSchema = z.discriminatedUnion('kind', [
     /** Copie embarquée de l'image (dans un projet ou en mémoire) ; absente du fichier de la bibliothèque. */
     dataUrl: z.string().startsWith('data:image/png;base64,').optional(),
     /**
+     * Sens de l'image dans sa boîte (décision du 18 novembre 2026) : tournée de ce nombre de
+     * degrés, sens horaire ; absente : comme dans son fichier. La boîte est celle de l'image
+     * telle qu'on la voit : un quart de tour échange sa largeur et sa hauteur.
+     */
+    rotation: rotationSchema.optional(),
+    /**
      * Tranche de l'image que la boîte montre, en fractions de sa largeur (`x`, `w`) et de sa
-     * hauteur (`y`, `h` ; absentes : toute la hauteur) ; absente : l'image entière. Posée par
+     * hauteur (`y`, `h` ; absentes : toute la hauteur) ; absente : l'image entière. Ces
+     * fractions sont celles de l'image telle qu'on la voit, tournée s'il y a lieu. Posée par
      * l'étirement d'un composant extensible, qui coupe une image aux traits du motif
      * (stretch.ts) ; l'éditeur ne l'écrit jamais.
      */
@@ -1224,18 +1233,59 @@ export function importedImageSize(widthPx: number, heightPx: number): { w: numbe
   }
 }
 
-/** Taille naturelle d'une image posée (quarts de cellule), ou null quand son fichier manque. */
-export function naturalImageSize(image: ImagePrimitive): { w: number; h: number } | null {
-  const pixels = image.dataUrl === undefined ? null : pngDataUrlDimensions(image.dataUrl)
-  return pixels ? importedImageSize(pixels.width, pixels.height) : null
+/** Une image tournée d'un quart de tour est couchée : sa largeur est la hauteur de son fichier. */
+function lyingImage(image: ImagePrimitive): boolean {
+  return image.rotation === 90 || image.rotation === 270
 }
 
-/** Largeur sur hauteur d'une image : celle de son fichier, sinon celle de sa boîte. */
+/**
+ * Taille naturelle d'une image posée (quarts de cellule), telle qu'on la voit : couchée si elle
+ * est tournée d'un quart de tour ; null quand son fichier manque.
+ */
+export function naturalImageSize(image: ImagePrimitive): { w: number; h: number } | null {
+  const pixels = image.dataUrl === undefined ? null : pngDataUrlDimensions(image.dataUrl)
+  if (!pixels) return null
+  return lyingImage(image)
+    ? importedImageSize(pixels.height, pixels.width)
+    : importedImageSize(pixels.width, pixels.height)
+}
+
+/**
+ * Largeur sur hauteur d'une image telle qu'on la voit : celle de son fichier (inversée pour
+ * une image couchée), sinon celle de sa boîte.
+ */
 export function imageRatio(image: ImagePrimitive): number {
   const pixels = image.dataUrl === undefined ? null : pngDataUrlDimensions(image.dataUrl)
-  return pixels && pixels.height > 0 && pixels.width > 0
-    ? pixels.width / pixels.height
-    : image.w / image.h
+  if (!pixels || pixels.height <= 0 || pixels.width <= 0) return image.w / image.h
+  return lyingImage(image) ? pixels.height / pixels.width : pixels.width / pixels.height
+}
+
+/**
+ * La même image dans un autre sens (0, 90, 180 ou 270°, sens horaire). Un quart de tour couche
+ * sa boîte autour de son centre, au quart de cellule près ; un demi-tour la laisse où elle est.
+ */
+export function turnedImage(image: ImagePrimitive, rotation: Rotation): ImagePrimitive {
+  const from = image.rotation ?? 0
+  const turned: ImagePrimitive = { ...image }
+  if (rotation === 0) delete turned.rotation
+  else turned.rotation = rotation
+  if ((rotation - from) % 180 !== 0) {
+    const shift = Math.trunc((image.w - image.h) / 2)
+    turned.x = image.x + shift
+    turned.y = image.y - shift
+    turned.w = image.h
+    turned.h = image.w
+  }
+  return turned
+}
+
+/**
+ * Attribut `transform` de l'image dessinée dans un carré d'une unité (voir ComponentGraphic et
+ * svg.ts) : tournée autour du centre de ce carré, que sa boîte étire ensuite à sa taille.
+ * Indéfini pour une image dans le sens de son fichier.
+ */
+export function imageTurn(image: ImagePrimitive): string | undefined {
+  return image.rotation ? `rotate(${image.rotation} 0.5 0.5)` : undefined
 }
 
 /**
