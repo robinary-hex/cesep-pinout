@@ -11,14 +11,22 @@ import { parseProject, serializeProject } from './serialize'
 import { DEFAULT_EXPORT } from './settings'
 import { buildProjectSvg } from './svg'
 import { unsolderedMarks } from './boardFaces'
+import { projectBounds } from './placement'
 import {
   BARE_WIRE_COLOR,
+  bulgeToward,
+  JUMPER_BULGE_LIMITS,
+  jumperApex,
+  jumperBulge,
   jumperControl,
+  jumperOutline,
   jumperPathData,
   movedWireVertex,
+  normalizedBulge,
   solderMark,
   wireBorder,
   wireKindLabel,
+  wireOutline,
   wireShapeData
 } from './wireKinds'
 
@@ -86,6 +94,108 @@ describe('sortes de fils : tracé', () => {
     expect(wireShapeData('jumper', points, 0)).toContain(' Q ')
     expect(wireShapeData('bare', points, 0)).not.toContain(' Q ')
     expect(wireShapeData(undefined, points, 0)).toBe(wireShapeData('bare', points, 0))
+  })
+
+  it('un pont a le bombé qu’on lui donne, d’un côté ou de l’autre ; sinon celui d’origine', () => {
+    const points: GridPoint[] = [
+      [0, 0],
+      [10, 0]
+    ]
+    // Sans bombé à lui : celui d'origine, qui grandit avec la corde entre deux bornes.
+    expect(jumperBulge(points)).toBeCloseTo(1.8)
+    expect(
+      jumperBulge([
+        [0, 0],
+        [0, 2]
+      ])
+    ).toBe(0.5)
+    expect(
+      jumperBulge([
+        [0, 0],
+        [40, 0]
+      ])
+    ).toBe(2)
+    // Le sien : en cellules, quelle que soit sa longueur. Le sommet de la courbe est à cette
+    // distance de la corde, le point de contrôle deux fois plus loin.
+    expect(jumperBulge(points, 3)).toBe(3)
+    expect(jumperApex(points, 3)).toEqual({ x: 5, y: -3 })
+    expect(jumperControl([0, 0], [10, 0], 3)).toEqual({ x: 5, y: -6 })
+    expect(jumperPathData(points, 3)).toBe('M 0 0 Q 5 -6 10 0')
+    expect(wireShapeData('jumper', points, 0, 3)).toBe('M 0 0 Q 5 -6 10 0')
+    // Négatif : de l'autre côté, à droite de son sens de tracé.
+    expect(jumperApex(points, -3)).toEqual({ x: 5, y: 3 })
+    expect(jumperPathData(points, -3)).toBe('M 0 0 Q 5 6 10 0')
+    // Un fil qui n'est pas un pont ne s'en soucie pas.
+    expect(wireShapeData(undefined, points, 0, 3)).toBe(wireShapeData(undefined, points, 0))
+  })
+
+  it('un bombé demandé va par quarts de cellule, entre ses bornes, et jamais à zéro', () => {
+    expect(normalizedBulge(1.3)).toBe(1.25)
+    expect(normalizedBulge(-1.4)).toBe(-1.5)
+    expect(normalizedBulge(99)).toBe(JUMPER_BULGE_LIMITS.max)
+    expect(normalizedBulge(-99)).toBe(-JUMPER_BULGE_LIMITS.max)
+    // Trop petit pour une courbe : le plus petit bombé, du côté demandé.
+    expect(normalizedBulge(0.05)).toBe(JUMPER_BULGE_LIMITS.min)
+    expect(normalizedBulge(-0.05)).toBe(-JUMPER_BULGE_LIMITS.min)
+    // Nul : le côté qu'on lui dit.
+    expect(normalizedBulge(0, 1)).toBe(JUMPER_BULGE_LIMITS.min)
+    expect(normalizedBulge(0, -2)).toBe(-JUMPER_BULGE_LIMITS.min)
+  })
+
+  it('glisser la courbe d’un pont : elle passe sous le pointeur, et se retourne passé la corde', () => {
+    // De gauche à droite : la gauche du tracé est en haut (y négatif).
+    const points: GridPoint[] = [
+      [0, 0],
+      [10, 0]
+    ]
+    // Tenue par son sommet : le bombé est la distance du pointeur à la corde.
+    expect(bulgeToward(points, { x: 5, y: -3 }, 1.8)).toBe(3)
+    expect(bulgeToward(points, { x: 5, y: -0.6 }, 1.8)).toBe(0.5)
+    // De l'autre côté de la corde : le pont se retourne.
+    expect(bulgeToward(points, { x: 5, y: 2 }, 1.8)).toBe(-2)
+    // Sur la corde même : il garde son côté, au plus petit bombé.
+    expect(bulgeToward(points, { x: 5, y: 0 }, 1.8)).toBe(JUMPER_BULGE_LIMITS.min)
+    expect(bulgeToward(points, { x: 5, y: 0 }, -1.8)).toBe(-JUMPER_BULGE_LIMITS.min)
+    // Tenue au quart de la corde, la courbe y est aux trois quarts de son bombé : pour passer à
+    // 1,5 cellule sous le pointeur, il lui faut un bombé de 2.
+    const bulge = bulgeToward(points, { x: 2.5, y: -1.5 }, 1.8)
+    expect(bulge).toBe(2)
+    const quarter = jumperOutline(points, bulge, 4)[1]
+    expect(quarter).toEqual([2.5, -1.5])
+    // Tout près d'un bout, le bombé ne s'emballe pas.
+    expect(bulgeToward(points, { x: 0.1, y: -1 }, 1.8)).toBeLessThanOrEqual(1.75)
+    // Un pont en biais : le côté se lit par rapport à son sens de tracé.
+    const down: GridPoint[] = [
+      [0, 0],
+      [0, 8]
+    ]
+    expect(bulgeToward(down, { x: 2, y: 4 }, 1)).toBe(2)
+    expect(bulgeToward(down, { x: -2, y: 4 }, 1)).toBe(-2)
+  })
+
+  it('un pont occupe la place de sa courbe : sa boîte et celle du montage la comptent', () => {
+    const points: GridPoint[] = [
+      [0, 0],
+      [10, 0]
+    ]
+    const outline = jumperOutline(points, 4)
+    expect(outline[0]).toEqual([0, 0])
+    expect(outline.at(-1)).toEqual([10, 0])
+    expect(outline[8]).toEqual([5, -4])
+    expect(Math.min(...outline.map((point) => point[1]))).toBe(-4)
+    // Un fil ordinaire : ses sommets.
+    expect(wireOutline(wire('w', points))).toBe(points)
+    expect(wireOutline({ ...wire('j', points, 'jumper'), bulge: 4 })).toEqual(outline)
+    // La boîte du montage monte jusqu'au sommet de la courbe : l'export ne la coupe pas.
+    const project = {
+      ...createEmptyProject('Pont', DEFAULT_PROFILE),
+      wires: [{ ...wire('j', points, 'jumper'), bulge: 4 }]
+    }
+    expect(projectBounds(project)).toEqual({ x: 0, y: -4, width: 10, height: 4 })
+    const flipped = { ...project, wires: [{ ...wire('j', points, 'jumper'), bulge: -4 }] }
+    expect(projectBounds(flipped)).toEqual({ x: 0, y: 0, width: 10, height: 4 })
+    const svg = buildProjectSvg(project, DEFAULT_EXPORT)?.svg ?? ''
+    expect(svg).toContain('d="M 0 0 Q 5 -8 10 0"')
   })
 
   it('le bout d’un pont va où on le pose ; celui d’un fil ajoute un coude', () => {

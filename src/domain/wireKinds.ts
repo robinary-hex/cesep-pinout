@@ -119,46 +119,162 @@ export function wireKindLabel(kind: WireKind | undefined): string {
   return kind === 'bare' ? 'Fil nu' : kind === 'jumper' ? 'Pont' : 'Fil'
 }
 
-/** Bombé d'un pont au milieu de sa corde, en cellules : il grandit avec elle, entre deux bornes. */
-function jumperBulge(length: number): number {
+/**
+ * Bombé d'un pont (décision du 18 novembre 2026) : la flèche de sa courbe, c'est-à-dire la
+ * distance de son sommet à sa corde, en cellules. Positif, le pont se bombe à gauche de son sens
+ * de tracé (vers le haut quand on le trace de gauche à droite) ; négatif, à droite. Un pont
+ * tout juste posé n'en a pas d'enregistré : son bombé d'origine grandit avec sa corde, entre
+ * deux bornes. Celui qu'on lui donne (`bulge` du fil) est en cellules et ne change plus avec
+ * sa longueur ; il va par quarts de cellule, entre ces bornes, et jamais à zéro : un pont
+ * reste une courbe.
+ */
+export const JUMPER_BULGE_STEP = 0.25
+export const JUMPER_BULGE_LIMITS = { min: 0.25, max: 20 }
+
+/** Bombé d'origine d'un pont dont la corde a cette longueur. */
+function defaultBulge(length: number): number {
   return Math.min(2, Math.max(0.5, length * 0.18))
 }
 
+/** Bombé avec lequel un pont se dessine : celui qu'on lui a donné, sinon celui d'origine. */
+export function jumperBulge(points: readonly GridPoint[], bulge?: number): number {
+  if (bulge !== undefined) return bulge
+  const from = points[0]
+  const to = points.at(-1)
+  return from && to ? defaultBulge(Math.hypot(to[0] - from[0], to[1] - from[1])) : 0
+}
+
 /**
- * Point de contrôle de la courbe d'un pont (une courbe de Bézier quadratique de A à B). Le pont
- * se bombe à gauche de son sens de tracé : vers le haut quand on le trace de gauche à droite. Le
- * retourner (échanger ses bouts) le bombe de l'autre côté.
+ * Un bombé demandé, ramené au pas et entre les bornes. `side` dit de quel côté le mettre (son
+ * signe) quand la valeur est nulle.
  */
-export function jumperControl(from: GridPoint, to: GridPoint): LocalPoint {
+export function normalizedBulge(value: number, side = 1): number {
+  const { min, max } = JUMPER_BULGE_LIMITS
+  const stepped = Math.round(Math.abs(value) / JUMPER_BULGE_STEP) * JUMPER_BULGE_STEP
+  const size = Math.min(max, Math.max(min, stepped))
+  const left = value === 0 ? side >= 0 : value > 0
+  return left ? size : -size
+}
+
+/**
+ * Le milieu de la corde d'un pont, écarté d'elle de `offset` cellules : à gauche de son sens de
+ * tracé, à droite si négatif.
+ */
+function besideChord(from: GridPoint, to: GridPoint, offset: number): LocalPoint {
   const dx = to[0] - from[0]
   const dy = to[1] - from[1]
   const length = Math.hypot(dx, dy)
   const middle = { x: (from[0] + to[0]) / 2, y: (from[1] + to[1]) / 2 }
   if (length === 0) return middle
-  // Le sommet d'une quadratique est à mi-chemin de son point de contrôle : deux fois le bombé.
-  const reach = 2 * jumperBulge(length)
   return {
-    x: rounded(middle.x + (dy / length) * reach),
-    y: rounded(middle.y - (dx / length) * reach)
+    x: rounded(middle.x + (dy / length) * offset),
+    y: rounded(middle.y - (dx / length) * offset)
   }
 }
 
+/**
+ * Point de contrôle de la courbe d'un pont (une courbe de Bézier quadratique de A à B). Sans
+ * bombé donné, celui d'origine : à gauche du sens de tracé. Retourner un pont (échanger ses
+ * bouts) le bombe de l'autre côté.
+ */
+export function jumperControl(from: GridPoint, to: GridPoint, bulge?: number): LocalPoint {
+  // Le sommet d'une quadratique est à mi-chemin de son point de contrôle : deux fois le bombé.
+  return besideChord(from, to, 2 * jumperBulge([from, to], bulge))
+}
+
+/** Sommet de la courbe d'un pont : son point le plus loin de sa corde, au milieu. */
+export function jumperApex(points: readonly GridPoint[], bulge?: number): LocalPoint | null {
+  const from = points[0]
+  const to = points.at(-1)
+  if (!from || !to || points.length < 2) return null
+  return besideChord(from, to, jumperBulge(points, bulge))
+}
+
 /** Tracé SVG d'un pont, de son premier à son dernier sommet. */
-export function jumperPathData(points: readonly GridPoint[]): string {
+export function jumperPathData(points: readonly GridPoint[], bulge?: number): string {
   const from = points[0]
   const to = points.at(-1)
   if (!from || !to || points.length < 2) return ''
-  const control = jumperControl(from, to)
+  const control = jumperControl(from, to, bulge)
   return `M ${from[0]} ${from[1]} Q ${control.x} ${control.y} ${to[0]} ${to[1]}`
+}
+
+/**
+ * Bombé qui fait passer la courbe d'un pont par un point : celui qu'on règle en glissant sa
+ * courbe (Ctrl+glisser). La courbe suit le pointeur là où on la tient, pas seulement en son
+ * sommet ; de l'autre côté de la corde, elle se retourne. `current` : le bombé du moment, qui
+ * garde son côté quand le point est sur la corde même.
+ */
+export function bulgeToward(
+  points: readonly GridPoint[],
+  point: LocalPoint,
+  current: number
+): number {
+  const from = points[0]
+  const to = points.at(-1)
+  if (!from || !to) return current
+  const dx = to[0] - from[0]
+  const dy = to[1] - from[1]
+  const length = Math.hypot(dx, dy)
+  if (length === 0) return current
+  // Où l'on tient la courbe le long de sa corde (0 au départ, 1 à l'arrivée), et l'écart du
+  // point à la corde, positif à gauche du sens de tracé.
+  const along = ((point.x - from[0]) * dx + (point.y - from[1]) * dy) / (length * length)
+  const across = ((point.x - from[0]) * dy - (point.y - from[1]) * dx) / length
+  // À la fraction t de sa corde, la courbe s'en écarte de 4·t·(1 − t) fois son bombé. Près des
+  // bouts ce facteur tend vers zéro : on ne le laisse pas emballer le bombé.
+  const t = Math.min(0.8, Math.max(0.2, along))
+  return normalizedBulge(across / (4 * t * (1 - t)), current)
+}
+
+/**
+ * Points par où passe la courbe d'un pont, bouts compris : de quoi en tirer sa boîte, ou savoir
+ * si un cadre de sélection la touche.
+ */
+export function jumperOutline(
+  points: readonly GridPoint[],
+  bulge?: number,
+  steps = 16
+): GridPoint[] {
+  const from = points[0]
+  const to = points.at(-1)
+  if (!from || !to || points.length < 2) return [...points]
+  const control = jumperControl(from, to, bulge)
+  const outline: GridPoint[] = []
+  for (let step = 0; step <= steps; step++) {
+    const t = step / steps
+    const a = (1 - t) * (1 - t)
+    const b = 2 * t * (1 - t)
+    const c = t * t
+    outline.push([
+      rounded(a * from[0] + b * control.x + c * to[0]),
+      rounded(a * from[1] + b * control.y + c * to[1])
+    ])
+  }
+  return outline
+}
+
+/**
+ * Ce qu'un fil occupe sur le montage : ses sommets, ou, pour un pont, les points de sa courbe,
+ * qui s'écarte de ses deux bouts. À prendre pour sa boîte et pour le cadre de sélection ; ses
+ * sommets (`points`) restent ce à quoi on le relie.
+ */
+export function wireOutline(wire: {
+  kind?: WireKind | undefined
+  points: readonly GridPoint[]
+  bulge?: number | undefined
+}): readonly GridPoint[] {
+  return wire.kind === 'jumper' ? jumperOutline(wire.points, wire.bulge) : wire.points
 }
 
 /** Tracé SVG d'un fil selon sa sorte : la courbe d'un pont, sinon ses segments aux coins arrondis. */
 export function wireShapeData(
   kind: WireKind | undefined,
   points: readonly GridPoint[],
-  cornerRadius: number
+  cornerRadius: number,
+  bulge?: number
 ): string {
-  return kind === 'jumper' ? jumperPathData(points) : wirePathData(points, cornerRadius)
+  return kind === 'jumper' ? jumperPathData(points, bulge) : wirePathData(points, cornerRadius)
 }
 
 /**

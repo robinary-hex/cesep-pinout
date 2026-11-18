@@ -18,9 +18,10 @@ import {
 } from './grid'
 import { styleProfileSchema, type StyleProfile } from './profile'
 import { stretchedDefinition } from './stretch'
+import { JUMPER_BULGE_LIMITS } from './wireKinds'
 import { isUTurn, segmentStep } from './wires'
 
-export const PROJECT_SCHEMA_VERSION = 26
+export const PROJECT_SCHEMA_VERSION = 27
 
 /**
  * Style propre à un élément du montage (voir styles.ts) : le nom d'un des `styles` du montage ;
@@ -135,6 +136,11 @@ export const wireSchema = z
     group: groupSchema,
     style: elementStyleSchema,
     kind: wireKindSchema.optional(),
+    /**
+     * Bombé d'un pont, en cellules (voir wireKinds.ts) : positif à gauche de son sens de tracé,
+     * négatif à droite. Absent : celui d'origine, qui grandit avec sa corde.
+     */
+    bulge: z.number().min(-JUMPER_BULGE_LIMITS.max).max(JUMPER_BULGE_LIMITS.max).optional(),
     color: hexColorSchema,
     points: z.array(gridPointSchema).min(2),
     /** Rang d'empilement : un fil de rang supérieur passe au-dessus aux croisements. */

@@ -274,6 +274,62 @@ describe('montage : variante d’un composant posé', () => {
   })
 })
 
+describe('montage : courbure d’un pont', () => {
+  it('le panneau d’un pont donne sa courbure, qu’on règle sans changer son côté', async () => {
+    const store = useSchematicStore()
+    const jumper = store.addWire(
+      [
+        [0, 0],
+        [10, 0]
+      ],
+      '#d62828',
+      'jumper'
+    )
+    const plain = store.addWire([
+      [0, 4],
+      [10, 4]
+    ])
+    if (!jumper || !plain) throw new Error('fil refusé')
+    store.selectedWires = [jumper]
+    store.inspectorOpen = true
+    const wrapper = mount(SchematicEditor, { attachTo: document.body })
+    await flushPromises()
+    const field = (): HTMLInputElement =>
+      wrapper.get('.inspector .jumper-bulge').get('input').element
+    const type = async (value: string): Promise<void> => {
+      field().value = value
+      field().dispatchEvent(new Event('change', { bubbles: true }))
+      await flushPromises()
+    }
+    // Le bombé d'origine, puis celui qu'on tape, au quart de cellule.
+    expect(wrapper.get('.inspector .jumper-bulge span').text()).toBe('Courbure (cellules)')
+    expect(field().value).toBe('1.8')
+    expect([field().min, field().max, field().step]).toEqual(['0.25', '20', '0.25'])
+    await type('3.1')
+    expect(store.doc.wires[0]?.bulge).toBe(3)
+    expect(field().value).toBe('3')
+    // Bombé de l'autre côté, il y reste : le champ ne dit que la grandeur.
+    store.setJumperBulge(jumper, -2)
+    await flushPromises()
+    expect(field().value).toBe('2')
+    await type('4')
+    expect(store.doc.wires[0]?.bulge).toBe(-4)
+    // Hors des bornes : ramené, et le champ le redit ; vide ou nul : rien ne change.
+    await type('80')
+    expect(store.doc.wires[0]?.bulge).toBe(-20)
+    expect(field().value).toBe('20')
+    await type('')
+    await type('0')
+    expect(store.doc.wires[0]?.bulge).toBe(-20)
+    expect(field().value).toBe('20')
+    // Un fil ordinaire n'a pas ce champ.
+    store.selectedWires = [plain]
+    await flushPromises()
+    expect(wrapper.find('.inspector .jumper-bulge').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})
+
 describe('montage : composant extensible', () => {
   it('le panneau donne son nombre de motifs, entre ses bornes', async () => {
     const store = useSchematicStore()

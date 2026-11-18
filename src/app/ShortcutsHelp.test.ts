@@ -25,6 +25,7 @@ describe('aide sur les raccourcis', () => {
       'Outils',
       'Tracer un fil',
       'Retoucher un fil',
+      'Retoucher un pont',
       'Composants et étiquettes',
       'Ordre',
       'Sélectionner',

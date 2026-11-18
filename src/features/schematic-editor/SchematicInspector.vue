@@ -4,6 +4,9 @@ import {
   BASE_VARIANT,
   startsDocumentColors,
   wireKindLabel,
+  JUMPER_BULGE_LIMITS,
+  JUMPER_BULGE_STEP,
+  jumperBulge,
   componentVariants,
   hasVariants,
   instanceDefinition,
@@ -18,7 +21,8 @@ import {
   type Rotation,
   type StretchAxis,
   type StyleProfile,
-  type TextAnchor
+  type TextAnchor,
+  type Wire
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import ColorAdder from '@/ui/ColorAdder.vue'
@@ -191,6 +195,26 @@ const allBare = computed(
     selectedWireList.value.length > 0 &&
     selectedWireList.value.every((wire) => wire.kind === 'bare')
 )
+
+/** Courbure d'un pont, telle que le panneau la dit : sa grandeur, sans son côté. */
+function bulgeSize(wire: Wire): number {
+  return Math.round(Math.abs(jumperBulge(wire.points, wire.bulge)) * 100) / 100
+}
+
+/** Champ « Courbure » d'un pont : sa grandeur ; le pont reste bombé du même côté. */
+function setBulge(event: Event): void {
+  const wire = singleWire.value
+  if (!wire) return
+  const field = event.target as HTMLInputElement
+  const wanted = field.value.trim() === '' ? NaN : Number(field.value)
+  if (Number.isFinite(wanted) && wanted > 0) {
+    const side = jumperBulge(wire.points, wire.bulge) < 0 ? -1 : 1
+    store.setJumperBulge(wire.id, side * wanted)
+  }
+  // Vide ou hors des bornes : le champ redit la courbure retenue.
+  const kept = singleWire.value
+  if (kept) field.value = String(bulgeSize(kept))
+}
 
 function setWireKind(event: Event): void {
   store.setWiresKind(
@@ -663,6 +687,17 @@ function setLabelVertical(event: Event): void {
         </div>
       </div>
       <template v-if="singleWire">
+        <label v-if="singleWire.kind === 'jumper'" class="field jumper-bulge">
+          <span>Courbure (cellules)</span>
+          <input
+            type="number"
+            :min="JUMPER_BULGE_LIMITS.min"
+            :max="JUMPER_BULGE_LIMITS.max"
+            :step="JUMPER_BULGE_STEP"
+            :value="bulgeSize(singleWire)"
+            @change="setBulge"
+          />
+        </label>
         <label class="field">
           <span>Extrémités libres</span>
           <select :value="singleWire.freeEnds" @change="setFreeEnds">

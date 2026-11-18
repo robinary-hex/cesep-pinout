@@ -200,6 +200,15 @@ export const SHORTCUT_SECTIONS: ShortcutSection[] = [
         ]
       },
       {
+        // Un pont n'a ni coude ni tronçon : Ctrl y saisit sa courbe.
+        title: 'Retoucher un pont',
+        rows: [
+          k('glisser', 'Déplacer le pont ou un bout'),
+          k('Ctrl+glisser', 'Régler sa courbure'),
+          k('Ctrl+clic', 'Le bomber de l’autre côté', { icon: 'swap' })
+        ]
+      },
+      {
         title: 'Composants et étiquettes',
         rows: [
           k('R', 'Tourner', { icon: 'rotate-cw', withShift: 'sens inverse' }),

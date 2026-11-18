@@ -547,7 +547,7 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
     const over: string[] = []
     if (wire.kind === 'jumper') {
       // Un pont : une courbe de A à B, sans flèche ni pointillés.
-      const d = jumperPathData(wire.points)
+      const d = jumperPathData(wire.points, wire.bulge)
       if (border) {
         under.push(
           `<path ${attrs({ d, fill: 'none', stroke: border.color, 'stroke-width': outer, 'stroke-linecap': 'round' })}/>`

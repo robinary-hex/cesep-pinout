@@ -20,6 +20,7 @@ import {
 import { instanceDefinition, type ComponentInstance, type Project, type TextLabel } from './project'
 import { projectStyleSheet, styleOf } from './styles'
 import { wireEndLabelBounds, wireEndLabelPlacement } from './wireEnds'
+import { wireOutline } from './wireKinds'
 
 /** Rectangle en cellules, coin supérieur gauche + taille. */
 export interface GridRect {
@@ -231,7 +232,10 @@ export function layoutLabel(label: TextLabel, cellPx: number, box: Box = label):
   )
 }
 
-/** Union des boîtes des composants, des sommets de fils et des étiquettes ; null si tout est vide. */
+/**
+ * Union des boîtes des composants, des fils (leurs sommets, la courbe d'un pont) et des
+ * étiquettes ; null si tout est vide.
+ */
 export function projectBounds(project: Project): GridRect | null {
   let result: GridRect | null = null
   const include = (bounds: GridRect): void => {
@@ -259,7 +263,8 @@ export function projectBounds(project: Project): GridRect | null {
   for (const wire of project.wires) {
     const style = styleOf(sheet, wire)
     const fontCells = style.endLabelFont.size / style.cellPx
-    for (const [x, y] of wire.points) include({ x, y, width: 0, height: 0 })
+    // Un pont s'écarte de ses deux bouts : c'est sa courbe qui compte.
+    for (const [x, y] of wireOutline(wire)) include({ x, y, width: 0, height: 0 })
     for (const endIndex of [0, wire.points.length - 1]) {
       const text = endIndex === 0 ? wire.endLabels.start : wire.endLabels.end
       const placement = text.length > 0 ? wireEndLabelPlacement(wire.points, endIndex) : null

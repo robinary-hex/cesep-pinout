@@ -66,9 +66,13 @@ import {
   translatePoints,
   turnedTextBox,
   unionRects,
+  formatCells,
+  jumperBulge,
+  normalizedBulge,
   wireBounds,
   wireGeometryProblem,
   wireKindLabel,
+  wireOutline,
   wireProblem,
   withGroup,
   withStyle,
@@ -1533,7 +1537,26 @@ export const useSchematicStore = defineStore('schematic', () => {
     })
   }
 
-  /** Retourne un pont : ses bouts échangés, il se bombe de l'autre côté. */
+  /**
+   * Donne son bombé à un pont (Ctrl+glisser sur sa courbe, champ « Courbure » du panneau) : en
+   * cellules, positif à gauche de son sens de tracé, négatif à droite ; ramené au pas et entre
+   * les bornes. Le pont le garde ensuite, quelle que soit sa longueur.
+   */
+  function setJumperBulge(id: string, bulge: number): void {
+    const wire = doc.value.wires.find((candidate) => candidate.id === id)
+    if (wire?.kind !== 'jumper') return
+    const current = jumperBulge(wire.points, wire.bulge)
+    const wanted = normalizedBulge(bulge, current)
+    if (wanted === current) return
+    apply('Courber le pont', (draft) => {
+      const target = draft.wires.find((candidate) => candidate.id === id)
+      if (target) target.bulge = wanted
+    })
+    const size = Math.abs(wanted)
+    status.value = `Pont bombé de ${formatCells(size)} cellule${size >= 2 ? 's' : ''}.`
+  }
+
+  /** Retourne un pont : ses bouts échangés, il se bombe de l'autre côté, d'autant. */
   function flipJumper(id: string): void {
     const wire = doc.value.wires.find((candidate) => candidate.id === id)
     if (wire?.kind !== 'jumper') return
@@ -1544,6 +1567,7 @@ export const useSchematicStore = defineStore('schematic', () => {
       const { start, end } = target.endLabels
       target.endLabels = { start: end, end: start }
     })
+    status.value = 'Pont bombé de l’autre côté.'
   }
 
   function setWireFreeEnds(id: string, style: FreeEndStyle): void {
@@ -1891,7 +1915,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     }
     for (const item of data.items) include(instanceBounds(item.instance, item.def))
     for (const wire of data.wires) {
-      const bounds = wireBounds(wire.points)
+      const bounds = wireBounds(wireOutline(wire))
       if (bounds) include(bounds)
     }
     for (const label of data.labels) include(textLabelBounds(label))
@@ -2115,6 +2139,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     popWireVertex,
     finishWire,
     finishJumper,
+    setJumperBulge,
     stopWireDrawing,
     setWirePoints,
     addWireVertex,

@@ -1301,6 +1301,175 @@ describe('canevas du montage : fil nu et pont', () => {
     wrapper.unmount()
   })
 
+  it('Ctrl+glisser sur un pont règle sa courbure, et le retourne passé sa corde', async () => {
+    const store = useSchematicStore()
+    const id = store.addWire(
+      [
+        [2, 6],
+        [12, 6]
+      ],
+      '#d62828',
+      'jumper'
+    )
+    if (!id) throw new Error('pont refusé')
+    store.clearSelection()
+    const wrapper = mount(SchematicCanvas, { attachTo: document.body })
+    await nextTick()
+    const svg = wrapper.get('svg.schematic')
+    const shown = (): string | undefined => wrapper.get('path.wire-jumper').attributes('d')
+    // Corde de 10 : bombé d'origine de 1,8 vers le haut.
+    expect(shown()).toBe('M 2 6 Q 7 2.4 12 6')
+    // Ctrl sur le pont : la poignée de sa courbe s'annonce à son sommet, pas d'anneau de broche.
+    store.ctrlHeld = true
+    wrapper.get('.wire-hit').element.dispatchEvent(new MouseEvent('pointerenter'))
+    await fire(svg, 'pointermove', at(store, 7, 4.2), CTRL)
+    expect(wrapper.get('.bulge-grab').attributes()).toMatchObject({ cx: '7', cy: '4.2' })
+    expect(wrapper.find('.pin-grab').exists()).toBe(false)
+    // On tire sa courbe vers le haut : elle suit le pointeur, rien n'est encore enregistré.
+    await fire(wrapper.get('.wire-hit'), 'pointerdown', at(store, 7, 4.2), CTRL)
+    await fire(svg, 'pointermove', at(store, 7, 2), CTRL)
+    expect(shown()).toBe('M 2 6 Q 7 -2 12 6')
+    expect(wrapper.get('.bulge-grab').attributes()).toMatchObject({ cx: '7', cy: '2' })
+    expect(store.doc.wires[0]?.bulge).toBeUndefined()
+    await fire(svg, 'pointerup', at(store, 7, 2), CTRL)
+    expect(store.doc.wires[0]).toMatchObject({ bulge: 4 })
+    expect(store.undoLabel).toBe('Courber le pont')
+    expect(store.selectedWires).toEqual([id])
+    // Passé de l'autre côté de sa corde, le pont se retourne : ses bouts ne bougent pas.
+    await fire(wrapper.get('.wire-hit'), 'pointerdown', at(store, 7, 2), CTRL)
+    await fire(svg, 'pointermove', at(store, 7, 7.5), CTRL)
+    await fire(svg, 'pointerup', at(store, 7, 7.5), CTRL)
+    expect(store.doc.wires[0]).toMatchObject({
+      bulge: -1.5,
+      points: [
+        [2, 6],
+        [12, 6]
+      ]
+    })
+    expect(shown()).toBe('M 2 6 Q 7 9 12 6')
+    // Une seule commande par geste.
+    store.undo()
+    expect(store.doc.wires[0]?.bulge).toBe(4)
+    wrapper.unmount()
+  })
+
+  it('un simple Ctrl+clic sur un pont le bombe de l’autre côté ; sans Ctrl, glisser le déplace', async () => {
+    const store = useSchematicStore()
+    const id = store.addWire(
+      [
+        [2, 6],
+        [12, 6]
+      ],
+      '#d62828',
+      'jumper'
+    )
+    if (!id) throw new Error('pont refusé')
+    store.setJumperBulge(id, 3)
+    store.clearSelection()
+    const wrapper = mount(SchematicCanvas, { attachTo: document.body })
+    await nextTick()
+    const svg = wrapper.get('svg.schematic')
+    await fire(wrapper.get('.wire-hit'), 'pointerdown', at(store, 7, 3), CTRL)
+    await fire(svg, 'pointerup', at(store, 7, 3), CTRL)
+    expect(store.undoLabel).toBe('Retourner le pont')
+    expect(store.doc.wires[0]).toMatchObject({
+      bulge: 3,
+      points: [
+        [12, 6],
+        [2, 6]
+      ]
+    })
+    expect(wrapper.get('path.wire-jumper').attributes('d')).toBe('M 12 6 Q 7 12 2 6')
+    // Sans Ctrl, comme avant : glisser un pont le déplace d'un bloc, son bombé gardé.
+    await fire(wrapper.get('.wire-hit'), 'pointerdown', at(store, 7, 9))
+    await fire(svg, 'pointermove', at(store, 8, 11))
+    await fire(svg, 'pointerup', at(store, 8, 11))
+    expect(store.doc.wires[0]).toMatchObject({
+      bulge: 3,
+      points: [
+        [13, 8],
+        [3, 8]
+      ]
+    })
+    wrapper.unmount()
+  })
+
+  it('un pont groupé est d’abord pris seul ; près de sa broche, Ctrl tire un fil d’elle', async () => {
+    const store = withResistor()
+    // Un pont de la broche droite de la résistance (6, 4) à un point libre, groupé avec un fil.
+    const jumper = store.addWire(
+      [
+        [6, 4],
+        [16, 4]
+      ],
+      '#d62828',
+      'jumper'
+    )
+    const other = store.addWire([
+      [2, 10],
+      [8, 10]
+    ])
+    if (!jumper || !other) throw new Error('fil refusé')
+    store.selectedWires = [jumper, other]
+    store.groupSelection()
+    store.clearSelection()
+    const wrapper = mount(SchematicCanvas, { attachTo: document.body })
+    await nextTick()
+    const svg = wrapper.get('svg.schematic')
+    const hit = wrapper.findAll('.wire-hit')[0]!
+    // Premier Ctrl+clic : le pont seul, sans rien changer.
+    await fire(hit, 'pointerdown', at(store, 11, 2.2), CTRL)
+    await fire(svg, 'pointermove', at(store, 11, 0), CTRL)
+    await fire(svg, 'pointerup', at(store, 11, 0), CTRL)
+    expect(store.selectedWires).toEqual([jumper])
+    expect(store.doc.wires[0]?.bulge).toBeUndefined()
+    // Le suivant saisit sa courbe.
+    await fire(hit, 'pointerdown', at(store, 11, 2.2), CTRL)
+    await fire(svg, 'pointermove', at(store, 11, 1), CTRL)
+    await fire(svg, 'pointerup', at(store, 11, 1), CTRL)
+    expect(store.doc.wires[0]?.bulge).toBe(3)
+    // Sur la broche où il est posé, Ctrl saisit la broche, comme partout.
+    store.ctrlHeld = true
+    hit.element.dispatchEvent(new MouseEvent('pointerenter'))
+    await fire(svg, 'pointermove', at(store, 6.1, 3.9), CTRL)
+    expect(wrapper.find('.bulge-grab').exists()).toBe(false)
+    expect(wrapper.get('.pin-grab').attributes()).toMatchObject({ cx: '6', cy: '4' })
+    // Plus loin sur sa courbe, c'est elle.
+    await fire(svg, 'pointermove', at(store, 11, 1), CTRL)
+    expect(wrapper.find('.pin-grab').exists()).toBe(false)
+    expect(wrapper.find('.bulge-grab').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('un cadre de sélection prend un pont par sa courbe, pas par sa corde', async () => {
+    const store = useSchematicStore()
+    const id = store.addWire(
+      [
+        [2, 10],
+        [12, 10]
+      ],
+      '#d62828',
+      'jumper'
+    )
+    if (!id) throw new Error('pont refusé')
+    store.setJumperBulge(id, 6)
+    store.clearSelection()
+    const wrapper = mount(SchematicCanvas, { attachTo: document.body })
+    await nextTick()
+    const svg = wrapper.get('svg.schematic')
+    // Un cadre sur sa corde, sous la courbe : rien.
+    await fire(svg, 'pointerdown', at(store, 6, 9))
+    await fire(svg, 'pointermove', at(store, 8, 11))
+    await fire(svg, 'pointerup', at(store, 8, 11))
+    expect(store.selectedWires).toEqual([])
+    // Un cadre sur le sommet de la courbe : le pont.
+    await fire(svg, 'pointerdown', at(store, 6, 3))
+    await fire(svg, 'pointermove', at(store, 8, 5))
+    await fire(svg, 'pointerup', at(store, 8, 5))
+    expect(store.selectedWires).toEqual([id])
+    wrapper.unmount()
+  })
+
   it('glisser le bout d’un pont le pose où l’on veut, sans coude', async () => {
     const store = useSchematicStore()
     const id = store.addWire(

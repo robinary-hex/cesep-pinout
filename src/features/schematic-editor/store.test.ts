@@ -2440,6 +2440,71 @@ describe('montage : fil nu et pont', () => {
     expect(store.doc).toBe(before)
   })
 
+  it('un pont prend le bombé qu’on lui donne, et le garde quand on le retourne ou qu’il s’allonge', () => {
+    const store = useSchematicStore()
+    const jumper = store.addWire(
+      [
+        [0, 0],
+        [10, 0]
+      ],
+      '#d62828',
+      'jumper'
+    )
+    const plain = store.addWire([
+      [0, 4],
+      [10, 4]
+    ])
+    if (!jumper || !plain) throw new Error('fil refusé')
+    const wire = (): { points: unknown; bulge?: number | undefined } => {
+      const found = store.doc.wires.find((candidate) => candidate.id === jumper)
+      if (!found) throw new Error('pont disparu')
+      return found
+    }
+    // Tout juste posé : pas de bombé à lui.
+    expect(wire().bulge).toBeUndefined()
+    store.setJumperBulge(jumper, 3.1)
+    expect(wire().bulge).toBe(3)
+    expect(store.undoLabel).toBe('Courber le pont')
+    expect(store.status).toBe('Pont bombé de 3 cellules.')
+    // De l'autre côté, et ramené entre les bornes.
+    store.setJumperBulge(jumper, -0.4)
+    expect(wire().bulge).toBe(-0.5)
+    expect(store.status).toBe('Pont bombé de 0,5 cellule.')
+    store.setJumperBulge(jumper, 500)
+    expect(wire().bulge).toBe(20)
+    // Redire le même bombé ne fait rien ; un fil qui n'est pas un pont n'en a pas.
+    const before = store.doc
+    store.setJumperBulge(jumper, 20)
+    store.setJumperBulge(plain, 2)
+    expect(store.doc).toBe(before)
+    // Retourné, il se bombe de l'autre côté, d'autant : ses bouts échangés, son bombé gardé.
+    store.setJumperBulge(jumper, 2.5)
+    store.flipJumper(jumper)
+    expect(wire()).toMatchObject({
+      bulge: 2.5,
+      points: [
+        [10, 0],
+        [0, 0]
+      ]
+    })
+    // Un bout déplacé : le bombé reste celui qu'on a donné.
+    store.setWirePoints(jumper, [
+      [30, 0],
+      [0, 0]
+    ])
+    expect(wire().bulge).toBe(2.5)
+    // Une copie le garde.
+    store.selectedWires = [jumper]
+    store.duplicateSelection()
+    expect(store.doc.wires.at(-1)).toMatchObject({ kind: 'jumper', bulge: 2.5 })
+    store.undo()
+    // Annuler rend le bombé d'avant.
+    store.undo()
+    store.undo()
+    store.undo()
+    expect(wire().bulge).toBe(20)
+  })
+
   it('un pont n’a que ses deux bouts : ni sommet, ni coupe ; il se retourne et suit ses broches', () => {
     const store = useSchematicStore()
     store.startPlacing(resistor())

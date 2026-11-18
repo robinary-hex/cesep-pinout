@@ -62,7 +62,10 @@ import {
   wireIntersectsRect,
   wirePathData,
   wireRenderParts,
+  bulgeToward,
   jointRadius,
+  jumperApex,
+  jumperBulge,
   jumperPathData,
   movedWireVertex,
   SOLDER_GLINT,
@@ -71,6 +74,7 @@ import {
   solderMark,
   unsolderedMarks,
   wireBorder,
+  wireOutline,
   wireShapeData,
   wiresFollowingJunctions,
   wiresFollowingPins,
@@ -215,6 +219,18 @@ type Drag =
       index: number
       original: readonly GridPoint[]
       preview: GridPoint[]
+    }
+  | {
+      /** Courbe d'un pont saisie par Ctrl+appui : la glisser règle son bombé. */
+      kind: 'jumper-bulge'
+      wireId: string
+      downX: number
+      downY: number
+      /** Faux tant que le pointeur n'a pas bougé : un simple Ctrl+clic retourne le pont. */
+      moved: boolean
+      /** Le bombé du pont à l'appui, et celui qu'il aurait si on relâchait. */
+      original: number
+      bulge: number
     }
 
 const drag = ref<Drag | null>(null)
@@ -522,7 +538,7 @@ const ghostCopies = computed(() => {
           id: wire.id,
           color: wire.color,
           width: style.wireWidth,
-          d: wireShapeData(wire.kind, wire.points, style.cornerRadius)
+          d: wireShapeData(wire.kind, wire.points, style.cornerRadius, wire.bulge)
         }
       }),
     labels: store.doc.labels
@@ -853,6 +869,19 @@ function wirePoints(wire: Wire): readonly GridPoint[] {
   return previewWires.value?.get(wire.id) ?? wire.points
 }
 
+/** Bombé d'un pont tel qu'il s'affiche : celui du geste en cours, sinon le sien. */
+function shownBulge(wire: Wire): number | undefined {
+  const current = drag.value
+  return current?.kind === 'jumper-bulge' && current.wireId === wire.id && current.moved
+    ? current.bulge
+    : wire.bulge
+}
+
+/** Ce qu'un fil occupe tel qu'il s'affiche : ses sommets, la courbe d'un pont. */
+function shownOutline(wire: Wire): readonly GridPoint[] {
+  return wireOutline({ kind: wire.kind, points: wirePoints(wire), bulge: shownBulge(wire) })
+}
+
 /** Marge du contour d'un groupe autour de ses membres, en cellules. */
 const GROUP_MARGIN_CELLS = 0.4
 
@@ -866,7 +895,7 @@ const groupOutlines = computed(() => {
     }
     for (const wire of store.doc.wires) {
       if (!group.members.wire.includes(wire.id)) continue
-      const bounds = wireBounds(wirePoints(wire))
+      const bounds = wireBounds(shownOutline(wire))
       if (bounds) rects.push(bounds)
     }
     for (const label of store.doc.labels) {
@@ -904,7 +933,7 @@ const renderedWires = computed(() =>
     // Un pont est une courbe de bout en bout : ni flèche ni pointillés à ses extrémités.
     const jumper = wire.kind === 'jumper'
     const shown = jumper ? null : wireRenderParts(points, wire.freeEnds, flags, width)
-    const d = wireShapeData(wire.kind, points, radius)
+    const d = wireShapeData(wire.kind, points, radius, shownBulge(wire))
     return {
       wire,
       width,
@@ -1238,6 +1267,60 @@ function instanceAt(point: LocalPoint): string | null {
 }
 
 /**
+ * Pont dont un Ctrl+appui saisirait la courbe, là où est le pointeur (décision du 18 novembre
+ * 2026) : Ctrl saisit le point d'attache de ce qu'on survole, et un pont n'a ni sommet ni
+ * tronçon, seulement sa courbe. La glisser règle son bombé, la passer de l'autre côté de sa
+ * corde le retourne ; un simple Ctrl+clic le retourne aussi. Près d'une broche où le pont est
+ * posé, Ctrl tire un fil de cette broche, comme partout : le pont ne se saisit pas par là.
+ */
+const bulgeGrab = computed<Wire | null>(() => {
+  const current = drag.value
+  if (current) {
+    return current.kind === 'jumper-bulge' ? (wireById.value.get(current.wireId) ?? null) : null
+  }
+  const point = hover.value
+  if (store.tool !== 'select' || !store.ctrlHeld || store.panKeyHeld || !point) return null
+  const wire = store.hoverWireId === null ? null : wireById.value.get(store.hoverWireId)
+  if (!wire || wire.kind !== 'jumper') return null
+  const pin = nearestPin(point)
+  const onItsPin =
+    pin !== null && wire.points.some((end) => end[0] === pin.point[0] && end[1] === pin.point[1])
+  return onItsPin ? null : wire
+})
+
+/** Le sommet de la courbe du pont saisi (ou qu'on saisirait) : sa poignée s'y montre. */
+const bulgeHandle = computed<LocalPoint | null>(() => {
+  const wire = bulgeGrab.value
+  return wire ? jumperApex(wirePoints(wire), shownBulge(wire)) : null
+})
+
+/**
+ * Ctrl+appui sur un pont : sa courbe est saisie. Le pont devient la sélection ; pris dans un
+ * groupe, il est d'abord pris seul, sans rien changer, comme un fil.
+ */
+function grabJumperBulge(wire: Wire, event: PointerEvent): void {
+  const alone = selectedAlone(wire.id)
+  const grouped = store.groups.some((group) => group.members.wire.includes(wire.id))
+  if (!alone) {
+    store.clearSelection()
+    store.selectedWires = [wire.id]
+  }
+  store.revealInspector()
+  if (grouped && !alone) return
+  const bulge = jumperBulge(wire.points, wire.bulge)
+  drag.value = {
+    kind: 'jumper-bulge',
+    wireId: wire.id,
+    downX: event.clientX,
+    downY: event.clientY,
+    moved: false,
+    original: bulge,
+    bulge
+  }
+  capture(event)
+}
+
+/**
  * Broche qu'un Ctrl+glisser saisirait, en mode sélection : la plus proche du pointeur parmi celles
  * du composant survolé, sinon une broche à portée. Ctrl tient ici le rôle qu'il a dans l'éditeur
  * de composants, où il saisit la poignée la plus proche d'une forme. Sans Ctrl, rien : glisser un
@@ -1251,6 +1334,8 @@ const pinGrab = computed<PinRef | null>(() => {
   }
   const point = hover.value
   if (store.tool !== 'select' || !store.ctrlHeld || store.panKeyHeld || !point) return null
+  // Sur la courbe d'un pont, c'est elle qu'on saisit.
+  if (bulgeGrab.value) return null
   const over = instanceAt(point)
   if (over === null) return nearestPin(point)
   // Sur une plaque, qui n'a pas de broches : celle qui est à portée, comme dans le vide.
@@ -1576,7 +1661,10 @@ function onWireDown(wireId: string, event: PointerEvent): void {
   // Alt+clic sur un croisement : l'autre fil passe au-dessus ; ailleurs, Alt+glisser copie.
   if (event.altKey && store.toggleCrossing(world.x, world.y)) return
   if (event.ctrlKey) {
-    toggleVertexAt(wireId, world)
+    // Un pont n'a pas de sommets : Ctrl saisit sa courbe.
+    const jumper = wireById.value.get(wireId)
+    if (jumper?.kind === 'jumper') grabJumperBulge(jumper, event)
+    else toggleVertexAt(wireId, world)
     return
   }
   if (event.shiftKey) {
@@ -1814,6 +1902,15 @@ function onPointerMove(event: PointerEvent): void {
         current.moved = true
       }
       break
+    case 'jumper-bulge': {
+      if (Math.hypot(event.clientX - current.downX, event.clientY - current.downY) > PIN_DRAG_PX) {
+        current.moved = true
+      }
+      // La courbe passe sous le pointeur ; de l'autre côté de la corde, le pont se retourne.
+      const wire = wireById.value.get(current.wireId)
+      if (wire && current.moved) current.bulge = bulgeToward(wire.points, world, current.bulge)
+      break
+    }
   }
 }
 
@@ -1865,7 +1962,8 @@ function onPointerUp(event: PointerEvent): void {
         .filter((item) => bandTakes(item, rect))
         .map((item) => item.instance.id)
       const wires = store.doc.wires
-        .filter((wire) => wireIntersectsRect(wire.points, rect))
+        // Un pont se prend par sa courbe, pas par sa corde.
+        .filter((wire) => wireIntersectsRect(wireOutline(wire), rect))
         .map((wire) => wire.id)
       const texts = store.doc.labels
         .filter((label) => rectsIntersect(textLabelBounds(label), rect))
@@ -1899,6 +1997,12 @@ function onPointerUp(event: PointerEvent): void {
         current.end === 'end' ? 'start' : 'end',
         current.axis
       )
+    }
+  } else if (current.kind === 'jumper-bulge') {
+    // Glissée, la courbe garde le bombé où on la lâche ; un simple Ctrl+clic retourne le pont.
+    if (!current.moved) store.flipJumper(current.wireId)
+    else if (current.bulge !== current.original) {
+      store.setJumperBulge(current.wireId, current.bulge)
     }
   } else if (current.kind === 'pin-wire') {
     if (current.moved) {
@@ -2659,6 +2763,16 @@ const cursorClass = computed(() => {
             vector-effect="non-scaling-stroke"
           />
 
+          <!-- Ctrl sur un pont : la poignée de sa courbe, à son sommet. -->
+          <circle
+            v-if="bulgeHandle"
+            class="bulge-grab"
+            :cx="bulgeHandle.x"
+            :cy="bulgeHandle.y"
+            :r="5.5 / cell"
+            vector-effect="non-scaling-stroke"
+          />
+
           <g v-if="ghostCopies" class="ghost" :transform="ghostCopies.transform">
             <path
               v-for="wire in ghostCopies.wires"
@@ -2985,6 +3099,14 @@ const cursorClass = computed(() => {
 .schematic.end-near,
 .schematic.end-near .wire-hit {
   cursor: move;
+}
+
+/* Courbe d'un pont qu'un Ctrl+appui saisirait : sa poignée, au sommet de la courbe. */
+.bulge-grab {
+  fill: #ffffff;
+  stroke: var(--selection);
+  stroke-width: 2;
+  pointer-events: none;
 }
 
 .box-handle {

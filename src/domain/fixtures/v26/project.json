@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 26,
+  "name": "Avant le bombé des ponts",
+  "profile": {
+    "name": "Standard",
+    "cellPx": 20,
+    "wireWidth": 0.15,
+    "wireBorder": 0.04,
+    "wireBorderColor": "#000000",
+    "cornerRadius": 0.4,
+    "componentStroke": 0.1,
+    "junctionScale": 2,
+    "junctionColor": "wire",
+    "labelFont": {
+      "family": "Segoe UI",
+      "size": 11
+    },
+    "endLabelFont": {
+      "family": "Segoe UI",
+      "size": 14
+    }
+  },
+  "styles": [],
+  "components": [],
+  "wires": [
+    {
+      "id": "w1",
+      "color": "#d62828",
+      "points": [
+        [0, 0],
+        [6, 0]
+      ],
+      "stack": 0,
+      "freeEnds": "flat",
+      "endLabels": {
+        "start": "",
+        "end": ""
+      }
+    },
+    {
+      "id": "w2",
+      "color": "#1d4ed8",
+      "kind": "jumper",
+      "points": [
+        [0, 3],
+        [10, 3]
+      ],
+      "stack": 1,
+      "freeEnds": "flat",
+      "endLabels": {
+        "start": "A",
+        "end": ""
+      }
+    }
+  ],
+  "crossingOverrides": [],
+  "labels": [],
+  "customColors": [],
+  "embeddedDefs": {}
+}

@@ -116,7 +116,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     son point d'accroche le plus proche. Sur un fil ou un lien, le point d'attache est un
     sommet : Ctrl+clic en ajoute un sur une partie droite, ou retire le coin visé (à même le
     trait ou sur sa poignée ; `toggleWireVertex`, `toggleLinkVertex` ; décision du 11 novembre
-    2026). Sans Ctrl, glisser un élément le déplace, toujours.
+    2026). Sur un pont, qui n'a ni sommet ni tronçon, c'est sa courbe : Ctrl+glisser règle son
+    bombé, Ctrl+clic le retourne (décision du 18 novembre 2026, voir « Plaques à trous »).
+    Sans Ctrl, glisser un élément le déplace, toujours.
     Dans le même esprit, Ctrl+clic sur un élément groupé le prend seul, au lieu de son groupe ;
     un fil ou un lien groupé est d'abord pris seul, le Ctrl+clic suivant touche à ses sommets.
     Une exception, dans le montage : pendant qu'on glisse une plaque à deux faces, Ctrl
@@ -1063,6 +1065,23 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     ne se raccorde à sa corde, seulement à ses bouts. Un bout qu'on glisse, ou qui suit
     sa broche, va où il va sans ajouter de coude (`movedWireVertex`). Clic droit :
     « Bomber de l'autre côté » (`flipJumper` : ses bouts échangés).
+    Bombé d'un pont (décision du 18 novembre 2026 ; `bulge` du fil, `jumperBulge`) : la flèche
+    de sa courbe, en cellules, positive à gauche de son sens de tracé, négative à droite. Un
+    pont tout juste posé n'en a pas : son bombé d'origine grandit avec sa corde (0,5 à 2
+    cellules). Celui qu'on lui donne ne change plus avec sa longueur ; il va par quarts de
+    cellule, de 0,25 à 20, jamais à zéro (`normalizedBulge`, `JUMPER_BULGE_LIMITS`). On le
+    donne en glissant la courbe, Ctrl maintenue (Ctrl saisit le point d'attache de ce qu'on
+    survole, et un pont n'a que sa courbe) : elle passe sous le pointeur là où on la tient
+    (`bulgeToward`), et se retourne quand il franchit la corde ; un simple Ctrl+clic la
+    retourne aussi (`flipJumper`). Une commande par geste (`setJumperBulge`), avec aperçu
+    (glisser `jumper-bulge` du canevas, `shownBulge`). Ctrl enfoncée sur un pont, sa poignée
+    s'annonce au sommet de sa courbe (`bulgeGrab`, `.bulge-grab`) à la place de l'anneau
+    d'une broche ; sur une broche où le pont est posé, c'est la broche qui se saisit, comme
+    partout. Un pont groupé est d'abord pris seul, comme un fil. Le panneau d'un pont a un
+    champ « Courbure (cellules) », sa grandeur sans son côté. Un pont occupe la place de sa
+    courbe, pas de sa corde (`wireOutline`, `jumperOutline`) : c'est elle que comptent la
+    boîte du montage (donc l'export et « Ajuster »), le contour d'un groupe et le cadre de
+    sélection. Aide : thème « Retoucher un pont ».
     Tout ce qui dessine un fil passe par `wireShapeData`, à l'écran comme à l'export ;
     tout ce qui valide son tracé par `wireProblem`, jamais par `wireGeometryProblem` seul.
   - Un composant est une plaque dès que son dessin a une grille de trous (`isBoard`,
@@ -1297,8 +1316,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     composant posé s'appelle « libellé » dans l'interface.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 17, projet 26, paramètres 16,
-  diagramme 6 (composant 17, projet 26 et paramètres 16 sont ceux de la 1.10.0, publiée le 18
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 17, projet 27, paramètres 16,
+  diagramme 6 (le projet 27, du 18 novembre 2026, pas encore publié, porte le bombé d'un pont,
+  `bulge` ; rien à convertir, la version ne monte que pour qu'une application plus ancienne
+  refuse le fichier au lieu de perdre ce bombé : un montage qu'il enregistre ne s'ouvrira plus
+  dans la 1.10.0 ni avant ; composant 17, projet 26 et paramètres 16 sont ceux de la 1.10.0, publiée le 18
   novembre 2026 : un composant, un montage ou des réglages qu'elle enregistre ne se lisent
   plus dans la 1.9.1 ni avant. Projet 26 et paramètres 16 portent la bordure des fils du
   profil de style, `wireBorder` et `wireBorderColor` ; composant 17 et projet 25 portent les

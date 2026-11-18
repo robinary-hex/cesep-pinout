@@ -684,7 +684,11 @@ export const projectMigrations: MigrationTable = {
       styles: (Array.isArray(raw['styles']) ? (raw['styles'] as unknown[]) : []).map((style) =>
         completeProfile(style)
       )
-    })
+    }),
+    // Projet v26 → v27 : un pont peut porter son bombé (`bulge`). Rien à convertir : sans lui,
+    // un pont garde son bombé d'origine. La version ne monte que pour qu'une application plus
+    // ancienne refuse le fichier, au lieu de perdre ce bombé en l'enregistrant.
+    26: (raw) => raw
   }
 }
 
