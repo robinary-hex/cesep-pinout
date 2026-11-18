@@ -221,8 +221,9 @@ la broche vue de dessous bouge quand le composant bouge, le fil soudé là la su
 L'écart entre les deux faces est le seul réglage de cette vue (`facesGap` de la plaque posée) :
 `spreadBoard` déplace la plaque par rapport à son pli, qui reste en place, et `boardsCarry` mène
 ce que porte chaque face avec elle, le dessous en miroir. Une forme d'un composant peut être une
-empreinte (`footprint`) : elle ne se dessine pas sur le composant posé, mais en pointillés sur
-l'autre face de la plaque à deux faces qui le porte (`boardFootprints`), avec la plaque.
+empreinte (`footprint`) : elle ne se dessine pas sur le composant posé, mais sur l'autre face de
+la plaque à deux faces qui le porte (`boardFootprints`), avec la plaque, fondue avec les autres
+empreintes du composant en une silhouette d'une allure fixe (`src/domain/footprint.ts`).
 
 ## Export
 

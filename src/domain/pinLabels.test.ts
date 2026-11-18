@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { NO_ARROWS, type Primitive } from './component'
 import type { Box } from './handles'
 import {
+  pinLabelAxis,
   pinLabelSide,
   primitiveTouchesBox,
   segmentTouchesBox,
@@ -92,5 +93,40 @@ describe('repères des broches', () => {
     expect(pinLabelSide(point, size, [outline, midline, text(4, 0), text(4, 4)], boxFor)).toBe(
       'top'
     )
+  })
+})
+
+describe('repères des broches : le sens d’une file', () => {
+  it('une colonne veut ses repères sur le côté, une rangée au bout', () => {
+    const column = [
+      { x: 1, y: 2 },
+      { x: 1, y: 3 },
+      { x: 1, y: 4 }
+    ]
+    expect(pinLabelAxis({ x: 1, y: 1 }, column)).toBe('sides')
+    expect(pinLabelAxis({ x: 0, y: 2 }, [{ x: 3, y: 2 }])).toBe('ends')
+    // D'une colonne et d'une rangée : la plus longue ; à égalité, ou seule : pas de préférence.
+    expect(pinLabelAxis({ x: 1, y: 1 }, [...column, { x: 6, y: 1 }])).toBe('sides')
+    expect(
+      pinLabelAxis({ x: 1, y: 1 }, [
+        { x: 1, y: 2 },
+        { x: 6, y: 1 }
+      ])
+    ).toBeNull()
+    expect(pinLabelAxis({ x: 1, y: 1 }, [])).toBeNull()
+  })
+
+  it('le sens voulu passe avant le bord le plus proche', () => {
+    // Broche en (1, 0) d'un composant plein : aucun côté n'est libre.
+    const boxFor = (): Box => ({ x: 0.5, y: 0.2, w: 1, h: 0.4 })
+    const point = { x: 1, y: 0 }
+    // Sans file : le bord le plus proche, le haut.
+    expect(pinLabelSide(point, size, [filled], boxFor)).toBe('top')
+    // D'une colonne : sur le côté, le plus proche d'abord ; d'une rangée : au bout.
+    expect(pinLabelSide(point, size, [filled], boxFor, 'sides')).toBe('left')
+    expect(pinLabelSide(point, size, [filled], boxFor, 'ends')).toBe('top')
+    // Un côté libre du sens voulu l'emporte sur un côté libre plus proche du bord.
+    expect(pinLabelSide({ x: 3, y: 1 }, size, [], boxFor)).toBe('top')
+    expect(pinLabelSide({ x: 3, y: 1 }, size, [], boxFor, 'sides')).toBe('right')
   })
 })

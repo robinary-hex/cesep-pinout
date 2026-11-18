@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { createEmptyComponent } from '@/domain'
+import { createEmptyComponent, DEFAULT_SHAPE_STYLE } from '@/domain'
 import {
   canvasMargins,
   fittingCellPx,
   pinLabelOverhang,
   pinLabelParts,
+  pinLabelSideAt,
   pinLabelText,
   pinNumberText
 } from './pinLabelLayout'
@@ -55,5 +56,51 @@ describe('repères des broches : marges du canevas et ajustement', () => {
     expect(fitted).toBeLessThan(27)
     const margins = canvasMargins(def, fitted)
     expect(def.size.widthCells * fitted + 2 * margins.x).toBeLessThanOrEqual(598)
+  })
+})
+
+describe('repères des broches : une file se lit d’un trait', () => {
+  it('les repères d’une colonne sont tous du même côté, broches des coins comprises', () => {
+    // Deux colonnes de huit broches, à une cellule des bords : un module à enficher.
+    const def = createEmptyComponent('module', 'Module')
+    def.size = { widthCells: 7, heightCells: 9 }
+    def.pins = [1, 6].flatMap((x) =>
+      Array.from({ length: 8 }, (_, row) => ({
+        id: `p${x}-${row}`,
+        name: 'BROCHE',
+        kind: 'io' as const,
+        x,
+        y: row + 1
+      }))
+    )
+    const sides = (): string[] =>
+      def.pins.map((pin, index) => pinLabelSideAt(def, pin, index, pin, 40))
+    // La broche du coin est aussi près du haut que du côté : elle suit sa colonne.
+    expect(sides().slice(0, 8)).toEqual(Array(8).fill('left'))
+    expect(sides().slice(8)).toEqual(Array(8).fill('right'))
+    // Une empreinte autour du composant ne gêne pas les repères : elle n'est pas du dessin.
+    def.visual = {
+      kind: 'drawing',
+      primitives: [
+        {
+          kind: 'rect',
+          x: 0,
+          y: 0,
+          w: 28,
+          h: 36,
+          rx: 0,
+          style: DEFAULT_SHAPE_STYLE,
+          footprint: true
+        }
+      ]
+    }
+    expect(sides().slice(0, 8)).toEqual(Array(8).fill('left'))
+    // Le même contour, dans le dessin : les repères de gauche le croiseraient, ils passent à
+    // droite de leur broche.
+    def.visual = {
+      kind: 'drawing',
+      primitives: [{ kind: 'rect', x: 0, y: 0, w: 28, h: 36, rx: 0, style: DEFAULT_SHAPE_STYLE }]
+    }
+    expect(sides().slice(0, 8)).toEqual(Array(8).fill('right'))
   })
 })

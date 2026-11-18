@@ -1,6 +1,6 @@
 import { castDraft, type Draft } from 'immer'
 import { defineStore } from 'pinia'
-import { computed, ref, shallowRef } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import {
   BASE_VARIANT,
   componentIssues,
@@ -22,6 +22,7 @@ import {
   createEmptyComponent,
   groupIds,
   importedImageSize,
+  isFootprint,
   isInsideBox,
   naturalImageSize,
   nextGroupId,
@@ -56,6 +57,7 @@ import { useLibraryStore } from '@/features/library/store'
 import { samePath } from '@/io/paths'
 import { useInspectorPanel } from '@/state/inspector'
 import { useDocumentTabs } from '@/state/tabs'
+import { layerForTool, layerInfo, toolFitsLayer, type EditorLayer } from './layers'
 import { fittingCellPx } from './pinLabelLayout'
 import type { ToolId } from './tools'
 
@@ -155,6 +157,11 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
    */
   const activeModel = ref<number | null>(null)
   const tool = ref<ToolId>('select')
+  /**
+   * Calque de travail (layers.ts) : ce qu'on a sous la main, le reste étant estompé et hors
+   * d'atteinte. Une façon de regarder, commune aux onglets ; rien n'en est enregistré.
+   */
+  const layer = ref<EditorLayer>('all')
   /** Panneau de propriétés à droite (`useInspectorPanel`) : replié par défaut, touche I. */
   const inspector = useInspectorPanel({
     hasSelection: () => selection.value !== null,
@@ -196,7 +203,10 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
       hoverPinId.value = null
       status.value = ''
     },
-    afterSync: pruneSelection
+    afterSync: () => {
+      pruneSelection()
+      followSelection()
+    }
   })
   const { doc, activeTabId, pristine, anyDirty, undoLabel, redoLabel, apply, cycleTab, moveTab } =
     base
@@ -412,6 +422,80 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     return bodyOf(draft).visual.primitives
   }
 
+  // Calques de travail
+
+  /** Calque d'une forme : les empreintes ont le leur. */
+  function primitiveLayer(primitive: Primitive): EditorLayer {
+    return isFootprint(primitive) ? 'footprint' : 'drawing'
+  }
+
+  /** Ce calque est-il sous la main : c'est celui qu'on regarde, ou on les regarde tous ? */
+  function onLayer(kind: EditorLayer): boolean {
+    return layer.value === 'all' || layer.value === kind
+  }
+
+  /** Cette forme est-elle sous la main, sur le calque qu'on regarde ? */
+  function primitiveOnLayer(primitive: Primitive): boolean {
+    return onLayer(primitiveLayer(primitive))
+  }
+
+  /** Calque qui tient toute une sélection ; `all` si elle en mêle plusieurs, null si elle est vide. */
+  function selectionLayer(current: Selection): EditorLayer | null {
+    const kinds = new Set<EditorLayer>()
+    if (current.pinIds.length > 0) kinds.add('pins')
+    for (const index of current.indexes) {
+      const primitive = shown.value.visual.primitives[index]
+      if (primitive) kinds.add(primitiveLayer(primitive))
+    }
+    const [only] = kinds
+    return kinds.size > 1 ? 'all' : (only ?? null)
+  }
+
+  /**
+   * La sélection se voit toujours : si elle sort du calque qu'on regarde (une forme collée, une
+   * broche prise dans la liste du panneau, une forme devenue empreinte), le calque change pour
+   * la montrer.
+   */
+  function followSelection(): void {
+    const current = selection.value
+    if (!current || layer.value === 'all') return
+    const needed = selectionLayer(current)
+    if (needed === null || needed === layer.value) return
+    layer.value = needed
+    status.value = layerInfo(needed).status
+  }
+
+  watch(selection, followSelection, { flush: 'sync' })
+
+  /** Passe au calque donné : ce qui était sélectionné hors de lui ne l'est plus. */
+  function showLayer(next: EditorLayer): void {
+    layer.value = next
+    const current = selection.value
+    if (!current || next === 'all') return
+    if (selectionLayer(current) !== next) selection.value = null
+  }
+
+  /** Choix d'un calque dans la barre d'outils. Un outil qui n'y pose rien rend la main. */
+  function setLayer(next: EditorLayer): void {
+    if (layer.value === next) return
+    showLayer(next)
+    if (!toolFitsLayer(tool.value, next)) tool.value = 'select'
+    status.value = layerInfo(next).status
+  }
+
+  // Un outil qui n'a rien à faire sur le calque qu'on regarde mène au sien : l'outil Broche au
+  // calque des broches, un outil de dessin au calque du dessin.
+  watch(
+    tool,
+    (next) => {
+      if (toolFitsLayer(next, layer.value)) return
+      const target = layerForTool(next)
+      showLayer(target)
+      status.value = layerInfo(target).status
+    },
+    { flush: 'sync' }
+  )
+
   // Sélection
 
   /** Sélectionne des formes et des broches ; rien du tout vide la sélection. */
@@ -424,12 +508,13 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
         : null
   }
 
-  /** Sélectionne toutes les formes et toutes les broches. */
+  /** Sélectionne toutes les formes et toutes les broches du calque qu'on regarde. */
   function selectAll(): void {
-    const count = shown.value.visual.primitives.length
     select(
-      Array.from({ length: count }, (_, index) => index),
-      shown.value.pins.map((pin) => pin.id)
+      shown.value.visual.primitives.flatMap((primitive, index) =>
+        primitiveOnLayer(primitive) ? [index] : []
+      ),
+      onLayer('pins') ? shown.value.pins.map((pin) => pin.id) : []
     )
   }
 
@@ -767,9 +852,14 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
 
   function addPrimitive(primitive: Primitive, label: string): number {
     let index = -1
+    // Sur le calque des empreintes, ce qu'on trace en devient une.
+    const added: Primitive =
+      layer.value === 'footprint' && 'style' in primitive
+        ? { ...primitive, footprint: true }
+        : primitive
     apply(label, (draft) => {
       const list = drawing(draft)
-      list.push(castDraft(primitive))
+      list.push(castDraft(added))
       index = list.length - 1
     })
     if (index >= 0) selectPrimitives([index])
@@ -804,7 +894,8 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   /**
    * Fait d'une forme une empreinte, ou la rend au dessin (décision du 18 novembre 2026). Une
    * empreinte ne se dessine pas sur le composant posé : elle dit la place qu'il prend de l'autre
-   * côté d'une plaque à trous, et s'y dessine en pointillés quand la plaque montre ses deux faces.
+   * côté d'une plaque à trous, et s'y dessine quand la plaque montre ses deux faces. La forme
+   * change de calque : s'il le faut, celui qu'on regarde la suit.
    */
   function setFootprint(index: number, on: boolean): void {
     updatePrimitive(
@@ -816,6 +907,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
         else delete primitive.footprint
       }
     )
+    followSelection()
   }
 
   /**
@@ -1394,6 +1486,10 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     pristine,
     selection,
     tool,
+    layer,
+    setLayer,
+    onLayer,
+    primitiveOnLayer,
     inspectorOpen,
     inspectorFloating,
     revealInspector,

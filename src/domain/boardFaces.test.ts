@@ -745,14 +745,19 @@ describe('empreinte d’un composant sur l’autre face de sa plaque', () => {
     expect(reread.embeddedDefs['led']?.visual.primitives[1]).toMatchObject({ footprint: true })
   })
 
-  it('s’exporte en pointillés sur l’autre face, et pas sur le composant', () => {
+  it('s’exporte sur l’autre face, en une silhouette, et pas sur le composant', () => {
     const doc = withFootprint(montage())
     const svg = buildProjectSvg(doc, DEFAULT_EXPORT)
     expect(svg?.svg).toContain(
       '<g class="footprint" transform="matrix(-1 0 0 1 38 0)"><g transform="matrix(1 0 0 1 12 11)">'
     )
-    // Une seule forme en pointillés : l'empreinte, vue de l'autre face.
-    expect(svg?.svg.match(/stroke-dasharray="0\.2 0\.3"/g)).toHaveLength(1)
+    // Une silhouette, dans l'allure des empreintes : son masque, ses tirets clairs.
+    expect(svg?.svg).toContain('<mask id="empreinte-c" maskUnits="userSpaceOnUse"')
+    expect(svg?.svg.match(/stroke-dasharray="0\.24 0\.18"/g)).toHaveLength(1)
+    // Elle se dessine avec la plaque : sur son dessous, sous les pattes qui y ressortent.
+    const text = svg?.svg ?? ''
+    expect(text.indexOf('class="underside"')).toBeLessThan(text.indexOf('class="footprint"'))
+    expect(text.indexOf('class="footprint"')).toBeLessThan(text.indexOf('class="through"'))
     expect(svg?.widthCells).toBe(18 + 2 * DEFAULT_EXPORT.marginCells)
     // Sans dessous montré, l'empreinte ne se dessine nulle part.
     const plain = buildProjectSvg(withFootprint(montage([], false)), DEFAULT_EXPORT)

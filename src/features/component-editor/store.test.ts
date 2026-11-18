@@ -932,3 +932,91 @@ describe('éditeur de composants : étirement en hauteur', () => {
     expect(store.doc.stretch).toMatchObject({ from: 12, to: 20 })
   })
 })
+
+describe('éditeur de composants : calques de travail', () => {
+  const rect: Primitive = {
+    kind: 'rect',
+    x: 4,
+    y: 0,
+    w: 8,
+    h: 8,
+    rx: 0,
+    style: DEFAULT_SHAPE_STYLE
+  }
+
+  it('un outil qui n’a rien à faire sur le calque mène au sien', () => {
+    const store = useComponentEditorStore()
+    // Au départ, tout est sous la main : aucun outil ne change le calque.
+    expect(store.layer).toBe('all')
+    store.tool = 'pin'
+    expect(store.layer).toBe('all')
+    store.tool = 'select'
+    store.setLayer('drawing')
+    expect(store.status).toContain('Calque Dessin')
+    // L'outil Broche mène au calque des broches ; un outil de dessin ramène à celui du dessin.
+    store.tool = 'pin'
+    expect(store.layer).toBe('pins')
+    expect(store.status).toContain('Calque Broches')
+    store.tool = 'rect'
+    expect(store.layer).toBe('drawing')
+    // Sur le calque des empreintes, le rectangle reste en main ; un texte n'y a pas sa place.
+    store.setLayer('footprint')
+    expect(store.tool).toBe('rect')
+    store.tool = 'text'
+    expect(store.layer).toBe('drawing')
+    // Choisir un calque où l'outil ne pose rien rend la main à la sélection.
+    store.setLayer('pins')
+    expect(store.tool).toBe('select')
+  })
+
+  it('sur le calque des empreintes, ce qu’on trace en devient une', () => {
+    const store = useComponentEditorStore()
+    store.setLayer('footprint')
+    const outline = store.addPrimitive(rect, 'Ajouter un rectangle')
+    expect(store.doc.visual.primitives[outline]).toMatchObject({ kind: 'rect', footprint: true })
+    expect(store.layer).toBe('footprint')
+    // Un point ne peut pas être une empreinte : il va au dessin, et le calque le suit.
+    const dot = store.addPrimitive(
+      { kind: 'dot', x: 4, y: 4, scale: 1, color: '#000000' },
+      'Ajouter un point'
+    )
+    expect(store.doc.visual.primitives[dot]).not.toHaveProperty('footprint')
+    expect(store.layer).toBe('drawing')
+    // Ailleurs, un rectangle est une forme du dessin.
+    const plain = store.addPrimitive(rect, 'Ajouter un rectangle')
+    expect(store.doc.visual.primitives[plain]).not.toHaveProperty('footprint')
+  })
+
+  it('le calque suit la sélection, et ne garde pas ce qui en sort', () => {
+    const store = useComponentEditorStore()
+    const shape = store.addPrimitive(rect, 'Ajouter un rectangle')
+    const pin = store.addPin({ x: 0, y: 1 })
+    // « Tout » : rien ne change, quoi qu'on sélectionne.
+    expect(store.layer).toBe('all')
+    // Passer au dessin : la broche sélectionnée n'en est pas, elle ne l'est plus.
+    store.setLayer('drawing')
+    expect(store.selection).toBeNull()
+    // Une broche prise autrement qu'au canevas (la liste du panneau) : le calque la suit.
+    store.selectPin(pin)
+    expect(store.layer).toBe('pins')
+    // Une forme et une broche ensemble : il faut tout voir.
+    store.select([shape], [pin])
+    expect(store.layer).toBe('all')
+    // Tout sélectionner ne prend que le calque qu'on regarde.
+    store.setLayer('drawing')
+    store.selectAll()
+    expect([store.selectedIndexes, store.selectedPinIds]).toEqual([[shape], []])
+    store.setLayer('pins')
+    store.selectAll()
+    expect([store.selectedIndexes, store.selectedPinIds]).toEqual([[], [pin]])
+    // Une forme qui devient une empreinte change de calque : celui qu'on regarde la suit, et
+    // revient avec l'annulation.
+    store.setLayer('drawing')
+    store.selectPrimitives([shape])
+    store.setFootprint(shape, true)
+    expect(store.layer).toBe('footprint')
+    store.undo()
+    expect(store.doc.visual.primitives[shape]).not.toHaveProperty('footprint')
+    expect(store.layer).toBe('drawing')
+  })
+})

@@ -780,8 +780,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   - Éditeur de composants : on édite une variante à la fois (`activeVariant` du store, gardée
     par onglet). Le store lit le dessin par `shown` et l'écrit par `bodyOf(draft)` : jamais
     `doc.value.pins` ni `draft.pins`, qui ne seraient que la première variante ; le canevas et le
-    panneau lisent `store.shown`. Barre d'outils : la liste des variantes (dès deux) et le
-    bouton qui en crée une ; panneau du composant : section « Variantes », une ligne par
+    panneau lisent `store.shown`. Barre d'outils : la liste des variantes (dès deux) ; une
+    variante se crée dans le panneau, pas dans la barre (décision du 18 novembre 2026) ;
+    panneau du composant : section « Variantes », avec le bouton qui en crée une, une ligne par
     variante avec un bouton radio qui montre et choisit celle qu'on regarde, son nom modifiable
     sur place, une poignée pour la glisser à un autre rang (`moveVariant`,
     `movedVariantOrder`) et une corbeille. `addVariant`, `showVariant`, `renameVariant`,
@@ -975,17 +976,30 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     côté de la plaque. Dans l'éditeur de composants, un rectangle, une ellipse, une ligne ou
     une polyligne devient une empreinte par la case « Empreinte sur l'autre face d'une
     plaque » de son panneau ou l'entrée du clic droit (`footprint` de la forme,
-    `setFootprint` du store ; `isFootprint`, `hasFootprint`). Une empreinte se dessine en
-    pointillés (`footprintDash` : des tirets à la mesure du trait), avec son trait, son
-    épaisseur et son remplissage. Elle ne fait pas partie du composant posé : ni sur le
-    montage, ni dans la bibliothèque. Seuls la montrent l'éditeur de composants, et l'autre
-    face de la plaque à deux faces qui porte le composant (`boardFootprints` de
-    boardCarry.ts, selon la règle de `boardLoad` ; `footprints` du store) : elle s'y dessine
-    avec la plaque, par le miroir de son dessous, sous les marques des pattes
-    (`footprintsByBoard`, `g.footprint` du canevas), à l'écran comme à l'export, qui lui
-    garde sa place dans l'image. `ComponentGraphic` a pour cela `footprints` (`hidden` par
-    défaut, `drawn` dans l'éditeur, `only` sur l'autre face) ; `componentSvg`, l'option du
-    même nom.
+    `setFootprint` du store ; `isFootprint`, `hasFootprint`), ou en la traçant sur le calque
+    des empreintes (voir « Calques de travail »). Elle ne fait pas partie du composant
+    posé : ni sur le montage, ni dans la bibliothèque. Seuls la montrent l'éditeur de
+    composants, et l'autre face de la plaque à deux faces qui porte le composant
+    (`boardFootprints` de boardCarry.ts, selon la règle de `boardLoad` ; `footprints` du
+    store) : elle s'y dessine avec la plaque, par le miroir de son dessous, sous les marques
+    des pattes (`footprintsByBoard`, `g.footprint` du canevas), à l'écran comme à l'export,
+    qui lui garde sa place dans l'image.
+    Allure (même jour, après un premier essai où chaque forme gardait son trait, en
+    pointillés : des traits épais, doublés là où deux formes se touchaient ;
+    `src/domain/footprint.ts`) : une empreinte a partout la même allure, quels que soient
+    le trait et le remplissage de ses formes (`FOOTPRINT_STYLE` : un voile sombre, cerné
+    d'un filet sombre que recouvrent des tirets clairs, donc lisible sur une plaque claire
+    comme sur une plaque sombre). Sur le montage, les formes d'empreinte d'un composant se
+    fondent en une seule silhouette : les traits sont tracés deux fois trop épais et un
+    masque en retire ce qui tombe dans une forme, il n'en reste que le contour de
+    l'ensemble, sans les côtés que deux formes partagent (les motifs d'un bornier étiré)
+    ni ce qu'une forme recouvre d'une autre (`src/render/FootprintGraphic.vue` à l'écran,
+    `footprintSvg` à l'export : le même dessin, d'après `footprintDrawing`). L'éditeur de
+    composants les montre une à une (`ComponentGraphic`, `footprintPath`), d'un trait fin
+    de l'épaisseur de l'écran : un simple contour quand tout est affiché, qui laisse voir
+    et saisir le dessin qu'il entoure, avec son voile et saisi aussi par l'intérieur sur
+    le calque des empreintes (`filledFootprint`). Le panneau d'une empreinte n'a ni trait
+    ni remplissage à régler.
   - Une plaque emmène ce qu'elle porte (`src/domain/boardCarry.ts`), qu'elle montre son
     dessous ou non : les composants qui ont une broche dans un de ses trous ou sont posés en
     entier sur elle, les fils dont tous les sommets sont sur elle, les étiquettes qui y
@@ -1093,7 +1107,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     panneau, rien n'est dessiné ; à ne pas confondre avec `group`, le groupe de sélection des
     formes et des broches sur le dessin. Le repère
     d'une broche se met du côté libre le plus proche du bord (`pinLabelSide`, contours et traits
-    évités), sinon du côté du bord le plus proche ; son numéro (et le point médian qui le sépare
+    évités, pas les empreintes), sinon du côté du bord le plus proche. Une file de broches se
+    lit d'un trait (décision du 18 novembre 2026 ; `pinLabelAxis`) : les broches d'une même
+    colonne ont leur repère sur le côté, celles d'une même rangée au-dessus ou au-dessous,
+    coins compris (la broche du coin, aussi près du haut que du côté, se mettait à part) ;
+    d'une colonne et d'une rangée, la plus longue l'emporte. Son numéro (et le point médian qui le sépare
     du nom) est plus petit et grisé, le nom garde sa taille (`pinNumberText`). Tout l'espace de travail a la couleur du
     papier ; la marge du canevas vaut une cellule ou la place des repères qui dépassent, et
     l'ajustement à la fenêtre en tient compte (`pinLabelLayout.ts`).
@@ -1106,6 +1124,26 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     `onOutsideDown`), Alt+glisser en dépose une copie, Ctrl+C / V / D copient,
     collent (décalées d'une cellule) et dupliquent ; le panneau de droite ne montre que l'élément
     sélectionné (forme, formes ou broche), sinon le composant.
+    Calques de travail (décision du 18 novembre 2026 ; `layers.ts`, `layer` du store) : un
+    composant a son dessin (formes, textes, images), ses broches et ses empreintes, et les
+    voir tous à la fois se lit mal. Quatre boutons de la barre d'outils, en sélecteur
+    segmenté après l'import d'image (`LAYERS`, `setLayer`) : « Tout » (au départ : tout se
+    voit, tout se prend), « Dessin », « Broches », « Empreintes ». Sur un calque, le reste
+    est estompé et hors d'atteinte : on clique et on entoure à travers (`showing` et
+    `reachable` de `ComponentGraphic`, qui reçoit `layer` ; `pinsReachable`, `.dimmed`), le
+    lasso et Ctrl+A ne prennent que lui (`primitiveOnLayer`, `onLayer`). Les empreintes ne
+    se voient que sur « Tout » et sur leur calque. Ce n'est qu'une façon de regarder,
+    commune aux onglets : rien n'en est enregistré dans le composant, et la vignette comme
+    le montage dessinent le composant sans calque (`layer` absent : sans ses empreintes).
+    Trois règles tiennent le tout ensemble. Ce qu'on trace sur le calque des empreintes en
+    devient une (`addPrimitive`). Un outil qui n'a rien à faire sur le calque qu'on regarde
+    mène au sien (`toolFitsLayer`, `layerForTool` : la touche B au calque des broches, un
+    outil de dessin à celui du dessin), et choisir un calque où l'outil ne pose rien rend la
+    main à la sélection. La sélection se voit toujours : si elle sort du calque (une forme
+    collée, une broche prise dans la liste du panneau, une forme devenue empreinte, une
+    annulation), le calque change pour la montrer, « Tout » si elle en mêle plusieurs
+    (`followSelection`, à l'écoute de la sélection) ; changer de calque fait tomber ce qui
+    n'en est pas.
     Maj pendant le tracé d'un rectangle ou d'une ellipse impose un carré ou un cercle. Tailles des
     textes proposées en multiples (×1 à ×3) d'une hauteur de référence de 0,5 cellule, comme
     les étiquettes du montage le sont de la taille des repères du profil ; la valeur stockée reste

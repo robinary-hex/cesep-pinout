@@ -129,17 +129,39 @@ export function primitiveTouchesBox(primitive: Primitive, box: Box): boolean {
   }
 }
 
+/** Où un repère se met de préférence : sur le côté de sa broche (gauche, droite), ou au bout. */
+export type LabelAxis = 'sides' | 'ends'
+
+/**
+ * Sens des repères d'une file de broches (décision du 18 novembre 2026) : les broches d'une même
+ * colonne ont leur repère sur le côté, celles d'une même rangée au-dessus ou au-dessous, pour
+ * que la file se lise d'un trait, ses deux bouts compris (sans cela, la broche du coin, aussi
+ * près du haut que du côté, se mettait à part). Une broche qui est d'une colonne et d'une
+ * rangée suit la plus longue ; seule, ou à égalité, elle n'a pas de préférence. `others` : les
+ * autres broches du composant.
+ */
+export function pinLabelAxis(point: LocalPoint, others: readonly LocalPoint[]): LabelAxis | null {
+  const column = others.filter((other) => other.x === point.x).length
+  const row = others.filter((other) => other.y === point.y).length
+  return column > row ? 'sides' : row > column ? 'ends' : null
+}
+
 /**
  * Côté du repère d'une broche : le premier, du bord le plus proche au plus lointain, dont la boîte
- * (donnée par `boxFor`) ne touche aucune forme ; sinon le bord le plus proche.
+ * (donnée par `boxFor`) ne touche aucune forme ; sinon le bord le plus proche. Avec `prefer`,
+ * les côtés de ce sens passent avant les autres.
  */
 export function pinLabelSide(
   point: LocalPoint,
   size: Size,
   primitives: readonly Primitive[],
-  boxFor: (side: LabelSide) => Box
+  boxFor: (side: LabelSide) => Box,
+  prefer: LabelAxis | null = null
 ): LabelSide {
-  const sides = sidesByNearestBorder(point, size)
+  const nearest = sidesByNearestBorder(point, size)
+  const wanted = (side: LabelSide): boolean =>
+    prefer === null || (side === 'left' || side === 'right') === (prefer === 'sides')
+  const sides = [...nearest.filter(wanted), ...nearest.filter((side) => !wanted(side))]
   const free = sides.find((side) => {
     const box = boxFor(side)
     return !primitives.some((primitive) => primitiveTouchesBox(primitive, box))

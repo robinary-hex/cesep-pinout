@@ -241,6 +241,12 @@ function isSelectedPin(id: string): boolean {
   return store.selectedPinIds.includes(id)
 }
 
+/**
+ * Les broches sont-elles sous la main ? Sur le calque du dessin ou des empreintes, elles sont
+ * estompées et hors d'atteinte : l'appui les traverse.
+ */
+const pinsReachable = computed(() => store.onLayer('pins'))
+
 function pinPosition(pin: Pin): LocalPoint {
   const current = drag.value
   if (current?.kind === 'move-pin' && current.id === pin.id) return current.current
@@ -737,7 +743,7 @@ function onHandleDown(handleId: string, event: PointerEvent): void {
 }
 
 function onPinDown(id: string, event: PointerEvent): void {
-  if (store.tool !== 'select' || event.button !== 0) return
+  if (store.tool !== 'select' || event.button !== 0 || !pinsReachable.value) return
   event.stopPropagation()
   const pin = store.shown.pins.find((candidate) => candidate.id === id)
   if (!pin) return
@@ -990,6 +996,8 @@ function primitivesInBand(bandDrag: Extract<Drag, { kind: 'band' }>): number[] {
   const x2 = Math.max(bandDrag.start.x, bandDrag.current.x) * QUARTERS_PER_CELL
   const y2 = Math.max(bandDrag.start.y, bandDrag.current.y) * QUARTERS_PER_CELL
   return store.shown.visual.primitives.flatMap((primitive, index) => {
+    // Hors du calque qu'on regarde, une forme ne se prend pas.
+    if (!store.primitiveOnLayer(primitive)) return []
     const b = primitiveBounds(primitive)
     return b.x1 <= x2 && x1 <= b.x2 && b.y1 <= y2 && y1 <= b.y2 ? [index] : []
   })
@@ -997,6 +1005,7 @@ function primitivesInBand(bandDrag: Extract<Drag, { kind: 'band' }>): number[] {
 
 /** Broches posées dans le lasso (en cellules). */
 function pinsInBand(bandDrag: Extract<Drag, { kind: 'band' }>): string[] {
+  if (!pinsReachable.value) return []
   const x1 = Math.min(bandDrag.start.x, bandDrag.current.x)
   const y1 = Math.min(bandDrag.start.y, bandDrag.current.y)
   const x2 = Math.max(bandDrag.start.x, bandDrag.current.x)
@@ -1239,7 +1248,7 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
             :def="store.shown"
             :cell-px="cell"
             :stroke-base="strokeBase"
-            footprints="drawn"
+            :layer="store.layer"
             interactive
             :moving="moving"
             :preview="handlePreview"
@@ -1253,7 +1262,7 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
             :def="ghostDef"
             :cell-px="cell"
             :stroke-base="strokeBase"
-            footprints="drawn"
+            layer="all"
           />
 
           <!-- Composant extensible : le motif, entre ses deux traits de coupe. -->
@@ -1345,11 +1354,17 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
             v-for="(pin, index) in store.shown.pins"
             :key="pin.id"
             class="pin"
-            :class="{ selected: isSelectedPin(pin.id), hovered: store.hoverPinId === pin.id }"
+            :class="{
+              selected: isSelectedPin(pin.id),
+              hovered: store.hoverPinId === pin.id,
+              dimmed: !pinsReachable
+            }"
             :transform="`translate(${pinPosition(pin).x * cell} ${pinPosition(pin).y * cell})`"
             @pointerdown="onPinDown(pin.id, $event)"
-            @contextmenu="onContextMenu($event, { kind: 'pin', id: pin.id })"
-            @pointerenter="store.hoverPinId = pin.id"
+            @contextmenu="
+              onContextMenu($event, pinsReachable ? { kind: 'pin', id: pin.id } : { kind: 'empty' })
+            "
+            @pointerenter="store.hoverPinId = pinsReachable ? pin.id : null"
             @pointerleave="store.hoverPinId = null"
           >
             <circle r="12" fill="transparent" />
@@ -1565,6 +1580,12 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
 
 .pin {
   cursor: pointer;
+}
+
+/* Hors du calque de travail, les broches sont estompées et hors d'atteinte. */
+.pin.dimmed {
+  opacity: 0.3;
+  pointer-events: none;
 }
 
 .pin text {

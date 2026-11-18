@@ -610,7 +610,7 @@ function setClosed(event: Event): void {
 
     <!-- Une forme seule -->
     <section v-if="primitive" class="block">
-      <h3>{{ PRIMITIVE_KIND_LABELS[primitive.kind] }}</h3>
+      <h3>{{ footprint ? 'Empreinte · ' : '' }}{{ PRIMITIVE_KIND_LABELS[primitive.kind] }}</h3>
 
       <template v-if="primitive.kind === 'text'">
         <label class="check">
@@ -739,95 +739,102 @@ function setClosed(event: Event): void {
       </template>
 
       <template v-else-if="shapeStyle">
-        <div class="row">
-          <label class="field">
-            <span>Trait</span>
-            <ColorField
-              :value="shapeStyle.stroke === 'none' ? '#000000' : shapeStyle.stroke"
-              :disabled="shapeStyle.stroke === 'none'"
-              @change="setStroke"
-            />
-          </label>
-          <label class="check">
-            <input type="checkbox" :checked="shapeStyle.stroke === 'none'" @change="toggleStroke" />
-            <span>Sans trait</span>
-          </label>
-        </div>
-        <label class="field">
-          <span>Épaisseur</span>
-          <select :value="shapeStyle.weight" @change="setWeight">
-            <option v-for="weight in weightChoices" :key="weight" :value="weight">
-              ×{{ weight
-              }}{{
-                weight === 0.5
-                  ? ' (fin)'
-                  : weight === 1
-                    ? ' (normal)'
-                    : weight === 2
-                      ? ' (gras)'
-                      : ''
-              }}
-            </option>
-          </select>
-        </label>
-        <div class="row">
-          <label class="field">
-            <span>Remplissage</span>
-            <ColorField
-              :value="shapeStyle.fill === 'none' ? '#ffffff' : shapeStyle.fill"
-              :disabled="shapeStyle.fill === 'none'"
-              @change="setFill"
-            />
-          </label>
-          <label class="check">
-            <input type="checkbox" :checked="shapeStyle.fill === 'none'" @change="toggleFill" />
-            <span>Sans remplissage</span>
-          </label>
-          <label class="field opacity">
-            <span>Opacité du remplissage : {{ Math.round(shapeStyle.fillOpacity * 100) }} %</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="5"
-              :value="Math.round(shapeStyle.fillOpacity * 100)"
-              :disabled="shapeStyle.fill === 'none'"
-              @change="setFillOpacity"
-            />
-          </label>
-        </div>
-        <div
-          v-if="primitive.kind === 'line' || (primitive.kind === 'polyline' && !primitive.closed)"
-          class="field"
-        >
-          <span>Flèche</span>
+        <!-- Une empreinte a partout la même allure : ni trait, ni remplissage, ni flèche. -->
+        <template v-if="!footprint">
           <div class="row">
-            <label class="check">
-              <input
-                type="checkbox"
-                :checked="primitive.arrows.start"
-                @change="setArrow('start', $event)"
+            <label class="field">
+              <span>Trait</span>
+              <ColorField
+                :value="shapeStyle.stroke === 'none' ? '#000000' : shapeStyle.stroke"
+                :disabled="shapeStyle.stroke === 'none'"
+                @change="setStroke"
               />
-              <span>Début</span>
             </label>
             <label class="check">
               <input
                 type="checkbox"
-                :checked="primitive.arrows.middle"
-                @change="setArrow('middle', $event)"
+                :checked="shapeStyle.stroke === 'none'"
+                @change="toggleStroke"
               />
-              <span>Centre</span>
-            </label>
-            <label class="check">
-              <input
-                type="checkbox"
-                :checked="primitive.arrows.end"
-                @change="setArrow('end', $event)"
-              />
-              <span>Fin</span>
+              <span>Sans trait</span>
             </label>
           </div>
-        </div>
+          <label class="field">
+            <span>Épaisseur</span>
+            <select :value="shapeStyle.weight" @change="setWeight">
+              <option v-for="weight in weightChoices" :key="weight" :value="weight">
+                ×{{ weight
+                }}{{
+                  weight === 0.5
+                    ? ' (fin)'
+                    : weight === 1
+                      ? ' (normal)'
+                      : weight === 2
+                        ? ' (gras)'
+                        : ''
+                }}
+              </option>
+            </select>
+          </label>
+          <div class="row">
+            <label class="field">
+              <span>Remplissage</span>
+              <ColorField
+                :value="shapeStyle.fill === 'none' ? '#ffffff' : shapeStyle.fill"
+                :disabled="shapeStyle.fill === 'none'"
+                @change="setFill"
+              />
+            </label>
+            <label class="check">
+              <input type="checkbox" :checked="shapeStyle.fill === 'none'" @change="toggleFill" />
+              <span>Sans remplissage</span>
+            </label>
+            <label class="field opacity">
+              <span>Opacité du remplissage : {{ Math.round(shapeStyle.fillOpacity * 100) }} %</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                :value="Math.round(shapeStyle.fillOpacity * 100)"
+                :disabled="shapeStyle.fill === 'none'"
+                @change="setFillOpacity"
+              />
+            </label>
+          </div>
+          <div
+            v-if="primitive.kind === 'line' || (primitive.kind === 'polyline' && !primitive.closed)"
+            class="field"
+          >
+            <span>Flèche</span>
+            <div class="row">
+              <label class="check">
+                <input
+                  type="checkbox"
+                  :checked="primitive.arrows.start"
+                  @change="setArrow('start', $event)"
+                />
+                <span>Début</span>
+              </label>
+              <label class="check">
+                <input
+                  type="checkbox"
+                  :checked="primitive.arrows.middle"
+                  @change="setArrow('middle', $event)"
+                />
+                <span>Centre</span>
+              </label>
+              <label class="check">
+                <input
+                  type="checkbox"
+                  :checked="primitive.arrows.end"
+                  @change="setArrow('end', $event)"
+                />
+                <span>Fin</span>
+              </label>
+            </div>
+          </div>
+        </template>
         <label v-if="primitive.kind === 'rect'" class="field">
           <span>Arrondi des coins (quarts de cellule)</span>
           <input type="number" min="0" step="1" :value="primitive.rx" @change="setRectRadius" />
@@ -842,7 +849,7 @@ function setClosed(event: Event): void {
         </label>
         <label
           class="check footprint"
-          title="La forme ne se dessine pas sur le composant posé : elle montre, en pointillés, la place qu’il prend sur l’autre face d’une plaque à trous qui montre son dessous."
+          title="La forme ne fait pas partie du composant posé : elle dit la place qu’il prend sur l’autre face d’une plaque à trous, où elle se dessine, fondue avec ses autres empreintes."
         >
           <input type="checkbox" :checked="footprint" @change="setFootprint" />
           <span>Empreinte sur l’autre face d’une plaque</span>

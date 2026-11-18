@@ -205,11 +205,11 @@ describe('éditeur de composants : menu contextuel', () => {
     wrapper.unmount()
   })
 
-  it('une forme devient une empreinte par le menu ou le panneau : elle passe en pointillés', async () => {
+  it('une forme devient une empreinte par le menu ou le panneau : elle en prend l’allure', async () => {
     const store = withRectangle()
     const wrapper = mount(ComponentEditor, { attachTo: document.body })
     const dash = (): string | undefined =>
-      wrapper.get('.component-graphic rect').attributes('stroke-dasharray')
+      wrapper.find('.component-graphic .footprint-dashes').exists() ? 'tirets' : undefined
     expect(dash()).toBeUndefined()
     rightClick(wrapper.get('.component-graphic .interactive').element)
     await flushPromises()
@@ -223,7 +223,11 @@ describe('éditeur de composants : menu contextuel', () => {
     await flushPromises()
     const check = wrapper.get('.inspector .footprint input')
     expect((check.element as HTMLInputElement).checked).toBe(true)
+    // Une empreinte n'a ni trait ni remplissage à régler : son allure est partout la même.
+    expect(wrapper.get('.inspector h3').text()).toBe('Empreinte · Rectangle')
+    expect(wrapper.get('.inspector').text()).not.toContain('Épaisseur')
     await check.setValue(false)
+    expect(wrapper.get('.inspector').text()).toContain('Épaisseur')
     expect(store.doc.visual.primitives[0]).not.toHaveProperty('footprint')
     expect(dash()).toBeUndefined()
     // Une annulation la refait empreinte.
@@ -494,15 +498,175 @@ describe('éditeur de composants : groupes de broches dans le panneau', () => {
   })
 })
 
+describe('éditeur de composants : calques de travail', () => {
+  /** Un rectangle du dessin, un contour d'empreinte et une broche, rien de sélectionné. */
+  function withLayers(): ReturnType<typeof useComponentEditorStore> {
+    const store = withRectangle()
+    store.addPrimitive(
+      { kind: 'rect', x: 0, y: 0, w: 16, h: 8, rx: 0, style: DEFAULT_SHAPE_STYLE, footprint: true },
+      'Ajouter un rectangle'
+    )
+    store.addPin({ x: 0, y: 1 })
+    store.selection = null
+    return store
+  }
+
+  it('la barre d’outils choisit le calque : le reste est estompé, les empreintes cachées', async () => {
+    const store = withLayers()
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    const layers = wrapper.findAll('.toolbar .layers button')
+    expect(layers.map((button) => button.attributes('title')?.split(' :')[0])).toEqual([
+      'Calque Tout',
+      'Calque Dessin',
+      'Calque Broches',
+      'Calque Empreintes'
+    ])
+    /** Par forme affichée : « dessin » ou « empreinte », et si elle est estompée. */
+    const shapes = (): string[] =>
+      wrapper
+        .findAll('.component-graphic > g')
+        .map(
+          (group) =>
+            (group.find('.footprint-dashes').exists() ? 'empreinte' : 'dessin') +
+            (group.classes().includes('dimmed') ? ', estompé' : '')
+        )
+    const pinDimmed = (): boolean => wrapper.get('.pin').classes().includes('dimmed')
+    // Tout : le dessin, l'empreinte et la broche, sous la main.
+    expect(layers[0]?.classes()).toContain('active')
+    expect([shapes(), pinDimmed()]).toEqual([['dessin', 'empreinte'], false])
+    // Dessin : la broche estompée, l'empreinte cachée.
+    await layers[1]?.trigger('click')
+    expect(store.layer).toBe('drawing')
+    expect(store.status).toContain('Calque Dessin')
+    expect([shapes(), pinDimmed()]).toEqual([['dessin'], true])
+    // Broches : le dessin estompé, l'empreinte toujours cachée.
+    await layers[2]?.trigger('click')
+    expect([shapes(), pinDimmed()]).toEqual([['dessin, estompé'], false])
+    // Empreintes : elle seule sous la main.
+    await layers[3]?.trigger('click')
+    expect([shapes(), pinDimmed()]).toEqual([['dessin, estompé', 'empreinte'], true])
+    expect(layers.map((button) => button.classes().includes('active'))).toEqual([
+      false,
+      false,
+      false,
+      true
+    ])
+    wrapper.unmount()
+  })
+
+  it('ce qui est estompé est hors d’atteinte : on clique et on entoure à travers', async () => {
+    const store = withLayers()
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    // L'ajustement à la fenêtre fait, la feuille ne bouge plus.
+    await flushPromises()
+    const svg = wrapper.get('svg.canvas')
+    const origin = /translate\(([-\d.]+) ([-\d.]+)\)/.exec(
+      svg.get('g[transform]').attributes('transform') ?? ''
+    )
+    const at = (x: number, y: number): MouseEventInit => ({
+      clientX: Number(origin?.[1] ?? 0) + x * store.cellPx,
+      clientY: Number(origin?.[2] ?? 0) + y * store.cellPx
+    })
+    const follow = async (type: string, position: MouseEventInit = {}): Promise<void> => {
+      svg.element.dispatchEvent(
+        new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, ...position })
+      )
+      await nextTick()
+    }
+    /** Un lasso autour de tout le composant. */
+    const lasso = async (): Promise<void> => {
+      await press(wrapper.get('.canvas-scroll'), at(-1, -1))
+      await follow('pointermove', at(5, 3))
+      await follow('pointerup', at(5, 3))
+    }
+    const picked = (): [readonly number[], number] => [
+      store.selectedIndexes,
+      store.selectedPinIds.length
+    ]
+    // Tout : le lasso prend le dessin, l'empreinte et la broche.
+    await lasso()
+    expect(picked()).toEqual([[0, 1], 1])
+    // Dessin : un appui sur la broche la traverse ; le lasso ne prend que le dessin.
+    store.setLayer('drawing')
+    await nextTick()
+    expect(store.selection).toBeNull()
+    await press(wrapper.get('.pin'))
+    await follow('pointerup')
+    expect(picked()).toEqual([[], 0])
+    await lasso()
+    expect(picked()).toEqual([[0], 0])
+    // Broches : le dessin se traverse, la broche se prend ; le lasso ne prend qu'elle.
+    store.setLayer('pins')
+    await nextTick()
+    await press(wrapper.get('.component-graphic > g'))
+    await follow('pointerup')
+    expect(picked()).toEqual([[], 0])
+    await press(wrapper.get('.pin'))
+    await follow('pointerup')
+    expect(picked()).toEqual([[], 1])
+    await lasso()
+    expect(picked()).toEqual([[], 1])
+    // Empreintes : elle seule.
+    store.setLayer('footprint')
+    await nextTick()
+    await lasso()
+    expect(picked()).toEqual([[1], 0])
+    wrapper.unmount()
+  })
+
+  it('un rectangle tracé sur le calque des empreintes en est une ; l’outil Broche mène au sien', async () => {
+    const store = withLayers()
+    const wrapper = mount(ComponentEditor, { attachTo: document.body })
+    // L'ajustement à la fenêtre fait, la feuille ne bouge plus.
+    await flushPromises()
+    const svg = wrapper.get('svg.canvas')
+    const origin = /translate\(([-\d.]+) ([-\d.]+)\)/.exec(
+      svg.get('g[transform]').attributes('transform') ?? ''
+    )
+    const send = async (type: string, x: number, y: number): Promise<void> => {
+      svg.element.dispatchEvent(
+        new MouseEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          clientX: Number(origin?.[1] ?? 0) + x * store.cellPx,
+          clientY: Number(origin?.[2] ?? 0) + y * store.cellPx
+        })
+      )
+      await nextTick()
+    }
+    store.setLayer('footprint')
+    await key('r')
+    expect([store.tool, store.layer]).toEqual(['rect', 'footprint'])
+    await send('pointerdown', 1, 0)
+    await send('pointermove', 3, 1)
+    await send('pointerup', 3, 1)
+    expect(store.doc.visual.primitives[2]).toMatchObject({ kind: 'rect', footprint: true })
+    expect(wrapper.findAll('.component-graphic .footprint-dashes')).toHaveLength(2)
+    // La touche B : l'outil Broche, et le calque des broches avec lui.
+    await key('b')
+    expect([store.tool, store.layer]).toEqual(['pin', 'pins'])
+    expect(wrapper.find('.component-graphic .footprint-dashes').exists()).toBe(false)
+    // Une broche choisie dans la liste du panneau, depuis le calque du dessin : il change.
+    store.setLayer('drawing')
+    expect(store.tool).toBe('select')
+    store.selectPin(store.doc.pins[0]?.id ?? '')
+    expect(store.layer).toBe('pins')
+    wrapper.unmount()
+  })
+})
+
 describe('éditeur de composants : variantes', () => {
-  it('se créent par la barre ou le panneau, se choisissent, se nomment et se suppriment', async () => {
+  it('se créent dans le panneau, se choisissent, se nomment et se suppriment', async () => {
     const store = withRectangle()
     store.inspectorOpen = true
     const wrapper = mount(ComponentEditor, { attachTo: document.body })
     // Une seule variante : pas de liste dans la barre, une phrase dans le panneau.
     expect(wrapper.find('.variant-select').exists()).toBe(false)
     expect(wrapper.find('.variant-row').exists()).toBe(false)
-    await wrapper.get('.toolbar button[title^="Nouvelle variante"]').trigger('click')
+    // Plus de bouton dans la barre d'outils : celui du panneau suffit.
+    expect(wrapper.find('.toolbar button[title^="Nouvelle variante"]').exists()).toBe(false)
+    await wrapper.get('.inspector button[title^="Nouvelle variante"]').trigger('click')
     expect(store.variants).toHaveLength(2)
     expect(store.variantId).toBe('v1')
     const select = wrapper.get('.variant-select')

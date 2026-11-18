@@ -4,7 +4,6 @@ import {
   abuttingImages,
   discsPathData,
   dotRadiusCells,
-  footprintDash,
   HOLE_COLOR,
   HOLE_OPACITY,
   HOLE_PAD_RADIUS_CELLS,
@@ -34,6 +33,7 @@ import {
 } from './boardFaces'
 import { computeConnectivity, projectPins, type FreeEnd } from './connectivity'
 import { crossingPieceEnds, crossingPieces } from './crossings'
+import { FOOTPRINT_STYLE, footprintDashArray, footprintDrawing } from './footprint'
 import { QUARTERS_PER_CELL, type LocalPoint } from './grid'
 import {
   facesFlip,
@@ -242,9 +242,7 @@ export function primitiveSvg(
     fill: primitive.style.fill,
     'fill-opacity': primitive.style.fillOpacity < 1 ? primitive.style.fillOpacity : undefined,
     'stroke-linecap': 'round',
-    'stroke-linejoin': 'round',
-    // Une empreinte : en pointillés.
-    'stroke-dasharray': primitive.footprint === true ? footprintDash(width) : undefined
+    'stroke-linejoin': 'round'
   }
   switch (primitive.kind) {
     case 'rect':
@@ -286,19 +284,16 @@ export function primitiveSvg(
 
 /**
  * Contenu d'un composant dans son repère local (cellules) : ses formes, images comprises, sans
- * ses empreintes ; avec `footprints`, ses empreintes seules, telles qu'elles se dessinent sur
- * l'autre face d'une plaque.
+ * ses empreintes, qui ne se dessinent que sur l'autre face d'une plaque (`footprintSvg`).
  */
 export function componentSvg(
   def: ComponentDefinition,
   componentStroke: number,
   fields?: FieldValues,
-  options: { skipTexts?: boolean; footprints?: boolean } = {}
+  options: { skipTexts?: boolean } = {}
 ): string {
   const shown = def.visual.primitives.filter(
-    (primitive) =>
-      !(options.skipTexts && primitive.kind === 'text') &&
-      isFootprint(primitive) === (options.footprints === true)
+    (primitive) => !(options.skipTexts && primitive.kind === 'text') && !isFootprint(primitive)
   )
   const lapped = abuttingImages(shown)
   return shown
@@ -309,6 +304,45 @@ export function componentSvg(
       })
     )
     .join('')
+}
+
+/**
+ * L'empreinte d'un composant, dans son repère local (cellules) : la silhouette de toutes ses
+ * formes d'empreinte réunies, dans l'allure commune aux empreintes (footprint.ts). Un voile
+ * sombre la remplit ; un filet sombre que recouvrent des tirets clairs la cerne. Les traits sont
+ * tracés deux fois trop épais et le masque en retire tout ce qui tombe dans une forme : il n'en
+ * reste que la moitié extérieure, le contour de l'ensemble, sans les côtés que deux formes
+ * partagent ni ce qu'une forme en recouvre d'une autre. Vide si le dessin n'a pas d'empreinte.
+ */
+export function footprintSvg(primitives: readonly Primitive[], maskId: string): string {
+  const drawing = footprintDrawing(primitives)
+  if (!drawing) return ''
+  const look = FOOTPRINT_STYLE
+  const closed = drawing.shapes.filter((shape) => shape.closed)
+  const solid = (color: string): string =>
+    closed
+      .map(
+        (shape) =>
+          `<path ${attrs({ d: shape.d, fill: color, stroke: color, 'stroke-width': look.seam })}/>`
+      )
+      .join('')
+  // Une forme ouverte (une ligne) n'a pas d'intérieur : son trait reste entier.
+  const stroked = (extra: Record<string, string | number>): string =>
+    drawing.shapes
+      .map(
+        (shape) =>
+          `<path ${attrs({ d: shape.d, 'stroke-width': shape.closed ? 2 * look.width : look.width, ...extra })}/>`
+      )
+      .join('')
+  const mask = `<mask ${attrs({ id: maskId, maskUnits: 'userSpaceOnUse', ...drawing.box })}><rect ${attrs({ ...drawing.box, fill: '#ffffff' })}/>${solid('#000000')}</mask>`
+  return (
+    `<g ${attrs({ opacity: look.shadowOpacity })}>${solid(look.dark)}</g>` +
+    mask +
+    `<g ${attrs({ mask: `url(#${maskId})`, fill: 'none' })}>` +
+    stroked({ stroke: look.dark, 'stroke-opacity': look.darkOpacity }) +
+    stroked({ stroke: look.light, 'stroke-dasharray': footprintDashArray() }) +
+    '</g>'
+  )
 }
 
 /** Petite flèche au bout d'une extrémité libre « prolongée », dans la direction du dernier segment. */
@@ -390,15 +424,13 @@ export function buildProjectSvg(project: Project, options: ExportSettings): SvgE
         instanceParts.push(
           `<g ${attrs({ class: 'underside', transform: `matrix(-1 0 0 1 ${fmt(flip)} 0)` })}>${drawing}</g>`
         )
-        // Sur l'autre face, l'empreinte des composants que la plaque porte : leurs formes
-        // d'empreinte, en pointillés, sous les pattes qui y ressortent.
+        // Sur l'autre face, l'empreinte des composants que la plaque porte : une silhouette par
+        // composant, sous les pattes qui y ressortent.
         for (const part of project.components) {
           if (footprints.get(part.id)?.id !== instance.id) continue
           const partDef = instanceDefinition(project, part)
           if (!partDef) continue
-          const shadow = componentSvg(partDef, styleOf(sheet, part).componentStroke, part.fields, {
-            footprints: true
-          })
+          const shadow = footprintSvg(partDef.visual.primitives, `empreinte-${part.id}`)
           instanceParts.push(
             `<g ${attrs({ class: 'footprint', transform: `matrix(-1 0 0 1 ${fmt(flip)} 0)` })}><g ${attrs({ transform: matrixToSvg(instanceMatrix(part, partDef)) })}>${shadow}</g></g>`
           )

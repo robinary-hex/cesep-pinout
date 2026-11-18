@@ -99,8 +99,10 @@ export type TextAnchor = z.infer<typeof textAnchorSchema>
 /**
  * Empreinte (décision du 18 novembre 2026) : une forme qui ne fait pas partie du dessin du
  * composant posé. Elle dit la place qu'il prend de l'autre côté d'une plaque à trous : quand la
- * plaque où il est enfiché montre ses deux faces, la forme se dessine en pointillés sur l'autre
- * face, et nulle part ailleurs. Absent : une forme comme les autres.
+ * plaque où il est enfiché montre ses deux faces, la forme se dessine sur l'autre face, fondue
+ * avec les autres empreintes du composant, et nulle part ailleurs (footprint.ts). Son trait et
+ * son remplissage ne comptent pas : une empreinte a partout la même allure. Absent : une forme
+ * comme les autres.
  */
 const footprintSchema = z.boolean().optional()
 
@@ -257,15 +259,6 @@ export function isFootprint(primitive: Primitive): boolean {
 /** Le dessin a-t-il des formes d'empreinte ? */
 export function hasFootprint(def: { visual: { primitives: readonly Primitive[] } }): boolean {
   return def.visual.primitives.some((primitive) => isFootprint(primitive))
-}
-
-/**
- * Tirets d'une empreinte, pour un trait de cette épaisseur (attribut `stroke-dasharray`, dans
- * l'unité du trait) : avec ses bouts ronds, des tirets de trois épaisseurs séparés de deux.
- */
-export function footprintDash(strokeWidth: number): string {
-  const round = (value: number): number => Math.round(value * 1000) / 1000
-  return `${round(2 * strokeWidth)} ${round(3 * strokeWidth)}`
 }
 
 // Plaque à trous (décision du 17 novembre 2026) : une plaque de prototypage est un composant

@@ -1340,7 +1340,7 @@ describe('canevas du montage : plaque à deux faces', () => {
     expect(store.doc.components[0]).toMatchObject({ x: -1, y: 1, facesGap: 8 })
   })
 
-  it('montre sur l’autre face l’empreinte d’un composant enfiché, en pointillés', async () => {
+  it('montre sur l’autre face l’empreinte d’un composant enfiché, en une silhouette', async () => {
     const store = useSchematicStore()
     store.startPlacing(board())
     const plate = store.placeAt(0, 0)
@@ -1359,26 +1359,33 @@ describe('canevas du montage : plaque à deux faces', () => {
     store.clearSelection()
     const wrapper = mount(SchematicCanvas)
     await nextTick()
-    const drawn = (): (string | undefined)[] =>
-      wrapper
-        .findAll('g.instance:not(.board) .component-graphic rect')
-        .map((rect) => rect.attributes('stroke-dasharray'))
+    const drawn = (): number =>
+      wrapper.findAll('g.instance:not(.board) .component-graphic rect').length
     // Sans dessous montré : le composant seul, sans son empreinte.
     expect(wrapper.find('g.footprint').exists()).toBe(false)
-    expect(drawn()).toEqual([undefined])
+    expect(drawn()).toBe(1)
     store.setInstanceUnderside(plate, true)
     await nextTick()
-    // L'empreinte : le dessin d'empreinte du composant, retourné sur l'autre face (x devient
-    // 14 − x), en pointillés ; le composant lui-même ne change pas.
+    // L'empreinte : la silhouette des formes d'empreinte du composant, retournée sur l'autre
+    // face (x devient 14 − x) ; le composant lui-même ne change pas.
     const footprint = wrapper.get('g.footprint')
     expect(footprint.attributes('transform')).toBe('matrix(-1 0 0 1 14 0)')
     expect(footprint.get('g').attributes('transform')).toBe('matrix(1 0 0 1 1 1)')
+    // Un voile, puis le contour que le masque laisse des traits : un filet sombre et des tirets
+    // clairs, dans l'allure commune aux empreintes.
+    const mask = `empreinte-${plate}-${id}`
+    expect(footprint.get('mask').attributes('id')).toBe(mask)
+    expect(footprint.get('.footprint-outline').attributes('mask')).toBe(`url(#${mask})`)
     expect(
-      footprint
-        .findAll('.component-graphic rect')
-        .map((rect) => rect.attributes('stroke-dasharray'))
-    ).toEqual(['0.2 0.3'])
-    expect(drawn()).toEqual([undefined])
+      footprint.findAll('.footprint-dashes').map((path) => path.attributes('stroke-dasharray'))
+    ).toEqual(['0.24 0.18'])
+    expect(footprint.find('.footprint-shadow path').exists()).toBe(true)
+    expect(drawn()).toBe(1)
+    // Elle se dessine avec la plaque, sous les pattes qui ressortent.
+    const order = wrapper
+      .findAll('g.underside, g.footprint, g.through-marks')
+      .map((group) => group.classes().find((name) => name !== 'instance' && name !== 'board'))
+    expect(order).toEqual(['underside', 'footprint', 'through-marks'])
     // Elle suit le composant qu'on glisse sur la plaque.
     await fire(wrapper.get('g.instance:not(.board) .hit'), 'pointerdown', at(store, 2, 1.5))
     await fire(wrapper.get('svg.schematic'), 'pointermove', at(store, 3, 1.5))

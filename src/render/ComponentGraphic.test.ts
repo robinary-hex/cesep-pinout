@@ -233,7 +233,7 @@ describe('ComponentGraphic', () => {
     expect(editing.get('rect').attributes()).toMatchObject({ x: '20', y: '20', width: '40' })
   })
 
-  it('une empreinte est en pointillés, et ne se dessine que là où on la demande', () => {
+  it('une empreinte ne se dessine que dans l’éditeur, selon le calque qu’on y regarde', () => {
     const def = createEmptyComponent('b', 'Bornier')
     def.visual = {
       kind: 'drawing',
@@ -242,16 +242,46 @@ describe('ComponentGraphic', () => {
         { kind: 'rect', x: 0, y: 2, w: 8, h: 4, rx: 0, style: DEFAULT_SHAPE_STYLE, footprint: true }
       ]
     }
-    const dashes = (footprints?: 'hidden' | 'drawn' | 'only'): (string | undefined)[] =>
-      mount(ComponentGraphic, { props: { def, cellPx: 20, ...(footprints ? { footprints } : {}) } })
-        .findAll('rect')
-        .map((rect) => rect.attributes('stroke-dasharray'))
+    type Layer = 'all' | 'drawing' | 'pins' | 'footprint'
+    /** Ce que montre le dessin : par forme, « dessin » ou « empreinte », et si elle est estompée. */
+    const shown = (layer?: Layer): string[] =>
+      mount(ComponentGraphic, {
+        props: { def, cellPx: 20, interactive: true, ...(layer ? { layer } : {}) }
+      })
+        .findAll('.component-graphic > g')
+        .map(
+          (group) =>
+            (group.find('.footprint-dashes').exists() ? 'empreinte' : 'dessin') +
+            (group.classes().includes('dimmed') ? ', estompé' : '')
+        )
     // Le composant tel qu'on le pose : sans son empreinte.
-    expect(dashes()).toEqual([undefined])
-    // Dans l'éditeur : tout le dessin, l'empreinte en pointillés (trait de 2 px : tirets 4, 6).
-    expect(dashes('drawn')).toEqual([undefined, '4 6'])
-    // Sur l'autre face d'une plaque : l'empreinte seule.
-    expect(dashes('only')).toEqual(['4 6'])
+    expect(shown()).toEqual(['dessin'])
+    // Dans l'éditeur. Tout : le dessin et l'empreinte ; Dessin : l'empreinte cachée ; Broches :
+    // le dessin estompé ; Empreintes : elle seule sous la main.
+    expect(shown('all')).toEqual(['dessin', 'empreinte'])
+    expect(shown('drawing')).toEqual(['dessin'])
+    expect(shown('pins')).toEqual(['dessin, estompé'])
+    expect(shown('footprint')).toEqual(['dessin, estompé', 'empreinte'])
+    // Une empreinte a son allure à elle, pas le trait de sa forme : un voile, un filet sombre,
+    // des tirets clairs, d'une épaisseur d'écran.
+    const wrapper = mount(ComponentGraphic, { props: { def, cellPx: 20, layer: 'all' } })
+    expect(wrapper.get('.footprint-shape').attributes()).toMatchObject({
+      d: 'M 0 10 H 40 V 30 H 0 Z',
+      'stroke-width': '2'
+    })
+    expect(wrapper.get('.footprint-dashes').attributes()).toMatchObject({
+      stroke: '#ffffff',
+      'stroke-dasharray': '7 5'
+    })
+    // Une forme estompée est hors d'atteinte : elle ne dit rien d'un appui.
+    const locked = mount(ComponentGraphic, {
+      props: { def, cellPx: 20, interactive: true, layer: 'footprint' }
+    })
+    const groups = locked.findAll('.component-graphic > g')
+    groups[0]?.element.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    expect(locked.emitted('primitiveDown')).toBeUndefined()
+    groups[1]?.element.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    expect(locked.emitted('primitiveDown')?.[0]?.[0]).toBe(1)
   })
 
   it('signale une image manquante au lieu de planter', () => {

@@ -90,6 +90,7 @@ import {
   type WireEndFlags
 } from '@/domain'
 import ComponentGraphic from '@/render/ComponentGraphic.vue'
+import FootprintGraphic from '@/render/FootprintGraphic.vue'
 import { screenColor } from '@/render/ink'
 import type { MenuRequest, MenuTarget } from './menu'
 import { useSchematicStore, type PlacedInstance } from './store'
@@ -2200,8 +2201,8 @@ const cursorClass = computed(() => {
                   </g>
                 </g>
                 <!-- Sur l'autre face d'une plaque à deux faces, l'empreinte des composants
-                     qu'elle porte : leurs formes d'empreinte, en pointillés, sous les pattes
-                     qui y ressortent. -->
+                     qu'elle porte : une silhouette par composant, sous les pattes qui y
+                     ressortent. -->
                 <template v-if="footprintsByBoard.has(item.instance.id)">
                   <g
                     v-for="part in footprintsByBoard.get(item.instance.id)"
@@ -2210,13 +2211,9 @@ const cursorClass = computed(() => {
                     :transform="undersides.get(item.instance.id)"
                   >
                     <g :transform="transformOf(part)">
-                      <ComponentGraphic
+                      <FootprintGraphic
                         :def="part.def"
-                        :cell-px="1"
-                        :pixel="1 / cell"
-                        :stroke-base="store.styleFor(part.instance).componentStroke"
-                        :ink="store.staleDefIds.has(part.def.id) ? 'var(--stale)' : null"
-                        footprints="only"
+                        :mask-id="`empreinte-${item.instance.id}-${part.instance.id}`"
                       />
                     </g>
                   </g>

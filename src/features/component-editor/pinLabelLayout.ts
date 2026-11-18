@@ -1,4 +1,6 @@
 import {
+  isFootprint,
+  pinLabelAxis,
   pinLabelSide,
   type Box,
   type ComponentDefinition,
@@ -73,7 +75,8 @@ export function pinLabelBox(point: LocalPoint, text: string, side: LabelSide, ce
 
 /**
  * Côté du repère d'une broche placée en `point` : le côté libre le plus proche du bord, sinon le
- * bord le plus proche (`pinLabelSide`).
+ * bord le plus proche (`pinLabelSide`), en commençant par le sens de sa file de broches
+ * (`pinLabelAxis`). Les empreintes ne gênent pas : elles ne font pas partie du dessin.
  */
 export function pinLabelSideAt(
   def: ComponentDefinition,
@@ -83,8 +86,15 @@ export function pinLabelSideAt(
   cellPx: number
 ): LabelSide {
   const text = pinLabelText(pin, index)
-  const primitives = def.visual.primitives
-  return pinLabelSide(point, def.size, primitives, (side) => pinLabelBox(point, text, side, cellPx))
+  const primitives = def.visual.primitives.filter((primitive) => !isFootprint(primitive))
+  const others = def.pins.filter((other) => other.id !== pin.id)
+  return pinLabelSide(
+    point,
+    def.size,
+    primitives,
+    (side) => pinLabelBox(point, text, side, cellPx),
+    pinLabelAxis(point, others)
+  )
 }
 
 /** Débord des repères hors de la boîte du composant, en pixels, horizontalement et verticalement. */

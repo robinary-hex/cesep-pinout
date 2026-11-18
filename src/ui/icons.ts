@@ -114,8 +114,33 @@ export const ICONS = {
     'M10 12h7v5h-7z'
   ],
   ungroup: ['M4 4h9v7H4z', 'M11 13h9v7h-9z'],
-  // Variantes d'un composant : des feuilles empilées.
+  // Des feuilles empilées : tous les calques de l'éditeur de composants.
   layers: ['M12 3 3 8l9 5 9-5z', 'M3 12l9 5 9-5', 'M3 16l9 5 9-5'],
+  // Calques de l'éditeur de composants : le dessin (trois formes), les broches (deux broches),
+  // les empreintes (un cadre en tirets).
+  shapes: ['M12 3l4.5 7h-9z', 'M3 14h7v7H3z', 'M17.5 14a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7z'],
+  pins: [
+    'M3 7h6',
+    'M9 7a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
+    'M15 7h6',
+    'M3 17h6',
+    'M9 17a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
+    'M15 17h6'
+  ],
+  footprint: [
+    'M5 3h2',
+    'M11 3h2',
+    'M17 3h2',
+    'M21 5v2',
+    'M21 11v2',
+    'M21 17v2',
+    'M19 21h-2',
+    'M13 21h-2',
+    'M7 21H5',
+    'M3 19v-2',
+    'M3 13v-2',
+    'M3 7V5'
+  ],
   // Poignée de glisser-déposer : six points.
   grip: ['M9 6h.01', 'M9 12h.01', 'M9 18h.01', 'M15 6h.01', 'M15 12h.01', 'M15 18h.01'],
   tag: [

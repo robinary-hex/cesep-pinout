@@ -4,14 +4,16 @@ import { COMPONENT_FILE } from '@/io/library'
 import { baseName } from '@/io/paths'
 import Icon from '@/ui/Icon.vue'
 import ToolbarBasics from '@/ui/ToolbarBasics.vue'
+import { LAYERS } from './layers'
 import { importImage } from './pngImport'
 import { useComponentEditorStore } from './store'
 import { TOOLS } from './tools'
 
 // Barre d'outils de l'éditeur de composants. D'abord le début commun aux trois éditeurs
 // (`ToolbarBasics` : zoom, annuler, rétablir, corbeille), puis les outils de dessin (pictogramme
-// seul, raccourci dans l'infobulle), l'import d'une image, posée comme une forme, les variantes
-// (celle qu'on regarde, et le bouton qui en crée une), le dessin affiché d'un composant
+// seul, raccourci dans l'infobulle), l'import d'une image, posée comme une forme, les calques
+// de travail (tout, dessin, broches, empreintes : layers.ts), la variante qu'on regarde (une
+// variante se crée dans le panneau de propriétés), le dessin affiché d'un composant
 // extensible qui a des modèles particuliers (son motif répété, ou le modèle d'un nombre), et la
 // case « Groupes » quand le composant en a ; à droite, le
 // nom du composant avec son fichier, le bouton du panneau de propriétés tout au bout, et
@@ -74,7 +76,23 @@ function showModel(event: Event): void {
         </button>
       </div>
 
-      <div class="group">
+      <div class="group layers" role="radiogroup" aria-label="Calque de travail">
+        <button
+          v-for="layer in LAYERS"
+          :key="layer.id"
+          type="button"
+          class="tool icon-only layer"
+          role="radio"
+          :class="{ active: store.layer === layer.id }"
+          :aria-checked="store.layer === layer.id"
+          :title="`Calque ${layer.label} : ${layer.hint}`"
+          @click="store.setLayer(layer.id)"
+        >
+          <Icon :name="layer.icon" :size="18" />
+        </button>
+      </div>
+
+      <div v-if="store.variants.length > 1 || store.models.length > 0" class="group">
         <select
           v-if="store.variants.length > 1"
           class="variant-select"
@@ -86,14 +104,6 @@ function showModel(event: Event): void {
             {{ variant.name }}
           </option>
         </select>
-        <button
-          type="button"
-          class="icon-only"
-          title="Nouvelle variante : une copie de celle qu’on regarde, à retoucher"
-          @click="store.addVariant()"
-        >
-          <Icon name="layers" :size="18" />
-        </button>
         <select
           v-if="store.models.length > 0"
           class="variant-select model-select"
@@ -181,6 +191,31 @@ function showModel(event: Event): void {
 .tool.active {
   background: var(--accent-soft);
   border-color: var(--accent-border);
+}
+
+/* Calques de travail : un sélecteur segmenté, le calque qu'on regarde marqué comme un outil
+   actif. */
+.layers {
+  gap: 0;
+}
+
+.layers .layer {
+  margin-left: -1px;
+  border-radius: 0;
+}
+
+.layers .layer:first-child {
+  margin-left: 0;
+  border-radius: 6px 0 0 6px;
+}
+
+.layers .layer:last-child {
+  border-radius: 0 6px 6px 0;
+}
+
+.layers .layer.active {
+  position: relative;
+  z-index: 1;
 }
 
 .variant-select {

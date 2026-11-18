@@ -5,7 +5,8 @@ import {
   arrowHeadPoints,
   discsPathData,
   dotRadiusCells,
-  footprintDash,
+  FOOTPRINT_STYLE,
+  footprintPath,
   HOLE_COLOR,
   HOLE_OPACITY,
   HOLE_PAD_RADIUS_CELLS,
@@ -61,12 +62,13 @@ const props = withDefaults(
      */
     pixel?: number
     /**
-     * Formes d'empreinte (la place que le composant prend de l'autre côté d'une plaque à trous),
-     * toujours en pointillés : `hidden`, le composant tel qu'on le pose, sans elles ; `drawn`,
-     * tout le dessin, elles comprises (l'éditeur de composants) ; `only`, elles seules (sur
-     * l'autre face de la plaque).
+     * Calque de travail de l'éditeur de composants ; absent partout ailleurs, où le composant se
+     * dessine tel qu'on le pose, sans ses formes d'empreinte (la place qu'il prend de l'autre
+     * côté d'une plaque à trous). `all` : tout le dessin, empreintes comprises ; `drawing` : le
+     * dessin, empreintes cachées ; `pins` : le dessin estompé et hors d'atteinte, empreintes
+     * cachées ; `footprint` : les empreintes, le reste estompé et hors d'atteinte.
      */
-    footprints?: 'hidden' | 'drawn' | 'only'
+    layer?: 'all' | 'drawing' | 'pins' | 'footprint' | null
   }>(),
   {
     strokeBase: 0.1,
@@ -77,7 +79,7 @@ const props = withDefaults(
     skipTexts: false,
     ink: null,
     pixel: 1,
-    footprints: 'hidden'
+    layer: null
   }
 )
 
@@ -93,14 +95,13 @@ const q = (value: number): number => (value * props.cellPx) / QUARTERS_PER_CELL
 const primitives = computed(() => {
   const all = props.def.visual.primitives
   const hideTexts = props.skipTexts
-  const footprints = props.footprints
-  // Dans l'éditeur (`drawn`), rien n'est retiré : le rang d'une forme reste celui du dessin.
+  // Avec un calque (l'éditeur), rien n'est retiré : le rang d'une forme reste celui du dessin.
+  const posed = props.layer === null
   const list =
-    hideTexts || footprints !== 'drawn'
+    hideTexts || posed
       ? all.filter(
           (primitive) =>
-            !(hideTexts && primitive.kind === 'text') &&
-            (footprints === 'drawn' || isFootprint(primitive) === (footprints === 'only'))
+            !(hideTexts && primitive.kind === 'text') && !(posed && isFootprint(primitive))
         )
       : all
   const preview = props.preview
@@ -108,6 +109,44 @@ const primitives = computed(() => {
     ? list.map((primitive, i) => (i === preview.index ? preview.primitive : primitive))
     : list
 })
+
+/**
+ * Comment chaque forme se montre sur le calque de travail : sous la main, estompée et hors
+ * d'atteinte, ou cachée.
+ */
+const showing = computed<('shown' | 'dimmed' | 'hidden')[]>(() =>
+  primitives.value.map((primitive) => {
+    const footprint = isFootprint(primitive)
+    switch (props.layer) {
+      case 'drawing':
+        return footprint ? 'hidden' : 'shown'
+      case 'pins':
+        return footprint ? 'hidden' : 'dimmed'
+      case 'footprint':
+        return footprint ? 'shown' : 'dimmed'
+      default:
+        return 'shown'
+    }
+  })
+)
+
+/**
+ * Tracé de chaque forme d'empreinte (null pour les autres) : une empreinte se dessine dans
+ * l'allure commune aux empreintes (footprint.ts), pas avec son trait ni son remplissage.
+ */
+const outlines = computed(() =>
+  primitives.value.map((primitive) =>
+    isFootprint(primitive) && 'style' in primitive ? footprintPath(primitive, props.cellPx) : null
+  )
+)
+// Dans l'éditeur, où l'on zoome fort, le contour d'une empreinte garde son épaisseur à l'écran,
+// comme un cadre de sélection : à la mesure des cellules, il deviendrait un bandeau.
+const FOOTPRINT_LINE_PX = 2
+const FOOTPRINT_DASH_PX = [7, 5]
+const footprintLine = computed(() => FOOTPRINT_LINE_PX * props.pixel)
+const footprintDashes = computed(() =>
+  FOOTPRINT_DASH_PX.map((length) => length * props.pixel).join(' ')
+)
 
 const HIT_MIN_PX = 10
 
@@ -129,12 +168,10 @@ function inkFor(color: string): string {
   return props.ink && color !== 'none' ? props.ink : screenColor(color)
 }
 
-function shapeAttrs(style: ShapeStyle, footprint?: boolean): Record<string, string | number> {
+function shapeAttrs(style: ShapeStyle): Record<string, string | number> {
   return {
     stroke: inkFor(style.stroke),
     'stroke-width': strokePx(style),
-    // Une empreinte : en pointillés.
-    ...(footprint === true ? { 'stroke-dasharray': footprintDash(strokePx(style)) } : {}),
     // Un remplissage de la couleur du trait fait partie du trait (forme pleine).
     fill:
       props.ink && style.fill !== 'none' && style.fill === style.stroke
@@ -259,230 +296,278 @@ function holesPaths(grid: HolesPrimitive): { pads: string; drills: string } {
   }
 }
 
+/** Une empreinte fermée a un intérieur sur son calque ; ailleurs, elle n'est qu'un contour. */
+function filledFootprint(index: number): boolean {
+  return props.layer === 'footprint' && outlines.value[index]?.closed === true
+}
+
+/** Une forme estompée est hors d'atteinte : l'appui la traverse. */
+function reachable(index: number): boolean {
+  return props.interactive && showing.value[index] === 'shown'
+}
+
 function down(index: number, event: PointerEvent): void {
-  if (props.interactive) emit('primitiveDown', index, event)
+  if (reachable(index)) emit('primitiveDown', index, event)
 }
 
 function menu(index: number, event: MouseEvent): void {
-  if (props.interactive) emit('primitiveMenu', index, event)
+  if (reachable(index)) emit('primitiveMenu', index, event)
 }
 </script>
 
 <template>
   <g class="component-graphic">
-    <g
-      v-for="(p, i) in primitives"
-      :key="i"
-      :transform="transformFor(i)"
-      :class="{ interactive }"
-      @pointerdown="down(i, $event)"
-      @contextmenu="menu(i, $event)"
-    >
-      <template v-if="p.kind === 'rect'">
-        <rect
-          :x="q(p.x)"
-          :y="q(p.y)"
-          :width="q(p.w)"
-          :height="q(p.h)"
-          :rx="q(p.rx)"
-          v-bind="shapeAttrs(p.style, p.footprint)"
-        />
-        <rect
-          v-if="interactive"
-          :x="q(p.x)"
-          :y="q(p.y)"
-          :width="q(p.w)"
-          :height="q(p.h)"
-          fill="transparent"
-          stroke="transparent"
-          :stroke-width="hitWidth(p.style)"
-        />
-      </template>
+    <template v-for="(p, i) in primitives" :key="i">
+      <g
+        v-if="showing[i] !== 'hidden'"
+        :transform="transformFor(i)"
+        :class="{ interactive: reachable(i), dimmed: showing[i] === 'dimmed' }"
+        @pointerdown="down(i, $event)"
+        @contextmenu="menu(i, $event)"
+      >
+        <!-- Une empreinte : un filet sombre que recouvrent des tirets clairs. Sur son calque,
+             un voile sombre la remplit et elle se saisit aussi par l'intérieur ; quand tout
+             est affiché, elle n'est qu'un contour, pour laisser voir et saisir le dessin
+             qu'elle entoure. -->
+        <template v-if="outlines[i]">
+          <path
+            class="footprint-shape"
+            :d="outlines[i]?.d"
+            :fill="filledFootprint(i) ? FOOTPRINT_STYLE.dark : 'none'"
+            :fill-opacity="FOOTPRINT_STYLE.shadowOpacity"
+            :stroke="FOOTPRINT_STYLE.dark"
+            :stroke-opacity="FOOTPRINT_STYLE.darkOpacity"
+            :stroke-width="footprintLine"
+          />
+          <path
+            class="footprint-dashes"
+            :d="outlines[i]?.d"
+            fill="none"
+            :stroke="FOOTPRINT_STYLE.light"
+            :stroke-width="footprintLine"
+            :stroke-dasharray="footprintDashes"
+          />
+          <path
+            v-if="interactive"
+            :d="outlines[i]?.d"
+            :fill="filledFootprint(i) ? 'transparent' : 'none'"
+            stroke="transparent"
+            :stroke-width="HIT_MIN_PX"
+          />
+        </template>
 
-      <template v-else-if="p.kind === 'ellipse'">
-        <ellipse
-          :cx="q(p.cx)"
-          :cy="q(p.cy)"
-          :rx="q(p.rx)"
-          :ry="q(p.ry)"
-          v-bind="shapeAttrs(p.style, p.footprint)"
-        />
-        <ellipse
-          v-if="interactive"
-          :cx="q(p.cx)"
-          :cy="q(p.cy)"
-          :rx="q(p.rx)"
-          :ry="q(p.ry)"
-          fill="transparent"
-          stroke="transparent"
-          :stroke-width="hitWidth(p.style)"
-        />
-      </template>
-
-      <template v-else-if="p.kind === 'line'">
-        <line v-bind="{ ...lineAttrs(p), ...shapeAttrs(p.style, p.footprint) }" />
-        <polygon
-          v-for="(head, h) in arrowHeads(p)"
-          :key="h"
-          :points="head"
-          :fill="inkFor(p.style.stroke)"
-        />
-        <line
-          v-if="interactive"
-          :x1="q(p.x1)"
-          :y1="q(p.y1)"
-          :x2="q(p.x2)"
-          :y2="q(p.y2)"
-          stroke="transparent"
-          :stroke-width="hitWidth(p.style)"
-        />
-      </template>
-
-      <template v-else-if="p.kind === 'polyline'">
-        <path v-if="p.radius > 0" :d="roundedPath(p)" v-bind="shapeAttrs(p.style, p.footprint)" />
-        <polygon
-          v-else-if="p.closed"
-          :points="polyPoints(p.points)"
-          v-bind="shapeAttrs(p.style, p.footprint)"
-        />
-        <polyline
-          v-else
-          :points="pointsAttribute(strokePoints(p))"
-          v-bind="shapeAttrs(p.style, p.footprint)"
-        />
-        <polygon
-          v-for="(head, h) in arrowHeads(p)"
-          :key="h"
-          :points="head"
-          :fill="inkFor(p.style.stroke)"
-        />
-        <polyline
-          v-if="interactive"
-          :points="polyPoints(p.points)"
-          :fill="p.closed ? 'transparent' : 'none'"
-          stroke="transparent"
-          :stroke-width="hitWidth(p.style)"
-        />
-      </template>
-
-      <template v-else-if="p.kind === 'dot'">
-        <circle :cx="q(p.x)" :cy="q(p.y)" :r="dotRadiusPx(p.scale)" :fill="inkFor(p.color)" />
-        <circle
-          v-if="interactive"
-          :cx="q(p.x)"
-          :cy="q(p.y)"
-          :r="dotHitRadiusPx(p.scale)"
-          fill="transparent"
-        />
-      </template>
-
-      <template v-else-if="p.kind === 'holes'">
-        <path class="hole-pads" :d="holesPaths(p).pads" :fill="p.color" />
-        <path
-          class="hole-drills"
-          :d="holesPaths(p).drills"
-          :fill="HOLE_COLOR"
-          :fill-opacity="HOLE_OPACITY"
-        />
-        <rect
-          v-if="interactive"
-          :x="q(p.x)"
-          :y="q(p.y)"
-          :width="q(p.w)"
-          :height="q(p.h)"
-          fill="transparent"
-        />
-      </template>
-
-      <template v-else-if="p.kind === 'image'">
-        <!-- Une tranche de l'image (composant étiré) : l'image remplit un carré d'une unité,
-             dont la fenêtre de ce petit SVG ne montre que la tranche voulue. -->
-        <svg
-          v-if="p.dataUrl && p.crop"
-          class="image-slice"
-          :x="q(p.x)"
-          :y="q(p.y)"
-          :width="q(p.w) + lapRight(i)"
-          :height="q(p.h) + lapBelow(i)"
-          :viewBox="`${p.crop.x} ${p.crop.y ?? 0} ${p.crop.w} ${p.crop.h ?? 1}`"
-          preserveAspectRatio="none"
-        >
-          <image :href="p.dataUrl" x="0" y="0" width="1" height="1" preserveAspectRatio="none" />
-        </svg>
-        <image
-          v-else-if="p.dataUrl"
-          :href="p.dataUrl"
-          :x="q(p.x)"
-          :y="q(p.y)"
-          :width="q(p.w) + lapRight(i)"
-          :height="q(p.h) + lapBelow(i)"
-          preserveAspectRatio="none"
-        />
-        <!-- Fichier perdu : un cadre gris à la place de l'image. -->
-        <g v-else class="missing-image">
+        <template v-else-if="p.kind === 'rect'">
           <rect
             :x="q(p.x)"
             :y="q(p.y)"
             :width="q(p.w)"
             :height="q(p.h)"
-            fill="#eef1f4"
-            stroke="#8c959f"
-            stroke-dasharray="6 4"
-            vector-effect="non-scaling-stroke"
+            :rx="q(p.rx)"
+            v-bind="shapeAttrs(p.style)"
           />
-          <text
-            :x="q(p.x + p.w / 2)"
-            :y="q(p.y + p.h / 2)"
-            text-anchor="middle"
-            dominant-baseline="middle"
-            :font-size="Math.min(q(p.w) / 9, q(p.h) / 2)"
-            fill="#57606a"
-          >
-            Image manquante
-          </text>
-        </g>
-        <rect
-          v-if="interactive"
-          :x="q(p.x)"
-          :y="q(p.y)"
-          :width="q(p.w)"
-          :height="q(p.h)"
-          fill="transparent"
-        />
-      </template>
+          <rect
+            v-if="interactive"
+            :x="q(p.x)"
+            :y="q(p.y)"
+            :width="q(p.w)"
+            :height="q(p.h)"
+            fill="transparent"
+            stroke="transparent"
+            :stroke-width="hitWidth(p.style)"
+          />
+        </template>
 
-      <template v-else>
-        <text
-          :font-size="p.size * cellPx"
-          :text-anchor="p.anchor"
-          :fill="inkFor(p.color)"
-          :transform="textTransform(p, cellPx / QUARTERS_PER_CELL)"
-          v-bind="textAttrs(p)"
-        >
-          <tspan
-            v-for="(line, l) in textLayout(p).lines"
-            :key="l"
-            :x="q(textLayout(p).x)"
-            :y="q(line.y)"
+        <template v-else-if="p.kind === 'ellipse'">
+          <ellipse
+            :cx="q(p.cx)"
+            :cy="q(p.cy)"
+            :rx="q(p.rx)"
+            :ry="q(p.ry)"
+            v-bind="shapeAttrs(p.style)"
+          />
+          <ellipse
+            v-if="interactive"
+            :cx="q(p.cx)"
+            :cy="q(p.cy)"
+            :rx="q(p.rx)"
+            :ry="q(p.ry)"
+            fill="transparent"
+            stroke="transparent"
+            :stroke-width="hitWidth(p.style)"
+          />
+        </template>
+
+        <template v-else-if="p.kind === 'line'">
+          <line v-bind="{ ...lineAttrs(p), ...shapeAttrs(p.style) }" />
+          <polygon
+            v-for="(head, h) in arrowHeads(p)"
+            :key="h"
+            :points="head"
+            :fill="inkFor(p.style.stroke)"
+          />
+          <line
+            v-if="interactive"
+            :x1="q(p.x1)"
+            :y1="q(p.y1)"
+            :x2="q(p.x2)"
+            :y2="q(p.y2)"
+            stroke="transparent"
+            :stroke-width="hitWidth(p.style)"
+          />
+        </template>
+
+        <template v-else-if="p.kind === 'polyline'">
+          <path v-if="p.radius > 0" :d="roundedPath(p)" v-bind="shapeAttrs(p.style)" />
+          <polygon
+            v-else-if="p.closed"
+            :points="polyPoints(p.points)"
+            v-bind="shapeAttrs(p.style)"
+          />
+          <polyline
+            v-else
+            :points="pointsAttribute(strokePoints(p))"
+            v-bind="shapeAttrs(p.style)"
+          />
+          <polygon
+            v-for="(head, h) in arrowHeads(p)"
+            :key="h"
+            :points="head"
+            :fill="inkFor(p.style.stroke)"
+          />
+          <polyline
+            v-if="interactive"
+            :points="polyPoints(p.points)"
+            :fill="p.closed ? 'transparent' : 'none'"
+            stroke="transparent"
+            :stroke-width="hitWidth(p.style)"
+          />
+        </template>
+
+        <template v-else-if="p.kind === 'dot'">
+          <circle :cx="q(p.x)" :cy="q(p.y)" :r="dotRadiusPx(p.scale)" :fill="inkFor(p.color)" />
+          <circle
+            v-if="interactive"
+            :cx="q(p.x)"
+            :cy="q(p.y)"
+            :r="dotHitRadiusPx(p.scale)"
+            fill="transparent"
+          />
+        </template>
+
+        <template v-else-if="p.kind === 'holes'">
+          <path class="hole-pads" :d="holesPaths(p).pads" :fill="p.color" />
+          <path
+            class="hole-drills"
+            :d="holesPaths(p).drills"
+            :fill="HOLE_COLOR"
+            :fill-opacity="HOLE_OPACITY"
+          />
+          <rect
+            v-if="interactive"
+            :x="q(p.x)"
+            :y="q(p.y)"
+            :width="q(p.w)"
+            :height="q(p.h)"
+            fill="transparent"
+          />
+        </template>
+
+        <template v-else-if="p.kind === 'image'">
+          <!-- Une tranche de l'image (composant étiré) : l'image remplit un carré d'une unité,
+             dont la fenêtre de ce petit SVG ne montre que la tranche voulue. -->
+          <svg
+            v-if="p.dataUrl && p.crop"
+            class="image-slice"
+            :x="q(p.x)"
+            :y="q(p.y)"
+            :width="q(p.w) + lapRight(i)"
+            :height="q(p.h) + lapBelow(i)"
+            :viewBox="`${p.crop.x} ${p.crop.y ?? 0} ${p.crop.w} ${p.crop.h ?? 1}`"
+            preserveAspectRatio="none"
           >
-            {{ line.text }}
-          </tspan>
-        </text>
-        <rect
-          v-if="interactive"
-          :x="q(p.x)"
-          :y="q(p.y)"
-          :width="q(p.w)"
-          :height="q(p.h)"
-          fill="transparent"
-        />
-      </template>
-    </g>
+            <image :href="p.dataUrl" x="0" y="0" width="1" height="1" preserveAspectRatio="none" />
+          </svg>
+          <image
+            v-else-if="p.dataUrl"
+            :href="p.dataUrl"
+            :x="q(p.x)"
+            :y="q(p.y)"
+            :width="q(p.w) + lapRight(i)"
+            :height="q(p.h) + lapBelow(i)"
+            preserveAspectRatio="none"
+          />
+          <!-- Fichier perdu : un cadre gris à la place de l'image. -->
+          <g v-else class="missing-image">
+            <rect
+              :x="q(p.x)"
+              :y="q(p.y)"
+              :width="q(p.w)"
+              :height="q(p.h)"
+              fill="#eef1f4"
+              stroke="#8c959f"
+              stroke-dasharray="6 4"
+              vector-effect="non-scaling-stroke"
+            />
+            <text
+              :x="q(p.x + p.w / 2)"
+              :y="q(p.y + p.h / 2)"
+              text-anchor="middle"
+              dominant-baseline="middle"
+              :font-size="Math.min(q(p.w) / 9, q(p.h) / 2)"
+              fill="#57606a"
+            >
+              Image manquante
+            </text>
+          </g>
+          <rect
+            v-if="interactive"
+            :x="q(p.x)"
+            :y="q(p.y)"
+            :width="q(p.w)"
+            :height="q(p.h)"
+            fill="transparent"
+          />
+        </template>
+
+        <template v-else>
+          <text
+            :font-size="p.size * cellPx"
+            :text-anchor="p.anchor"
+            :fill="inkFor(p.color)"
+            :transform="textTransform(p, cellPx / QUARTERS_PER_CELL)"
+            v-bind="textAttrs(p)"
+          >
+            <tspan
+              v-for="(line, l) in textLayout(p).lines"
+              :key="l"
+              :x="q(textLayout(p).x)"
+              :y="q(line.y)"
+            >
+              {{ line.text }}
+            </tspan>
+          </text>
+          <rect
+            v-if="interactive"
+            :x="q(p.x)"
+            :y="q(p.y)"
+            :width="q(p.w)"
+            :height="q(p.h)"
+            fill="transparent"
+          />
+        </template>
+      </g>
+    </template>
   </g>
 </template>
 
 <style scoped>
 .interactive {
   cursor: pointer;
+}
+
+/* Hors du calque de travail : estompé, et hors d'atteinte. */
+.dimmed {
+  opacity: 0.3;
+  pointer-events: none;
 }
 </style>
