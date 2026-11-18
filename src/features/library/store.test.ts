@@ -391,6 +391,31 @@ describe('dossier de Pinout', () => {
     expect(library.dataRoot).toBe(ROOT)
     expect(library.sharedSettingsPath).toBe(SHARED)
   })
+
+  it('refuse un dossier dont une version plus récente se sert, et sait qu’il faut mettre à jour', async () => {
+    const library = useLibraryStore()
+    await library.init()
+    fs.presetDataDir = null
+    const newer = JSON.stringify({
+      ...(JSON.parse(serializeSettings(DEFAULT_SETTINGS)) as object),
+      schemaVersion: DEFAULT_SETTINGS.schemaVersion + 1
+    })
+    await fs.writeTextFile('F:/suite/Applications/parametres.json', newer)
+    expect(await library.setDataDir('F:/suite')).toBe('failed')
+    expect(library.updateNeeded).toBe(true)
+    expect(library.problem).toContain('version plus récente de Pinout')
+    // Rien n'a changé, ni ici ni dans ce dossier.
+    expect(library.dataRoot).toBe(ROOT)
+    expect(await fs.readTextFile('F:/suite/Applications/parametres.json')).toBe(newer)
+    // Un autre refus n'appelle pas de mise à jour ; un dossier accepté non plus.
+    await fs.writeTextFile('F:/casse/Applications/parametres.json', 'pas du JSON')
+    expect(await library.setDataDir('F:/casse')).toBe('failed')
+    expect(library.updateNeeded).toBe(false)
+    expect(await library.setDataDir('F:/suite')).toBe('failed')
+    expect(library.updateNeeded).toBe(true)
+    expect(await library.setDataDir('F:/neuf')).toBe('moved')
+    expect(library.updateNeeded).toBe(false)
+  })
 })
 
 describe('dossier proposé pour enregistrer et ouvrir', () => {

@@ -8,6 +8,7 @@ import {
   DEFAULT_PALETTE,
   DEFAULT_PROFILE,
   DEFAULT_SETTINGS,
+  NewerFormatError,
   type DiagramDefaults,
   type ExportSettings,
   type PaletteColor,
@@ -76,6 +77,12 @@ export const useLibraryStore = defineStore('library', () => {
   )
   /** Non nul au premier lancement : l'application demande où mettre le dossier de Pinout. */
   const firstRun = ref<FirstRun | null>(null)
+  /**
+   * Vrai quand le dossier de Pinout qu'on vient de demander a été refusé parce qu'une version
+   * plus récente de l'application s'en sert déjà : il n'y a qu'à se mettre à jour. La boîte du
+   * premier lancement, qu'on ne peut pas fermer, propose alors la mise à jour elle-même.
+   */
+  const updateNeeded = ref(false)
   /**
    * Non nul quand, à ce lancement, le dossier de Pinout a suivi le dossier par défaut à sa
    * nouvelle place (`followDefaultFolder`) : d'où il vient, où il est maintenant.
@@ -364,11 +371,13 @@ export const useLibraryStore = defineStore('library', () => {
       sharedSettingsPath.value = moved.sharedPath
       dataRoot.value = root
       firstRun.value = null
+      updateNeeded.value = false
       problem.value = ''
       await refresh()
       await refreshProfiles()
       return moved.adopted ? 'adopted' : 'moved'
     } catch (error) {
+      updateNeeded.value = error instanceof NewerFormatError
       problem.value = `Dossier de Pinout inchangé : ${describe(error)}`
       return 'failed'
     }
@@ -423,6 +432,7 @@ export const useLibraryStore = defineStore('library', () => {
     sharedSettingsPath,
     dataRoot,
     firstRun,
+    updateNeeded,
     relocation,
     followRelocation,
     libraryDir,

@@ -639,6 +639,18 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     avait été choisi, sinon `<Documents>\Pinout`. Jusqu'à la 1.8.0 c'était le dossier du cours,
     `<OneDrive>\(Cours)\Robotique\(Ressources)\Pinout` : il n'est plus proposé que s'il a déjà
     ses données alors que `(Pinout)` n'en a pas encore.
+    Cette boîte cache la barre d'application, donc son bouton de mise à jour : elle le porte
+    elle-même (décision du 18 novembre 2026 ; `src/app/UpdateButton.vue`, le même bouton aux
+    deux endroits, `update` et `checking` passés par `App.vue`). Une 1.9.1 lancée pour la
+    première fois sur un dossier dont la 1.10.0 se servait déjà restait bloquée : dossier
+    refusé, « mets l'application à jour », et le bouton pour le faire hors d'atteinte. Dès
+    qu'une mise à jour s'annonce, la boîte la montre (« Une nouvelle version de Pinout est
+    disponible. » et le bouton). Quand le dossier est refusé pour cette raison
+    (`updateNeeded` du store : les paramètres du dossier ont levé une `NewerFormatError`),
+    elle le dit en clair, à la place du message brut, avec le bouton à côté, ou, si rien ne
+    s'est encore annoncé, « Rechercher une mise à jour » (`checkForUpdate` d'`App.vue`, comme
+    le menu Fichier) ; « Utiliser ce dossier » n'est alors plus le bouton mis en avant.
+    Choisir un autre dossier reste permis.
   - Le dossier par défaut a changé de place (même décision ; `defaultDirSuccessor`,
     `followDefaultFolder` du store de la bibliothèque) : au lancement, une machine dont le
     dossier de Pinout est encore l'ancien dossier par défaut passe à `<OneDrive>\(Pinout)` dès
@@ -678,7 +690,13 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   `userData/settings.json`, copie complète avec les fichiers récents et `dataDir`
   (`withLocalPart`). Le fichier partagé est relu au lancement, avant chaque enregistrement
   (seuls les réglages modifiés écrasent) et quand la fenêtre reprend la main
-  (`reloadSharedSettings`) ; il n'est réécrit que si son contenu change. La boîte des paramètres
+  (`reloadSharedSettings`) ; il n'est réécrit que si son contenu change. Un fichier partagé
+  écrit par une version plus récente de Pinout (`NewerFormatError` de migrations.ts : le refus
+  d'un fichier trop récent, à part des autres) n'est ni lu ni réécrit (décision du 18 novembre
+  2026 ; `fromNewerVersion` dans `saveSettings`) : la machine en retard garde ses réglages dans
+  son fichier local, le dit, et ne défait pas ceux des machines à jour. Jusqu'à la 1.10.0
+  comprise, une version en retard le réécrivait à son format au premier réglage enregistré.
+  La boîte des paramètres
   n'enregistre que ses propres réglages : le dossier de Pinout change dès qu'on le choisit
   (`relocateSharedSettings`).
 - Bibliothèque de composants : le dossier `Composants` du dossier de Pinout (`libraryDir` du

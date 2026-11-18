@@ -41,6 +41,10 @@ describe('recherche d’une mise à jour demandée par le menu', () => {
       message: 'La version 1.9.1 est disponible.',
       detail: 'Le bouton en haut à droite s’en occupe.'
     })
+    // Au premier lancement, la barre d'application est cachée : le bouton est dans la boîte.
+    expect(updateCheckMessage({ outcome: 'available', version: '1.9.1' }, true).detail).toBe(
+      'Le bouton de la boîte « Dossier de Pinout » s’en occupe.'
+    )
     expect(updateCheckMessage({ outcome: 'none', version: '1.9.0' })).toEqual({
       message: 'Pinout 1.9.0 est à jour.',
       detail: ''

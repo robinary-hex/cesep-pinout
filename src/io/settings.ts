@@ -1,4 +1,10 @@
-import { DEFAULT_SETTINGS, parseSettings, serializeSettings, type Settings } from '@/domain'
+import {
+  DEFAULT_SETTINGS,
+  NewerFormatError,
+  parseSettings,
+  serializeSettings,
+  type Settings
+} from '@/domain'
 import { bridge } from './bridge'
 import {
   dataFolder,
@@ -43,15 +49,31 @@ function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+interface ReadSettings {
+  settings: Settings | null
+  problem: string | null
+  /** Vrai quand le fichier vient d'une version plus récente de Pinout : une mise à jour le lira. */
+  newer: boolean
+}
+
 /** Lit un fichier de paramètres : null sans fichier ; `problem` s'il est illisible. */
-async function readSettingsFile(
-  path: string
-): Promise<{ settings: Settings | null; problem: string | null }> {
-  if (!(await bridge().pathExists(path))) return { settings: null, problem: null }
+async function readSettingsFile(path: string): Promise<ReadSettings> {
+  if (!(await bridge().pathExists(path))) return { settings: null, problem: null, newer: false }
   try {
-    return { settings: parseSettings(await bridge().readTextFile(path)), problem: null }
+    const settings = parseSettings(await bridge().readTextFile(path))
+    return { settings, problem: null, newer: false }
   } catch (error) {
-    return { settings: null, problem: describe(error) }
+    return { settings: null, problem: describe(error), newer: error instanceof NewerFormatError }
+  }
+}
+
+/** Vrai si ce texte est un fichier de paramètres écrit par une version plus récente de Pinout. */
+function fromNewerVersion(text: string): boolean {
+  try {
+    parseSettings(text)
+    return false
+  } catch (error) {
+    return error instanceof NewerFormatError
   }
 }
 
@@ -110,7 +132,9 @@ export async function loadSettings(): Promise<LoadedSettings> {
   if (shared.problem !== null) {
     return {
       settings: base,
-      problem: `Paramètres partagés illisibles (${shared.problem}) ; ceux de cette machine sont utilisés.`,
+      problem: shared.newer
+        ? 'Les paramètres partagés viennent d’une version plus récente de Pinout : ceux de cette machine sont utilisés jusqu’à la mise à jour.'
+        : `Paramètres partagés illisibles (${shared.problem}) ; ceux de cette machine sont utilisés.`,
       sharedPath,
       legacy
     }
@@ -142,7 +166,9 @@ export async function readLegacySettings(legacy: LegacyFolders): Promise<Setting
 
 /**
  * Écrit le fichier local, et le fichier partagé seulement si son contenu change : ouvrir un
- * montage ne touche que les fichiers récents, il n'y a alors rien à synchroniser.
+ * montage ne touche que les fichiers récents, il n'y a alors rien à synchroniser. Un fichier
+ * partagé écrit par une version plus récente de Pinout n'est pas réécrit : cette machine garde
+ * ses réglages dans son fichier local, sans défaire ceux des machines à jour.
  */
 export async function saveSettings(settings: Settings): Promise<void> {
   await bridge().writeTextFile(await localSettingsPath(), serializeSettings(settings))
@@ -152,15 +178,18 @@ export async function saveSettings(settings: Settings): Promise<void> {
   const current = (await bridge().pathExists(sharedPath))
     ? await bridge().readTextFile(sharedPath)
     : null
-  if (current !== text) await bridge().writeTextFile(sharedPath, text)
+  if (current === text) return
+  if (current !== null && fromNewerVersion(current)) return
+  await bridge().writeTextFile(sharedPath, text)
 }
 
 /**
  * Change de dossier de Pinout (`dataDir`). Si ce dossier a déjà des paramètres lisibles, ils
  * deviennent ceux de l'application : une autre machine les y a mis. Sinon ce sont `brought` (les
  * paramètres de l'ancienne organisation, au premier lancement), à défaut les réglages courants,
- * qui y sont écrits. Un fichier illisible n'est pas écrasé : l'erreur remonte et rien ne change.
- * Le fichier de l'ancien dossier reste où il était.
+ * qui y sont écrits. Un fichier illisible n'est pas écrasé : l'erreur remonte et rien ne change
+ * (une `NewerFormatError` quand le dossier sert déjà à une version plus récente de Pinout : la
+ * mise à jour est alors le seul remède). Le fichier de l'ancien dossier reste où il était.
  */
 export async function relocateSharedSettings(
   current: Settings,
@@ -169,8 +198,15 @@ export async function relocateSharedSettings(
 ): Promise<RelocatedSettings> {
   const local: Settings = { ...current, dataDir }
   const sharedPath = await sharedSettingsPath(dataDir)
-  const found =
-    sharedPath === null ? { settings: null, problem: null } : await readSettingsFile(sharedPath)
+  const found: ReadSettings =
+    sharedPath === null
+      ? { settings: null, problem: null, newer: false }
+      : await readSettingsFile(sharedPath)
+  if (found.newer) {
+    throw new NewerFormatError(
+      'ce dossier sert déjà à une version plus récente de Pinout ; il faut mettre l’application à jour pour l’utiliser'
+    )
+  }
   if (found.problem !== null) {
     throw new Error(`ce dossier contient un ${SETTINGS_FILE} illisible (${found.problem})`)
   }

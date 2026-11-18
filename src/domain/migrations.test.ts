@@ -59,6 +59,7 @@ import {
   componentMigrations,
   FileFormatError,
   migrateRaw,
+  NewerFormatError,
   projectMigrations,
   type MigrationTable
 } from './migrations'
@@ -90,9 +91,20 @@ describe('migrations', () => {
   })
 
   it('rejette une version plus récente que l’application', () => {
-    expect(() =>
-      migrateRaw({ schemaVersion: projectMigrations.current + 1 }, projectMigrations, 'Projet')
-    ).toThrow(/plus récente/)
+    const caught = (raw: unknown): unknown => {
+      try {
+        migrateRaw(raw, projectMigrations, 'Projet')
+      } catch (error) {
+        return error
+      }
+      return null
+    }
+    const newer = caught({ schemaVersion: projectMigrations.current + 1 })
+    expect(String(newer)).toMatch(/plus récente/)
+    // Un refus à part des autres : l'application sait alors proposer la mise à jour.
+    expect(newer).toBeInstanceOf(NewerFormatError)
+    expect(newer).toBeInstanceOf(FileFormatError)
+    expect(caught({})).not.toBeInstanceOf(NewerFormatError)
   })
 
   it('enchaîne les étapes jusqu’à la version courante', () => {

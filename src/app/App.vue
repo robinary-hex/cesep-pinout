@@ -48,7 +48,8 @@ import {
 import DataFolderDialog from './DataFolderDialog.vue'
 import ShortcutsHelp from './ShortcutsHelp.vue'
 import SidePanel from './SidePanel.vue'
-import { updateButtonLabel, updateButtonTitle, updateCheckMessage } from './update'
+import { updateCheckMessage } from './update'
+import UpdateButton from './UpdateButton.vue'
 
 // Coque applicative : menu Fichier, bascule entre les modes (un pictogramme chacun), onglets des
 // documents ouverts du mode affiché, thème, paramètres, aide, copies de secours et garde à la
@@ -98,16 +99,27 @@ async function recoverUpdateStatus(): Promise<void> {
   }
 }
 
-/** Menu Fichier : cherche une mise à jour maintenant, et dit ce qu'il en est. */
+/** Vrai le temps d'une recherche demandée : son bouton attend, on n'en lance pas deux. */
+const checkingUpdate = ref(false)
+
+/**
+ * Menu Fichier, ou boîte du premier lancement : cherche une mise à jour maintenant, et dit ce
+ * qu'il en est.
+ */
 async function checkForUpdate(): Promise<void> {
+  if (checkingUpdate.value) return
+  checkingUpdate.value = true
   let result: UpdateCheckResult
   try {
     result = await bridge().checkForUpdate()
   } catch (error) {
     result = { outcome: 'failed', message: error instanceof Error ? error.message : String(error) }
+  } finally {
+    checkingUpdate.value = false
   }
   await recoverUpdateStatus()
-  const text = updateCheckMessage(result)
+  // Au premier lancement, la barre d'application est cachée : le bouton est dans la boîte.
+  const text = updateCheckMessage(result, library.firstRun !== null)
   await ask({
     title: 'Mise à jour',
     message: text.message,
@@ -968,17 +980,7 @@ onUnmounted(() => {
         </button>
       </div>
       <div class="spacer" />
-      <button
-        v-if="update"
-        type="button"
-        class="with-icon update"
-        :class="update.state"
-        :disabled="update.state === 'downloading' || update.state === 'installing'"
-        :title="updateButtonTitle(update)"
-        @click="onUpdateClick"
-      >
-        <Icon name="export" :size="15" /> {{ updateButtonLabel(update) }}
-      </button>
+      <UpdateButton v-if="update" :status="update" @click="onUpdateClick" />
       <div class="group">
         <button
           type="button"
@@ -1012,7 +1014,14 @@ onUnmounted(() => {
       <DiagramEditor v-else-if="mode === 'diagram'" ref="diagramEditor" />
       <SchematicEditor v-else ref="schematicEditor" @edit-component="editComponentOf" />
     </main>
-    <DataFolderDialog v-if="library.firstRun" @done="dataFolderChosen?.()" />
+    <DataFolderDialog
+      v-if="library.firstRun"
+      :update="update"
+      :checking="checkingUpdate"
+      @done="dataFolderChosen?.()"
+      @update="onUpdateClick"
+      @check-update="checkForUpdate"
+    />
     <SettingsDialog v-if="showSettings" @close="showSettings = false" />
     <ProfileDialog
       v-if="showProfile"

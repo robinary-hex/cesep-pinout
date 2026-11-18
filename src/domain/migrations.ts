@@ -29,6 +29,18 @@ export class FileFormatError extends Error {
   }
 }
 
+/**
+ * Fichier écrit par une version plus récente de l'application : seule une mise à jour le lira.
+ * À part des autres refus, pour que l'application puisse proposer cette mise à jour au lieu de
+ * seulement le dire, et pour qu'elle ne réécrive pas ce fichier à sa façon.
+ */
+export class NewerFormatError extends FileFormatError {
+  constructor(message: string) {
+    super(message)
+    this.name = 'NewerFormatError'
+  }
+}
+
 export type RawRecord = Record<string, unknown>
 /** Transforme un document de la version n vers n + 1 ; schemaVersion est mis à jour ensuite. */
 export type Migration = (raw: RawRecord) => RawRecord
@@ -97,7 +109,7 @@ export function migrateRaw(raw: unknown, table: MigrationTable, what: string): R
     throw new FileFormatError(`${what} : schemaVersion manquant ou invalide`)
   }
   if (version > table.current) {
-    throw new FileFormatError(
+    throw new NewerFormatError(
       `${what} : version ${version} plus récente que celle gérée (${table.current}) ; mets l'application à jour`
     )
   }

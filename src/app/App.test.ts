@@ -513,6 +513,96 @@ describe('mise à jour : le bouton et la recherche à la demande', () => {
   })
 })
 
+describe('mise à jour au premier lancement : la boîte du dossier porte le bouton', () => {
+  const SHARED = 'C:/fake/Documents/Pinout/Applications/parametres.json'
+  /** Les paramètres qu'une version plus récente de Pinout aurait laissés dans le dossier. */
+  const NEWER = JSON.stringify({
+    ...(JSON.parse(serializeSettings(DEFAULT_SETTINGS)) as object),
+    schemaVersion: DEFAULT_SETTINGS.schemaVersion + 1
+  })
+  const box = (title: string): Element | null =>
+    document.body.querySelector(`[role="dialog"][aria-label="${title}"]`)
+  const folderBox = (): Element | null => box('Dossier de Pinout')
+  const updateButton = (): HTMLButtonElement | null =>
+    folderBox()?.querySelector<HTMLButtonElement>('button.update') ?? null
+  const press = (text: string): void => {
+    const found = [...document.body.querySelectorAll('button')].find(
+      (candidate) => candidate.textContent?.trim() === text
+    )
+    if (!found) throw new Error(`bouton « ${text} » introuvable`)
+    found.click()
+  }
+
+  beforeEach(async () => {
+    fs.presetDataDir = null
+    // Le dossier proposé sert déjà à une version plus récente de Pinout.
+    await fs.writeTextFile(SHARED, NEWER)
+  })
+
+  it('montre la mise à jour annoncée, et s’en sert quand le dossier demande une version plus récente', async () => {
+    fs.updateStatus = { state: 'available', version: '9.9.9' }
+    const wrapper = mount(App, { attachTo: document.body })
+    await flushPromises()
+    // La boîte cache la barre d'application : elle montre elle-même la mise à jour annoncée.
+    expect(folderBox()?.textContent).toContain('Une nouvelle version de Pinout est disponible.')
+    expect(updateButton()?.textContent?.trim()).toBe('Mise à jour 9.9.9 : télécharger')
+    // Le dossier est refusé : la boîte dit ce qu'il faut faire, le bouton à côté.
+    press('Utiliser ce dossier')
+    await flushPromises()
+    expect(folderBox()?.textContent).toContain('sert déjà à une version plus récente de Pinout')
+    expect(folderBox()?.querySelector('.update-notice.needed')).not.toBeNull()
+    expect(folderBox()?.querySelector('.problem')).toBeNull()
+    expect(await fs.readTextFile(SHARED)).toBe(NEWER)
+    // Il fait ce que fait celui de la barre d'application.
+    const download = vi.spyOn(fs, 'downloadUpdate')
+    updateButton()?.click()
+    await flushPromises()
+    expect(download).toHaveBeenCalledTimes(1)
+    expect(updateButton()?.textContent?.trim()).toBe('Téléchargement 0 %')
+    expect(updateButton()?.disabled).toBe(true)
+    fs.sendUpdateStatus({ state: 'downloaded', version: '9.9.9' })
+    await flushPromises()
+    const install = vi.spyOn(fs, 'installUpdate')
+    updateButton()?.click()
+    await flushPromises()
+    expect(install).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+
+  it('sans mise à jour annoncée, propose de la chercher quand le dossier en demande une', async () => {
+    const wrapper = mount(App, { attachTo: document.body })
+    await flushPromises()
+    // Rien d'annoncé : rien à en dire tant que le dossier n'est pas refusé.
+    expect(folderBox()).not.toBeNull()
+    expect(folderBox()?.querySelector('.update-notice')).toBeNull()
+    press('Utiliser ce dossier')
+    await flushPromises()
+    expect(folderBox()?.textContent).toContain('sert déjà à une version plus récente de Pinout')
+    expect(updateButton()).toBeNull()
+    // La recherche répond dans sa boîte, par-dessus ; le bouton est ensuite dans celle du dossier.
+    fs.updateCheck = { outcome: 'available', version: '1.3.0' }
+    fs.updateStatus = { state: 'available', version: '1.3.0' }
+    press('Rechercher une mise à jour')
+    await flushPromises()
+    expect(box('Mise à jour')?.textContent).toContain('La version 1.3.0 est disponible.')
+    expect(box('Mise à jour')?.textContent).toContain('« Dossier de Pinout »')
+    press('OK')
+    await flushPromises()
+    expect(box('Mise à jour')).toBeNull()
+    expect(updateButton()?.textContent?.trim()).toBe('Mise à jour 1.3.0 : télécharger')
+    // Un autre dossier, neuf, reste permis : la boîte se ferme et l'application démarre.
+    fs.openDialogAnswers.push('E:/Ailleurs')
+    press('Choisir un autre dossier…')
+    await flushPromises()
+    expect(folderBox()).toBeNull()
+    expect(useLibraryStore().dataRoot).toBe('E:/Ailleurs')
+    expect(wrapper.find('.topbar button.update').exists()).toBe(true)
+    wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+})
+
 describe('menu Fichier : fichiers récents', () => {
   it('retire un fichier de la liste par sa croix, sans fermer le menu ni toucher au fichier', async () => {
     const wrapper = mount(App, { attachTo: document.body })

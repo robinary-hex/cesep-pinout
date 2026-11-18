@@ -37,13 +37,22 @@ export function updateButtonTitle(status: UpdateStatus): string {
   }
 }
 
-/** Ce que dit la boîte après une recherche demandée par le menu Fichier : le message, sa précision. */
-export function updateCheckMessage(result: UpdateCheckResult): { message: string; detail: string } {
+/**
+ * Ce que dit la boîte après une recherche demandée (menu Fichier, boîte du premier lancement) :
+ * le message, sa précision. `firstRun` : la recherche vient de la boîte du premier lancement, qui
+ * cache la barre d'application et porte donc elle-même le bouton de mise à jour.
+ */
+export function updateCheckMessage(
+  result: UpdateCheckResult,
+  firstRun = false
+): { message: string; detail: string } {
   switch (result.outcome) {
     case 'available':
       return {
         message: `La version ${result.version} est disponible.`,
-        detail: 'Le bouton en haut à droite s’en occupe.'
+        detail: firstRun
+          ? 'Le bouton de la boîte « Dossier de Pinout » s’en occupe.'
+          : 'Le bouton en haut à droite s’en occupe.'
       }
     case 'none':
       return { message: `Pinout ${result.version} est à jour.`, detail: '' }

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_SETTINGS, parseSettings, serializeSettings } from '@/domain'
+import { DEFAULT_SETTINGS, NewerFormatError, parseSettings, serializeSettings } from '@/domain'
 import { setBridge } from './bridge'
 import {
   loadSettings,
@@ -27,6 +27,11 @@ const mine = {
   recentFiles: ['C:/Docs/a.pinout']
 }
 const settled = { ...mine, dataDir: 'D:/Pinout' }
+/** Un fichier de paramètres qu'une version plus récente de Pinout aurait écrit. */
+const NEWER = JSON.stringify({
+  ...(JSON.parse(serializeSettings(DEFAULT_SETTINGS)) as object),
+  schemaVersion: DEFAULT_SETTINGS.schemaVersion + 1
+})
 
 describe('paramètres locaux et partagés', () => {
   it('tant que le dossier de Pinout n’est pas choisi, tout reste dans le fichier local', async () => {
@@ -92,6 +97,20 @@ describe('paramètres locaux et partagés', () => {
     expect(await readSharedSettings('D:/Pinout')).toBeNull()
   })
 
+  it('laisse tel quel un fichier partagé écrit par une version plus récente', async () => {
+    await fs.writeTextFile(LOCAL, serializeSettings(settled))
+    await fs.writeTextFile(SHARED, NEWER)
+    // Au lancement : la machine garde ses réglages, et on lui dit pourquoi.
+    const loaded = await loadSettings()
+    expect(loaded.settings).toEqual(settled)
+    expect(loaded.problem).toContain('version plus récente de Pinout')
+    // Un réglage changé ici reste dans le fichier local : celui des machines à jour n'est pas
+    // réécrit à l'ancienne façon.
+    await saveSettings({ ...settled, theme: 'dark' })
+    expect(parseSettings(await fs.readTextFile(LOCAL)).theme).toBe('dark')
+    expect(await fs.readTextFile(SHARED)).toBe(NEWER)
+  })
+
   it('n’écrit rien au lancement tant que le dossier reste à choisir', async () => {
     const loaded = await loadSettings()
     expect(loaded.settings).toEqual(DEFAULT_SETTINGS)
@@ -137,6 +156,16 @@ describe('changement de dossier de Pinout', () => {
     await fs.writeTextFile(SHARED, '{ "schemaVersion": ')
     await expect(relocateSharedSettings(mine, 'D:/Pinout')).rejects.toThrow(/illisible/)
     expect(await fs.readTextFile(SHARED)).toBe('{ "schemaVersion": ')
+    expect(fs.texts.has(LOCAL)).toBe(false)
+  })
+
+  it('refuse un dossier dont une version plus récente se sert, en disant de mettre à jour', async () => {
+    await fs.writeTextFile(SHARED, NEWER)
+    const refusal = await relocateSharedSettings(mine, 'D:/Pinout').catch((error: unknown) => error)
+    // Un refus à part : c'est lui qui fait proposer la mise à jour.
+    expect(refusal).toBeInstanceOf(NewerFormatError)
+    expect(String(refusal)).toContain('mettre l’application à jour')
+    expect(await fs.readTextFile(SHARED)).toBe(NEWER)
     expect(fs.texts.has(LOCAL)).toBe(false)
   })
 })
