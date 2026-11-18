@@ -29,6 +29,8 @@ const THICK: StyleProfile = {
   name: 'Épais',
   cellPx: 40,
   wireWidth: 0.3,
+  wireBorder: 0,
+  wireBorderColor: '#000000',
   cornerRadius: 0,
   componentStroke: 0.2,
   junctionScale: 1.5,

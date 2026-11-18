@@ -20,7 +20,7 @@ import { styleProfileSchema, type StyleProfile } from './profile'
 import { stretchedDefinition } from './stretch'
 import { isUTurn, segmentStep } from './wires'
 
-export const PROJECT_SCHEMA_VERSION = 25
+export const PROJECT_SCHEMA_VERSION = 26
 
 /**
  * Style propre à un élément du montage (voir styles.ts) : le nom d'un des `styles` du montage ;

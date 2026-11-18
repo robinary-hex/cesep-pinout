@@ -3,7 +3,7 @@ import { hexColorSchema } from './color'
 import { DEFAULT_DIAGRAM_STYLE, diagramStyleSchema, nodeFillSchema } from './diagram'
 import { DEFAULT_PROFILE, styleProfileSchema } from './profile'
 
-export const SETTINGS_SCHEMA_VERSION = 15
+export const SETTINGS_SCHEMA_VERSION = 16
 
 export const paletteColorSchema = z.object({
   name: z.string().min(1),

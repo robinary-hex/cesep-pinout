@@ -54,6 +54,23 @@ function number(event: Event, fallback: number): number {
     </div>
     <div class="row">
       <label class="field">
+        <span title="De chaque côté ; 0 : pas de bordure">Bordure des fils (cellules)</span>
+        <input
+          class="wire-border"
+          type="number"
+          min="0"
+          step="0.01"
+          :value="profile.wireBorder"
+          @change="patch({ wireBorder: Math.max(0, number($event, profile.wireBorder)) })"
+        />
+      </label>
+      <label v-if="profile.wireBorder > 0" class="field wire-border-color">
+        <span>Couleur de la bordure</span>
+        <ColorField :value="profile.wireBorderColor" @change="patch({ wireBorderColor: $event })" />
+      </label>
+    </div>
+    <div class="row">
+      <label class="field">
         <span>Rayon des coins (cellules)</span>
         <input
           type="number"

@@ -4,6 +4,7 @@ import { pathPointAt } from './diagramLinks'
 import {
   DEFAULT_COMPONENT_STROKE,
   DEFAULT_END_LABEL_SIZE,
+  DEFAULT_WIRE_BORDER_COLOR,
   styleProfileSchema,
   type StyleProfile
 } from './profile'
@@ -44,8 +45,8 @@ function isRecord(value: unknown): value is RawRecord {
 
 /**
  * Complète un profil de style brut avec les champs apparus depuis : trait des composants, police
- * des étiquettes d'extrémité (même famille que les repères). Sert aux migrations et aux profils
- * nommés enregistrés sur disque.
+ * des étiquettes d'extrémité (même famille que les repères), bordure des fils (aucune). Sert aux
+ * migrations et aux profils nommés enregistrés sur disque.
  */
 export function completeProfile(raw: unknown): RawRecord {
   const profile = isRecord(raw) ? raw : {}
@@ -54,6 +55,8 @@ export function completeProfile(raw: unknown): RawRecord {
   return {
     componentStroke: DEFAULT_COMPONENT_STROKE,
     endLabelFont: { family, size: DEFAULT_END_LABEL_SIZE },
+    wireBorder: 0,
+    wireBorderColor: DEFAULT_WIRE_BORDER_COLOR,
     ...profile
   }
 }
@@ -660,7 +663,16 @@ export const projectMigrations: MigrationTable = {
         )
       }
     },
-    24: migrateProjectV24
+    24: migrateProjectV24,
+    // Projet v25 → v26 : bordure des fils dans le profil de style, aucune au départ ; les styles
+    // propres du montage la reçoivent aussi.
+    25: (raw) => ({
+      ...raw,
+      profile: completeProfile(raw['profile']),
+      styles: (Array.isArray(raw['styles']) ? (raw['styles'] as unknown[]) : []).map((style) =>
+        completeProfile(style)
+      )
+    })
   }
 }
 
@@ -852,6 +864,8 @@ export const settingsMigrations: MigrationTable = {
       delete rest['libraryDir']
       delete rest['settingsDir']
       return { ...rest, dataDir: '' }
-    }
+    },
+    // v15 → v16 : bordure des fils dans le profil général, aucune au départ.
+    15: (raw) => ({ ...raw, defaultProfile: completeProfile(raw['defaultProfile']) })
   }
 }

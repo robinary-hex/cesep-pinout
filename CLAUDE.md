@@ -546,6 +546,22 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   Les marques d'extrémité libre et de broche reliée à rien prennent `--alert` (rouge en clair, ambre
   en sombre) ; l'aperçu d'export transparent montre un point à chaque
   intersection de la grille (`--transparent-*`).
+- Bordure des fils (décision du 18 novembre 2026 ; `wireBorder`, `wireBorderColor` du profil de
+  style, `wireBorder()` de `src/domain/wireKinds.ts`) : un style peut border tous ses fils,
+  fils nus et ponts compris. Deux réglages du profil, donc du style général, de chaque
+  montage et des styles propres : « Bordure des fils (cellules) », ce dont elle dépasse de
+  chaque côté du fil (0 au départ : pas de bordure), et sa couleur, proposée dès qu'il y en
+  a une (`ProfileFields.vue`). Sans bordure dans le style, seul le fil nu garde la sienne,
+  son liseré sombre : en étain sur le papier, on ne le verrait pas ; avec, il prend celle du
+  style comme les autres. Toutes les bordures se dessinent ensemble, sous tous les fils
+  (`g.wire-borders`, à l'écran comme à l'export), et non chacune sous son fil : des fils
+  qui se touchent n'ont ainsi qu'un contour, sans trait en travers d'une jonction. Y ont
+  aussi la leur les pointes de flèche, les pointillés, les points de jonction (`junctionDot`
+  rend celle du fil porteur), les gouttes de soudure et les points d'étiquette d'extrémité.
+  À un croisement, le fil du dessus se redessine avec sa bordure, chaque trait dépassant un
+  peu le précédent pour ne pas laisser de filet (`CROSSING_OVERLAP`). Bordé, un fil a les
+  bouts ronds à l'export aussi, comme à l'écran. Un noir pur prend l'encre du thème, comme
+  celui des fils. Le liseré de sélection entoure la bordure.
 - Profil de style : l'application a un profil général (`defaultProfile` des paramètres) et chaque
   montage a le sien, enregistré dans son fichier, avec lequel il se dessine. Une seule boîte,
   `settings/ProfileDialog.vue`, pour les deux : `target="general"` (bouton de la barre
@@ -994,10 +1010,12 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     Fil nu : la géométrie et toutes les retouches d'un fil, mais il est soudé à toutes les
     broches posées sur son trajet, pas seulement à ses bouts (`computeConnectivity`,
     `solders`) ; pas aux pastilles vides, et deux fils nus qui se croisent ne se touchent
-    pas. Il se dessine en métal, sur un liseré sombre (`BARE_WIRE_EDGE`), avec un point de
-    soudure sur chaque broche (`.solder`) : un point de couleur vive, cerné de sombre
-    (`SOLDER_COLOR`, `SOLDER_EDGE` ; décision du 17 novembre 2026 : une goutte d'étain sur
-    un fil d'étain ne disait pas qu'il y avait là une broche). Il a sa couleur comme tout fil (décision du 17
+    pas. Il se dessine en métal, sur un liseré sombre (`BARE_WIRE_EDGE`), avec une goutte de
+    soudure sur chaque broche (`.solder` ; décision du 18 novembre 2026, qui revient sur le
+    gros point orange de la veille) : de la couleur du fil, elle le renfle (`SOLDER_SCALE`)
+    et sa bordure la cerne avec lui, d'un seul contour ; une ombre en croissant et un petit
+    reflet disent la goutte de métal plutôt qu'un gros point (`solderMark`, `SOLDER_SHADE`,
+    `SOLDER_GLINT`), à l'écran comme à l'export. Il a sa couleur comme tout fil (décision du 17
     novembre 2026, après un essai où il était toujours en étain) : l'étain au départ
     (`BARE_WIRE_COLOR`), puis celle qu'on lui donne. Les fils nus ont leur propre couleur
     courante (`bareColor` du store : celle du dernier fil nu tracé ou recoloré, à part de
@@ -1045,8 +1063,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     couché sur une pastille d'où ressort un bout de fil lui est soudé
     (`computeConnectivity(wires, pins, twins)`). Sur chaque face, un point de couleur vive,
     cerné de sombre, marque les pastilles où ressort ce qui est enfiché de l'autre côté
-    (`throughMarks`, `.through` ; la même marque que le point de soudure d'un fil nu : une
-    patte se voit pareil, soudée ou non) ; le trou survolé se
+    (`throughMarks`, `.through`) ; une patte soudée à un fil nu ne la montre pas, la goutte
+    de soudure du fil la remplace (`unsolderedMarks`) ; le trou survolé se
     montre d'un anneau sur l'autre face (`twinMark`).
   - Écart des faces (décision du 18 novembre 2026) : Ctrl maintenue pendant qu'on glisse une
     plaque à deux faces, seule sélectionnée, la déplace par rapport à son pli. Le pli reste
@@ -1241,8 +1259,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     composant posé s'appelle « libellé » dans l'interface.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 17, projet 25, paramètres 15,
-  diagramme 6 (composant 17 et projet 25, du 18 novembre 2026, pas encore publiés, portent les
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 17, projet 26, paramètres 16,
+  diagramme 6 (projet 26 et paramètres 16, du 18 novembre 2026, pas encore publiés, portent la bordure des fils du profil de style, `wireBorder` et `wireBorderColor` : les réglages qu'ils enregistrent ne se liront plus dans la 1.9.1 ni avant ; composant 17 et projet 25, du même jour, pas publiés non plus, portent les
   composants extensibles : `stretch` rangé par sens, `crop`, `countX` et `countY` d'un composant posé, et la plaque à trous : forme `holes`, sorte d'un fil `kind`, `underside` et `facesGap` d'une plaque posée, `footprint` d'une forme ; les versions 16 et 24, de la veille, n'ont pas été publiées non plus : elles n'avaient qu'un sens d'étirement (`stretch.axis`, `count`), que leurs migrations rangent sous le bon sens ; le projet 24 donne l'étain aux fils nus du 23, qui se dessinaient tous ainsi, et le 25 donne son propre champ à chaque texte variable, avec la valeur que partageaient ceux du même nom ; un composant ou un montage qu'ils
   enregistrent ne s'ouvrira plus dans la 1.9.1 ni avant ; paramètres 15 et diagramme 5 sont ceux de la 1.6.0, publiée le 11 novembre
   2026 : palette des diagrammes et dossier de Pinout dans les paramètres, couleur du texte

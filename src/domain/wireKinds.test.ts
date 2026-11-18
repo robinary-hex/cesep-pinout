@@ -1,18 +1,23 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import { computeConnectivity, type PinRef } from './connectivity'
 import { computeCrossings } from './crossings'
 import { wiresFollowingJunctions, wiresFollowingPins } from './elastic'
 import type { GridPoint } from './grid'
 import { DEFAULT_PROFILE } from './profile'
+import { createEmptyComponent } from './component'
 import { createEmptyProject, wireProblem, type Wire, type WireKind } from './project'
 import { parseProject, serializeProject } from './serialize'
 import { DEFAULT_EXPORT } from './settings'
 import { buildProjectSvg } from './svg'
+import { unsolderedMarks } from './boardFaces'
 import {
   BARE_WIRE_COLOR,
   jumperControl,
   jumperPathData,
   movedWireVertex,
+  solderMark,
+  wireBorder,
   wireKindLabel,
   wireShapeData
 } from './wireKinds'
@@ -315,5 +320,186 @@ describe('sortes de fils : fichier et export', () => {
     expect(svg).toContain('stroke="#d62828"')
     // Sans broche sur son trajet, pas de point de soudure.
     expect(svg).not.toContain('class="solders"')
+  })
+})
+
+describe('bordure des fils', () => {
+  it('vient du style quand il en a une ; sinon seul le fil nu garde son liseré', () => {
+    const plain = wire('w', [])
+    const bare = wire('b', [], 'bare')
+    const jumper = wire('j', [], 'jumper')
+    // Sans bordure dans le style : rien pour un fil ou un pont, le liseré sombre pour un fil nu.
+    expect(wireBorder(DEFAULT_PROFILE, plain)).toBeNull()
+    expect(wireBorder(DEFAULT_PROFILE, jumper)).toBeNull()
+    const edge = wireBorder(DEFAULT_PROFILE, bare)
+    expect(edge?.color).toBe('#59616a')
+    // Le liseré fait 1,6 fois l'épaisseur du fil : 0,3 de chaque côté.
+    expect(edge?.width).toBeCloseTo(DEFAULT_PROFILE.wireWidth * 0.3)
+    // Avec une bordure : la même pour tous, fil nu compris.
+    const style = { ...DEFAULT_PROFILE, wireBorder: 0.04, wireBorderColor: '#1d4ed8' }
+    for (const entry of [plain, bare, jumper]) {
+      expect(wireBorder(style, entry)).toEqual({ width: 0.04, color: '#1d4ed8' })
+    }
+  })
+
+  it('s’exporte sous tous les fils, autour des pointes, des jonctions et des croisements', () => {
+    const project = createEmptyProject('Bordé', {
+      ...DEFAULT_PROFILE,
+      wireBorder: 0.05,
+      wireBorderColor: '#1d4ed8'
+    })
+    project.wires = [
+      // Un fil en flèche, croisé par un autre, et un troisième raccordé au premier.
+      {
+        ...wire('a', [
+          [0, 2],
+          [8, 2]
+        ]),
+        freeEnds: 'arrow'
+      },
+      {
+        ...wire('b', [
+          [4, 0],
+          [4, 4]
+        ]),
+        stack: 1
+      },
+      wire('c', [
+        [6, 2],
+        [6, 5]
+      ]),
+      wire(
+        'j',
+        [
+          [0, 6],
+          [5, 8]
+        ],
+        'jumper'
+      )
+    ]
+    const svg = buildProjectSvg(project, DEFAULT_EXPORT)?.svg ?? ''
+    const document = new DOMParser().parseFromString(svg, 'image/svg+xml')
+    const borders = document.querySelector('g.wire-borders')
+    if (!borders) throw new Error('bordures attendues')
+    // Les bordures viennent avant les fils, toutes de la couleur du style.
+    const groups = [...document.querySelectorAll('g')].map((group) => group.getAttribute('class'))
+    expect(groups.indexOf('wire-borders')).toBeLessThan(groups.indexOf('wires'))
+    const strokes = new Set(
+      [...borders.querySelectorAll('path')].map((path) => path.getAttribute('stroke'))
+    )
+    expect([...strokes]).toEqual(['#1d4ed8'])
+    // Un tracé par fil, plus large que lui de deux bordures, aux bouts ronds comme le fil.
+    const paths = [...borders.querySelectorAll('path')]
+    expect(paths).toHaveLength(4)
+    expect(paths.map((path) => Number(path.getAttribute('stroke-width')))).toEqual([
+      0.25, 0.25, 0.25, 0.25
+    ])
+    expect(paths[0]?.getAttribute('stroke-linecap')).toBe('round')
+    // Les pointes de flèche ont leur bordure, et le point de jonction la sienne.
+    expect(borders.querySelectorAll('polygon')).toHaveLength(2)
+    expect(borders.querySelector('polygon')?.getAttribute('stroke-width')).toBe('0.1')
+    const junction = borders.querySelector('circle')
+    expect(junction?.getAttribute('fill')).toBe('#1d4ed8')
+    expect(Number(junction?.getAttribute('r'))).toBeCloseTo(0.15 + 0.05)
+    // Au croisement, le fil du dessus se redessine avec sa bordure, sur un liseré plus large.
+    const crossing = [...(document.querySelector('g.crossings')?.querySelectorAll('line') ?? [])]
+    expect(crossing.map((line) => line.getAttribute('stroke'))).toEqual([
+      '#ffffff',
+      '#1d4ed8',
+      '#d62828'
+    ])
+    expect(crossing.map((line) => Number(line.getAttribute('stroke-width')))).toEqual([
+      0.43, 0.25, 0.15
+    ])
+    // Chaque trait dépasse un peu le précédent : leurs bouts ne laissent pas de filet.
+    expect(crossing.map((line) => Number(line.getAttribute('y1')))).toEqual([1.5, 1.48, 1.46])
+    // Sans bordure dans le style et sans fil nu : pas de bordures du tout.
+    const bare = createEmptyProject('Nu', DEFAULT_PROFILE)
+    bare.wires = [
+      wire('w', [
+        [0, 0],
+        [4, 0]
+      ])
+    ]
+    expect(buildProjectSvg(bare, DEFAULT_EXPORT)?.svg).not.toContain('wire-borders')
+  })
+})
+
+describe('goutte de soudure d’un fil nu', () => {
+  it('a une ombre en bas à droite et un reflet en haut à gauche, dans son rayon', () => {
+    const mark = solderMark(10, 20, 0.2)
+    // Le reflet : un petit disque, vers le haut et la gauche du centre.
+    expect(mark.glint.cx).toBeLessThan(10)
+    expect(mark.glint.cy).toBeLessThan(20)
+    expect(Math.hypot(mark.glint.cx - 10, mark.glint.cy - 20) + mark.glint.r).toBeLessThan(0.2)
+    // L'ombre : un arc qui part de la droite et finit en bas à gauche.
+    const numbers = (mark.shade.match(/-?\d+(\.\d+)?/g) ?? []).map(Number)
+    const [startX, startY] = numbers
+    const [endX, endY] = numbers.slice(-2)
+    expect(mark.shade).toMatch(/^M [\d. -]+ A /)
+    expect(startX).toBeGreaterThan(10)
+    expect(startY).toBeLessThan(20)
+    expect(endX).toBeLessThan(10)
+    expect(endY).toBeGreaterThan(20)
+    expect(mark.shadeWidth).toBeGreaterThan(0)
+  })
+
+  it('s’exporte à la couleur du fil, cernée comme lui, et remplace la marque de la patte', () => {
+    const project = createEmptyProject('Soudé', DEFAULT_PROFILE)
+    const def = createEmptyComponent('r', 'R')
+    def.size = { widthCells: 2, heightCells: 2 }
+    def.pins = [{ id: 'p1', name: '1', kind: 'io', x: 1, y: 1 }]
+    project.embeddedDefs = { r: def }
+    project.components = [
+      {
+        id: 'c1',
+        defId: 'r',
+        x: 1,
+        y: 0,
+        rotation: 0,
+        mirror: false,
+        label: '',
+        fields: {},
+        behindWires: true
+      }
+    ]
+    project.wires = [
+      {
+        ...wire(
+          'b',
+          [
+            [0, 1],
+            [4, 1]
+          ],
+          'bare'
+        ),
+        color: '#b45309'
+      }
+    ]
+    const svg = buildProjectSvg(project, DEFAULT_EXPORT)?.svg ?? ''
+    const document = new DOMParser().parseFromString(svg, 'image/svg+xml')
+    const solders = document.querySelector('g.solders')
+    if (!solders) throw new Error('soudure attendue')
+    // La goutte : de la couleur du fil, avec son ombre et son reflet.
+    const [drop, glint] = [...solders.querySelectorAll('circle')]
+    expect(drop?.getAttribute('fill')).toBe('#b45309')
+    expect(Number(drop?.getAttribute('r'))).toBeCloseTo(0.225)
+    expect(drop?.hasAttribute('stroke')).toBe(false)
+    expect(glint?.getAttribute('fill')).toBe('#ffffff')
+    expect(solders.querySelector('path')?.getAttribute('stroke-opacity')).toBe('0.16')
+    expect(svg).not.toContain('#f5a524')
+    // Son cerne est dans les bordures, avec le liseré du fil : ils ne font qu'un contour.
+    const ring = document.querySelector('g.wire-borders circle')
+    expect(ring?.getAttribute('fill')).toBe('#59616a')
+    expect(Number(ring?.getAttribute('r'))).toBeCloseTo(0.225 + 0.045)
+  })
+
+  it('une patte soudée ne montre plus sa marque sur la pastille', () => {
+    const marks = [
+      { board: 'b', point: [2, 2] as GridPoint },
+      { board: 'b', point: [3, 2] as GridPoint }
+    ]
+    expect(unsolderedMarks(marks, [{ point: [3, 2] }])).toEqual([marks[0]])
+    expect(unsolderedMarks(marks, [])).toEqual(marks)
   })
 })

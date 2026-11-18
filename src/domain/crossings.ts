@@ -168,12 +168,19 @@ export function crossingPieces(
 }
 
 /**
- * Bouts du morceau de fil redessiné sur un croisement : une demi-cellule de part et d'autre du
- * point, dans la direction du fil du dessus.
+ * Ce dont la bordure d'un fil redessiné sur un croisement dépasse le liseré, et le fil sa
+ * bordure, à chaque bout (en cellules) : trois traits qui finiraient au même endroit
+ * laisseraient un filet en travers du fil, là où leurs bords se mêlent.
  */
-export function crossingPieceEnds(piece: CrossingPiece): [GridPoint, GridPoint] {
+export const CROSSING_OVERLAP = 0.02
+
+/**
+ * Bouts du morceau de fil redessiné sur un croisement : une demi-cellule de part et d'autre du
+ * point (`reach`), dans la direction du fil du dessus.
+ */
+export function crossingPieceEnds(piece: CrossingPiece, reach = 0.5): [GridPoint, GridPoint] {
   const [x, y] = piece.point
-  const half = 0.5 / Math.hypot(piece.step[0], piece.step[1])
+  const half = reach / Math.hypot(piece.step[0], piece.step[1])
   const dx = piece.step[0] * half
   const dy = piece.step[1] * half
   return [

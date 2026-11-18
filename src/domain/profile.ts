@@ -23,6 +23,9 @@ export type FontSpec = z.infer<typeof fontSchema>
 /** Taille par défaut des étiquettes d'extrémité (points), plus lisible que les repères. */
 export const DEFAULT_END_LABEL_SIZE = 14
 
+/** Couleur de la bordure des fils tant qu'on n'en a pas choisi une autre. */
+export const DEFAULT_WIRE_BORDER_COLOR = '#000000'
+
 /**
  * Profil de style : l'échelle et le trait. L'application en a un, général (paramètres) ; chaque
  * montage en garde une copie dans son fichier, celle avec laquelle il se dessine. Changer de
@@ -35,6 +38,13 @@ export const styleProfileSchema = z.object({
   cellPx: z.number().int().positive(),
   /** Épaisseur des fils, en cellules. */
   wireWidth: z.number().positive(),
+  /**
+   * Bordure des fils (décision du 18 novembre 2026) : ce dont elle dépasse de chaque côté du
+   * fil, en cellules, et sa couleur. 0 : pas de bordure. Elle vaut pour tous les fils du style,
+   * fils nus et ponts compris (`wireBorder` de wireKinds.ts).
+   */
+  wireBorder: z.number().nonnegative(),
+  wireBorderColor: hexColorSchema,
   /** Rayon des coins arrondis, en cellules (borné au rendu à la moitié du plus court segment). */
   cornerRadius: z.number().nonnegative(),
   /** Trait de base des composants dessinés, en cellules (multiplié par le poids de chaque forme). */
@@ -54,6 +64,8 @@ export const DEFAULT_PROFILE: StyleProfile = {
   name: 'Standard',
   cellPx: 20,
   wireWidth: 0.15,
+  wireBorder: 0,
+  wireBorderColor: DEFAULT_WIRE_BORDER_COLOR,
   cornerRadius: 0.4,
   componentStroke: DEFAULT_COMPONENT_STROKE,
   junctionScale: 2,
@@ -77,7 +89,11 @@ export function profileDifferences(profile: StyleProfile, reference: StyleProfil
   if (profile.cellPx !== reference.cellPx) facts.push('cell')
   if (
     profile.wireWidth !== reference.wireWidth ||
-    profile.cornerRadius !== reference.cornerRadius
+    profile.cornerRadius !== reference.cornerRadius ||
+    profile.wireBorder !== reference.wireBorder ||
+    // La couleur d'une bordure qui n'existe pas ne compte pas.
+    (profile.wireBorder > 0 &&
+      profile.wireBorderColor.toLowerCase() !== reference.wireBorderColor.toLowerCase())
   ) {
     facts.push('wires')
   }

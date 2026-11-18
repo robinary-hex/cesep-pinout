@@ -7,6 +7,7 @@ import {
   boardsCarry,
   boxHandles,
   componentImages,
+  CROSSING_OVERLAP,
   crossingPieceEnds,
   distanceToSegment,
   facesFlip,
@@ -61,13 +62,14 @@ import {
   wireIntersectsRect,
   wirePathData,
   wireRenderParts,
-  BARE_WIRE_EDGE,
-  BARE_WIRE_EDGE_SCALE,
   jumperPathData,
   movedWireVertex,
-  SOLDER_COLOR,
-  SOLDER_EDGE,
+  SOLDER_GLINT,
   SOLDER_SCALE,
+  SOLDER_SHADE,
+  solderMark,
+  unsolderedMarks,
+  wireBorder,
   wireShapeData,
   wiresFollowingJunctions,
   wiresFollowingPins,
@@ -631,7 +633,12 @@ const hinges = computed(() =>
  */
 const throughByBoard = computed(() => {
   const byBoard = new Map<string, { key: string; x: number; y: number }[]>()
-  for (const mark of dragPreview.value?.marks ?? store.throughs) {
+  // Une patte soudée à un fil nu montre la goutte de soudure du fil, pas sa marque.
+  const marks = unsolderedMarks(
+    dragPreview.value?.marks ?? store.throughs,
+    dragPreview.value?.solders ?? store.connectivity.solders
+  )
+  for (const mark of marks) {
     const [x, y] = mark.point
     const list = byBoard.get(mark.board) ?? []
     list.push({ key: `${x},${y}`, x, y })
@@ -887,6 +894,8 @@ const renderedWires = computed(() =>
     const style = store.styleFor(wire)
     const width = style.wireWidth
     const radius = style.cornerRadius
+    // Sa bordure : celle de son style, ou le liseré d'un fil nu ; `outer` : le fil et elle.
+    const border = wireBorder(style, wire)
     // Un pont est une courbe de bout en bout : ni flèche ni pointillés à ses extrémités.
     const jumper = wire.kind === 'jumper'
     const shown = jumper ? null : wireRenderParts(points, wire.freeEnds, flags, width)
@@ -894,12 +903,13 @@ const renderedWires = computed(() =>
     return {
       wire,
       width,
+      border,
+      outer: border ? width + 2 * border.width : width,
       hitWidth: hitWidthOf(width),
       d,
       body: shown ? (shown.body.length >= 2 ? wirePathData(shown.body, radius) : '') : d,
       dotted: shown ? shown.dotted.map((tail) => wirePathData(tail, radius)) : [],
       heads: shown ? shown.heads.map((head) => pointsAttribute(head)) : [],
-      // Un fil nu se dessine dans sa couleur (l'étain au départ), avec un liseré sombre dessous.
       color: wire.color,
       bare: wire.kind === 'bare',
       jumper,
@@ -931,15 +941,23 @@ const wireById = computed(() => new Map(store.doc.wires.map((wire) => [wire.id, 
  */
 const crossingMarks = computed(() =>
   store.pieces.map((piece) => {
-    const [[x1, y1], [x2, y2]] = crossingPieceEnds(piece)
     const top = wireById.value.get(piece.topWireId)
+    const style = top ? store.styleFor(top) : profile.value
+    const width = style.wireWidth
+    const border = top ? wireBorder(style, top) : null
+    const span = (reach: number): { x1: number; y1: number; x2: number; y2: number } => {
+      const [[x1, y1], [x2, y2]] = crossingPieceEnds(piece, reach)
+      return { x1, y1, x2, y2 }
+    }
     return {
       key: `${piece.point[0]},${piece.point[1]}`,
-      x1,
-      y1,
-      x2,
-      y2,
-      width: (top ? store.styleFor(top) : profile.value).wireWidth,
+      ...span(0.5),
+      // Bordé, chaque trait dépasse un peu le précédent : pas de filet en travers du fil.
+      edge: span(0.5 + CROSSING_OVERLAP),
+      line: span(border ? 0.5 + 2 * CROSSING_OVERLAP : 0.5),
+      width,
+      border,
+      outer: border ? width + 2 * border.width : width,
       color: top ? top.color : '#000000'
     }
   })
@@ -956,21 +974,30 @@ const junctions = computed(() => {
       x: junction.point[0],
       y: junction.point[1],
       r: dot.radius,
-      fill: dot.color
+      fill: dot.color,
+      border: dot.border
     }
   })
 })
 
-/** Points de soudure des fils nus : un point de couleur vive sur chaque broche de leur trajet. */
+/**
+ * Gouttes de soudure des fils nus, sur chaque broche de leur trajet : de la couleur du fil,
+ * cernées comme lui, avec leur ombre et leur reflet (`solderMark`).
+ */
 const solders = computed(() =>
   (dragPreview.value?.solders ?? store.connectivity.solders).map((solder) => {
     const wire = wireById.value.get(solder.wireId)
-    const width = (wire ? store.styleFor(wire) : profile.value).wireWidth
+    const style = wire ? store.styleFor(wire) : profile.value
+    const r = style.wireWidth * SOLDER_SCALE
+    const [x, y] = solder.point
     return {
-      key: `${solder.wireId}:${solder.point[0]},${solder.point[1]}`,
-      x: solder.point[0],
-      y: solder.point[1],
-      r: width * SOLDER_SCALE
+      key: `${solder.wireId}:${x},${y}`,
+      x,
+      y,
+      r,
+      color: wire ? wire.color : '#000000',
+      border: wire ? wireBorder(style, wire) : null,
+      ...solderMark(x, y, r)
     }
   })
 )
@@ -999,6 +1026,7 @@ const endLabels = computed(() =>
         text,
         color: wire.color,
         dotRadius: style.wireWidth,
+        border: wireBorder(style, wire),
         fontCells: style.endLabelFont.size / style.cellPx,
         family: style.endLabelFont.family,
         dotX: dot[0],
@@ -2056,7 +2084,7 @@ const cursorClass = computed(() => {
                     v-if="item.selected"
                     class="ring"
                     :d="item.d"
-                    :stroke-width="item.width + SELECTION_RING_PX / cell"
+                    :stroke-width="item.outer + SELECTION_RING_PX / cell"
                   />
                 </template>
                 <template v-for="item in renderedWires" :key="`gap:${item.wire.id}`">
@@ -2064,20 +2092,74 @@ const cursorClass = computed(() => {
                     v-if="item.selected"
                     class="gap"
                     :d="item.d"
-                    :stroke-width="item.width + SELECTION_GAP_PX / cell"
+                    :stroke-width="item.outer + SELECTION_GAP_PX / cell"
+                  />
+                </template>
+              </g>
+
+              <!-- Bordures des fils : toutes sous tous les fils, pour que des fils qui se
+                   touchent n'aient qu'un contour ; jonctions, soudures et points d'étiquette
+                   y ont la leur. -->
+              <g class="wire-borders">
+                <template v-for="item in renderedWires" :key="item.wire.id">
+                  <template v-if="item.border">
+                    <path
+                      v-if="item.body"
+                      class="wire-border"
+                      :d="item.body"
+                      :stroke="screenColor(item.border.color)"
+                      :stroke-width="item.outer"
+                    />
+                    <path
+                      v-for="(tail, t) in item.dotted"
+                      :key="`tail${t}`"
+                      class="wire-border"
+                      :d="tail"
+                      :stroke="screenColor(item.border.color)"
+                      :stroke-width="item.outer"
+                      :stroke-dasharray="`0 ${item.width * 2}`"
+                    />
+                    <polygon
+                      v-for="(head, h) in item.heads"
+                      :key="`head${h}`"
+                      :points="head"
+                      :fill="screenColor(item.border.color)"
+                      :stroke="screenColor(item.border.color)"
+                      :stroke-width="item.border.width * 2"
+                    />
+                  </template>
+                </template>
+                <template v-for="dot in junctions" :key="`junction:${dot.key}`">
+                  <circle
+                    v-if="dot.border"
+                    :cx="dot.x"
+                    :cy="dot.y"
+                    :r="dot.r + dot.border.width"
+                    :fill="screenColor(dot.border.color)"
+                  />
+                </template>
+                <template v-for="dot in solders" :key="`solder:${dot.key}`">
+                  <circle
+                    v-if="dot.border"
+                    :cx="dot.x"
+                    :cy="dot.y"
+                    :r="dot.r + dot.border.width"
+                    :fill="screenColor(dot.border.color)"
+                  />
+                </template>
+                <template v-for="entry in endLabels" :key="`end:${entry.key}`">
+                  <circle
+                    v-if="entry.border"
+                    :cx="entry.dotX"
+                    :cy="entry.dotY"
+                    :r="entry.dotRadius + entry.border.width"
+                    :fill="screenColor(entry.border.color)"
                   />
                 </template>
               </g>
 
               <g class="wires">
                 <template v-for="item in renderedWires" :key="item.wire.id">
-                  <path
-                    v-if="item.body && item.bare"
-                    class="wire wire-edge"
-                    :d="item.body"
-                    :stroke="BARE_WIRE_EDGE"
-                    :stroke-width="item.width * BARE_WIRE_EDGE_SCALE"
-                  />
                   <path
                     v-if="item.body"
                     class="wire"
@@ -2122,13 +2204,16 @@ const cursorClass = computed(() => {
                     :y1="mark.y1"
                     :x2="mark.x2"
                     :y2="mark.y2"
-                    :stroke-width="mark.width * 2.2"
+                    :stroke-width="mark.outer + mark.width * 1.2"
                   />
                   <line
-                    :x1="mark.x1"
-                    :y1="mark.y1"
-                    :x2="mark.x2"
-                    :y2="mark.y2"
+                    v-if="mark.border"
+                    v-bind="mark.edge"
+                    :stroke="screenColor(mark.border.color)"
+                    :stroke-width="mark.outer"
+                  />
+                  <line
+                    v-bind="mark.line"
                     :stroke="screenColor(mark.color)"
                     :stroke-width="mark.width"
                   />
@@ -2147,17 +2232,23 @@ const cursorClass = computed(() => {
               </g>
 
               <g class="solders">
-                <circle
-                  v-for="dot in solders"
-                  :key="dot.key"
-                  class="solder"
-                  :cx="dot.x"
-                  :cy="dot.y"
-                  :r="dot.r"
-                  :fill="SOLDER_COLOR"
-                  :stroke="SOLDER_EDGE"
-                  vector-effect="non-scaling-stroke"
-                />
+                <g v-for="dot in solders" :key="dot.key" class="solder">
+                  <circle :cx="dot.x" :cy="dot.y" :r="dot.r" :fill="screenColor(dot.color)" />
+                  <path
+                    class="solder-shade"
+                    :d="dot.shade"
+                    :stroke="SOLDER_SHADE.color"
+                    :stroke-opacity="SOLDER_SHADE.opacity"
+                    :stroke-width="dot.shadeWidth"
+                  />
+                  <circle
+                    :cx="dot.glint.cx"
+                    :cy="dot.glint.cy"
+                    :r="dot.glint.r"
+                    :fill="SOLDER_GLINT.color"
+                    :fill-opacity="SOLDER_GLINT.opacity"
+                  />
+                </g>
               </g>
             </template>
 
@@ -2656,9 +2747,19 @@ const cursorClass = computed(() => {
   stroke: var(--grid-major);
 }
 
-.wires path {
+.wires path,
+.wire-borders path {
   fill: none;
   stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Bordures des fils : sous eux, elles ne prennent pas les clics. */
+.wire-borders {
+  pointer-events: none;
+}
+
+.wire-borders polygon {
   stroke-linejoin: round;
 }
 
@@ -2816,10 +2917,14 @@ const cursorClass = computed(() => {
   cursor: nwse-resize;
 }
 
-/* Point de soudure d'un fil nu sur une broche : un point de couleur vive, cerné de sombre. */
+/* Goutte de soudure d'un fil nu sur une broche : sa couleur, une ombre et un reflet. */
 .solder {
-  stroke-width: 1.25;
   pointer-events: none;
+}
+
+.solder-shade {
+  fill: none;
+  stroke-linecap: round;
 }
 
 /* Le pli entre les deux faces d'une plaque : un trait pointillé et la flèche « retournée ». */

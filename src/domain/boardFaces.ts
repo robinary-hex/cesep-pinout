@@ -12,7 +12,6 @@ import {
   type GridRect
 } from './placement'
 import { instanceDefinition, type ComponentInstance, type Project } from './project'
-import { SOLDER_COLOR, SOLDER_EDGE } from './wireKinds'
 
 // Les deux faces d'une plaque à trous (décision du 17 novembre 2026). Une plaque posée peut
 // montrer son dessous à côté de son dessus : le même dessin, retourné comme une page qu'on
@@ -126,13 +125,13 @@ export function otherFacePins(pins: readonly PinRef[], faces: BoardFaces): PinRe
 /**
  * Marque de ce qui traverse une plaque : un point de couleur vive sur la pastille, cerné de
  * sombre, pour qu'on voie d'un coup d'œil où sont les pattes (décision du 17 novembre 2026 :
- * une goutte d'étain, de la couleur des pastilles, ne se voyait pas). C'est la marque d'une
- * broche soudée à un fil nu (`SOLDER_COLOR`) : une patte se voit pareil, soudée ou non. Son
- * rayon est en cellules ; la pastille (0,3) reste visible autour.
+ * une goutte d'étain, de la couleur des pastilles, ne se voyait pas). Une patte soudée à un
+ * fil nu ne la montre pas : la goutte de soudure du fil, à sa couleur, la remplace
+ * (`unsolderedMarks`). Son rayon est en cellules ; la pastille (0,3) reste visible autour.
  */
 export const THROUGH_MARK_RADIUS = 0.24
-export const THROUGH_MARK_COLOR = SOLDER_COLOR
-export const THROUGH_MARK_EDGE = SOLDER_EDGE
+export const THROUGH_MARK_COLOR = '#f5a524'
+export const THROUGH_MARK_EDGE = '#6b3f00'
 /** Épaisseur du cerne à l'export, en cellules. */
 export const THROUGH_MARK_EDGE_WIDTH = 0.05
 
@@ -170,4 +169,17 @@ export function throughMarks(
     add(wire.points.at(-1))
   }
   return [...marks.values()]
+}
+
+/**
+ * Les marques qui restent à montrer : sur une pastille où un fil nu est soudé, la goutte de
+ * soudure du fil dit déjà qu'une patte est là.
+ */
+export function unsolderedMarks(
+  marks: readonly ThroughMark[],
+  solders: readonly { point: GridPoint }[]
+): ThroughMark[] {
+  if (solders.length === 0) return [...marks]
+  const soldered = new Set(solders.map((solder) => pointKey(solder.point)))
+  return marks.filter((mark) => !soldered.has(pointKey(mark.point)))
 }

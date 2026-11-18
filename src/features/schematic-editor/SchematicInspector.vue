@@ -46,7 +46,13 @@ const profile = computed(() => store.profile)
 const FACT_TEXTS: { key: ProfileFact; text: (p: StyleProfile) => string }[] = [
   { key: 'name', text: (p) => `Profil « ${p.name} »` },
   { key: 'cell', text: (p) => `Cellule : ${p.cellPx} px à l’écran` },
-  { key: 'wires', text: (p) => `Fils : ${p.wireWidth} cellule, coins de rayon ${p.cornerRadius}` },
+  {
+    key: 'wires',
+    text: (p) =>
+      `Fils : ${p.wireWidth} cellule, coins de rayon ${p.cornerRadius}${
+        p.wireBorder > 0 ? `, bordure ${p.wireBorder} ${p.wireBorderColor}` : ''
+      }`
+  },
   { key: 'componentStroke', text: (p) => `Trait des composants : ${p.componentStroke} cellule` },
   {
     key: 'junction',

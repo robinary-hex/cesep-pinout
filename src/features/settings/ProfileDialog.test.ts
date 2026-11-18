@@ -134,6 +134,35 @@ describe('profils de style enregistrés', () => {
     await flushPromises()
   }
 
+  it('règle la bordure des fils : sa taille, puis sa couleur, avec aperçu sur le montage', async () => {
+    const library = useLibraryStore()
+    const schematic = useSchematicStore()
+    await library.init()
+    const wrapper = mount(ProfileDialog, { props: { target: 'general' }, attachTo: document.body })
+    await flushPromises()
+    // Pas de bordure au départ : sa couleur ne se propose pas encore.
+    expect(field('Bordure des fils').value).toBe('0')
+    expect(document.body.textContent).not.toContain('Couleur de la bordure')
+    await type('Bordure des fils', '0.04')
+    expect(schematic.profile.wireBorder).toBe(0.04)
+    expect(document.body.textContent).toContain('Couleur de la bordure')
+    // La couleur se tape dans son champ, comme toute couleur.
+    const hex = document.body.querySelector<HTMLInputElement>('.wire-border-color input.hex')
+    if (!hex) throw new Error('code de la couleur introuvable')
+    hex.value = '#1d4ed8'
+    hex.dispatchEvent(new Event('change', { bubbles: true }))
+    await flushPromises()
+    expect(schematic.profile.wireBorderColor).toBe('#1d4ed8')
+    // Une taille négative est ramenée à zéro.
+    await type('Bordure des fils', '-1')
+    expect(schematic.profile.wireBorder).toBe(0)
+    await type('Bordure des fils', '0.06')
+    button('Appliquer').click()
+    await flushPromises()
+    expect(library.defaultProfile).toMatchObject({ wireBorder: 0.06, wireBorderColor: '#1d4ed8' })
+    wrapper.unmount()
+  })
+
   it('enregistre deux profils, puis en choisir un le remet dans les champs et à l’aperçu', async () => {
     const library = useLibraryStore()
     const schematic = useSchematicStore()

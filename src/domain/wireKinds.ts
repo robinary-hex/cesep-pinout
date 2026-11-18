@@ -1,4 +1,5 @@
 import type { GridPoint, LocalPoint } from './grid'
+import type { StyleProfile } from './profile'
 import type { Wire, WireKind } from './project'
 import { dragVertex, wirePathData } from './wires'
 
@@ -8,7 +9,8 @@ import { dragVertex, wirePathData } from './wires'
 //   - le fil nu (`bare`) : la même géométrie, mais soudé à toutes les broches posées sur son
 //     trajet. C'est le fil dénudé qu'on couche sur une rangée de pattes pour les relier d'un
 //     coup. Il se dessine en métal, sur un liseré sombre : en étain au départ, dans la couleur
-//     qu'on lui donne ensuite (cuivre, ou une couleur par piste), comme tout fil ;
+//     qu'on lui donne ensuite (cuivre, ou une couleur par piste), comme tout fil ; une goutte
+//     de soudure le renfle sur chaque broche ;
 //   - le pont (`jumper`) : un fil isolé de A à B, dessiné en courbe. Il n'a que ses deux bouts,
 //     ne suit pas la grille et ne touche rien en chemin.
 //
@@ -25,17 +27,69 @@ export const BARE_WIRE_COLOR_NAME = 'Étain'
 export const BARE_WIRE_EDGE = '#59616a'
 /** Largeur du liseré d'un fil nu, en multiple de l'épaisseur du fil. */
 export const BARE_WIRE_EDGE_SCALE = 1.6
+
+const rounded = (value: number): number => Math.round(value * 1000) / 1000
+
+/** Bordure d'un fil : ce dont elle dépasse de chaque côté, en cellules, et sa couleur. */
+export interface WireBorder {
+  width: number
+  color: string
+}
+
 /**
- * Marque d'une broche soudée : un point de couleur vive, cerné de sombre, qu'on voit sur un fil
- * nu quelle que soit sa couleur, et sur les pastilles d'une plaque (décision du 17 novembre
- * 2026 : une goutte d'étain sur un fil d'étain ne disait pas qu'il y avait là une broche). C'est
- * la marque du point de soudure d'un fil nu sur une broche de son trajet, et celle de ce qui
- * traverse une plaque à deux faces (voir boardFaces.ts). Rayon du point de soudure : en
- * épaisseurs de fil.
+ * Bordure avec laquelle un fil se dessine (décision du 18 novembre 2026) : celle de son style
+ * (`wireBorder`, `wireBorderColor`) quand il en définit une, pour tous les fils, nus et ponts
+ * compris. Sans elle, un fil n'a pas de bordure, sauf le fil nu, qui garde son liseré sombre :
+ * en étain sur le papier, on ne le verrait pas.
  */
-export const SOLDER_COLOR = '#f5a524'
-export const SOLDER_EDGE = '#6b3f00'
+export function wireBorder(
+  style: Pick<StyleProfile, 'wireWidth' | 'wireBorder' | 'wireBorderColor'>,
+  wire: Pick<Wire, 'kind'>
+): WireBorder | null {
+  if (style.wireBorder > 0) return { width: style.wireBorder, color: style.wireBorderColor }
+  if (wire.kind !== 'bare') return null
+  return { width: (style.wireWidth * (BARE_WIRE_EDGE_SCALE - 1)) / 2, color: BARE_WIRE_EDGE }
+}
+
+/**
+ * Point de soudure d'un fil nu sur une broche de son trajet (décision du 18 novembre 2026, qui
+ * revient sur le point orange de la veille) : une goutte de la couleur du fil, qui le renfle et
+ * que sa bordure cerne avec lui. Deux touches disent la goutte de métal plutôt qu'un gros
+ * point : une ombre en croissant en bas à droite, un petit reflet en haut à gauche. Rayon de la
+ * goutte : en épaisseurs de fil.
+ */
 export const SOLDER_SCALE = 1.5
+export const SOLDER_SHADE = { color: '#000000', opacity: 0.16 }
+export const SOLDER_GLINT = { color: '#ffffff', opacity: 0.7 }
+
+/** Les deux touches d'une goutte de soudure de rayon `radius`, centrée en (x, y). */
+export function solderMark(
+  x: number,
+  y: number,
+  radius: number
+): {
+  /** L'ombre : un arc, et l'épaisseur de son trait. */
+  shade: string
+  shadeWidth: number
+  /** Le reflet : un petit disque. */
+  glint: { cx: number; cy: number; r: number }
+} {
+  const reach = radius * 0.64
+  // De la droite jusqu'en bas à gauche, en passant par le bas : le côté à l'ombre.
+  const at = (degrees: number): string => {
+    const angle = (degrees * Math.PI) / 180
+    return `${rounded(x + reach * Math.cos(angle))} ${rounded(y + reach * Math.sin(angle))}`
+  }
+  return {
+    shade: `M ${at(-20)} A ${rounded(reach)} ${rounded(reach)} 0 0 1 ${at(115)}`,
+    shadeWidth: rounded(radius * 0.3),
+    glint: {
+      cx: rounded(x - radius * 0.36),
+      cy: rounded(y - radius * 0.36),
+      r: rounded(radius * 0.22)
+    }
+  }
+}
 
 export function isJumper(wire: Pick<Wire, 'kind'>): boolean {
   return wire.kind === 'jumper'
@@ -49,8 +103,6 @@ export function isBare(wire: Pick<Wire, 'kind'>): boolean {
 export function wireKindLabel(kind: WireKind | undefined): string {
   return kind === 'bare' ? 'Fil nu' : kind === 'jumper' ? 'Pont' : 'Fil'
 }
-
-const rounded = (value: number): number => Math.round(value * 1000) / 1000
 
 /** Bombé d'un pont au milieu de sa corde, en cellules : il grandit avec elle, entre deux bornes. */
 function jumperBulge(length: number): number {

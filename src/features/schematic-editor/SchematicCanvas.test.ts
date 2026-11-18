@@ -1132,12 +1132,22 @@ describe('canevas du montage : fil nu et pont', () => {
     const wrapper = mount(SchematicCanvas, { attachTo: document.body })
     await nextTick()
     // Le fil nu : un liseré sombre sous un trait d'étain, et une soudure par broche.
-    const edge = wrapper.get('.wires .wire-edge')
+    const edge = wrapper.get('.wire-borders .wire-border')
     expect(edge.attributes('stroke')).toBe('#59616a')
+    expect(wrapper.findAll('.wire-borders .wire-border')).toHaveLength(1)
     expect(wrapper.get('.wires .wire-bare').attributes('stroke')).toBe('#dfe5ea')
     expect(wrapper.findAll('.solders .solder')).toHaveLength(2)
-    // Une broche soudée se voit : un point de couleur vive, cerné de sombre.
-    expect(wrapper.get('.solders .solder').attributes('fill')).toBe('#f5a524')
+    // Une broche soudée : une goutte de la couleur du fil, avec son ombre et son reflet, cernée
+    // par la bordure du fil, dessous.
+    const drop = wrapper.get('.solders .solder')
+    expect(drop.findAll('circle').map((circle) => circle.attributes('fill'))).toEqual([
+      '#dfe5ea',
+      '#ffffff'
+    ])
+    expect(drop.find('.solder-shade').exists()).toBe(true)
+    expect(
+      wrapper.findAll('.wire-borders circle').map((circle) => circle.attributes('fill'))
+    ).toEqual(['#59616a', '#59616a'])
     // Le pont : une courbe de A à B, dans sa couleur, bombée vers le haut.
     const jumper = wrapper.get('.wires .wire-jumper')
     expect(jumper.attributes('d')).toBe('M 6 1 Q 9 -1.16 12 1')
@@ -1148,7 +1158,63 @@ describe('canevas du montage : fil nu et pont', () => {
     store.setCurrentColor('#b45309')
     await nextTick()
     expect(wrapper.get('.wires .wire-bare').attributes('stroke')).toBe('#b45309')
-    expect(wrapper.get('.wires .wire-edge').attributes('stroke')).toBe('#59616a')
+    expect(wrapper.get('.wire-borders .wire-border').attributes('stroke')).toBe('#59616a')
+    expect(wrapper.get('.solders .solder circle').attributes('fill')).toBe('#b45309')
+    wrapper.unmount()
+  })
+
+  it('le style du montage donne une bordure à tous les fils, sous eux', async () => {
+    const store = useSchematicStore()
+    store.addWire([
+      [0, 2],
+      [8, 2]
+    ])
+    store.addWire(
+      [
+        [0, 4],
+        [8, 4]
+      ],
+      null,
+      'bare'
+    )
+    store.addWire(
+      [
+        [0, 6],
+        [5, 8]
+      ],
+      '#d62828',
+      'jumper'
+    )
+    const wrapper = mount(SchematicCanvas, { attachTo: document.body })
+    await nextTick()
+    // Au départ : pas de bordure, sauf le liseré du fil nu.
+    expect(wrapper.findAll('.wire-borders .wire-border')).toHaveLength(1)
+    store.setProfile({ ...store.profile, wireBorder: 0.05, wireBorderColor: '#1d4ed8' })
+    await nextTick()
+    // Tous les fils ont la bordure du style, fil nu et pont compris : plus large qu'eux de
+    // deux bordures, dans sa couleur.
+    const borders = wrapper.findAll('.wire-borders .wire-border')
+    expect(borders.map((border) => border.attributes('stroke'))).toEqual([
+      '#1d4ed8',
+      '#1d4ed8',
+      '#1d4ed8'
+    ])
+    expect(borders.map((border) => Number(border.attributes('stroke-width')))).toEqual([
+      0.25, 0.25, 0.25
+    ])
+    // Les bordures sont dessinées avant les fils : elles restent dessous.
+    const groups = wrapper.findAll('svg.schematic g').map((group) => group.classes()[0])
+    expect(groups.indexOf('wire-borders')).toBeLessThan(groups.indexOf('wires'))
+    // Un fil sélectionné : son liseré de sélection entoure aussi la bordure.
+    store.selectedWires = [store.doc.wires[0]?.id ?? '']
+    await nextTick()
+    expect(Number(wrapper.get('.wire-selections .ring').attributes('stroke-width'))).toBeCloseTo(
+      0.25 + 9 / 20
+    )
+    // Une annulation retire la bordure.
+    store.undo()
+    await nextTick()
+    expect(wrapper.findAll('.wire-borders .wire-border')).toHaveLength(1)
     wrapper.unmount()
   })
 

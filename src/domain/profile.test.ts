@@ -72,4 +72,23 @@ describe('profil de style et paramètres', () => {
     ])
     expect(sameProfile(custom, DEFAULT_PROFILE)).toBe(false)
   })
+
+  it('compte la bordure des fils avec les fils ; sa couleur ne compte que si elle existe', () => {
+    // Pas de bordure au départ.
+    expect(DEFAULT_PROFILE).toMatchObject({ wireBorder: 0, wireBorderColor: '#000000' })
+    const bordered = { ...DEFAULT_PROFILE, wireBorder: 0.04 }
+    expect(profileDifferences(bordered, DEFAULT_PROFILE)).toEqual(['wires'])
+    expect(profileDifferences({ ...bordered, wireBorderColor: '#1d4ed8' }, bordered)).toEqual([
+      'wires'
+    ])
+    expect(profileDifferences({ ...bordered, wireBorderColor: '#000000' }, bordered)).toEqual([])
+    // Sans bordure, une autre couleur ne change rien au dessin.
+    expect(sameProfile({ ...DEFAULT_PROFILE, wireBorderColor: '#1d4ed8' }, DEFAULT_PROFILE)).toBe(
+      true
+    )
+    // Une bordure ne peut pas être négative.
+    expect(styleProfileSchema.safeParse({ ...DEFAULT_PROFILE, wireBorder: -0.1 }).success).toBe(
+      false
+    )
+  })
 })

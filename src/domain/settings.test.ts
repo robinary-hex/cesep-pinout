@@ -14,7 +14,7 @@ import {
 describe('paramètres', () => {
   it('migre un fichier de version 1 en ajoutant export et copie de secours', () => {
     const settings = parseSettings(settingsV1)
-    expect(settings.schemaVersion).toBe(15)
+    expect(settings.schemaVersion).toBe(16)
     expect(settings.export).toEqual(DEFAULT_EXPORT)
     expect(settings.autosaveSeconds).toBe(DEFAULT_AUTOSAVE_SECONDS)
     // Les anciens dossiers ne sont plus des réglages : le dossier de Pinout reste à choisir.

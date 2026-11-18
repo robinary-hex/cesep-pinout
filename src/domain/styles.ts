@@ -1,7 +1,8 @@
 import type { Junction } from './connectivity'
 import type { GridPoint } from './grid'
 import { profileDifferences, type StyleProfile } from './profile'
-import type { Project } from './project'
+import type { Project, WireKind } from './project'
+import { wireBorder, type WireBorder } from './wireKinds'
 
 // Styles propres (décision du 12 novembre 2026) : dans un même montage, une partie des éléments
 // peut se dessiner avec un autre profil de style que celui du montage. Un élément (composant
@@ -107,19 +108,21 @@ export function restyledLabelSize(size: number, from: StyleProfile, to: StylePro
 export interface JunctionWire extends Styled {
   id: string
   color: string
+  kind?: WireKind | undefined
   points: readonly GridPoint[]
 }
 
 /**
  * Point d'une jonction quand les fils n'ont pas tous le même style : son rayon est le plus grand
  * que demandent les fils qui s'y rejoignent (le fil porteur et ceux dont un bout est là), pour
- * rester visible sur le plus épais ; sa couleur suit le style du fil porteur.
+ * rester visible sur le plus épais ; sa couleur suit le style du fil porteur, sa bordure est
+ * celle de ce fil.
  */
 export function junctionDot(
   junction: Junction,
   wires: readonly JunctionWire[],
   sheet: StyleSheet
-): { radius: number; color: string } {
+): { radius: number; color: string; border: WireBorder | null } {
   const [x, y] = junction.point
   const here = (point: GridPoint | undefined): boolean =>
     point !== undefined && point[0] === x && point[1] === y
@@ -135,5 +138,5 @@ export function junctionDot(
     carrierStyle.junctionColor === 'wire'
       ? (carrier?.color ?? '#000000')
       : carrierStyle.junctionColor
-  return { radius, color }
+  return { radius, color, border: carrier ? wireBorder(carrierStyle, carrier) : null }
 }

@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 25,
+  "name": "Avant la bordure des fils",
+  "profile": {
+    "name": "Standard",
+    "cellPx": 20,
+    "wireWidth": 0.15,
+    "cornerRadius": 0.4,
+    "componentStroke": 0.1,
+    "junctionScale": 2,
+    "junctionColor": "wire",
+    "labelFont": {
+      "family": "Segoe UI",
+      "size": 11
+    },
+    "endLabelFont": {
+      "family": "Segoe UI",
+      "size": 14
+    }
+  },
+  "styles": [
+    {
+      "name": "Épais",
+      "cellPx": 20,
+      "wireWidth": 0.3,
+      "cornerRadius": 0.4,
+      "componentStroke": 0.1,
+      "junctionScale": 2,
+      "junctionColor": "wire",
+      "labelFont": {
+        "family": "Segoe UI",
+        "size": 11
+      },
+      "endLabelFont": {
+        "family": "Segoe UI",
+        "size": 14
+      }
+    }
+  ],
+  "components": [],
+  "wires": [
+    {
+      "id": "w1",
+      "color": "#d62828",
+      "points": [
+        [0, 0],
+        [6, 0]
+      ],
+      "stack": 0,
+      "freeEnds": "flat",
+      "endLabels": {
+        "start": "",
+        "end": ""
+      }
+    },
+    {
+      "id": "w2",
+      "color": "#dfe5ea",
+      "kind": "bare",
+      "points": [
+        [0, 2],
+        [6, 2]
+      ],
+      "stack": 1,
+      "freeEnds": "flat",
+      "endLabels": {
+        "start": "",
+        "end": ""
+      },
+      "style": "Épais"
+    }
+  ],
+  "crossingOverrides": [],
+  "labels": [],
+  "customColors": [],
+  "embeddedDefs": {}
+}
