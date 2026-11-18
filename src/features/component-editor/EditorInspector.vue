@@ -11,8 +11,7 @@ import {
   pinSections,
   PRIMITIVE_KIND_LABELS,
   QUARTERS_PER_CELL,
-  stretchAxis,
-  stretchCount,
+  stretchCounts,
   stretchedDefinition,
   STROKE_WEIGHTS,
   TEXT_BASE_SIZE_CELLS,
@@ -20,7 +19,10 @@ import {
   turnedTextBox,
   type Arrows,
   type PinKind,
-  type PinSection
+  type PinSection,
+  type StretchAxis,
+  type StretchCounts,
+  type StretchSpan
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import ComponentGraphic from '@/render/ComponentGraphic.vue'
@@ -107,37 +109,39 @@ function setSize(axis: 'widthCells' | 'heightCells', event: Event): void {
   store.setSize({ ...store.shown.size, [axis]: value })
 }
 
-// Composant extensible : le motif entre deux traits, les nombres permis, les modèles particuliers
-// de certains nombres, et un aperçu étiré. Ces réglages sont ceux de la variante affichée, même
-// quand on retouche un de ses modèles.
+// Composant extensible : dans chaque sens où il s'étire, le motif entre deux traits et les nombres
+// permis ; puis les modèles particuliers de certains nombres, et un aperçu étiré. Ces réglages
+// sont ceux de la variante affichée, même quand on retouche un de ses modèles.
 
 const stretch = computed(() => store.shownVariant.stretch ?? null)
 
-/** Sens de l'étirement : en largeur (traits verticaux) ou en hauteur (traits horizontaux). */
-const stretchSense = computed(() => (stretch.value ? stretchAxis(stretch.value) : 'x'))
-
 /**
- * Les trois boutons radio de la section : le composant ne s'étire pas, s'étire à l'horizontale
- * (en largeur) ou à la verticale (en hauteur). Choisir un sens le rend extensible.
+ * Les deux cases de la section (décision du 18 novembre 2026) : le composant s'étire à
+ * l'horizontale (en largeur), à la verticale (en hauteur), dans les deux sens, ou pas du tout.
  */
-type StretchMode = 'off' | 'x' | 'y'
-const STRETCH_MODES: { value: StretchMode; label: string; title: string }[] = [
-  { value: 'off', label: 'Désactivé', title: 'Le composant ne s’étire pas' },
+const STRETCH_SENSES: { axis: StretchAxis; label: string; title: string }[] = [
   {
-    value: 'x',
+    axis: 'x',
     label: 'Horizontal',
     title: 'Le composant posé s’étire en largeur : un début, un motif, une fin'
   },
   {
-    value: 'y',
+    axis: 'y',
     label: 'Vertical',
     title: 'Le composant posé s’étire en hauteur : un haut, un motif, un bas'
   }
 ]
-const stretchMode = computed<StretchMode>(() => (stretch.value ? stretchSense.value : 'off'))
 
-function setStretchMode(mode: StretchMode): void {
-  store.setStretch(mode === 'off' ? null : { axis: mode })
+/** Les sens où le composant s'étire, chacun avec ses réglages. */
+const spans = computed(() =>
+  STRETCH_SENSES.flatMap((sense) => {
+    const span = stretch.value?.[sense.axis]
+    return span ? [{ ...sense, span }] : []
+  })
+)
+
+function setStretchAxis(axis: StretchAxis, event: Event): void {
+  store.setStretchAxis(axis, checked(event))
 }
 
 /** Écrit dans le champ ce que le composant a retenu : une valeur refusée ou ramenée se voit. */
@@ -145,34 +149,36 @@ function showKept(event: Event, value: number): void {
   ;(event.target as HTMLInputElement).value = String(value)
 }
 
-/** Début du motif, en cellules (au quart) : le motif se déplace sans changer de taille. */
-function setMotifStart(event: Event): void {
-  const current = stretch.value
+/** Début du motif d'un sens, en cellules (au quart) : il se déplace sans changer de taille. */
+function setMotifStart(axis: StretchAxis, event: Event): void {
+  const current = stretch.value?.[axis]
   const cells = numberValue(event)
   if (!current) return
   if (Number.isFinite(cells)) {
     const from = Math.round(cells * QUARTERS_PER_CELL)
-    store.setStretch({ from, to: from + current.to - current.from })
+    store.setStretchSpan(axis, { from, to: from + current.to - current.from })
   }
-  showKept(event, (stretch.value?.from ?? 0) / QUARTERS_PER_CELL)
+  showKept(event, (stretch.value?.[axis]?.from ?? 0) / QUARTERS_PER_CELL)
 }
 
-/** Taille du motif dans le sens de l'étirement (largeur ou hauteur), en cellules entières. */
-function setMotifWidth(event: Event): void {
-  const current = stretch.value
+/** Taille du motif d'un sens (sa largeur, ou sa hauteur), en cellules entières. */
+function setMotifSize(axis: StretchAxis, event: Event): void {
+  const current = stretch.value?.[axis]
   const cells = numberValue(event)
   if (!current) return
   if (Number.isFinite(cells)) {
-    store.setStretch({ to: current.from + Math.max(1, Math.round(cells)) * QUARTERS_PER_CELL })
+    store.setStretchSpan(axis, {
+      to: current.from + Math.max(1, Math.round(cells)) * QUARTERS_PER_CELL
+    })
   }
-  const kept = stretch.value
+  const kept = stretch.value?.[axis]
   showKept(event, kept ? (kept.to - kept.from) / QUARTERS_PER_CELL : 1)
 }
 
-function setStretchCount(key: 'initial' | 'min' | 'max', event: Event): void {
+function setStretchCount(axis: StretchAxis, key: 'initial' | 'min' | 'max', event: Event): void {
   const value = numberValue(event)
-  if (Number.isFinite(value)) store.setStretch({ [key]: Math.max(1, Math.round(value)) })
-  showKept(event, stretch.value?.[key] ?? 1)
+  if (Number.isFinite(value)) store.setStretchSpan(axis, { [key]: Math.max(1, Math.round(value)) })
+  showKept(event, stretch.value?.[axis]?.[key] ?? 1)
 }
 
 /** Nombre de motifs auquel sert un modèle ; un nombre déjà pris est refusé, le champ le redit. */
@@ -182,32 +188,40 @@ function setModelCount(count: number, event: Event): void {
   if (store.models.some((model) => model.count === count)) showKept(event, count)
 }
 
-/** Nombre de motifs que montre l'aperçu ; il ne s'enregistre pas. */
-const previewWanted = ref(3)
-const previewCount = computed(() => stretchCount(store.shownVariant, previewWanted.value))
+/** Nombres de motifs que montre l'aperçu, un par sens ; ils ne s'enregistrent pas. */
+const previewWanted = ref<StretchCounts>({ x: 3, y: 3 })
+const previewCounts = computed(() => stretchCounts(store.shownVariant, previewWanted.value))
 
-function setPreviewCount(event: Event): void {
+function setPreviewCount(axis: StretchAxis, event: Event): void {
   const value = numberValue(event)
-  if (Number.isFinite(value)) previewWanted.value = Math.round(value)
-  showKept(event, previewCount.value)
+  if (Number.isFinite(value)) {
+    previewWanted.value = { ...previewWanted.value, [axis]: Math.round(value) }
+  }
+  showKept(event, previewCounts.value[axis])
+}
+
+/** Ce que dit le curseur d'un sens : son nombre de motifs, et son sens s'il y en a deux. */
+function previewLabel(sense: { axis: StretchAxis; label: string }): string {
+  const count = previewCounts.value[sense.axis]
+  return spans.value.length > 1
+    ? `Aperçu ${sense.label.toLowerCase()} à ${count}`
+    : `Aperçu à ${count}`
 }
 
 /** Un cran du curseur par nombre de motifs permis, du minimum au maximum. */
-const previewTicks = computed(() => {
-  const current = stretch.value
-  if (!current) return []
-  return Array.from({ length: current.max - current.min + 1 }, (_, index) => current.min + index)
-})
+function previewTicks(span: StretchSpan): number[] {
+  return Array.from({ length: span.max - span.min + 1 }, (_, index) => span.min + index)
+}
 
 /** Place du dessin dans le cadre de l'aperçu, qui prend la largeur du panneau. */
 const PREVIEW_WIDTH_PX = 236
 /** Hauteur laissée à l'aperçu : plus grande pour un composant qui s'étire vers le bas. */
-const previewHeightPx = computed(() => (stretchSense.value === 'y' ? 240 : 96))
+const previewHeightPx = computed(() => (stretch.value?.y ? 240 : 96))
 
-/** Le composant étiré au nombre de l'aperçu, à l'échelle qui tient dans le panneau. */
+/** Le composant étiré aux nombres de l'aperçu, à l'échelle qui tient dans le panneau. */
 const preview = computed(() => {
   if (!stretch.value) return null
-  const def = stretchedDefinition(store.shownVariant, previewCount.value)
+  const def = stretchedDefinition(store.shownVariant, previewCounts.value)
   const cell = Math.min(
     PREVIEW_WIDTH_PX / def.size.widthCells,
     previewHeightPx.value / def.size.heightCells,
@@ -987,84 +1001,99 @@ function setClosed(event: Event): void {
 
       <section class="block stretch">
         <h3>Étirement</h3>
-        <div class="stretch-modes" role="radiogroup" aria-label="Étirement">
-          <label v-for="mode in STRETCH_MODES" :key="mode.value" class="check" :title="mode.title">
+        <div class="stretch-senses">
+          <label
+            v-for="sense in STRETCH_SENSES"
+            :key="sense.axis"
+            class="check"
+            :title="sense.title"
+          >
             <input
-              type="radio"
-              name="stretch-mode"
-              :value="mode.value"
-              :checked="stretchMode === mode.value"
-              @change="setStretchMode(mode.value)"
+              type="checkbox"
+              :value="sense.axis"
+              :checked="stretch?.[sense.axis] !== undefined"
+              @change="setStretchAxis(sense.axis, $event)"
             />
-            <span>{{ mode.label }}</span>
+            <span>{{ sense.label }}</span>
           </label>
         </div>
         <template v-if="stretch">
-          <div class="row">
-            <label class="field">
-              <span
-                :title="
-                  stretchSense === 'y'
-                    ? 'Trait du haut, en cellules ; se glisse aussi sur le dessin'
-                    : 'Trait de gauche, en cellules ; se glisse aussi sur le dessin'
-                "
-              >
-                Début du motif
-              </span>
-              <input
-                type="number"
-                min="0"
-                step="0.25"
-                :value="stretch.from / QUARTERS_PER_CELL"
-                @change="setMotifStart"
-              />
-            </label>
-            <label class="field">
-              <span title="En cellules entières : ce dont le composant s’allonge à chaque motif">
-                {{ stretchSense === 'y' ? 'Hauteur du motif' : 'Largeur du motif' }}
-              </span>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                :value="(stretch.to - stretch.from) / QUARTERS_PER_CELL"
-                @change="setMotifWidth"
-              />
-            </label>
+          <div
+            v-for="entry in spans"
+            :key="entry.axis"
+            class="stretch-span"
+            :class="`span-${entry.axis}`"
+          >
+            <div v-if="spans.length > 1" class="span-title">{{ entry.label }}</div>
+            <div class="row">
+              <label class="field">
+                <span
+                  :title="
+                    entry.axis === 'y'
+                      ? 'Trait du haut, en cellules ; se glisse aussi sur le dessin'
+                      : 'Trait de gauche, en cellules ; se glisse aussi sur le dessin'
+                  "
+                >
+                  Début du motif
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.25"
+                  :value="entry.span.from / QUARTERS_PER_CELL"
+                  @change="setMotifStart(entry.axis, $event)"
+                />
+              </label>
+              <label class="field">
+                <span title="En cellules entières : ce dont le composant s’allonge à chaque motif">
+                  {{ entry.axis === 'y' ? 'Hauteur du motif' : 'Largeur du motif' }}
+                </span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  :value="(entry.span.to - entry.span.from) / QUARTERS_PER_CELL"
+                  @change="setMotifSize(entry.axis, $event)"
+                />
+              </label>
+            </div>
+            <div class="counts">
+              <label class="field">
+                <span title="Nombre de motifs du composant qu’on vient de poser">Au départ</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  :value="entry.span.initial"
+                  @change="setStretchCount(entry.axis, 'initial', $event)"
+                />
+              </label>
+              <label class="field">
+                <span>Minimum</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  :value="entry.span.min"
+                  @change="setStretchCount(entry.axis, 'min', $event)"
+                />
+              </label>
+              <label class="field">
+                <span>Maximum</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  :value="entry.span.max"
+                  @change="setStretchCount(entry.axis, 'max', $event)"
+                />
+              </label>
+            </div>
           </div>
-          <div class="counts">
-            <label class="field">
-              <span title="Nombre de motifs du composant qu’on vient de poser">Au départ</span>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                :value="stretch.initial"
-                @change="setStretchCount('initial', $event)"
-              />
-            </label>
-            <label class="field">
-              <span>Minimum</span>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                :value="stretch.min"
-                @change="setStretchCount('min', $event)"
-              />
-            </label>
-            <label class="field">
-              <span>Maximum</span>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                :value="stretch.max"
-                @change="setStretchCount('max', $event)"
-              />
-            </label>
-          </div>
-          <div class="block-title models-title">
+          <div
+            v-if="spans.length === 1 || store.models.length > 0"
+            class="block-title models-title"
+          >
             <span
               class="sub-title"
               title="Dessins particuliers pour certains nombres de motifs : ils y remplacent le motif répété"
@@ -1074,7 +1103,12 @@ function setClosed(event: Event): void {
             <button
               type="button"
               class="small with-icon add-model"
-              title="Nouveau modèle : une copie du composant étiré à ce nombre, à retoucher"
+              :disabled="spans.length !== 1"
+              :title="
+                spans.length === 1
+                  ? 'Nouveau modèle : une copie du composant étiré à ce nombre, à retoucher'
+                  : 'Un modèle par nombre ne vaut que pour un composant qui s’étire dans un seul sens'
+              "
               @click="store.addModel()"
             >
               <Icon name="plus" :size="13" /> Modèle
@@ -1116,7 +1150,9 @@ function setClosed(event: Event): void {
                 :title="
                   model.used
                     ? 'Nombre de motifs auquel ce dessin remplace le motif répété'
-                    : 'Hors des nombres permis : ce modèle ne sert pas'
+                    : spans.length > 1
+                      ? 'Le composant s’étire dans les deux sens : ce modèle ne sert pas'
+                      : 'Hors des nombres permis : ce modèle ne sert pas'
                 "
               >
                 <span>Modèle à</span>
@@ -1140,21 +1176,26 @@ function setClosed(event: Event): void {
             </div>
           </div>
           <div v-if="preview" class="stretch-preview">
-            <label class="field preview-count">
+            <label
+              v-for="entry in spans"
+              :key="entry.axis"
+              class="field preview-count"
+              :class="`preview-${entry.axis}`"
+            >
               <span title="Ce que donne le composant étiré ; rien n’est enregistré">
-                Aperçu à {{ previewCount }}
+                {{ previewLabel(entry) }}
               </span>
               <input
                 type="range"
                 step="1"
-                list="stretch-preview-ticks"
-                :min="stretch.min"
-                :max="stretch.max"
-                :value="previewCount"
-                @input="setPreviewCount"
+                :list="`stretch-preview-ticks-${entry.axis}`"
+                :min="entry.span.min"
+                :max="entry.span.max"
+                :value="previewCounts[entry.axis]"
+                @input="setPreviewCount(entry.axis, $event)"
               />
-              <datalist id="stretch-preview-ticks">
-                <option v-for="tick in previewTicks" :key="tick" :value="tick" />
+              <datalist :id="`stretch-preview-ticks-${entry.axis}`">
+                <option v-for="tick in previewTicks(entry.span)" :key="tick" :value="tick" />
               </datalist>
             </label>
             <div class="preview-frame">
@@ -1273,24 +1314,38 @@ function setClosed(event: Event): void {
 </template>
 
 <style scoped>
-/* Composant extensible : trois boutons radio sur une ligne (désactivé, horizontal, vertical),
-   trois nombres côte à côte, puis l'aperçu étiré sur le papier. */
-.stretch-modes {
+/* Composant extensible : deux cases sur une ligne (horizontal, vertical) ; pour chaque sens
+   coché, son motif et trois nombres côte à côte ; puis l'aperçu étiré sur le papier. */
+.stretch-senses {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
+  gap: 4px 18px;
   margin-bottom: 8px;
 }
 
-.stretch-modes .check {
+.stretch-senses .check {
   margin-bottom: 0;
   color: var(--text);
   cursor: pointer;
 }
 
-.stretch-modes input {
+.stretch-senses input {
   margin: 0;
   cursor: pointer;
+}
+
+/* Les deux sens à la fois : chacun a son bloc de réglages, sous son nom. */
+.stretch-span + .stretch-span {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.span-title {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
 }
 
 .stretch .counts {

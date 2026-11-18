@@ -249,7 +249,7 @@ export function boardsCarry(
     } else if (
       instance.defId === moved.defId &&
       instance.variant === moved.variant &&
-      instance.count !== moved.count
+      (instance.countX !== moved.countX || instance.countY !== moved.countY)
     ) {
       // Étirée : ce qu'elle porte dessus reste où il est.
       if (!from.bottom || !to.bottom || from.flip === to.flip) continue

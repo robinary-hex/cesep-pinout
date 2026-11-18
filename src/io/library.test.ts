@@ -180,11 +180,7 @@ describe('bibliothèque sur disque : variantes', () => {
     const def = resistor()
     // À un seul motif, une pièce à part, avec sa propre image.
     def.stretch = {
-      from: 4,
-      to: 12,
-      initial: 1,
-      min: 1,
-      max: 4,
+      x: { from: 4, to: 12, initial: 1, min: 1, max: 4 },
       models: [
         {
           count: 1,

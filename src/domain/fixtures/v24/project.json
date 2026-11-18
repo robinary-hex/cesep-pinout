@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 24,
+  "name": "Avant l'étirement dans les deux sens",
+  "profile": {
+    "name": "Standard",
+    "cellPx": 20,
+    "wireWidth": 0.15,
+    "cornerRadius": 0.4,
+    "componentStroke": 0.1,
+    "junctionScale": 2,
+    "junctionColor": "wire",
+    "labelFont": { "family": "Segoe UI", "size": 11 },
+    "endLabelFont": { "family": "Segoe UI", "size": 14 }
+  },
+  "styles": [],
+  "components": [
+    {
+      "id": "c1",
+      "defId": "bornier",
+      "count": 3,
+      "x": 0,
+      "y": 0,
+      "rotation": 0,
+      "mirror": false,
+      "label": "",
+      "fields": {},
+      "behindWires": true
+    },
+    {
+      "id": "c2",
+      "defId": "bornier",
+      "variant": "v1",
+      "count": 4,
+      "x": 6,
+      "y": 0,
+      "rotation": 0,
+      "mirror": false,
+      "label": "",
+      "fields": {},
+      "behindWires": true
+    },
+    {
+      "id": "c3",
+      "defId": "bornier",
+      "x": 0,
+      "y": 10,
+      "rotation": 0,
+      "mirror": false,
+      "label": "",
+      "fields": {},
+      "behindWires": true
+    }
+  ],
+  "wires": [],
+  "crossingOverrides": [],
+  "labels": [],
+  "customColors": [],
+  "embeddedDefs": {
+    "bornier": {
+      "schemaVersion": 16,
+      "id": "bornier",
+      "name": "Bornier",
+      "category": "Connecteurs",
+      "description": "",
+      "size": { "widthCells": 2, "heightCells": 2 },
+      "visual": { "kind": "drawing", "primitives": [] },
+      "pins": [{ "id": "p1", "name": "1", "kind": "io", "x": 0, "y": 1 }],
+      "stretch": { "axis": "y", "from": 0, "to": 8, "initial": 2, "min": 1, "max": 6 },
+      "variantName": "Debout",
+      "variants": [
+        {
+          "id": "v1",
+          "name": "Couché",
+          "size": { "widthCells": 2, "heightCells": 2 },
+          "visual": { "kind": "drawing", "primitives": [] },
+          "pins": [{ "id": "p1", "name": "1", "kind": "io", "x": 1, "y": 0 }],
+          "stretch": { "from": 0, "to": 8, "initial": 3, "min": 1, "max": 8 }
+        }
+      ]
+    }
+  }
+}

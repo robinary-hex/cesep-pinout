@@ -11,8 +11,10 @@ import {
   DEFAULT_SHAPE_STYLE,
   parseProject,
   serializeProject,
+  textContent,
   withPreviewVariant,
-  type ComponentDefinition
+  type ComponentDefinition,
+  type Primitive
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import { setBridge } from '@/io/bridge'
@@ -1648,7 +1650,7 @@ function header(initial = 3): ComponentDefinition {
     { id: 'p1', name: '1', kind: 'io', x: 1, y: 1 },
     { id: 'fin', name: 'F', kind: 'io', x: 2, y: 1 }
   ]
-  def.stretch = { from: 2, to: 6, initial, min: 1, max: 8 }
+  def.stretch = { x: { from: 2, to: 6, initial, min: 1, max: 8 } }
   return def
 }
 
@@ -1660,7 +1662,7 @@ describe('montage : composants extensibles', () => {
     store.stopPlacing()
     if (!id) throw new Error('pose refusée')
     // Le nombre est écrit dans l'exemplaire : il ne changera pas avec la définition.
-    expect(store.doc.components[0]).toMatchObject({ id, x: 10, y: 10, count: 3 })
+    expect(store.doc.components[0]).toMatchObject({ id, x: 10, y: 10, countX: 3 })
     expect(store.placed[0]?.def.size).toEqual({ widthCells: 4, heightCells: 2 })
     // Trois contacts, puis la broche de repère au bout.
     expect(store.pinRefs.map((pin) => [pin.pinId, ...pin.point])).toEqual([
@@ -1673,7 +1675,8 @@ describe('montage : composants extensibles', () => {
     store.startPlacing(resistor())
     store.placeAt(0, 0)
     store.stopPlacing()
-    expect(store.doc.components[1]?.count).toBeUndefined()
+    expect(store.doc.components[1]?.countX).toBeUndefined()
+    expect(store.doc.components[1]?.countY).toBeUndefined()
   })
 
   it('s’étire par la fin : le début reste, la broche du bout emmène son fil', () => {
@@ -1695,7 +1698,7 @@ describe('montage : composants extensibles', () => {
       store.doc.wires.find((candidate) => candidate.id === wire)?.points
 
     expect(store.setInstanceCount(id, 5)).toBe(true)
-    expect(store.doc.components[0]).toMatchObject({ x: 10, y: 10, count: 5 })
+    expect(store.doc.components[0]).toMatchObject({ x: 10, y: 10, countX: 5 })
     expect(store.undoLabel).toBe('Étirer le composant')
     // Le fil du troisième contact ne bouge pas ; celui du bout suit sa broche, deux cellules plus loin.
     expect(points(onThird)).toEqual([
@@ -1709,7 +1712,7 @@ describe('montage : composants extensibles', () => {
     ])
     // Une seule annulation remet tout.
     store.undo()
-    expect(store.doc.components[0]?.count).toBe(3)
+    expect(store.doc.components[0]?.countX).toBe(3)
     expect(points(onEnd)).toEqual([
       [14, 11],
       [14, 16]
@@ -1741,7 +1744,7 @@ describe('montage : composants extensibles', () => {
     ])
     expect(store.setInstanceCount(id, 5, 'end')).toBe(true)
     // Deux contacts de plus du côté du début : le composant part de deux cellules plus à gauche.
-    expect(store.doc.components[0]).toMatchObject({ x: 8, y: 10, count: 5 })
+    expect(store.doc.components[0]).toMatchObject({ x: 8, y: 10, countX: 5 })
     expect(store.pinRefs.map((pin) => pin.point[0])).toEqual([9, 10, 11, 12, 13, 14])
     expect(store.doc.wires.find((candidate) => candidate.id === wire)?.points).toEqual([
       [11, 11],
@@ -1758,7 +1761,7 @@ describe('montage : composants extensibles', () => {
     store.stopPlacing()
     if (!id || !plain) throw new Error('pose refusée')
     expect(store.setInstanceCount(id, 99)).toBe(true)
-    expect(store.doc.components[0]?.count).toBe(8)
+    expect(store.doc.components[0]?.countX).toBe(8)
     const before = store.doc
     // Déjà au maximum, déjà à ce nombre, ou pas extensible : aucune commande.
     expect(store.setInstanceCount(id, 99)).toBe(false)
@@ -1766,10 +1769,10 @@ describe('montage : composants extensibles', () => {
     expect(store.setInstanceCount(plain, 4)).toBe(false)
     expect(store.doc).toBe(before)
     expect(store.setInstanceCount(id, 0)).toBe(true)
-    expect(store.doc.components[0]?.count).toBe(1)
+    expect(store.doc.components[0]?.countX).toBe(1)
     // Le montage se rouvre avec ses nombres.
     const reread = parseProject(serializeProject(store.doc))
-    expect(reread.components[0]?.count).toBe(1)
+    expect(reread.components[0]?.countX).toBe(1)
   })
 
   it('prend le modèle particulier d’un nombre : étirer passe d’un dessin à l’autre', () => {
@@ -1777,11 +1780,7 @@ describe('montage : composants extensibles', () => {
     const def = header(1)
     // À un seul contact, une pièce à part : trois cellules de large, deux broches.
     def.stretch = {
-      from: 2,
-      to: 6,
-      initial: 1,
-      min: 1,
-      max: 8,
+      x: { from: 2, to: 6, initial: 1, min: 1, max: 8 },
       models: [
         {
           count: 1,
@@ -1799,7 +1798,7 @@ describe('montage : composants extensibles', () => {
     store.stopPlacing()
     if (!id) throw new Error('pose refusée')
     // Posé à un : c'est le modèle qui se dessine, sans qu'on l'ait choisi.
-    expect(store.doc.components[0]).toMatchObject({ count: 1 })
+    expect(store.doc.components[0]).toMatchObject({ countX: 1 })
     expect(store.placed[0]?.def.size.widthCells).toBe(3)
     expect(store.pinRefs.map((pin) => [pin.pinId, ...pin.point])).toEqual([
       ['seul', 11, 11],
@@ -1831,7 +1830,7 @@ describe('montage : composants extensibles', () => {
     const store = useSchematicStore()
     const def = header()
     // Les deux broches sont dans le motif (la deuxième cellule du haut) : elles descendent ensemble.
-    def.stretch = { axis: 'y', from: 2, to: 6, initial: 3, min: 1, max: 8 }
+    def.stretch = { y: { from: 2, to: 6, initial: 3, min: 1, max: 8 } }
     store.startPlacing(def)
     const id = store.placeAt(10, 10)
     store.stopPlacing()
@@ -1840,25 +1839,28 @@ describe('montage : composants extensibles', () => {
     expect(store.pinRefs.map((pin) => [pin.pinId, ...pin.point])).toEqual([
       ['p1', 11, 11],
       ['fin', 12, 11],
-      ['p1#1', 11, 12],
-      ['fin#1', 12, 12],
-      ['p1#2', 11, 13],
-      ['fin#2', 12, 13]
+      ['p1#0.1', 11, 12],
+      ['fin#0.1', 12, 12],
+      ['p1#0.2', 11, 13],
+      ['fin#0.2', 12, 13]
     ])
+    // Son nombre est celui de sa hauteur.
+    expect(store.doc.components[0]).toMatchObject({ countY: 3 })
+    expect(store.doc.components[0]?.countX).toBeUndefined()
     const wire = store.addWire([
       [11, 13],
       [11, 18]
     ])
     // Par le début (le haut) : le bas reste en place, le composant remonte de deux cellules.
     expect(store.setInstanceCount(id, 5, 'end')).toBe(true)
-    expect(store.doc.components[0]).toMatchObject({ x: 10, y: 8, count: 5 })
+    expect(store.doc.components[0]).toMatchObject({ x: 10, y: 8, countY: 5 })
     expect(store.doc.wires.find((candidate) => candidate.id === wire)?.points).toEqual([
       [11, 13],
       [11, 18]
     ])
     // Par la fin : le haut reste, et le fil de la dernière broche la suit vers le bas.
     expect(store.setInstanceCount(id, 6)).toBe(true)
-    expect(store.doc.components[0]).toMatchObject({ x: 10, y: 8, count: 6 })
+    expect(store.doc.components[0]).toMatchObject({ x: 10, y: 8, countY: 6 })
     expect(store.placed[0]?.def.size).toEqual({ widthCells: 2, heightCells: 7 })
   })
 
@@ -1912,7 +1914,107 @@ describe('montage : composants extensibles', () => {
     expect(store.doc.components[0]?.fields).toEqual({ 'Nom 2': 'A', 'Nom 3': 'B' })
     // Une seule annulation remet le nombre et les valeurs.
     store.undo()
-    expect(store.doc.components[0]).toMatchObject({ count: 3, fields: { Nom: 'A', 'Nom 2': 'B' } })
+    expect(store.doc.components[0]).toMatchObject({ countX: 3, fields: { Nom: 'A', 'Nom 2': 'B' } })
+  })
+
+  it('un texte hors du motif et un texte du motif, du même nom : chacun son champ, sa valeur', () => {
+    const store = useSchematicStore()
+    const def = header(2)
+    const pin = (x: number): Primitive => ({
+      kind: 'text',
+      x,
+      y: 0,
+      w: 2,
+      h: 2,
+      text: 'Pin',
+      size: 0.5,
+      anchor: 'middle',
+      color: '#000000',
+      variable: true,
+      defaultValue: 'PIN',
+      unit: '',
+      bold: false,
+      followsRotation: false,
+      italic: false,
+      underline: false,
+      strike: false,
+      vertical: false
+    })
+    // Un « Pin » avant le motif (qui va de 2 à 6 quarts), un autre dedans.
+    def.visual = { kind: 'drawing', primitives: [pin(0), pin(3)] }
+    store.startPlacing(def)
+    const id = store.placeAt(10, 10)
+    store.stopPlacing()
+    if (!id) throw new Error('pose refusée')
+    const drawn = (): ComponentDefinition => store.placed[0]?.def ?? def
+    const names = (): string[] => componentFields(drawn()).map((field) => field.name)
+    /** Ce que montre chaque texte du composant posé, de gauche à droite. */
+    const shown = (): string[] => {
+      const fields = store.doc.components[0]?.fields ?? {}
+      return drawn()
+        .visual.primitives.flatMap((primitive) => (primitive.kind === 'text' ? [primitive] : []))
+        .sort((a, b) => a.x - b.x)
+        .map((primitive) => textContent(primitive, fields))
+    }
+    // Trois textes à l'écran, trois champs : aucun n'en règle deux.
+    expect(names()).toEqual(['Pin', 'Pin 2', 'Pin 3'])
+    expect(shown()).toEqual(['PIN', 'PIN', 'PIN'])
+    store.setInstanceField(id, 'Pin', 'Test')
+    expect(shown()).toEqual(['Test', 'PIN', 'PIN'])
+    store.setInstanceField(id, 'Pin 2', 'A')
+    store.setInstanceField(id, 'Pin 3', 'B')
+    expect(shown()).toEqual(['Test', 'A', 'B'])
+    // Un motif de plus au début : le texte d'avant garde sa valeur, celles des motifs les suivent.
+    store.setInstanceCount(id, 3, 'end')
+    expect(names()).toEqual(['Pin', 'Pin 2', 'Pin 3', 'Pin 4'])
+    expect(store.doc.components[0]?.fields).toEqual({ Pin: 'Test', 'Pin 3': 'A', 'Pin 4': 'B' })
+    expect(shown()).toEqual(['Test', 'PIN', 'A', 'B'])
+  })
+
+  it('s’étire dans les deux sens : un nombre par sens, chacun avec son bout fixe', () => {
+    const store = useSchematicStore()
+    const def = header(2)
+    // La broche du milieu est dans le motif des deux sens ; celle du bout, après le motif de la
+    // largeur, ne se recopie qu'en hauteur.
+    def.stretch = {
+      x: { from: 2, to: 6, initial: 2, min: 1, max: 8 },
+      y: { from: 2, to: 6, initial: 1, min: 1, max: 4 }
+    }
+    store.startPlacing(def)
+    const id = store.placeAt(10, 10)
+    store.stopPlacing()
+    if (!id) throw new Error('pose refusée')
+    // Posé à ses deux nombres de départ.
+    expect(store.doc.components[0]).toMatchObject({ countX: 2, countY: 1 })
+    expect(store.placed[0]?.def.size).toEqual({ widthCells: 3, heightCells: 2 })
+    const wire = store.addWire([
+      [13, 11],
+      [16, 11]
+    ])
+    // Une rangée de plus par le bas : la largeur ne bouge pas.
+    expect(store.setInstanceCount(id, 2, 'start', 'y')).toBe(true)
+    expect(store.doc.components[0]).toMatchObject({ x: 10, y: 10, countX: 2, countY: 2 })
+    expect(store.placed[0]?.def.size).toEqual({ widthCells: 3, heightCells: 3 })
+    expect(store.pinRefs.map((pin) => [pin.pinId, ...pin.point])).toEqual([
+      ['p1', 11, 11],
+      ['p1#1', 12, 11],
+      ['fin', 13, 11],
+      ['p1#0.1', 11, 12],
+      ['p1#1.1', 12, 12],
+      ['fin#0.1', 13, 12]
+    ])
+    // Une colonne de plus par la droite : la broche du bout emmène son fil.
+    expect(store.setInstanceCount(id, 3, 'start', 'x')).toBe(true)
+    expect(store.doc.components[0]).toMatchObject({ x: 10, y: 10, countX: 3, countY: 2 })
+    expect(store.doc.wires.find((candidate) => candidate.id === wire)?.points[0]).toEqual([14, 11])
+    // Sans dire le sens : la largeur. Hors des bornes d'un sens : sa borne.
+    expect(store.setInstanceCount(id, 4)).toBe(true)
+    expect(store.doc.components[0]).toMatchObject({ countX: 4, countY: 2 })
+    expect(store.setInstanceCount(id, 99, 'start', 'y')).toBe(true)
+    expect(store.doc.components[0]).toMatchObject({ countX: 4, countY: 4 })
+    // Le fichier garde les deux nombres.
+    const reread = parseProject(serializeProject(store.doc))
+    expect(reread.components[0]).toMatchObject({ countX: 4, countY: 4 })
   })
 })
 

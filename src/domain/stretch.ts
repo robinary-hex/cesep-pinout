@@ -1,4 +1,5 @@
 import {
+  ownFieldNames,
   renumberPins,
   translatePrimitive,
   type ComponentDefinition,
@@ -8,23 +9,29 @@ import {
   type Pin,
   type Primitive,
   type QuarterPoint,
-  type Stretch
+  type Stretch,
+  type StretchSpan
 } from './component'
 import { QUARTERS_PER_CELL } from './grid'
 
 // Composants extensibles (décision du 17 novembre 2026) : un bornier à deux points qu'on étire à
-// trois, puis à quatre ; un connecteur d'un contact qui en prend huit. Le dessin se coupe en trois
-// par deux traits : un début, un motif, une fin. Étirer, c'est répéter le motif. Les traits sont
-// verticaux quand le composant s'étire en largeur, horizontaux quand il s'étire en hauteur (un
-// haut, un motif, un bas) : un seul sens par dessin, au choix (`axis`, décision du 17 novembre
-// 2026). Tout ce fichier raisonne en largeur ; l'étirement en hauteur est le même, appliqué au
-// dessin dont on a échangé abscisses et ordonnées (`turnedDrawing`), puis remis à l'endroit.
+// trois, puis à quatre ; un connecteur d'un contact qui en prend huit ; une plaque à trous qu'on
+// agrandit. Dans un sens, deux traits coupent le dessin en trois : un début, un motif, une fin.
+// Étirer, c'est répéter le motif. Un dessin s'étire en largeur (`x` : deux traits verticaux), en
+// hauteur (`y` : deux traits horizontaux), ou dans les deux sens à la fois (décision du 18
+// novembre 2026) : chaque sens a alors son motif et son nombre, et les quatre traits coupent le
+// dessin en neuf. Ses coins ne bougent pas, ses bords se répètent dans leur sens, son centre dans
+// les deux.
+//
+// Toute la règle est écrite en largeur ; l'étirement en hauteur est le même, appliqué au dessin
+// dont on a échangé abscisses et ordonnées (`turnedDrawing`), puis remis à l'endroit. Les deux
+// sens s'enchaînent : la largeur d'abord, puis la hauteur du résultat.
 //
 //   - ce qui est à gauche du motif ne bouge pas, ce qui est à droite suit ;
 //   - ce qui tient dans le motif est recopié dans chaque motif, broches comprises ;
 //   - une forme à cheval sur un trait s'allonge (un contour, un texte centré) ;
 //   - une image à cheval est coupée aux traits : seule sa tranche du milieu se répète ;
-//   - chaque copie d'un texte variable a son champ à elle : une valeur par motif.
+//   - chaque copie d'un texte variable a son champ à elle (`ownFieldNames`).
 //
 // Le résultat est un composant comme un autre : tout ce qui dessine ou relie un exemplaire posé
 // passe par `instanceDefinition`, qui rend ce composant étiré, et n'a rien d'autre à savoir.
@@ -34,27 +41,47 @@ export const STRETCH_MAX_COUNT = 64
 
 /** Sens dans lequel un composant s'étire : en largeur ('x') ou en hauteur ('y'). */
 export type StretchAxis = 'x' | 'y'
+export const STRETCH_AXES: readonly StretchAxis[] = ['x', 'y']
 
-/** Sens de l'étirement d'un dessin : en largeur tant que rien d'autre n'est dit. */
-export function stretchAxis(stretch: Pick<Stretch, 'axis'>): StretchAxis {
-  return stretch.axis ?? 'x'
-}
-
-/** Étendue d'une boîte dans le sens où elle s'étire, en cellules : sa largeur, ou sa hauteur. */
-export function stretchExtent(
-  size: ComponentDefinition['size'],
-  stretch: Pick<Stretch, 'axis'>
-): number {
-  return stretchAxis(stretch) === 'y' ? size.heightCells : size.widthCells
+/** Nombre de motifs dans chaque sens ; 1 dans un sens où le composant ne s'étire pas. */
+export interface StretchCounts {
+  x: number
+  y: number
 }
 
 /**
- * Réglages d'un composant qu'on rend extensible : tout son dessin est le motif, de 1 à 12.
- * `extentCells` est son étendue dans le sens voulu (`stretchExtent`).
+ * Nombres de motifs qu'on demande : un par sens (absent ou null : le nombre de départ de ce
+ * sens), ou un seul nombre, pour le premier sens où le composant s'étire.
  */
-export function defaultStretch(extentCells: number, axis: StretchAxis = 'x'): Stretch {
+export type WantedCounts = number | { x?: number | null; y?: number | null } | null | undefined
+
+/** Les sens où un dessin s'étire : en largeur, en hauteur, les deux, ou aucun. */
+export function stretchAxes(stretch: Stretch | null | undefined): StretchAxis[] {
+  return stretch ? STRETCH_AXES.filter((axis) => stretch[axis] !== undefined) : []
+}
+
+/** Le premier sens où un dessin s'étire : en largeur s'il le fait, sinon en hauteur. */
+export function stretchAxis(stretch: Stretch | null | undefined): StretchAxis {
+  return stretchAxes(stretch)[0] ?? 'x'
+}
+
+/**
+ * Le sens d'un dessin qui ne s'étire que dans un sens ; null s'il s'étire dans les deux, ou pas
+ * du tout. Les modèles par nombre ne valent que là : un dessin par nombre de motifs.
+ */
+export function singleAxis(stretch: Stretch | null | undefined): StretchAxis | null {
+  const axes = stretchAxes(stretch)
+  return axes.length === 1 ? (axes[0] ?? null) : null
+}
+
+/** Étendue d'une boîte dans un sens, en cellules : sa largeur, ou sa hauteur. */
+export function stretchExtent(size: ComponentDefinition['size'], axis: StretchAxis): number {
+  return axis === 'y' ? size.heightCells : size.widthCells
+}
+
+/** Réglages d'un sens qu'on vient d'activer : tout le dessin est le motif, de 1 à 12. */
+export function defaultSpan(extentCells: number): StretchSpan {
   return {
-    ...(axis === 'y' ? { axis } : {}),
     from: 0,
     to: Math.max(1, extentCells) * QUARTERS_PER_CELL,
     initial: 1,
@@ -63,66 +90,96 @@ export function defaultStretch(extentCells: number, axis: StretchAxis = 'x'): St
   }
 }
 
+/**
+ * Réglages d'un composant qu'on rend extensible dans un sens : tout son dessin est le motif.
+ * `extentCells` est son étendue dans ce sens (`stretchExtent`).
+ */
+export function defaultStretch(extentCells: number, axis: StretchAxis = 'x'): Stretch {
+  return { [axis]: defaultSpan(extentCells) }
+}
+
 /** Taille du motif, en cellules : ce dont le composant s'allonge à chaque motif de plus. */
-export function motifCells(stretch: Stretch): number {
-  return (stretch.to - stretch.from) / QUARTERS_PER_CELL
+export function motifCells(span: StretchSpan): number {
+  return (span.to - span.from) / QUARTERS_PER_CELL
 }
 
 /**
- * Des réglages ramenés à ce qui est permis : un motif dans la boîte du composant, large d'un
- * nombre entier de cellules (les broches recopiées restent sur la grille) et d'une au moins ; un
- * minimum d'au moins 1, un maximum qui ne le dépasse pas vers le bas, un nombre de départ entre
- * les deux. `widthCells` est l'étendue de la boîte dans le sens de l'étirement
- * (`stretchExtent`) : sa largeur, ou sa hauteur.
+ * Les réglages d'un sens ramenés à ce qui est permis : un motif dans la boîte du composant,
+ * large d'un nombre entier de cellules (les broches recopiées restent sur la grille) et d'une au
+ * moins ; un minimum d'au moins 1, un maximum qui ne le dépasse pas vers le bas, un nombre de
+ * départ entre les deux. `extentCells` est l'étendue de la boîte dans ce sens.
  */
-export function normalizedStretch(stretch: Stretch, widthCells: number): Stretch {
-  const width = Math.max(1, widthCells) * QUARTERS_PER_CELL
+export function normalizedSpan(span: StretchSpan, extentCells: number): StretchSpan {
+  const extent = Math.max(1, extentCells) * QUARTERS_PER_CELL
   const cells = Math.max(
     1,
-    Math.min(Math.round((stretch.to - stretch.from) / QUARTERS_PER_CELL), Math.max(1, widthCells))
+    Math.min(Math.round((span.to - span.from) / QUARTERS_PER_CELL), Math.max(1, extentCells))
   )
-  const span = cells * QUARTERS_PER_CELL
-  const from = Math.max(0, Math.min(Math.round(stretch.from), width - span))
-  const min = Math.max(1, Math.min(Math.round(stretch.min), STRETCH_MAX_COUNT))
-  const max = Math.max(min, Math.min(Math.round(stretch.max), STRETCH_MAX_COUNT))
-  const initial = Math.max(min, Math.min(Math.round(stretch.initial), max))
-  return { ...stretch, from, to: from + span, initial, min, max }
+  const size = cells * QUARTERS_PER_CELL
+  const from = Math.max(0, Math.min(Math.round(span.from), extent - size))
+  const min = Math.max(1, Math.min(Math.round(span.min), STRETCH_MAX_COUNT))
+  const max = Math.max(min, Math.min(Math.round(span.max), STRETCH_MAX_COUNT))
+  const initial = Math.max(min, Math.min(Math.round(span.initial), max))
+  return { from, to: from + size, initial, min, max }
+}
+
+/** Les réglages d'un composant extensible, chaque sens ramené à ce que sa boîte permet. */
+export function normalizedStretch(stretch: Stretch, size: ComponentDefinition['size']): Stretch {
+  const next: Stretch = { ...stretch }
+  for (const axis of STRETCH_AXES) {
+    const span = stretch[axis]
+    if (span) next[axis] = normalizedSpan(span, stretchExtent(size, axis))
+  }
+  return next
 }
 
 /**
- * Nombre de motifs d'un composant : celui qu'on demande, ramené entre ses bornes ; sans demande,
+ * Nombre de motifs dans un sens : celui qu'on demande, ramené entre ses bornes ; sans demande,
+ * son nombre de départ. Toujours 1 dans un sens où le composant ne s'étire pas.
+ */
+export function spanCount(span: StretchSpan | undefined, count: number | null | undefined): number {
+  if (!span) return 1
+  const wanted = count === null || count === undefined ? span.initial : Math.round(count)
+  return Math.max(span.min, Math.min(wanted, span.max, STRETCH_MAX_COUNT))
+}
+
+/** Nombres de motifs d'un composant dans chaque sens, ramenés entre ses bornes. */
+export function stretchCounts(
+  def: Pick<ComponentDefinition, 'stretch'>,
+  wanted?: WantedCounts
+): StretchCounts {
+  const stretch = def.stretch
+  const asked = typeof wanted === 'number' ? { [stretchAxis(stretch)]: wanted } : (wanted ?? {})
+  return { x: spanCount(stretch?.x, asked.x), y: spanCount(stretch?.y, asked.y) }
+}
+
+/**
+ * Nombre de motifs d'un composant dans son premier sens, ramené entre ses bornes ; sans demande,
  * son nombre de départ. Toujours 1 pour un composant qui n'est pas extensible.
  */
 export function stretchCount(
   def: Pick<ComponentDefinition, 'stretch'>,
-  count: number | null | undefined
+  count?: number | null
 ): number {
-  const stretch = def.stretch
-  if (!stretch) return 1
-  const wanted = count === null || count === undefined ? stretch.initial : Math.round(count)
-  return Math.max(stretch.min, Math.min(wanted, stretch.max, STRETCH_MAX_COUNT))
-}
-
-/** Identifiant de la copie d'une broche du motif : la première garde le sien. */
-export function stretchPinId(id: string, copy: number): string {
-  return copy === 0 ? id : `${id}#${copy}`
+  return stretchCounts(def, count)[stretchAxis(def.stretch)]
 }
 
 /**
- * Nom du champ de la copie d'un texte variable du motif : la première garde le sien, les
- * suivantes le font suivre de leur rang (« Nom », « Nom 2 », « Nom 3 »). Chaque copie a ainsi
- * sa valeur à elle dans le composant posé (décision du 17 novembre 2026).
+ * Identifiant de la copie d'une broche du motif : la première garde le sien. `x` est le rang
+ * de sa copie en largeur, `y` en hauteur : « p1#2 » en largeur seule, « p1#2.1 » dès qu'elle
+ * est aussi recopiée en hauteur.
  */
-export function stretchFieldName(name: string, copy: number): string {
-  return copy === 0 ? name : `${name} ${copy + 1}`
+export function stretchPinId(id: string, x: number, y = 0): string {
+  if (y > 0) return `${id}#${x}.${y}`
+  return x === 0 ? id : `${id}#${x}`
 }
 
-/** D'où vient une broche d'un composant étiré : la broche du dessin, et le rang de son motif. */
-export function stretchPinSource(id: string): { base: string; copy: number } {
-  const match = /^(.*)#(\d+)$/.exec(id)
+/** D'où vient une broche d'un composant étiré : la broche du dessin, et le rang de sa copie. */
+export function stretchPinSource(id: string): { base: string; x: number; y: number } {
+  const match = /^(.*)#(\d+)(?:\.(\d+))?$/.exec(id)
   return match?.[1] !== undefined && match[2] !== undefined
-    ? { base: match[1], copy: Number(match[2]) }
-    : { base: id, copy: 0 }
+    ? { base: match[1], x: Number(match[2]), y: match[3] === undefined ? 0 : Number(match[3]) }
+    : { base: id, x: 0, y: 0 }
 }
 
 type Zone = 'before' | 'motif' | 'after' | 'across'
@@ -133,8 +190,8 @@ type Zone = 'before' | 'motif' | 'after' | 'across'
  * jusqu'avant celui de droite : posé pile sur le trait de droite, il est à la fin. Un trait de
  * séparation sur le trait de gauche se retrouve ainsi une fois à chaque motif, jamais en double.
  */
-function zoneOf(x1: number, x2: number, stretch: Stretch): Zone {
-  const { from, to } = stretch
+function zoneOf(x1: number, x2: number, span: StretchSpan): Zone {
+  const { from, to } = span
   if (x1 === x2) return x1 < from ? 'before' : x1 < to ? 'motif' : 'after'
   if (x1 >= from && x2 <= to) return 'motif'
   if (x2 <= from) return 'before'
@@ -167,16 +224,16 @@ function extent(primitive: Primitive): [number, number] {
  * Où va une abscisse d'une forme qui s'allonge : inchangée avant le motif, décalée de tout
  * l'allongement après lui, et en proportion à l'intérieur.
  */
-function stretchedX(x: number, stretch: Stretch, count: number): number {
-  const { from, to } = stretch
+function stretchedX(x: number, span: StretchSpan, count: number): number {
+  const { from, to } = span
   if (x <= from) return x
   if (x >= to) return x + (count - 1) * (to - from)
   return from + (x - from) * count
 }
 
 /** Tranches d'une image à cheval sur un trait : avant le motif, dans le motif (répétée), après. */
-function slicedImage(image: ImagePrimitive, stretch: Stretch, count: number): ImagePrimitive[] {
-  const { from, to } = stretch
+function slicedImage(image: ImagePrimitive, span: StretchSpan, count: number): ImagePrimitive[] {
+  const { from, to } = span
   const period = to - from
   const whole = image.crop ?? { x: 0, w: 1 }
   const end = image.x + image.w
@@ -201,65 +258,79 @@ function slicedImage(image: ImagePrimitive, stretch: Stretch, count: number): Im
   return parts
 }
 
-/** Ce qu'une forme devient dans un composant étiré à `count` motifs : elle-même, ou ses copies. */
-function stretchedPrimitive(primitive: Primitive, stretch: Stretch, count: number): Primitive[] {
-  const period = stretch.to - stretch.from
+/**
+ * Un morceau d'un dessin étiré : la forme, et le rang de sa copie dans le motif (null pour ce
+ * que le motif ne recopie pas : avant lui, après lui, ou à cheval sur un trait).
+ */
+interface Piece {
+  primitive: Primitive
+  copy: number | null
+}
+
+/** Ce qu'une forme devient dans un dessin étiré à `count` motifs : elle-même, ou ses copies. */
+function stretchedPrimitive(primitive: Primitive, span: StretchSpan, count: number): Piece[] {
+  const period = span.to - span.from
   const [x1, x2] = extent(primitive)
-  const zone = zoneOf(x1, x2, stretch)
-  if (zone === 'before') return [primitive]
-  if (zone === 'after') return [translatePrimitive(primitive, (count - 1) * period, 0)]
+  const zone = zoneOf(x1, x2, span)
   if (zone === 'motif') {
-    return Array.from({ length: count }, (_, k) => {
-      if (k === 0) return primitive
-      const copy = translatePrimitive(primitive, k * period, 0)
-      // Chaque copie d'un texte variable a son champ : une valeur par motif.
-      return copy.kind === 'text' && copy.variable
-        ? { ...copy, text: stretchFieldName(copy.text, k) }
-        : copy
-    })
+    return Array.from({ length: count }, (_, k) => ({
+      primitive: k === 0 ? primitive : translatePrimitive(primitive, k * period, 0),
+      copy: k
+    }))
   }
-  const at = (x: number): number => stretchedX(x, stretch, count)
+  const one = (shape: Primitive): Piece[] => [{ primitive: shape, copy: null }]
+  // À un seul motif rien ne bouge, et une image n'est pas coupée.
+  if (count === 1 || zone === 'before') return one(primitive)
+  if (zone === 'after') return one(translatePrimitive(primitive, (count - 1) * period, 0))
+  const at = (x: number): number => stretchedX(x, span, count)
   switch (primitive.kind) {
     // Une grille de trous à cheval s'élargit comme un contour : elle a plus de trous.
     case 'rect':
     case 'text':
     case 'holes': {
       const x = at(primitive.x)
-      return [{ ...primitive, x, w: at(primitive.x + primitive.w) - x }]
+      return one({ ...primitive, x, w: at(primitive.x + primitive.w) - x })
     }
     case 'ellipse': {
       const left = at(primitive.cx - primitive.rx)
       const right = at(primitive.cx + primitive.rx)
-      return [{ ...primitive, cx: (left + right) / 2, rx: (right - left) / 2 }]
+      return one({ ...primitive, cx: (left + right) / 2, rx: (right - left) / 2 })
     }
     case 'line':
-      return [{ ...primitive, x1: at(primitive.x1), x2: at(primitive.x2) }]
+      return one({ ...primitive, x1: at(primitive.x1), x2: at(primitive.x2) })
     case 'polyline':
-      return [{ ...primitive, points: primitive.points.map(([x, y]): QuarterPoint => [at(x), y]) }]
+      return one({
+        ...primitive,
+        points: primitive.points.map(([x, y]): QuarterPoint => [at(x), y])
+      })
     case 'image':
-      return slicedImage(primitive, stretch, count)
+      return slicedImage(primitive, span, count).map((slice) => ({ primitive: slice, copy: null }))
     case 'dot':
-      return [primitive]
+      return one(primitive)
   }
 }
 
 /**
- * Broches d'un composant étiré : celles d'avant le motif, puis celles de chaque motif l'un après
- * l'autre, puis celles d'après. Les numéros suivent cet ordre, comme toujours.
+ * Broches d'un dessin étiré : celles d'avant le motif, puis celles de chaque motif l'un après
+ * l'autre, puis celles d'après. Les numéros suivent cet ordre, comme toujours. `copyId` nomme la
+ * copie d'une broche du motif d'après son rang.
  */
-function stretchedPins(pins: readonly Pin[], stretch: Stretch, count: number): Pin[] {
-  const period = motifCells(stretch)
+function stretchedPins(
+  pins: readonly Pin[],
+  span: StretchSpan,
+  count: number,
+  copyId: (id: string, copy: number) => string
+): Pin[] {
+  const period = motifCells(span)
   const zone = (pin: Pin): Zone => {
     const x = pin.x * QUARTERS_PER_CELL
-    return zoneOf(x, x, stretch)
+    return zoneOf(x, x, span)
   }
   const before = pins.filter((pin) => zone(pin) === 'before')
   const motif = pins.filter((pin) => zone(pin) === 'motif')
   const after = pins.filter((pin) => zone(pin) === 'after')
   const copies = Array.from({ length: count }, (_, k) =>
-    motif.map((pin) =>
-      k === 0 ? pin : { ...pin, id: stretchPinId(pin.id, k), x: pin.x + k * period }
-    )
+    motif.map((pin) => (k === 0 ? pin : { ...pin, id: copyId(pin.id, k), x: pin.x + k * period }))
   ).flat()
   return renumberPins([
     ...before,
@@ -332,72 +403,143 @@ function turnedDrawing(drawing: Drawing): Drawing {
 }
 
 /**
- * Dessin d'un composant dont le motif est répété `n` fois dans son sens : sa taille, ses formes,
- * ses broches. Avec `wholeImages`, une image à cheval sur un trait n'est pas coupée : elle reste
- * entière, à sa place (le dessin de départ d'un modèle particulier).
+ * D'où vient une forme d'un dessin étiré : son rang dans le dessin d'origine, et le rang de sa
+ * copie dans chaque sens (null là où le motif ne la recopie pas). C'est ce qui permet de suivre
+ * un texte variable d'un étirement à l'autre, quel que soit le nom que porte son champ.
  */
-function repeatedDrawing(def: Drawing, stretch: Stretch, n: number, wholeImages = false): Drawing {
-  if (stretchAxis(stretch) === 'y') {
-    return turnedDrawing(repeatedAcross(turnedDrawing(def), stretch, n, wholeImages))
-  }
-  return repeatedAcross(def, stretch, n, wholeImages)
+interface Origin {
+  source: number
+  x: number | null
+  y: number | null
 }
 
-/** Le dessin dont le motif est répété `n` fois en largeur. */
-function repeatedAcross(def: Drawing, stretch: Stretch, n: number, wholeImages: boolean): Drawing {
+/** Un dessin étiré, et l'origine de chacune de ses formes. */
+interface Parts {
+  drawing: Drawing
+  origins: Origin[]
+}
+
+/** Le dessin dont le motif est répété `n` fois en largeur ; `axis` : le sens que cela représente. */
+function repeatedAcross(
+  parts: Parts,
+  span: StretchSpan,
+  n: number,
+  wholeImages: boolean,
+  axis: StretchAxis
+): Parts {
+  const def = parts.drawing
   const kept = (primitive: Primitive): boolean =>
     wholeImages &&
     primitive.kind === 'image' &&
-    zoneOf(primitive.x, primitive.x + primitive.w, stretch) === 'across'
+    zoneOf(primitive.x, primitive.x + primitive.w, span) === 'across'
+  // Une broche recopiée en hauteur l'a peut-être déjà été en largeur : son nom garde ce rang-là.
+  const copyId = (id: string, copy: number): string => {
+    if (axis === 'x') return stretchPinId(id, copy)
+    const source = stretchPinSource(id)
+    return stretchPinId(source.base, source.x, copy)
+  }
+  const primitives: Primitive[] = []
+  const origins: Origin[] = []
+  def.visual.primitives.forEach((primitive, index) => {
+    const origin = parts.origins[index] ?? { source: index, x: null, y: null }
+    const pieces: Piece[] = kept(primitive)
+      ? [{ primitive, copy: null }]
+      : stretchedPrimitive(primitive, span, n)
+    for (const piece of pieces) {
+      primitives.push(piece.primitive)
+      origins.push({ ...origin, [axis]: piece.copy })
+    }
+  })
   return {
-    size: {
-      widthCells: def.size.widthCells + (n - 1) * motifCells(stretch),
-      heightCells: def.size.heightCells
+    drawing: {
+      size: {
+        widthCells: def.size.widthCells + (n - 1) * motifCells(span),
+        heightCells: def.size.heightCells
+      },
+      visual: { kind: 'drawing', primitives },
+      // À un seul motif rien ne bouge : les broches gardent leur ordre, donc leurs numéros.
+      pins: n === 1 ? def.pins : stretchedPins(def.pins, span, n, copyId)
     },
-    visual: {
-      kind: 'drawing',
-      primitives: def.visual.primitives.flatMap((primitive) =>
-        kept(primitive) ? [primitive] : stretchedPrimitive(primitive, stretch, n)
-      )
-    },
-    // À un seul motif rien ne bouge : les broches gardent leur ordre, donc leurs numéros.
-    pins: n === 1 ? def.pins : stretchedPins(def.pins, stretch, n)
+    origins
   }
 }
 
-const stretched = new WeakMap<ComponentDefinition, Map<number, ComponentDefinition>>()
+/**
+ * Dessin d'un composant dont le motif est répété dans chaque sens où il s'étire : la largeur
+ * d'abord, puis la hauteur du résultat. Avec `wholeImages`, une image à cheval sur un trait
+ * n'est pas coupée : elle reste entière, à sa place (le dessin de départ d'un modèle
+ * particulier).
+ */
+function repeatedDrawing(
+  def: Drawing,
+  stretch: Stretch,
+  counts: StretchCounts,
+  wholeImages = false
+): Parts {
+  let parts: Parts = {
+    drawing: { size: def.size, visual: def.visual, pins: def.pins },
+    origins: def.visual.primitives.map((_, source) => ({ source, x: null, y: null }))
+  }
+  if (stretch.x) parts = repeatedAcross(parts, stretch.x, counts.x, wholeImages, 'x')
+  if (stretch.y) {
+    const turned = repeatedAcross(
+      { drawing: turnedDrawing(parts.drawing), origins: parts.origins },
+      stretch.y,
+      counts.y,
+      wholeImages,
+      'y'
+    )
+    parts = { drawing: turnedDrawing(turned.drawing), origins: turned.origins }
+  }
+  return parts
+}
+
+/** Le modèle particulier qui vaut à ces nombres : il n'y en a que pour un seul sens. */
+function modelFor(stretch: Stretch, counts: StretchCounts): CountModel | undefined {
+  const axis = singleAxis(stretch)
+  return axis ? stretch.models?.find((candidate) => candidate.count === counts[axis]) : undefined
+}
+
+const posed = new WeakMap<ComponentDefinition, Map<string, ComponentDefinition>>()
 
 /**
- * Le composant tel qu'il se dessine avec `count` motifs (son nombre de départ si rien n'est
- * demandé) : même identité, mais la taille, les formes et les broches étirées. Un nombre qui a
- * son modèle particulier (`stretch.models`) prend ce dessin-là au lieu du motif répété. Pour un
- * composant qui n'est pas extensible, ou à un seul motif sans modèle, c'est le composant
- * lui-même. Le résultat est gardé : pour un même composant et un même nombre, le même objet.
+ * Le composant tel qu'on le pose : étiré à ses nombres de motifs (ceux de départ si rien n'est
+ * demandé), et chaque texte variable avec son champ à lui (`ownFieldNames`). Même identité, mais
+ * la taille, les formes et les broches étirées. Un nombre qui a son modèle particulier
+ * (`stretch.models`, pour un composant qui ne s'étire que dans un sens) prend ce dessin-là au
+ * lieu du motif répété. Quand rien ne change (pas extensible, ou un seul motif, et pas deux
+ * textes variables du même nom), c'est le composant lui-même. Le résultat est gardé : pour un
+ * même composant et les mêmes nombres, le même objet.
  */
 export function stretchedDefinition(
   def: ComponentDefinition,
-  count?: number | null
+  wanted?: WantedCounts
 ): ComponentDefinition {
-  const stretch = def.stretch
-  if (!stretch) return def
-  const n = stretchCount(def, count)
-  const model = stretch.models?.find((candidate) => candidate.count === n)
-  if (n === 1 && !model) return def
-  let cache = stretched.get(def)
+  const counts = stretchCounts(def, wanted)
+  const key = `${counts.x}:${counts.y}`
+  let cache = posed.get(def)
   if (!cache) {
     cache = new Map()
-    stretched.set(def, cache)
+    posed.set(def, cache)
   }
-  let resolved = cache.get(n)
+  let resolved = cache.get(key)
   if (!resolved) {
+    const stretch = def.stretch
+    const model = stretch ? modelFor(stretch, counts) : undefined
+    let drawn = def
     if (model) {
-      resolved = { ...def, size: model.size, visual: model.visual, pins: model.pins }
-      if (model.pinGroups) resolved.pinGroups = model.pinGroups
-      else delete resolved.pinGroups
-    } else {
-      resolved = { ...def, ...repeatedDrawing(def, stretch, n) }
+      drawn = { ...def, size: model.size, visual: model.visual, pins: model.pins }
+      if (model.pinGroups) drawn.pinGroups = model.pinGroups
+      else delete drawn.pinGroups
+    } else if (stretch && (counts.x > 1 || counts.y > 1)) {
+      drawn = { ...def, ...repeatedDrawing(def, stretch, counts).drawing }
     }
-    cache.set(n, resolved)
+    const named = ownFieldNames(drawn.visual.primitives)
+    resolved =
+      named === drawn.visual.primitives
+        ? drawn
+        : { ...drawn, visual: { kind: 'drawing', primitives: [...named] } }
+    cache.set(key, resolved)
   }
   return resolved
 }
@@ -405,29 +547,38 @@ export function stretchedDefinition(
 // Modèles par nombre (décision du 17 novembre 2026) : pour certains nombres de motifs, un dessin
 // à part remplace le motif répété (une pièce à un seul point, moulée d'un bloc, n'a pas l'allure
 // d'un bout de barrette). On ne le choisit pas en posant le composant : c'est le nombre qui le
-// désigne, donc étirer le composant passe de l'un à l'autre.
+// désigne, donc étirer le composant passe de l'un à l'autre. Ils ne valent que pour un composant
+// qui s'étire dans un seul sens : dans les deux, il faudrait un dessin par couple de nombres.
 
 /**
  * Dessin de départ du modèle particulier d'un nombre de motifs : le composant tel que son motif
  * répété le dessine à ce nombre, à retoucher ensuite. Une image que l'étirement couperait y
  * revient entière, à sa place : une tranche ne se retouche pas, et un modèle a le plus souvent
  * son image à lui. Les broches gardent les identifiants qu'elles ont dans le composant étiré.
- * Null pour un composant qui n'est pas extensible.
+ * Null pour un composant qui ne s'étire pas dans un seul sens.
  */
 export function modelDrawing(def: ComponentDefinition, count: number): CountModel | null {
   const stretch = def.stretch
-  if (!stretch) return null
+  const axis = singleAxis(stretch)
+  if (!stretch || !axis) return null
   const n = Math.max(1, Math.min(Math.round(count), STRETCH_MAX_COUNT))
-  const model: CountModel = { count: n, ...repeatedDrawing(def, stretch, n, true) }
+  const counts: StretchCounts = { x: 1, y: 1, [axis]: n }
+  const model: CountModel = { count: n, ...repeatedDrawing(def, stretch, counts, true).drawing }
   if (def.pinGroups) model.pinGroups = def.pinGroups
   return model
 }
 
-/** Premier nombre de motifs permis qui n'a pas encore son modèle ; null s'ils l'ont tous. */
+/**
+ * Premier nombre de motifs permis qui n'a pas encore son modèle ; null s'ils l'ont tous, ou si le
+ * composant ne s'étire pas dans un seul sens.
+ */
 export function freeModelCount(stretch: Stretch): number | null {
+  const axis = singleAxis(stretch)
+  const span = axis ? stretch[axis] : undefined
+  if (!span) return null
   const taken = new Set((stretch.models ?? []).map((model) => model.count))
-  const max = Math.min(stretch.max, STRETCH_MAX_COUNT)
-  for (let n = stretch.min; n <= max; n++) if (!taken.has(n)) return n
+  const max = Math.min(span.max, STRETCH_MAX_COUNT)
+  for (let n = span.min; n <= max; n++) if (!taken.has(n)) return n
   return null
 }
 
@@ -460,32 +611,35 @@ export function modelDefinition(
   return resolved
 }
 
-/** Quel bout d'un composant étiré reste en place : son début (à gauche du dessin) ou sa fin. */
+/** Quel bout d'un composant étiré reste en place : son début (à gauche, ou en haut) ou sa fin. */
 export type StretchEnd = 'start' | 'end'
 
 /**
- * Correspondance des broches quand un composant passe de `before` à `after` motifs : identifiant
- * avant → identifiant après. Les broches du début et de la fin gardent le leur. Celles des motifs
- * aussi quand c'est le début qui reste en place : on ajoute ou on retire des motifs à la fin.
- * Quand c'est la fin qui reste, les motifs se comptent depuis elle : le dernier reste le dernier.
- * Une broche qui disparaît n'a pas de correspondante. Si l'un des deux nombres a son modèle
- * particulier, les identifiants ne se répondent plus : les broches se suivent alors par leur
- * rang, compté depuis le bout qui reste en place.
+ * Correspondance des broches quand un composant passe de `before` à `after` motifs dans un sens
+ * (`axis` ; sans lui, son premier sens) : identifiant avant → identifiant après. Les broches du
+ * début et de la fin gardent le leur. Celles des motifs aussi quand c'est le début qui reste en
+ * place : on ajoute ou on retire des motifs à la fin. Quand c'est la fin qui reste, les motifs se
+ * comptent depuis elle : le dernier reste le dernier. Une broche qui disparaît n'a pas de
+ * correspondante. Si l'un des deux nombres a son modèle particulier, les identifiants ne se
+ * répondent plus : les broches se suivent alors par leur rang, compté depuis le bout qui reste
+ * en place.
  */
 export function stretchPinMap(
   def: ComponentDefinition,
-  before: number,
-  after: number,
-  fixed: StretchEnd
+  before: WantedCounts,
+  after: WantedCounts,
+  fixed: StretchEnd,
+  axis: StretchAxis = stretchAxis(def.stretch)
 ): Map<string, string> {
   const map = new Map<string, string>()
   const stretch = def.stretch
-  if (!stretch) return map
-  const pinsBefore = stretchedDefinition(def, before).pins
-  const pinsAfter = stretchedDefinition(def, after).pins
-  const hasModel = (count: number): boolean =>
-    stretch.models?.some((candidate) => candidate.count === count) ?? false
-  if (hasModel(before) || hasModel(after)) {
+  const span = stretch?.[axis]
+  if (!stretch || !span) return map
+  const from = stretchCounts(def, before)
+  const to = stretchCounts(def, after)
+  const pinsBefore = stretchedDefinition(def, from).pins
+  const pinsAfter = stretchedDefinition(def, to).pins
+  if (modelFor(stretch, from) || modelFor(stretch, to)) {
     const shift = fixed === 'start' ? 0 : pinsAfter.length - pinsBefore.length
     pinsBefore.forEach((pin, index) => {
       const target = pinsAfter[index + shift]
@@ -494,78 +648,88 @@ export function stretchPinMap(
     return map
   }
   const known = new Set(pinsAfter.map((pin) => pin.id))
-  const vertical = stretchAxis(stretch) === 'y'
   const motif = new Set(
     def.pins
       .filter((pin) => {
-        const along = (vertical ? pin.y : pin.x) * QUARTERS_PER_CELL
-        return zoneOf(along, along, stretch) === 'motif'
+        const along = (axis === 'y' ? pin.y : pin.x) * QUARTERS_PER_CELL
+        return zoneOf(along, along, span) === 'motif'
       })
       .map((pin) => pin.id)
   )
-  const shift = fixed === 'start' ? 0 : after - before
+  const shift = fixed === 'start' ? 0 : to[axis] - from[axis]
   for (const pin of pinsBefore) {
     const source = stretchPinSource(pin.id)
-    const target = motif.has(source.base)
-      ? source.copy + shift >= 0
-        ? stretchPinId(source.base, source.copy + shift)
-        : null
-      : pin.id
+    let target: string | null = pin.id
+    if (motif.has(source.base)) {
+      const rank = source[axis] + shift
+      target =
+        rank >= 0
+          ? stretchPinId(
+              source.base,
+              axis === 'x' ? rank : source.x,
+              axis === 'y' ? rank : source.y
+            )
+          : null
+    }
     if (target !== null && known.has(target)) map.set(pin.id, target)
   }
   return map
 }
 
-/** Noms des champs que le motif recopie : ses textes variables, tels que le dessin les nomme. */
-function motifFieldNames(def: ComponentDefinition, stretch: Stretch): string[] {
-  const vertical = stretchAxis(stretch) === 'y'
-  const names = def.visual.primitives.flatMap((primitive) => {
-    if (primitive.kind !== 'text' || !primitive.variable) return []
-    const [from, to] = extent(vertical ? turnedPrimitive(primitive) : primitive)
-    return zoneOf(from, to, stretch) === 'motif' ? [primitive.text] : []
+/** Les textes variables d'un composant étiré : d'où vient chacun, et le nom de son champ. */
+function posedFields(
+  def: ComponentDefinition,
+  stretch: Stretch,
+  counts: StretchCounts
+): { origin: Origin; name: string }[] {
+  const parts = repeatedDrawing(def, stretch, counts)
+  return ownFieldNames(parts.drawing.visual.primitives).flatMap((primitive, index) => {
+    const origin = parts.origins[index]
+    return primitive.kind === 'text' && primitive.variable && origin
+      ? [{ origin, name: primitive.text }]
+      : []
   })
-  return [...new Set(names)]
 }
 
 /**
- * Valeurs des champs d'un composant posé qui passe de `before` à `after` motifs. Les valeurs des
- * textes variables du motif suivent leur motif, comme les broches : rien ne change quand c'est le
- * début qui reste en place (les motifs s'ajoutent ou se retirent à la fin) ; quand c'est la fin
- * qui reste, les motifs se comptent depuis elle, et chaque valeur change de rang avec le sien.
- * Celle d'un motif retiré est perdue. Rend les mêmes valeurs (le même objet) si rien ne bouge,
- * et quand l'un des deux nombres a son modèle particulier : ses champs sont les siens.
+ * Valeurs des champs d'un composant posé qui passe de `before` à `after` motifs dans un sens
+ * (`axis` ; sans lui, son premier sens). Chaque valeur suit son texte, quel que soit le nom que
+ * prend son champ : les textes de même nom sont numérotés dans l'ordre de lecture, et ce rang
+ * change quand des motifs s'ajoutent ou se retirent avant eux. Quand c'est le début qui reste en
+ * place, les motifs s'ajoutent ou se retirent à la fin ; quand c'est la fin, ils se comptent
+ * depuis elle. La valeur d'un motif retiré est perdue. Rend les mêmes valeurs (le même objet) si
+ * rien ne bouge, et quand l'un des deux nombres a son modèle particulier : ses champs sont les
+ * siens.
  */
 export function restretchedFields(
   def: ComponentDefinition,
   fields: FieldValues,
-  before: number,
-  after: number,
-  fixed: StretchEnd
+  before: WantedCounts,
+  after: WantedCounts,
+  fixed: StretchEnd,
+  axis: StretchAxis = stretchAxis(def.stretch)
 ): FieldValues {
   const stretch = def.stretch
-  const shift = after - before
-  if (!stretch || fixed === 'start' || shift === 0) return fields
-  if (stretch.models?.some((model) => model.count === before || model.count === after)) {
-    return fields
-  }
-  const names = motifFieldNames(def, stretch)
+  if (!stretch?.[axis]) return fields
+  const from = stretchCounts(def, before)
+  const to = stretchCounts(def, after)
+  if (from[axis] === to[axis]) return fields
+  if (modelFor(stretch, from) || modelFor(stretch, to)) return fields
+  const key = (origin: Origin): string => `${origin.source}:${origin.x}:${origin.y}`
+  const old = posedFields(def, stretch, from)
+  const oldNames = new Map(old.map((entry) => [key(entry.origin), entry.name]))
+  const shift = fixed === 'start' ? 0 : to[axis] - from[axis]
   const next: Record<string, string> = { ...fields }
-  let changed = false
-  for (const name of names) {
-    for (let copy = 0; copy < STRETCH_MAX_COUNT; copy++) {
-      const key = stretchFieldName(name, copy)
-      if (Object.hasOwn(next, key)) {
-        Reflect.deleteProperty(next, key)
-        changed = true
-      }
-    }
-    for (let copy = 0; copy < before; copy++) {
-      const value = fields[stretchFieldName(name, copy)]
-      const target = copy + shift
-      if (value !== undefined && target >= 0 && target < after) {
-        next[stretchFieldName(name, target)] = value
-      }
-    }
+  for (const { name } of old) Reflect.deleteProperty(next, name)
+  for (const { origin, name } of posedFields(def, stretch, to)) {
+    const rank = origin[axis]
+    const source = oldNames.get(key({ ...origin, [axis]: rank === null ? null : rank - shift }))
+    const value = source === undefined ? undefined : fields[source]
+    if (value !== undefined) next[name] = value
   }
-  return changed ? next : fields
+  const names = Object.keys(next)
+  const same =
+    names.length === Object.keys(fields).length &&
+    names.every((name) => fields[name] === next[name])
+  return same ? fields : next
 }

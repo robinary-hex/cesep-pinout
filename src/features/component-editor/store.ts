@@ -10,12 +10,14 @@ import {
   movedVariantOrder,
   nextVariantId,
   nextVariantName,
-  defaultStretch,
+  defaultSpan,
   freeModelCount,
   modelDefinition,
   modelDrawing,
   STRETCH_MAX_COUNT,
-  stretchAxis,
+  STRETCH_AXES,
+  singleAxis,
+  stretchAxes,
   stretchExtent,
   variantDefinition,
   arrangedPins,
@@ -28,6 +30,7 @@ import {
   nextGroupId,
   nextPinGroupId,
   nextPinGroupName,
+  normalizedSpan,
   normalizedStretch,
   pinsInside,
   placedPin,
@@ -51,7 +54,9 @@ import {
   type ShapeStyle,
   type Size,
   type StackMove,
-  type Stretch
+  type Stretch,
+  type StretchAxis,
+  type StretchSpan
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import { samePath } from '@/io/paths'
@@ -235,15 +240,18 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
    */
   const shown = computed(() => modelDefinition(shownVariant.value, activeModel.value))
   /**
-   * Modèles particuliers de la variante affichée, par nombre croissant ; `used` : ce nombre est
-   * entre le minimum et le maximum, donc le modèle sert.
+   * Modèles particuliers de la variante affichée, par nombre croissant ; `used` : le modèle
+   * sert. Il faut que le composant ne s'étire que dans un sens, et que ce nombre soit entre le
+   * minimum et le maximum de ce sens.
    */
   const models = computed(() => {
     const stretch = shownVariant.value.stretch
+    const axis = singleAxis(stretch)
+    const span = axis ? stretch?.[axis] : undefined
     return (stretch?.models ?? [])
       .map((model) => ({
         count: model.count,
-        used: stretch !== undefined && model.count >= stretch.min && model.count <= stretch.max
+        used: span !== undefined && model.count >= span.min && model.count <= span.max
       }))
       .sort((a, b) => a.count - b.count)
   })
@@ -694,9 +702,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
       body.size = { widthCells: size.widthCells, heightCells: size.heightCells }
       if (removed > 0) body.pins = castDraft(renumberPins(kept))
       // Le motif d'un composant extensible reste dans la boîte.
-      if (body.stretch) {
-        body.stretch = castDraft(normalizedStretch(body.stretch, stretchExtent(size, body.stretch)))
-      }
+      if (body.stretch) body.stretch = castDraft(normalizedStretch(body.stretch, size))
     })
     if (removed > 0) {
       status.value = `${removed} broche(s) hors de la nouvelle boîte supprimée(s).`
@@ -739,75 +745,86 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
         }
       }
       bodyOf(draft).pins = castDraft(kept.length !== before.pins.length ? renumberPins(kept) : kept)
-      // Le motif d'un composant extensible suit l'origine, et reste dans la boîte.
+      // Les motifs d'un composant extensible suivent l'origine, et restent dans la boîte.
       const stretch = bodyOf(draft).stretch
       if (stretch) {
-        const shift = (stretchAxis(stretch) === 'y' ? dy : dx) * QUARTERS_PER_CELL
-        bodyOf(draft).stretch = castDraft(
-          normalizedStretch(
-            { ...stretch, from: stretch.from + shift, to: stretch.to + shift },
-            stretchExtent(size, stretch)
-          )
-        )
+        const moved: Stretch = { ...stretch }
+        for (const axis of STRETCH_AXES) {
+          const span = stretch[axis]
+          const shift = (axis === 'y' ? dy : dx) * QUARTERS_PER_CELL
+          if (span) moved[axis] = { ...span, from: span.from + shift, to: span.to + shift }
+        }
+        bodyOf(draft).stretch = castDraft(normalizedStretch(moved, size))
       }
     })
     const removed = before.pins.length - kept.length
     if (removed > 0) status.value = `${removed} broche(s) hors de la nouvelle boîte supprimée(s).`
   }
 
-  /** Les nombres d'un composant extensible : ce qu'il garde quand son motif change de sens. */
-  function keptCounts(stretch: Stretch): Pick<Stretch, 'initial' | 'min' | 'max'> {
-    return { initial: stretch.initial, min: stretch.min, max: stretch.max }
+  /**
+   * Composant extensible (décision du 17 novembre 2026, voir stretch.ts du domaine) : rend la
+   * variante affichée extensible dans un sens, ou cesse de l'y étirer. Les deux sens se cochent
+   * l'un sans l'autre ou ensemble (décision du 18 novembre 2026) : en largeur ('x', deux traits
+   * verticaux), en hauteur ('y', deux traits horizontaux). Un sens qu'on active prend tout le
+   * dessin pour motif ; le dernier qu'on retire rend le composant ordinaire, et ses modèles
+   * particuliers partent avec. Ces réglages sont ceux de la variante, même quand on retouche un
+   * de ses modèles.
+   */
+  function setStretchAxis(axis: StretchAxis, on: boolean): void {
+    const current = shownVariant.value.stretch
+    if (on === (current?.[axis] !== undefined)) return
+    if (on) {
+      const span = defaultSpan(stretchExtent(shownVariant.value.size, axis))
+      apply(current ? 'Étirer dans les deux sens' : 'Composant extensible', (draft) => {
+        const body = variantBodyOf(draft)
+        if (body.stretch) body.stretch[axis] = span
+        else body.stretch = { [axis]: span }
+      })
+      if (!current) {
+        status.value =
+          'Composant extensible : place les deux traits autour de la partie qui se répète.'
+      } else {
+        // Un modèle par nombre ne vaut que pour un seul sens.
+        status.value =
+          'Le composant s’étire dans les deux sens : chacun a son motif et ses nombres.' +
+          ((current.models?.length ?? 0) > 0 ? ' Ses modèles par nombre ne servent plus.' : '')
+      }
+      return
+    }
+    const left = stretchAxes(current).filter((other) => other !== axis)
+    apply(left.length > 0 ? 'Étirer dans un seul sens' : 'Composant non extensible', (draft) => {
+      const body = variantBodyOf(draft)
+      if (left.length === 0) delete body.stretch
+      else if (body.stretch) delete body.stretch[axis]
+    })
+    if (left.length > 0) {
+      status.value =
+        left[0] === 'y'
+          ? 'Le composant ne s’étire plus qu’en hauteur : un haut, un motif, un bas.'
+          : 'Le composant ne s’étire plus qu’en largeur : un début, un motif, une fin.'
+    }
   }
 
   /**
-   * Composant extensible (décision du 17 novembre 2026, voir stretch.ts du domaine) : rend
-   * extensible la variante affichée, change les réglages de son motif, ou la rend à nouveau
-   * ordinaire (null ; ses modèles particuliers partent avec). Les réglages sont ramenés à ce qui
-   * est permis : un motif dans la boîte, large d'un nombre entier de cellules, un nombre de
-   * départ entre le minimum et le maximum. Ce sont ceux de la variante, même quand on retouche
-   * un de ses modèles. `axis` choisit le sens : en largeur ('x', deux traits verticaux) ou en
-   * hauteur ('y', deux traits horizontaux).
+   * Règle le motif ou les nombres d'un sens où la variante affichée s'étire. Les réglages sont
+   * ramenés à ce qui est permis : un motif dans la boîte, large d'un nombre entier de cellules,
+   * un nombre de départ entre le minimum et le maximum.
    */
-  function setStretch(patch: Partial<Omit<Stretch, 'models'>> | null): void {
-    const current = shownVariant.value.stretch
-    if (patch === null) {
-      if (!current) return
-      apply('Composant non extensible', (draft) => {
-        delete variantBodyOf(draft).stretch
-      })
-      return
-    }
-    // Le sens demandé, sinon celui qu'il a : en largeur (traits verticaux) ou en hauteur.
-    const axis = patch.axis ?? (current ? stretchAxis(current) : 'x')
-    const extent = stretchExtent(shownVariant.value.size, { axis })
-    // Changer de sens remet le motif sur toute l'étendue du nouveau : ses traits se lisaient
-    // dans l'autre. Les nombres et les modèles restent.
-    const basis =
-      current && stretchAxis(current) === axis
-        ? current
-        : { ...current, ...defaultStretch(extent), ...(current ? keptCounts(current) : {}) }
-    const next = normalizedStretch({ ...basis, ...patch }, extent)
-    // En largeur, le sens ne s'écrit pas.
-    if (axis === 'y') next.axis = 'y'
-    else delete next.axis
-    const same =
-      current !== undefined &&
-      stretchAxis(current) === axis &&
-      (['from', 'to', 'initial', 'min', 'max'] as const).every((key) => current[key] === next[key])
+  function setStretchSpan(axis: StretchAxis, patch: Partial<StretchSpan>): void {
+    const current = shownVariant.value.stretch?.[axis]
+    if (!current) return
+    const next = normalizedSpan(
+      { ...current, ...patch },
+      stretchExtent(shownVariant.value.size, axis)
+    )
+    const same = (['from', 'to', 'initial', 'min', 'max'] as const).every(
+      (key) => current[key] === next[key]
+    )
     if (same) return
-    apply(current ? 'Régler le motif' : 'Composant extensible', (draft) => {
-      variantBodyOf(draft).stretch = castDraft(next)
+    apply('Régler le motif', (draft) => {
+      const stretch = variantBodyOf(draft).stretch
+      if (stretch) stretch[axis] = next
     })
-    if (!current) {
-      status.value =
-        'Composant extensible : place les deux traits autour de la partie qui se répète.'
-    } else if (stretchAxis(current) !== axis) {
-      status.value =
-        axis === 'y'
-          ? 'Le composant s’étire en hauteur : un haut, un motif, un bas.'
-          : 'Le composant s’étire en largeur : un début, un motif, une fin.'
-    }
   }
 
   /**
@@ -1237,6 +1254,11 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     const variant = shownVariant.value
     const stretch = variant.stretch
     if (!stretch) return null
+    if (!singleAxis(stretch)) {
+      status.value =
+        'Un modèle par nombre ne vaut que pour un composant qui s’étire dans un seul sens.'
+      return null
+    }
     const count = freeModelCount(stretch)
     const drawn = count === null ? null : modelDrawing(variant, count)
     if (count === null || !drawn) {
@@ -1565,7 +1587,8 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     setId,
     setSize,
     setBox,
-    setStretch,
+    setStretchAxis,
+    setStretchSpan,
     importImage,
     resetImageSize,
     addPrimitive,

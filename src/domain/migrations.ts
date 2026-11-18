@@ -319,6 +319,33 @@ function migrateComponentV14(raw: RawRecord): RawRecord {
   return { ...raw, visual: { kind: 'drawing', primitives: [image] } }
 }
 
+// Composant v16 → v17 : un composant peut s'étirer dans les deux sens. Les réglages de son
+// motif, jusque-là ceux d'un seul sens nommé par `axis`, vont sous ce sens (`x` ou `y`) ; les
+// modèles par nombre restent à côté. Chaque variante a les siens.
+
+function migrateStretchV16(body: RawRecord): RawRecord {
+  const stretch = body['stretch']
+  // Déjà rangé par sens (une définition embarquée montée plus tôt) : rien à faire.
+  if (!isRecord(stretch) || !('from' in stretch)) return body
+  const { axis, models, ...span } = stretch
+  return {
+    ...body,
+    stretch: { [axis === 'y' ? 'y' : 'x']: span, ...(models === undefined ? {} : { models }) }
+  }
+}
+
+function migrateComponentV16(raw: RawRecord): RawRecord {
+  const next = migrateStretchV16(raw)
+  const variants = next['variants']
+  if (!Array.isArray(variants)) return next
+  return {
+    ...next,
+    variants: variants.map((variant: unknown) =>
+      isRecord(variant) ? migrateStretchV16(variant) : variant
+    )
+  }
+}
+
 export const componentMigrations: MigrationTable = {
   current: COMPONENT_SCHEMA_VERSION,
   steps: {
@@ -345,7 +372,8 @@ export const componentMigrations: MigrationTable = {
     13: (raw) => withTextDefaults(raw, { vertical: false }),
     14: migrateComponentV14,
     // v15 → v16 : composants extensibles (`stretch`). Aucun ne l'est au départ.
-    15: (raw) => raw
+    15: (raw) => raw,
+    16: migrateComponentV16
   }
 }
 
@@ -468,6 +496,101 @@ function migrateSettingsV8(raw: RawRecord): RawRecord {
   return { ...rest, palette: [...palette, ...added] }
 }
 
+// Projet v24 → v25 : un composant posé a un nombre de motifs par sens (`countX`, `countY`). Son
+// ancien nombre (`count`) valait pour le seul sens où sa définition s'étirait : il y va. Chaque
+// texte variable a aussi son champ à lui : deux textes du même nom partageaient une valeur, le
+// second devient « Nom 2 » (`ownFieldNames`) et reçoit la valeur qu'ils partageaient, pour que le
+// montage garde son allure. Les définitions embarquées passent ensuite à la version 17 des
+// composants.
+
+/** Noms des textes variables d'un dessin brut, dans l'ordre de lecture : de haut en bas, puis de gauche à droite. */
+function variableTextNamesV24(body: RawRecord): string[] {
+  const visual = body['visual']
+  const primitives =
+    isRecord(visual) && Array.isArray(visual['primitives'])
+      ? (visual['primitives'] as unknown[])
+      : []
+  const place = (text: RawRecord, key: string): number =>
+    typeof text[key] === 'number' ? text[key] : 0
+  return primitives
+    .flatMap((primitive, index) =>
+      isRecord(primitive) &&
+      primitive['kind'] === 'text' &&
+      primitive['variable'] === true &&
+      typeof primitive['text'] === 'string'
+        ? [{ text: primitive, name: primitive['text'], index }]
+        : []
+    )
+    .sort(
+      (a, b) =>
+        place(a.text, 'y') - place(b.text, 'y') ||
+        place(a.text, 'x') - place(b.text, 'x') ||
+        a.index - b.index
+    )
+    .map((entry) => entry.name)
+}
+
+/**
+ * Valeurs des champs d'un exemplaire quand chaque texte variable de son dessin prend son propre
+ * champ : ceux qui en partageaient un gardent sa valeur, sous leur nouveau nom.
+ */
+function ownFieldValuesV24(body: RawRecord, fields: RawRecord): RawRecord {
+  const counts = new Map<string, number>()
+  for (const name of variableTextNamesV24(body)) counts.set(name, (counts.get(name) ?? 0) + 1)
+  const taken = new Set(counts.keys())
+  const next = { ...fields }
+  for (const [name, count] of counts) {
+    let rank = 2
+    for (let copy = 1; copy < count; copy++) {
+      while (taken.has(`${name} ${rank}`)) rank++
+      const own = `${name} ${rank}`
+      taken.add(own)
+      if (typeof fields[name] === 'string' && !(own in next)) next[own] = fields[name]
+    }
+  }
+  return next
+}
+
+function migrateProjectV24(raw: RawRecord): RawRecord {
+  const defs = isRecord(raw['embeddedDefs']) ? raw['embeddedDefs'] : {}
+  const components = Array.isArray(raw['components']) ? (raw['components'] as unknown[]) : []
+  /** Le dessin qu'un exemplaire montre : celui de sa variante. */
+  const bodyOf = (instance: RawRecord): RawRecord | null => {
+    const def = defs[String(instance['defId'])]
+    if (!isRecord(def)) return null
+    const variants = Array.isArray(def['variants']) ? (def['variants'] as unknown[]) : []
+    const variant = variants.find(
+      (candidate) => isRecord(candidate) && candidate['id'] === instance['variant']
+    )
+    return isRecord(variant) ? variant : def
+  }
+  /** Le sens où ce dessin s'étirait : il n'en avait qu'un. */
+  const vertical = (body: RawRecord | null): boolean => {
+    const stretch = body?.['stretch']
+    if (!isRecord(stretch)) return false
+    // L'ancienne forme nomme son sens ; la nouvelle range ses réglages sous lui.
+    return 'from' in stretch ? stretch['axis'] === 'y' : !('x' in stretch) && 'y' in stretch
+  }
+  return migrateEmbeddedDefs({
+    ...raw,
+    components: components.map((instance) => {
+      if (!isRecord(instance)) return instance
+      const body = bodyOf(instance)
+      if (typeof instance['count'] === 'number') {
+        const { count, ...rest } = instance
+        return vertical(body) ? { ...rest, countY: count } : { ...rest, countX: count }
+      }
+      // Un composant extensible nommait déjà les champs de ses motifs : on n'y touche pas.
+      const fields = instance['fields']
+      if (!body || isRecord(body['stretch']) || !isRecord(fields)) return instance
+      const own = ownFieldValuesV24(body, fields)
+      return Object.keys(own).length === Object.keys(fields).length
+        ? instance
+        : { ...instance, fields: own }
+    })
+  })
+}
+
 export const projectMigrations: MigrationTable = {
   current: PROJECT_SCHEMA_VERSION,
   steps: {
@@ -536,7 +659,8 @@ export const projectMigrations: MigrationTable = {
           isRecord(wire) && wire['kind'] === 'bare' ? { ...wire, color: BARE_WIRE_COLOR } : wire
         )
       }
-    }
+    },
+    24: migrateProjectV24
   }
 }
 

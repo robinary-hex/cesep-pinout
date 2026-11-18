@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 16,
+  "id": "bornier",
+  "name": "Bornier",
+  "category": "Connecteurs",
+  "description": "",
+  "size": { "widthCells": 2, "heightCells": 2 },
+  "visual": {
+    "kind": "drawing",
+    "primitives": [
+      {
+        "kind": "rect",
+        "x": 0,
+        "y": 0,
+        "w": 8,
+        "h": 8,
+        "rx": 0,
+        "style": { "stroke": "#000000", "weight": 1, "fill": "none", "fillOpacity": 1 }
+      }
+    ]
+  },
+  "pins": [{ "id": "p1", "name": "1", "kind": "io", "x": 0, "y": 1 }],
+  "stretch": { "axis": "y", "from": 0, "to": 8, "initial": 2, "min": 1, "max": 6 },
+  "variantName": "Debout",
+  "variants": [
+    {
+      "id": "v1",
+      "name": "Couché",
+      "size": { "widthCells": 2, "heightCells": 2 },
+      "visual": { "kind": "drawing", "primitives": [] },
+      "pins": [{ "id": "p1", "name": "1", "kind": "io", "x": 1, "y": 0 }],
+      "stretch": {
+        "from": 0,
+        "to": 8,
+        "initial": 3,
+        "min": 1,
+        "max": 8,
+        "models": [
+          {
+            "count": 1,
+            "size": { "widthCells": 2, "heightCells": 2 },
+            "visual": { "kind": "drawing", "primitives": [] },
+            "pins": [{ "id": "p1", "name": "1", "kind": "io", "x": 1, "y": 0 }]
+          }
+        ]
+      }
+    }
+  ]
+}

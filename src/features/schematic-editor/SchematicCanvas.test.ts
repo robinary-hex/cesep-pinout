@@ -947,7 +947,7 @@ function header(initial = 3): ComponentDefinition {
     { id: 'p1', name: '1', kind: 'io', x: 1, y: 1 },
     { id: 'fin', name: 'F', kind: 'io', x: 2, y: 1 }
   ]
-  def.stretch = { from: 2, to: 6, initial, min: 1, max: 8 }
+  def.stretch = { x: { from: 2, to: 6, initial, min: 1, max: 8 } }
   return def
 }
 
@@ -1019,14 +1019,14 @@ describe('canevas du montage : composant extensible', () => {
     await fire(wrapper.findAll('.stretch-handle')[1]!, 'pointerdown', at(store, 14, 11))
     // Deux cellules plus loin : deux contacts de plus, déjà dessinés, rien d'enregistré.
     await fire(svg, 'pointermove', at(store, 16.1, 11.3))
-    expect(store.doc.components[0]?.count).toBe(3)
+    expect(store.doc.components[0]?.countX).toBe(3)
     expect(pins()).toBe(before + 2)
     // La poignée de fin suit le bout du composant, deux cellules plus loin.
     const moved = Number(wrapper.findAll('.stretch-handle .stretch-hit')[1]?.attributes('cx'))
     expect(moved).toBeGreaterThan(16.15)
     expect(moved).toBeLessThan(17)
     await fire(svg, 'pointerup', at(store, 16.1, 11.3))
-    expect(store.doc.components[0]).toMatchObject({ id, x: 10, count: 5 })
+    expect(store.doc.components[0]).toMatchObject({ id, x: 10, countX: 5 })
     expect(store.undoLabel).toBe('Étirer le composant')
     // Revenir au point de départ ne fait pas de commande.
     const after = store.doc
@@ -1045,14 +1045,62 @@ describe('canevas du montage : composant extensible', () => {
     await fire(wrapper.findAll('.stretch-handle')[0]!, 'pointerdown', at(store, 10, 11))
     await fire(svg, 'pointermove', at(store, 8.9, 11))
     await fire(svg, 'pointerup', at(store, 8.9, 11))
-    expect(store.doc.components[0]).toMatchObject({ x: 9, count: 4 })
+    expect(store.doc.components[0]).toMatchObject({ x: 9, countX: 4 })
     // La broche du bout n'a pas bougé.
     expect(store.pinRefs.at(-1)?.point).toEqual([14, 11])
     // Pousser la poignée vers le composant le raccourcit, jusqu'à son minimum.
     await fire(wrapper.findAll('.stretch-handle')[0]!, 'pointerdown', at(store, 9, 11))
     await fire(svg, 'pointermove', at(store, 30, 11))
     await fire(svg, 'pointerup', at(store, 30, 11))
-    expect(store.doc.components[0]).toMatchObject({ x: 12, count: 1 })
+    expect(store.doc.components[0]).toMatchObject({ x: 12, countX: 1 })
+    wrapper.unmount()
+  })
+
+  it('dans les deux sens : une poignée par côté, chacune étire le sien', async () => {
+    const store = useSchematicStore()
+    const def = header(2)
+    def.stretch = {
+      x: { from: 2, to: 6, initial: 2, min: 1, max: 8 },
+      y: { from: 2, to: 6, initial: 1, min: 1, max: 8 }
+    }
+    store.startPlacing(def)
+    const id = store.placeAt(10, 10)
+    store.stopPlacing()
+    if (!id) throw new Error('pose refusée')
+    store.selection = [id]
+    const wrapper = mount(SchematicCanvas, { attachTo: document.body })
+    await nextTick()
+    const svg = wrapper.get('svg.schematic')
+    // Le composant va de (10, 10) à (13, 12) : gauche, droite, haut, bas.
+    const grips = (): ReturnType<typeof wrapper.findAll> => wrapper.findAll('.stretch-handle')
+    expect(grips()).toHaveLength(4)
+    expect(grips().map((grip) => (grip.element as SVGElement).style.cursor)).toEqual([
+      'ew-resize',
+      'ew-resize',
+      'ns-resize',
+      'ns-resize'
+    ])
+    expect(wrapper.find('.stretch-x-start').exists()).toBe(true)
+    expect(wrapper.find('.stretch-y-end').exists()).toBe(true)
+
+    // La poignée du bas, tirée de deux cellules : deux rangées de plus, la largeur ne bouge pas.
+    await fire(wrapper.get('.stretch-y-end'), 'pointerdown', at(store, 11.5, 12))
+    await fire(svg, 'pointermove', at(store, 11.8, 14.1))
+    // Aperçu : rien d'enregistré.
+    expect(store.doc.components[0]).toMatchObject({ countX: 2, countY: 1 })
+    await fire(svg, 'pointerup', at(store, 11.8, 14.1))
+    expect(store.doc.components[0]).toMatchObject({ x: 10, y: 10, countX: 2, countY: 3 })
+    expect(store.undoLabel).toBe('Étirer le composant')
+    // La poignée de gauche, tirée d'une cellule : une colonne de plus, la droite en place.
+    await fire(wrapper.get('.stretch-x-start'), 'pointerdown', at(store, 10, 12))
+    await fire(svg, 'pointermove', at(store, 8.9, 12))
+    await fire(svg, 'pointerup', at(store, 8.9, 12))
+    expect(store.doc.components[0]).toMatchObject({ x: 9, y: 10, countX: 3, countY: 3 })
+    // La poignée du haut, poussée vers le bas : une rangée de moins, le bas en place.
+    await fire(wrapper.get('.stretch-y-start'), 'pointerdown', at(store, 11, 10))
+    await fire(svg, 'pointermove', at(store, 11, 11.2))
+    await fire(svg, 'pointerup', at(store, 11, 11.2))
+    expect(store.doc.components[0]).toMatchObject({ x: 9, y: 11, countX: 3, countY: 2 })
     wrapper.unmount()
   })
 })

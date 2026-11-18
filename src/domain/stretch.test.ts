@@ -6,12 +6,14 @@ import {
   componentIssues,
   createEmptyComponent,
   DEFAULT_SHAPE_STYLE,
+  ownFieldNames,
   variantDefinition,
   type ComponentDefinition,
   type HolesPrimitive,
   type ImagePrimitive,
   type Primitive,
   type Stretch,
+  type StretchSpan,
   type TextPrimitive
 } from './component'
 import { pngHeaderDataUrl } from './testing/pngHeader'
@@ -21,14 +23,17 @@ import {
   modelDefinition,
   modelDrawing,
   motifCells,
+  normalizedSpan,
   normalizedStretch,
   restretchedFields,
+  singleAxis,
   STRETCH_MAX_COUNT,
+  stretchAxes,
   stretchAxis,
   stretchCount,
+  stretchCounts,
   stretchedDefinition,
   stretchExtent,
-  stretchFieldName,
   stretchPinId,
   stretchPinMap,
   stretchPinSource
@@ -41,7 +46,7 @@ const style = DEFAULT_SHAPE_STYLE
  * et un trait de séparation dans le motif (2 cellules, de 1 à 3), un autre trait pile sur la fin
  * du motif. Sa broche est au milieu du motif.
  */
-function terminal(stretch: Partial<Stretch> = {}): ComponentDefinition {
+function terminal(span: Partial<StretchSpan> = {}): ComponentDefinition {
   const def = createEmptyComponent('bornier', 'Bornier')
   def.size = { widthCells: 4, heightCells: 2 }
   def.visual = {
@@ -54,7 +59,7 @@ function terminal(stretch: Partial<Stretch> = {}): ComponentDefinition {
     ]
   }
   def.pins = [{ id: 'p1', name: '1', kind: 'io', x: 2, y: 2 }]
-  def.stretch = { from: 4, to: 12, initial: 2, min: 1, max: 6, ...stretch }
+  def.stretch = { x: { from: 4, to: 12, initial: 2, min: 1, max: 6, ...span } }
   return def
 }
 
@@ -76,12 +81,16 @@ describe('composant extensible : nombre de motifs', () => {
     expect(stretchCount(createEmptyComponent('r', 'R'), 5)).toBe(1)
     // Aucune définition ne dépasse le plafond de l'application.
     expect(stretchCount(terminal({ max: 500 }), 500)).toBe(STRETCH_MAX_COUNT)
-    expect(motifCells(def.stretch as Stretch)).toBe(2)
+    expect(motifCells(def.stretch?.x as StretchSpan)).toBe(2)
+    // Un nombre seul vaut pour le premier sens ; on peut aussi en donner un par sens.
+    expect(stretchCounts(def, 4)).toEqual({ x: 4, y: 1 })
+    expect(stretchCounts(def, { x: 5, y: 3 })).toEqual({ x: 5, y: 1 })
+    expect(stretchCounts(def)).toEqual({ x: 2, y: 1 })
   })
 
   it('ramène des réglages à ce qui est permis', () => {
     // Un motif d'un nombre entier de cellules, dans la boîte ; il garde son début au quart.
-    expect(normalizedStretch({ from: 2, to: 9, initial: 1, min: 1, max: 4 }, 4)).toEqual({
+    expect(normalizedSpan({ from: 2, to: 9, initial: 1, min: 1, max: 4 }, 4)).toEqual({
       from: 2,
       to: 10,
       initial: 1,
@@ -89,23 +98,34 @@ describe('composant extensible : nombre de motifs', () => {
       max: 4
     })
     // Trop large pour la boîte : toute la largeur ; trop à droite : il revient dedans.
-    expect(normalizedStretch({ from: 0, to: 80, initial: 1, min: 1, max: 4 }, 3)).toMatchObject({
+    expect(normalizedSpan({ from: 0, to: 80, initial: 1, min: 1, max: 4 }, 3)).toMatchObject({
       from: 0,
       to: 12
     })
-    expect(normalizedStretch({ from: 14, to: 18, initial: 1, min: 1, max: 4 }, 4)).toMatchObject({
+    expect(normalizedSpan({ from: 14, to: 18, initial: 1, min: 1, max: 4 }, 4)).toMatchObject({
       from: 12,
       to: 16
     })
     // Jamais moins d'une cellule ; le maximum ne passe pas sous le minimum, le départ est entre eux.
-    expect(normalizedStretch({ from: 4, to: 4, initial: 9, min: 3, max: 2 }, 4)).toEqual({
+    expect(normalizedSpan({ from: 4, to: 4, initial: 9, min: 3, max: 2 }, 4)).toEqual({
       from: 4,
       to: 8,
       initial: 3,
       min: 3,
       max: 3
     })
-    expect(defaultStretch(3)).toEqual({ from: 0, to: 12, initial: 1, min: 1, max: 12 })
+    expect(defaultStretch(3)).toEqual({ x: { from: 0, to: 12, initial: 1, min: 1, max: 12 } })
+    // Chaque sens se ramène à l'étendue de la boîte dans ce sens-là ; les modèles restent.
+    const loose: Stretch = {
+      x: { from: 0, to: 80, initial: 1, min: 1, max: 4 },
+      y: { from: 0, to: 80, initial: 1, min: 1, max: 4 },
+      models: []
+    }
+    expect(normalizedStretch(loose, { widthCells: 3, heightCells: 2 })).toEqual({
+      x: { from: 0, to: 12, initial: 1, min: 1, max: 4 },
+      y: { from: 0, to: 8, initial: 1, min: 1, max: 4 },
+      models: []
+    })
   })
 })
 
@@ -159,8 +179,12 @@ describe('composant extensible : le dessin étiré', () => {
     ])
     expect(stretchPinId('p1', 0)).toBe('p1')
     expect(stretchPinId('p1', 2)).toBe('p1#2')
-    expect(stretchPinSource('p1#2')).toEqual({ base: 'p1', copy: 2 })
-    expect(stretchPinSource('p1')).toEqual({ base: 'p1', copy: 0 })
+    expect(stretchPinSource('p1#2')).toEqual({ base: 'p1', x: 2, y: 0 })
+    expect(stretchPinSource('p1')).toEqual({ base: 'p1', x: 0, y: 0 })
+    // Recopiée aussi en hauteur, une broche porte ses deux rangs.
+    expect(stretchPinId('p1', 2, 1)).toBe('p1#2.1')
+    expect(stretchPinId('p1', 0, 1)).toBe('p1#0.1')
+    expect(stretchPinSource('p1#2.1')).toEqual({ base: 'p1', x: 2, y: 1 })
   })
 
   it('un seul morceau : le composant entier est le motif, et se répète', () => {
@@ -173,7 +197,7 @@ describe('composant extensible : le dessin étiré', () => {
       primitives: [{ kind: 'rect', x: 2, y: 2, w: 4, h: 4, rx: 0, style }]
     }
     def.pins = [{ id: 'p1', name: '1', kind: 'io', x: 1, y: 1 }]
-    def.stretch = { from: 2, to: 6, initial: 1, min: 1, max: 40 }
+    def.stretch = { x: { from: 2, to: 6, initial: 1, min: 1, max: 40 } }
     const four = stretchedDefinition(def, 4)
     expect(four.size.widthCells).toBe(5)
     expect(
@@ -403,8 +427,8 @@ describe('composant extensible : les broches d’un nombre à l’autre', () => 
 
 describe('composant extensible : contrôles', () => {
   it('refuse un motif qui n’est pas en cellules entières ou des bornes incohérentes', () => {
-    const messages = (stretch: Partial<Stretch>): string[] =>
-      componentIssues(terminal(stretch)).map((issue) => `${issue.level} : ${issue.message}`)
+    const messages = (span: Partial<StretchSpan>): string[] =>
+      componentIssues(terminal(span)).map((issue) => `${issue.level} : ${issue.message}`)
     expect(messages({})).toEqual([])
     expect(messages({ from: 4, to: 10 })).toContain(
       'error : Composant extensible : le motif doit faire un nombre entier de cellules'
@@ -468,10 +492,13 @@ describe('composant extensible : modèles par nombre', () => {
       visual: { kind: 'drawing', primitives: [] },
       pins: []
     })
+    const span = stretch.x as StretchSpan
     expect(freeModelCount(stretch)).toBe(1)
     expect(freeModelCount({ ...stretch, models: [model(1), model(2)] })).toBe(3)
-    expect(freeModelCount({ ...stretch, min: 2, initial: 2 })).toBe(2)
-    expect(freeModelCount({ ...stretch, max: 2, models: [model(1), model(2)] })).toBeNull()
+    expect(freeModelCount({ x: { ...span, min: 2, initial: 2 } })).toBe(2)
+    expect(freeModelCount({ x: { ...span, max: 2 }, models: [model(1), model(2)] })).toBeNull()
+    // Dans les deux sens, il n'y a pas de modèle par nombre.
+    expect(freeModelCount({ ...stretch, y: span })).toBeNull()
   })
 
   it('montre le dessin d’un modèle seul, sans motif', () => {
@@ -523,7 +550,7 @@ describe('composant extensible : modèles par nombre', () => {
  * vis et un trait de séparation dans le motif (de 1 à 3 cellules du haut), un autre trait pile
  * sur la fin du motif. Il s'étire en hauteur.
  */
-function tower(stretch: Partial<Stretch> = {}): ComponentDefinition {
+function tower(span: Partial<StretchSpan> = {}): ComponentDefinition {
   const def = createEmptyComponent('bornier-debout', 'Bornier debout')
   def.size = { widthCells: 2, heightCells: 4 }
   def.visual = {
@@ -536,27 +563,26 @@ function tower(stretch: Partial<Stretch> = {}): ComponentDefinition {
     ]
   }
   def.pins = [{ id: 'p1', name: '1', kind: 'io', x: 0, y: 2 }]
-  def.stretch = { axis: 'y', from: 4, to: 12, initial: 2, min: 1, max: 6, ...stretch }
+  def.stretch = { y: { from: 4, to: 12, initial: 2, min: 1, max: 6, ...span } }
   return def
 }
 
 describe('composant extensible : en hauteur', () => {
   it('lit ses traits le long de sa hauteur', () => {
     const def = tower()
-    expect(stretchAxis(def.stretch as Stretch)).toBe('y')
-    expect(stretchExtent(def.size, def.stretch as Stretch)).toBe(4)
-    // Sans rien dire, un composant s'étire en largeur.
-    expect(stretchAxis(terminal().stretch as Stretch)).toBe('x')
-    expect(stretchExtent(terminal().size, terminal().stretch as Stretch)).toBe(4)
+    expect(stretchAxis(def.stretch)).toBe('y')
+    expect(stretchAxes(def.stretch)).toEqual(['y'])
+    expect(singleAxis(def.stretch)).toBe('y')
+    expect(stretchExtent(def.size, 'y')).toBe(4)
+    expect(stretchAxis(terminal().stretch)).toBe('x')
+    expect(stretchExtent(terminal().size, 'x')).toBe(4)
+    // Un composant ordinaire ne s'étire dans aucun sens.
+    expect(stretchAxes(undefined)).toEqual([])
+    expect(singleAxis(undefined)).toBeNull()
     expect(defaultStretch(3, 'y')).toEqual({
-      axis: 'y',
-      from: 0,
-      to: 12,
-      initial: 1,
-      min: 1,
-      max: 12
+      y: { from: 0, to: 12, initial: 1, min: 1, max: 12 }
     })
-    expect(defaultStretch(3)).toEqual({ from: 0, to: 12, initial: 1, min: 1, max: 12 })
+    expect(defaultStretch(3)).toEqual({ x: { from: 0, to: 12, initial: 1, min: 1, max: 12 } })
   })
 
   it('répète le motif vers le bas : un haut, des motifs, un bas', () => {
@@ -574,11 +600,12 @@ describe('composant extensible : en hauteur', () => {
     expect(shapes(three, 'line').map((line) => (line.kind === 'line' ? line.y1 : null))).toEqual([
       4, 12, 20, 28
     ])
-    // Les broches descendent avec les motifs, toujours sur la grille.
+    // Les broches descendent avec les motifs, toujours sur la grille ; leur nom dit leur rang en
+    // hauteur, après celui (zéro) qu'elles ont en largeur.
     expect(three.pins.map((pin) => [pin.id, pin.name, pin.x, pin.y])).toEqual([
       ['p1', '1', 0, 2],
-      ['p1#1', '2', 0, 4],
-      ['p1#2', '3', 0, 6]
+      ['p1#0.1', '2', 0, 4],
+      ['p1#0.2', '3', 0, 6]
     ])
     // À un seul motif : le composant lui-même.
     expect(stretchedDefinition(tower(), 1)).toMatchObject({
@@ -622,12 +649,12 @@ describe('composant extensible : en hauteur', () => {
     const def = tower()
     expect([...stretchPinMap(def, 2, 3, 'start')]).toEqual([
       ['p1', 'p1'],
-      ['p1#1', 'p1#1']
+      ['p1#0.1', 'p1#0.1']
     ])
     // La fin (le bas) reste en place : les motifs se comptent depuis elle.
     expect([...stretchPinMap(def, 2, 3, 'end')]).toEqual([
-      ['p1', 'p1#1'],
-      ['p1#1', 'p1#2']
+      ['p1', 'p1#0.1'],
+      ['p1#0.1', 'p1#0.2']
     ])
     expect(componentIssues(tower()).map((issue) => issue.message)).toEqual([])
     // Le motif se lit le long de la hauteur (4 cellules), pas de la largeur (2).
@@ -637,8 +664,9 @@ describe('composant extensible : en hauteur', () => {
   })
 })
 
-describe('composant extensible : une valeur par copie d’un texte variable', () => {
-  const text = (patch: Partial<TextPrimitive>): TextPrimitive => ({
+/** Un texte variable « Nom », dans le motif du bornier. */
+function text(patch: Partial<TextPrimitive>): TextPrimitive {
+  return {
     kind: 'text',
     x: 5,
     y: 1,
@@ -658,8 +686,60 @@ describe('composant extensible : une valeur par copie d’un texte variable', ()
     strike: false,
     vertical: false,
     ...patch
+  }
+}
+
+/** Noms des champs que lisent les textes variables d'un dessin, dans l'ordre du dessin. */
+function fieldNames(def: ComponentDefinition): string[] {
+  return def.visual.primitives.flatMap((primitive) =>
+    primitive.kind === 'text' && primitive.variable ? [primitive.text] : []
+  )
+}
+
+describe('un champ par texte variable', () => {
+  it('numérote les textes du même nom dans l’ordre de lecture', () => {
+    // Deux « Pin » : celui du haut garde le nom, quel que soit son rang dans le dessin.
+    const twins = [text({ text: 'Pin', y: 9 }), text({ text: 'Pin', y: 1 })]
+    expect(
+      ownFieldNames(twins).map((primitive) => (primitive.kind === 'text' ? primitive.text : ''))
+    ).toEqual(['Pin 2', 'Pin'])
+    // Sur une même ligne : de gauche à droite.
+    const row = [text({ text: 'Pin', x: 9 }), text({ text: 'Pin', x: 1 }), text({ text: 'Pin' })]
+    expect(
+      ownFieldNames(row).map((primitive) => (primitive.kind === 'text' ? primitive.text : ''))
+    ).toEqual(['Pin 3', 'Pin', 'Pin 2'])
+    // Un nom déjà porté par un autre texte est sauté.
+    const taken = [
+      text({ text: 'Pin', y: 1 }),
+      text({ text: 'Pin 2', y: 3 }),
+      text({ text: 'Pin', y: 5 })
+    ]
+    expect(
+      ownFieldNames(taken).map((primitive) => (primitive.kind === 'text' ? primitive.text : ''))
+    ).toEqual(['Pin', 'Pin 2', 'Pin 3'])
+    // Rien à renommer : le même tableau. Un texte fixe ne compte pas.
+    const plain = [text({ text: 'Pin' }), text({ text: 'Pin', variable: false })]
+    expect(ownFieldNames(plain)).toBe(plain)
   })
 
+  it('vaut aussi pour un composant qui ne s’étire pas', () => {
+    const def = createEmptyComponent('r', 'R')
+    def.size = { widthCells: 4, heightCells: 2 }
+    def.visual = { kind: 'drawing', primitives: [text({ x: 0 }), text({ x: 8 })] }
+    // Dans l'éditeur le dessin garde ses noms ; posé, chaque texte a le sien.
+    expect(fieldNames(def)).toEqual(['Nom', 'Nom'])
+    const placed = stretchedDefinition(def)
+    expect(fieldNames(placed)).toEqual(['Nom', 'Nom 2'])
+    expect(componentFields(placed).map((field) => field.name)).toEqual(['Nom', 'Nom 2'])
+    expect(stretchedDefinition(def)).toBe(placed)
+    // Sans doublon, le composant posé est le composant lui-même.
+    const single = createEmptyComponent('c', 'C')
+    single.visual = { kind: 'drawing', primitives: [text({})] }
+    expect(stretchedDefinition(single)).toBe(single)
+  })
+})
+
+describe('composant extensible : une valeur par copie d’un texte variable', () => {
   /** Le bornier, avec un nom par borne dans le motif, un repère avant lui et un texte fixe. */
   function labelled(): ComponentDefinition {
     const def = terminal()
@@ -675,16 +755,14 @@ describe('composant extensible : une valeur par copie d’un texte variable', ()
   }
 
   it('nomme le champ de chaque copie : la première garde son nom', () => {
-    expect(stretchFieldName('Nom', 0)).toBe('Nom')
-    expect(stretchFieldName('Nom', 1)).toBe('Nom 2')
-    expect(stretchFieldName('Nom', 4)).toBe('Nom 5')
     const three = stretchedDefinition(labelled(), 3)
-    // Un champ par copie du texte du motif ; le repère, hors du motif, reste seul.
+    // Un champ par copie du texte du motif ; le repère, hors du motif, reste seul. Ils se lisent
+    // de gauche à droite.
     expect(componentFields(three).map((field) => field.name)).toEqual([
+      'Réf',
       'Nom',
       'Nom 2',
-      'Nom 3',
-      'Réf'
+      'Nom 3'
     ])
     // Un texte fixe est recopié tel quel.
     expect(
@@ -694,8 +772,8 @@ describe('composant extensible : une valeur par copie d’un texte variable', ()
     ).toEqual(['vis', 'vis', 'vis'])
     // À un seul motif, rien ne change.
     expect(componentFields(stretchedDefinition(labelled(), 1)).map((field) => field.name)).toEqual([
-      'Nom',
-      'Réf'
+      'Réf',
+      'Nom'
     ])
   })
 
@@ -719,6 +797,225 @@ describe('composant extensible : une valeur par copie d’un texte variable', ()
     const plain = { Réf: 'J1' }
     expect(restretchedFields(def, plain, 2, 3, 'end')).toBe(plain)
     expect(restretchedFields(createEmptyComponent('r', 'R'), fields, 2, 3, 'end')).toBe(fields)
+  })
+
+  it('un texte hors du motif et un texte du motif, du même nom, ont chacun leur champ', () => {
+    // Le bornier debout : un « Pin » au-dessus du motif, un autre dans le motif.
+    const def = tower()
+    def.visual = {
+      kind: 'drawing',
+      primitives: [text({ text: 'Pin', x: 0, y: 6, w: 8 }), text({ text: 'Pin', x: 0, y: 1, w: 8 })]
+    }
+    const two = stretchedDefinition(def, 2)
+    // Trois textes, trois champs, de haut en bas : aucun champ ne règle deux textes.
+    const drawn = two.visual.primitives.flatMap((primitive) =>
+      primitive.kind === 'text' ? [[primitive.y, primitive.text]] : []
+    )
+    expect(drawn.sort((a, b) => Number(a[0]) - Number(b[0]))).toEqual([
+      [1, 'Pin'],
+      [6, 'Pin 2'],
+      [14, 'Pin 3']
+    ])
+    expect(componentFields(two).map((field) => field.name)).toEqual(['Pin', 'Pin 2', 'Pin 3'])
+    // Un motif de plus à la fin : chaque valeur reste à son texte.
+    const fields = { Pin: 'A', 'Pin 2': 'B', 'Pin 3': 'C' }
+    expect(restretchedFields(def, fields, 2, 3, 'start')).toBe(fields)
+    // Un motif de plus au début : le texte du haut garde sa valeur, celles des motifs suivent
+    // leur motif, sous un nom qui a changé de rang.
+    expect(restretchedFields(def, fields, 2, 3, 'end')).toEqual({
+      Pin: 'A',
+      'Pin 3': 'B',
+      'Pin 4': 'C'
+    })
+    // Un motif de moins à la fin : sa valeur seule est perdue.
+    expect(restretchedFields(def, { ...fields, 'Pin 4': 'D' }, 3, 2, 'start')).toEqual(fields)
+  })
+})
+
+/**
+ * Une plaque de trois cellules de côté, qui s'étire dans les deux sens : un contour sur tout le
+ * dessin, un point et un nom au centre (le motif des deux sens, de 1 à 2 cellules), une broche
+ * sur le motif, une autre dans le coin.
+ */
+function plate(): ComponentDefinition {
+  const def = createEmptyComponent('plaque', 'Plaque')
+  def.size = { widthCells: 3, heightCells: 3 }
+  def.visual = {
+    kind: 'drawing',
+    primitives: [
+      { kind: 'rect', x: 0, y: 0, w: 12, h: 12, rx: 1, style },
+      { kind: 'dot', x: 6, y: 6, scale: 1, color: '#000000' },
+      text({ x: 5, y: 5, w: 2, h: 2 })
+    ]
+  }
+  def.pins = [
+    { id: 'coin', name: 'A', kind: 'io', x: 0, y: 0 },
+    { id: 'p1', name: '1', kind: 'io', x: 1, y: 1 }
+  ]
+  def.stretch = {
+    x: { from: 4, to: 8, initial: 1, min: 1, max: 8 },
+    y: { from: 4, to: 8, initial: 1, min: 1, max: 8 }
+  }
+  return def
+}
+
+describe('composant extensible : dans les deux sens à la fois', () => {
+  it('a un nombre de motifs par sens', () => {
+    const def = plate()
+    expect(stretchAxes(def.stretch)).toEqual(['x', 'y'])
+    expect(singleAxis(def.stretch)).toBeNull()
+    expect(stretchCounts(def)).toEqual({ x: 1, y: 1 })
+    expect(stretchCounts(def, { x: 3, y: 99 })).toEqual({ x: 3, y: 8 })
+    // Un nombre seul vaut pour le premier sens, la largeur.
+    expect(stretchCounts(def, 4)).toEqual({ x: 4, y: 1 })
+    expect(stretchedDefinition(def, { x: 1, y: 1 })).toBe(def)
+    expect(stretchedDefinition(def, { x: 3, y: 2 })).toBe(stretchedDefinition(def, { x: 3, y: 2 }))
+    expect(stretchedDefinition(def, { x: 3, y: 2 })).not.toBe(
+      stretchedDefinition(def, { x: 2, y: 3 })
+    )
+  })
+
+  it('répète le centre dans les deux sens, les bords dans le leur', () => {
+    const wide = stretchedDefinition(plate(), { x: 3, y: 2 })
+    expect(wide.size).toEqual({ widthCells: 5, heightCells: 4 })
+    // Le contour s'allonge dans les deux sens et garde ses coins.
+    expect(shapes(wide, 'rect')).toEqual([{ kind: 'rect', x: 0, y: 0, w: 20, h: 16, rx: 1, style }])
+    // Le point du centre : un par motif, trois colonnes sur deux rangées.
+    expect(
+      shapes(wide, 'dot')
+        .map((dot) => (dot.kind === 'dot' ? [dot.x, dot.y] : []))
+        .sort((a, b) => Number(a[1]) - Number(b[1]) || Number(a[0]) - Number(b[0]))
+    ).toEqual([
+      [6, 6],
+      [10, 6],
+      [14, 6],
+      [6, 10],
+      [10, 10],
+      [14, 10]
+    ])
+    // Les broches : celle du coin reste seule, celle du motif est recopiée rangée par rangée.
+    expect(wide.pins.map((pin) => [pin.id, pin.name, pin.x, pin.y])).toEqual([
+      ['coin', 'A', 0, 0],
+      ['p1', '2', 1, 1],
+      ['p1#1', '3', 2, 1],
+      ['p1#2', '4', 3, 1],
+      ['p1#0.1', '5', 1, 2],
+      ['p1#1.1', '6', 2, 2],
+      ['p1#2.1', '7', 3, 2]
+    ])
+    // Chaque copie du nom a son champ, dans l'ordre de lecture.
+    expect(componentFields(wide).map((field) => field.name)).toEqual([
+      'Nom',
+      'Nom 2',
+      'Nom 3',
+      'Nom 4',
+      'Nom 5',
+      'Nom 6'
+    ])
+  })
+
+  it('coupe une image en neuf : ses coins restent, son centre se répète', () => {
+    const def = plate()
+    const image: ImagePrimitive = {
+      kind: 'image',
+      x: 0,
+      y: 0,
+      w: 12,
+      h: 12,
+      file: 'plaque.png',
+      dataUrl: pngHeaderDataUrl(240, 240)
+    }
+    def.visual = { kind: 'drawing', primitives: [image] }
+    const pieces = stretchedDefinition(def, { x: 2, y: 2 }).visual.primitives
+    // Quatre tranches en largeur, chacune coupée en quatre en hauteur.
+    expect(pieces).toHaveLength(16)
+    const third = 1 / 3
+    const at = (x: number, y: number): ImagePrimitive | undefined =>
+      pieces.find(
+        (piece): piece is ImagePrimitive => piece.kind === 'image' && piece.x === x && piece.y === y
+      )
+    expect(at(0, 0)?.crop).toEqual({ x: 0, w: third, y: 0, h: third })
+    // Le centre, recopié : la même tranche de l'image, un motif plus loin dans chaque sens.
+    expect(at(4, 4)).toMatchObject({ w: 4, h: 4 })
+    expect(at(8, 8)?.crop).toEqual(at(4, 4)?.crop)
+    expect(at(8, 8)?.crop?.x).toBeCloseTo(third)
+    expect(at(8, 8)?.crop?.y).toBeCloseTo(third)
+    // Le coin opposé a suivi dans les deux sens.
+    expect(at(12, 12)?.crop?.x).toBeCloseTo(2 * third)
+    expect(at(12, 12)?.crop?.y).toBeCloseTo(2 * third)
+  })
+
+  it('suit les broches et les valeurs dans le sens qu’on étire', () => {
+    const def = plate()
+    const before = { x: 2, y: 2 }
+    // En hauteur, le bas en place : chaque rangée descend d'un rang, les colonnes ne bougent pas.
+    expect([...stretchPinMap(def, before, { x: 2, y: 3 }, 'end', 'y')]).toEqual([
+      ['coin', 'coin'],
+      ['p1', 'p1#0.1'],
+      ['p1#1', 'p1#1.1'],
+      ['p1#0.1', 'p1#0.2'],
+      ['p1#1.1', 'p1#1.2']
+    ])
+    // En largeur, la droite en place : chaque colonne recule d'un rang.
+    expect([...stretchPinMap(def, before, { x: 3, y: 2 }, 'end', 'x')]).toEqual([
+      ['coin', 'coin'],
+      ['p1', 'p1#1'],
+      ['p1#1', 'p1#2'],
+      ['p1#0.1', 'p1#1.1'],
+      ['p1#1.1', 'p1#2.1']
+    ])
+    // Le début en place : les broches gardent leur nom.
+    expect([...stretchPinMap(def, before, { x: 3, y: 2 }, 'start', 'x')]).toEqual([
+      ['coin', 'coin'],
+      ['p1', 'p1'],
+      ['p1#1', 'p1#1'],
+      ['p1#0.1', 'p1#0.1'],
+      ['p1#1.1', 'p1#1.1']
+    ])
+    // Les valeurs suivent leur texte : une colonne de plus à droite, et les noms de la seconde
+    // rangée changent de rang ; une colonne de plus à gauche, tous changent.
+    const fields = { Nom: 'A', 'Nom 2': 'B', 'Nom 3': 'C', 'Nom 4': 'D' }
+    expect(restretchedFields(def, fields, before, { x: 3, y: 2 }, 'start', 'x')).toEqual({
+      Nom: 'A',
+      'Nom 2': 'B',
+      'Nom 4': 'C',
+      'Nom 5': 'D'
+    })
+    expect(restretchedFields(def, fields, before, { x: 3, y: 2 }, 'end', 'x')).toEqual({
+      'Nom 2': 'A',
+      'Nom 3': 'B',
+      'Nom 5': 'C',
+      'Nom 6': 'D'
+    })
+    // Une rangée de plus en bas : rien ne bouge.
+    expect(restretchedFields(def, fields, before, { x: 2, y: 3 }, 'start', 'y')).toBe(fields)
+  })
+
+  it('laisse de côté les modèles par nombre, et le dit', () => {
+    const def = plate()
+    const model = {
+      count: 1,
+      size: { widthCells: 2, heightCells: 2 },
+      visual: { kind: 'drawing' as const, primitives: [] },
+      pins: []
+    }
+    def.stretch = { ...(def.stretch as Stretch), models: [model] }
+    // Le dessin à un motif reste celui du composant, pas celui du modèle.
+    expect(stretchedDefinition(def, { x: 1, y: 1 }).size).toEqual(def.size)
+    expect(modelDrawing(def, 2)).toBeNull()
+    expect(componentIssues(def)).toContainEqual({
+      level: 'warning',
+      message: 'Les modèles par nombre ne servent pas à un composant qui s’étire dans les deux sens'
+    })
+    // Chaque sens a ses contrôles.
+    const off = plate()
+    off.stretch = {
+      ...(off.stretch as Stretch),
+      y: { from: 4, to: 20, initial: 1, min: 1, max: 8 }
+    }
+    expect(componentIssues(off).map((issue) => issue.message)).toContain(
+      'Le motif dépasse la boîte du composant'
+    )
   })
 })
 

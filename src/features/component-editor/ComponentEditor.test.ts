@@ -889,7 +889,7 @@ describe('éditeur de composants : composant extensible', () => {
     await nextTick()
   }
 
-  it('trois boutons radio règlent l’étirement ; un sens montre les réglages, l’aperçu et les traits', async () => {
+  it('deux cases règlent l’étirement ; un sens coché montre ses réglages, l’aperçu et ses traits', async () => {
     const store = withRectangle()
     store.addPin({ x: 2, y: 1 })
     store.selection = null
@@ -910,37 +910,37 @@ describe('éditeur de composants : composant extensible', () => {
       input.dispatchEvent(new Event('change', { bubbles: true }))
       await nextTick()
     }
-    const modes = (): ReturnType<typeof wrapper.findAll> =>
-      section().findAll('.stretch-modes input[type="radio"]')
-    const choose = async (value: string): Promise<void> => {
-      const radio = modes().find((entry) => entry.attributes('value') === value)
-      if (!radio) throw new Error(`bouton « ${value} » introuvable`)
-      await radio.setValue(true)
+    const boxes = (): ReturnType<typeof wrapper.findAll> =>
+      section().findAll('.stretch-senses input[type="checkbox"]')
+    const tick = async (axis: string, on: boolean): Promise<void> => {
+      const box = boxes().find((entry) => entry.attributes('value') === axis)
+      if (!box) throw new Error(`case « ${axis} » introuvable`)
+      await box.setValue(on)
     }
-    const chosen = (): string | undefined =>
-      modes()
-        .find((entry) => (entry.element as HTMLInputElement).checked)
-        ?.attributes('value')
-    // Au départ : les trois boutons, « Désactivé » coché, et rien d'autre ; pas de traits.
+    const ticked = (): (string | undefined)[] =>
+      boxes()
+        .filter((entry) => (entry.element as HTMLInputElement).checked)
+        .map((entry) => entry.attributes('value'))
+    const labels = (within = ''): string[] =>
+      section()
+        .findAll(`${within} .field span`)
+        .map((span) => span.text())
+    // Au départ : les deux cases, décochées, et rien d'autre ; pas de traits.
     expect(
       section()
-        .findAll('.stretch-modes .check')
+        .findAll('.stretch-senses .check')
         .map((entry) => entry.text())
-    ).toEqual(['Désactivé', 'Horizontal', 'Vertical'])
-    expect(chosen()).toBe('off')
-    expect(section().find('input[type="checkbox"]').exists()).toBe(false)
+    ).toEqual(['Horizontal', 'Vertical'])
+    expect(ticked()).toEqual([])
+    expect(section().find('input[type="radio"]').exists()).toBe(false)
     expect(section().findAll('.field')).toHaveLength(0)
     expect(wrapper.find('.cuts').exists()).toBe(false)
 
     // « Horizontal » rend le composant extensible, en largeur.
-    await choose('x')
-    expect(store.doc.stretch).toEqual({ from: 0, to: 16, initial: 1, min: 1, max: 12 })
-    expect(chosen()).toBe('x')
-    expect(
-      section()
-        .findAll('.field span')
-        .map((span) => span.text())
-    ).toEqual([
+    await tick('x', true)
+    expect(store.doc.stretch).toEqual({ x: { from: 0, to: 16, initial: 1, min: 1, max: 12 } })
+    expect(ticked()).toEqual(['x'])
+    expect(labels()).toEqual([
       'Début du motif',
       'Largeur du motif',
       'Au départ',
@@ -948,6 +948,8 @@ describe('éditeur de composants : composant extensible', () => {
       'Maximum',
       'Aperçu à 3'
     ])
+    // Un seul sens : son bloc n'a pas besoin de titre.
+    expect(section().find('.span-title').exists()).toBe(false)
     // Les deux traits et la bande du motif sont sur la feuille.
     expect(wrapper.findAll('.cuts .cut')).toHaveLength(2)
     expect(wrapper.find('.cuts .motif-band').exists()).toBe(true)
@@ -955,11 +957,11 @@ describe('éditeur de composants : composant extensible', () => {
     // Le motif : une cellule, à partir d'une demi-cellule.
     await type('Largeur du motif', '2')
     await type('Début du motif', '0.5')
-    expect(store.doc.stretch).toMatchObject({ from: 2, to: 10 })
+    expect(store.doc.stretch?.x).toMatchObject({ from: 2, to: 10 })
     await type('Maximum', '6')
     await type('Au départ', '9')
     // Hors des bornes : le nombre est ramené, et le champ le redit.
-    expect(store.doc.stretch).toMatchObject({ initial: 6, max: 6 })
+    expect(store.doc.stretch?.x).toMatchObject({ initial: 6, max: 6 })
     expect(field('Au départ').value).toBe('6')
     await type('Au départ', '2')
     await type('Minimum', '2')
@@ -988,20 +990,61 @@ describe('éditeur de composants : composant extensible', () => {
     // Rien de tout cela n'est enregistré dans le composant.
     expect(store.doc.pins).toHaveLength(1)
 
-    // « Vertical » change de sens, « Désactivé » rend le composant ordinaire.
-    await choose('y')
-    expect(store.doc.stretch).toMatchObject({ axis: 'y' })
-    expect(chosen()).toBe('y')
-    await choose('off')
+    // « Vertical » en plus : le composant s'étire dans les deux sens, chacun sous son nom, avec
+    // ses réglages, ses traits et son curseur d'aperçu.
+    await tick('y', true)
+    expect(ticked()).toEqual(['x', 'y'])
+    expect(store.doc.stretch).toMatchObject({
+      x: { from: 2, to: 10, min: 2, max: 6 },
+      y: { from: 0, to: 8, initial: 1, min: 1, max: 12 }
+    })
+    expect(
+      section()
+        .findAll('.span-title')
+        .map((entry) => entry.text())
+    ).toEqual(['Horizontal', 'Vertical'])
+    expect(labels('.span-y')).toEqual([
+      'Début du motif',
+      'Hauteur du motif',
+      'Au départ',
+      'Minimum',
+      'Maximum'
+    ])
+    expect(wrapper.findAll('.cuts')).toHaveLength(2)
+    expect(wrapper.findAll('.cuts .cut')).toHaveLength(4)
+    expect(
+      section()
+        .findAll('.preview-count span')
+        .map((span) => span.text())
+    ).toEqual(['Aperçu horizontal à 5', 'Aperçu vertical à 3'])
+    // Cinq colonnes sur trois rangées : la broche du motif est recopiée dans les deux sens.
+    expect(section().findAll('.preview-pin')).toHaveLength(15)
+    // Les réglages d'un sens ne touchent pas à l'autre.
+    const tall = section().get('.span-y').findAll('.counts input')[2]
+    if (!tall) throw new Error('maximum du sens vertical introuvable')
+    ;(tall.element as HTMLInputElement).value = '4'
+    await tall.trigger('change')
+    expect(store.doc.stretch).toMatchObject({ x: { max: 6 }, y: { max: 4 } })
+    // Dans les deux sens, pas de modèles par nombre à ajouter.
+    expect(section().find('button.add-model').exists()).toBe(false)
+
+    // Décocher un sens ne laisse que l'autre ; décocher le dernier rend le composant ordinaire.
+    await tick('x', false)
+    expect(store.doc.stretch).toEqual({ y: { from: 0, to: 8, initial: 1, min: 1, max: 4 } })
+    expect(ticked()).toEqual(['y'])
+    expect(wrapper.findAll('.cuts .cut')).toHaveLength(2)
+    expect(section().find('button.add-model').exists()).toBe(true)
+    await tick('y', false)
     expect(store.doc.stretch).toBeUndefined()
-    expect(chosen()).toBe('off')
+    expect(ticked()).toEqual([])
     expect(wrapper.find('.cuts').exists()).toBe(false)
     wrapper.unmount()
   })
 
   it('glisser le trait de gauche déplace le motif, celui de droite règle sa largeur', async () => {
     const store = withRectangle()
-    store.setStretch({ from: 0, to: 4 })
+    store.setStretchAxis('x', true)
+    store.setStretchSpan('x', { from: 0, to: 4 })
     const wrapper = mount(ComponentEditor, { attachTo: document.body })
     await nextTick()
     const svg = wrapper.get('svg.canvas')
@@ -1014,20 +1057,20 @@ describe('éditeur de composants : composant extensible', () => {
     await fireAt(wrapper.get('.cut-to .cut-hit'), 'pointerdown', x(1))
     await fireAt(svg, 'pointermove', x(2.9))
     // Aperçu pendant le geste : rien d'enregistré.
-    expect(store.doc.stretch).toMatchObject({ from: 0, to: 4 })
+    expect(store.doc.stretch?.x).toMatchObject({ from: 0, to: 4 })
     await fireAt(svg, 'pointerup', x(2.9))
-    expect(store.doc.stretch).toMatchObject({ from: 0, to: 12 })
+    expect(store.doc.stretch?.x).toMatchObject({ from: 0, to: 12 })
     expect(store.undoLabel).toBe('Régler le motif')
     // Le trait de gauche, tiré d'un quart de cellule : le motif se déplace, sans changer de largeur.
     await fireAt(wrapper.get('.cut-from .cut-hit'), 'pointerdown', x(0))
     await fireAt(svg, 'pointermove', x(0.26))
     await fireAt(svg, 'pointerup', x(0.26))
-    expect(store.doc.stretch).toMatchObject({ from: 1, to: 13 })
+    expect(store.doc.stretch?.x).toMatchObject({ from: 1, to: 13 })
     // Il ne sort pas de la boîte (4 cellules).
     await fireAt(wrapper.get('.cut-from .cut-hit'), 'pointerdown', x(0.25))
     await fireAt(svg, 'pointermove', x(9))
     await fireAt(svg, 'pointerup', x(9))
-    expect(store.doc.stretch).toMatchObject({ from: 4, to: 16 })
+    expect(store.doc.stretch?.x).toMatchObject({ from: 4, to: 16 })
     wrapper.unmount()
   })
 })
@@ -1037,7 +1080,8 @@ describe('éditeur de composants : modèles par nombre', () => {
     const store = withRectangle()
     store.addPin({ x: 2, y: 1 })
     store.selection = null
-    store.setStretch({ from: 4, to: 12, initial: 1, min: 1, max: 4 })
+    store.setStretchAxis('x', true)
+    store.setStretchSpan('x', { from: 4, to: 12, initial: 1, min: 1, max: 4 })
     store.inspectorOpen = true
     const wrapper = mount(ComponentEditor, { attachTo: document.body })
     await nextTick()
@@ -1088,26 +1132,29 @@ describe('éditeur de composants : modèles par nombre', () => {
   })
 })
 
-describe('éditeur de composants : étirement en hauteur', () => {
-  it('« Vertical » couche les traits, qui se glissent de haut en bas', async () => {
+describe('éditeur de composants : étirement en hauteur et dans les deux sens', () => {
+  it('« Vertical » ajoute deux traits couchés, qui se glissent de haut en bas', async () => {
     const store = withRectangle()
     store.setSize({ widthCells: 2, heightCells: 4 })
-    store.setStretch({ from: 0, to: 4 })
+    store.setStretchAxis('x', true)
+    store.setStretchSpan('x', { from: 0, to: 4 })
     store.inspectorOpen = true
     const wrapper = mount(ComponentEditor, { attachTo: document.body })
     await nextTick()
     const section = (): ReturnType<typeof wrapper.get> => wrapper.get('.inspector .stretch')
     // En largeur : deux traits verticaux.
-    expect(wrapper.get('.cuts').classes()).not.toContain('vertical')
-    const upright = wrapper.get('.cut-from .cut-line').attributes()
+    expect(wrapper.findAll('.cuts')).toHaveLength(1)
+    expect(wrapper.get('.cuts-x').classes()).not.toContain('vertical')
+    const upright = wrapper.get('.cuts-x .cut-from .cut-line').attributes()
     expect(upright['x1']).toBe(upright['x2'])
 
-    await section().get('.stretch-modes input[value="y"]').setValue(true)
-    expect(store.doc.stretch).toMatchObject({ axis: 'y', from: 0, to: 16 })
-    expect(section().findAll('.field span')[1]?.text()).toBe('Hauteur du motif')
-    // En hauteur : deux traits horizontaux, sur toute la largeur de la feuille.
-    expect(wrapper.get('.cuts').classes()).toContain('vertical')
-    const flat = wrapper.get('.cut-from .cut-line').attributes()
+    await section().get('.stretch-senses input[value="y"]').setValue(true)
+    expect(store.doc.stretch).toMatchObject({ x: { from: 0, to: 4 }, y: { from: 0, to: 16 } })
+    expect(section().findAll('.span-y .field span')[1]?.text()).toBe('Hauteur du motif')
+    // En hauteur : deux traits horizontaux de plus, sur toute la largeur de la feuille.
+    expect(wrapper.findAll('.cuts')).toHaveLength(2)
+    expect(wrapper.get('.cuts-y').classes()).toContain('vertical')
+    const flat = wrapper.get('.cuts-y .cut-from .cut-line').attributes()
     expect(flat['y1']).toBe(flat['y2'])
     expect(Number(flat['x2'])).toBeGreaterThan(Number(flat['x1']))
 
@@ -1127,15 +1174,17 @@ describe('éditeur de composants : étirement en hauteur', () => {
       )
       await nextTick()
     }
-    await fire(wrapper.get('.cut-to .cut-hit'), 'pointerdown', y(4))
+    await fire(wrapper.get('.cuts-y .cut-to .cut-hit'), 'pointerdown', y(4))
     await fire(svg, 'pointermove', y(2.1))
     await fire(svg, 'pointerup', y(2.1))
-    expect(store.doc.stretch).toMatchObject({ axis: 'y', from: 0, to: 8 })
+    expect(store.doc.stretch?.y).toMatchObject({ from: 0, to: 8 })
     // Le trait du haut, descendu d'une cellule : le motif se déplace, sans changer de hauteur.
-    await fire(wrapper.get('.cut-from .cut-hit'), 'pointerdown', y(0))
+    await fire(wrapper.get('.cuts-y .cut-from .cut-hit'), 'pointerdown', y(0))
     await fire(svg, 'pointermove', y(1))
     await fire(svg, 'pointerup', y(1))
-    expect(store.doc.stretch).toMatchObject({ axis: 'y', from: 4, to: 12 })
+    expect(store.doc.stretch?.y).toMatchObject({ from: 4, to: 12 })
+    // Les traits de la largeur n'ont pas bougé.
+    expect(store.doc.stretch?.x).toMatchObject({ from: 0, to: 4 })
     wrapper.unmount()
   })
 })

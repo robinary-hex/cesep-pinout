@@ -706,55 +706,60 @@ describe('éditeur de composants : composant extensible', () => {
     const store = useComponentEditorStore()
     expect(store.shown.stretch).toBeUndefined()
     // Au départ : tout le composant (4 cellules) est le motif, de 1 à 12.
-    store.setStretch({})
-    expect(store.doc.stretch).toEqual({ from: 0, to: 16, initial: 1, min: 1, max: 12 })
+    store.setStretchAxis('x', true)
+    expect(store.doc.stretch).toEqual({ x: { from: 0, to: 16, initial: 1, min: 1, max: 12 } })
     expect(store.undoLabel).toBe('Composant extensible')
     expect(store.status).toContain('deux traits')
     // Le motif se déplace au quart de cellule ; sa largeur va par cellules entières.
-    store.setStretch({ from: 2, to: 6 })
-    expect(store.doc.stretch).toMatchObject({ from: 2, to: 6 })
+    store.setStretchSpan('x', { from: 2, to: 6 })
+    expect(store.doc.stretch?.x).toMatchObject({ from: 2, to: 6 })
     expect(store.undoLabel).toBe('Régler le motif')
-    store.setStretch({ to: 9 })
-    expect(store.doc.stretch).toMatchObject({ from: 2, to: 10 })
+    store.setStretchSpan('x', { to: 9 })
+    expect(store.doc.stretch?.x).toMatchObject({ from: 2, to: 10 })
     // Il ne sort pas de la boîte.
-    store.setStretch({ from: 14, to: 22 })
-    expect(store.doc.stretch).toMatchObject({ from: 8, to: 16 })
+    store.setStretchSpan('x', { from: 14, to: 22 })
+    expect(store.doc.stretch?.x).toMatchObject({ from: 8, to: 16 })
     // Les nombres restent cohérents : le départ entre le minimum et le maximum.
-    store.setStretch({ initial: 2, min: 2, max: 6 })
-    expect(store.doc.stretch).toMatchObject({ initial: 2, min: 2, max: 6 })
-    store.setStretch({ max: 1 })
-    expect(store.doc.stretch).toMatchObject({ initial: 2, min: 2, max: 2 })
-    // Redire la même chose ne fait pas de commande.
+    store.setStretchSpan('x', { initial: 2, min: 2, max: 6 })
+    expect(store.doc.stretch?.x).toMatchObject({ initial: 2, min: 2, max: 6 })
+    store.setStretchSpan('x', { max: 1 })
+    expect(store.doc.stretch?.x).toMatchObject({ initial: 2, min: 2, max: 2 })
+    // Redire la même chose ne fait pas de commande ; régler un sens qu'il n'a pas non plus.
     const before = store.doc
-    store.setStretch({ max: 2 })
+    store.setStretchSpan('x', { max: 2 })
+    store.setStretchSpan('y', { max: 4 })
+    store.setStretchAxis('x', true)
+    store.setStretchAxis('y', false)
     expect(store.doc).toBe(before)
-    store.setStretch(null)
+    store.setStretchAxis('x', false)
     expect(store.doc.stretch).toBeUndefined()
     expect(store.undoLabel).toBe('Composant non extensible')
     store.undo()
-    expect(store.doc.stretch).toMatchObject({ min: 2, max: 2 })
+    expect(store.doc.stretch?.x).toMatchObject({ min: 2, max: 2 })
   })
 
   it('garde le motif dans la boîte quand le composant change de taille', () => {
     const store = useComponentEditorStore()
-    store.setStretch({ from: 8, to: 16 })
+    store.setStretchAxis('x', true)
+    store.setStretchSpan('x', { from: 8, to: 16 })
     store.setSize({ widthCells: 3, heightCells: 2 })
-    expect(store.doc.stretch).toMatchObject({ from: 4, to: 12 })
+    expect(store.doc.stretch?.x).toMatchObject({ from: 4, to: 12 })
     // La boîte gagne une cellule à gauche : le dessin suit l'origine, le motif aussi.
     store.setBox({ x: -1, y: 0, w: 4, h: 2 })
     expect(store.doc.size.widthCells).toBe(4)
-    expect(store.doc.stretch).toMatchObject({ from: 8, to: 16 })
+    expect(store.doc.stretch?.x).toMatchObject({ from: 8, to: 16 })
   })
 
   it('chaque variante a ses réglages : une copie les reprend, puis vit sa vie', () => {
     const store = useComponentEditorStore()
-    store.setStretch({ from: 0, to: 8, initial: 2 })
+    store.setStretchAxis('x', true)
+    store.setStretchSpan('x', { from: 0, to: 8, initial: 2 })
     const variant = store.addVariant()
-    expect(store.shown.stretch).toMatchObject({ from: 0, to: 8, initial: 2 })
-    store.setStretch(null)
+    expect(store.shown.stretch?.x).toMatchObject({ from: 0, to: 8, initial: 2 })
+    store.setStretchAxis('x', false)
     expect(store.shown.stretch).toBeUndefined()
     // La variante d'origine reste extensible.
-    expect(store.doc.stretch).toMatchObject({ from: 0, to: 8 })
+    expect(store.doc.stretch?.x).toMatchObject({ from: 0, to: 8 })
     expect(store.doc.variants?.[0]?.stretch).toBeUndefined()
     // Supprimer la variante d'origine promeut l'autre, avec ses réglages à elle.
     store.removeVariant('base')
@@ -773,7 +778,8 @@ describe('éditeur de composants : modèles par nombre', () => {
     )
     store.addPin({ x: 2, y: 1 })
     store.selection = null
-    store.setStretch({ from: 4, to: 12, initial: 1, min: 1, max: 4 })
+    store.setStretchAxis('x', true)
+    store.setStretchSpan('x', { from: 4, to: 12, initial: 1, min: 1, max: 4 })
     return store
   }
 
@@ -790,21 +796,21 @@ describe('éditeur de composants : modèles par nombre', () => {
     expect(store.shown.visual.primitives).toEqual(store.doc.visual.primitives)
     expect(store.shown.pins).toEqual(store.doc.pins)
     // Les réglages d'étirement restent ceux de la variante.
-    expect(store.shownVariant.stretch).toMatchObject({ from: 4, to: 12 })
+    expect(store.shownVariant.stretch?.x).toMatchObject({ from: 4, to: 12 })
 
     // Ce qu'on dessine va dans le modèle, pas dans le dessin qui s'étire.
     store.setSize({ widthCells: 3, heightCells: 2 })
     store.addPin({ x: 0, y: 1 })
     expect(store.doc.size.widthCells).toBe(4)
     expect(store.doc.pins).toHaveLength(1)
-    expect(store.doc.stretch).toMatchObject({ from: 4, to: 12 })
+    expect(store.doc.stretch?.x).toMatchObject({ from: 4, to: 12 })
     const model = store.doc.stretch?.models?.[0]
     expect(model?.size.widthCells).toBe(3)
     expect(model?.pins).toHaveLength(2)
 
     // Régler le motif pendant qu'on regarde un modèle : la variante change, ses modèles restent.
-    store.setStretch({ max: 6 })
-    expect(store.doc.stretch).toMatchObject({ max: 6 })
+    store.setStretchSpan('x', { max: 6 })
+    expect(store.doc.stretch?.x).toMatchObject({ max: 6 })
     expect(store.doc.stretch?.models).toHaveLength(1)
     expect(store.modelCount).toBe(1)
 
@@ -880,56 +886,98 @@ describe('éditeur de composants : modèles par nombre', () => {
 
     // Rendre le composant ordinaire emporte ses modèles.
     store.showModel(1)
-    store.setStretch(null)
+    store.setStretchAxis('x', false)
     expect(store.modelCount).toBeNull()
     expect(store.shown.stretch).toBeUndefined()
   })
+
+  it('dans les deux sens, les modèles ne servent plus : ils restent, et aucun ne s’ajoute', () => {
+    const store = extensible()
+    store.addModel()
+    store.showModel(null)
+    store.setStretchAxis('y', true)
+    expect(store.status).toContain('modèles par nombre ne servent plus')
+    expect(store.models).toEqual([{ count: 1, used: false }])
+    expect(store.doc.stretch?.models).toHaveLength(1)
+    expect(store.issues.map((issue) => issue.message)).toContain(
+      'Les modèles par nombre ne servent pas à un composant qui s’étire dans les deux sens'
+    )
+    const before = store.doc
+    expect(store.addModel()).toBeNull()
+    expect(store.status).toContain('un seul sens')
+    expect(store.doc).toBe(before)
+    // De retour à un seul sens, le modèle sert de nouveau.
+    store.setStretchAxis('y', false)
+    expect(store.models).toEqual([{ count: 1, used: true }])
+  })
 })
 
-describe('éditeur de composants : étirement en hauteur', () => {
-  it('change de sens : le motif repart de toute la hauteur, les nombres restent', () => {
+describe('éditeur de composants : étirement en hauteur et dans les deux sens', () => {
+  it('chaque sens se coche à part : le second prend tout le dessin, le premier ne bouge pas', () => {
     const store = useComponentEditorStore()
     const height = store.doc.size.heightCells
-    store.setStretch({ from: 4, to: 12, initial: 2, min: 1, max: 6 })
-    store.setStretch({ axis: 'y' })
+    store.setStretchAxis('x', true)
+    store.setStretchSpan('x', { from: 4, to: 12, initial: 2, min: 1, max: 6 })
+    store.setStretchAxis('y', true)
     expect(store.doc.stretch).toEqual({
-      axis: 'y',
-      from: 0,
-      to: height * 4,
-      initial: 2,
-      min: 1,
-      max: 6
+      x: { from: 4, to: 12, initial: 2, min: 1, max: 6 },
+      y: { from: 0, to: height * 4, initial: 1, min: 1, max: 12 }
     })
-    expect(store.undoLabel).toBe('Régler le motif')
+    expect(store.undoLabel).toBe('Étirer dans les deux sens')
+    expect(store.status).toContain('dans les deux sens')
+    // Chaque sens a ses réglages.
+    store.setStretchSpan('y', { max: 3 })
+    expect(store.doc.stretch?.y).toMatchObject({ max: 3 })
+    expect(store.doc.stretch?.x).toMatchObject({ max: 6 })
+    // Décocher la largeur : il ne reste que la hauteur, avec ses réglages.
+    store.setStretchAxis('x', false)
+    expect(store.doc.stretch).toEqual({
+      y: { from: 0, to: height * 4, initial: 1, min: 1, max: 3 }
+    })
+    expect(store.undoLabel).toBe('Étirer dans un seul sens')
     expect(store.status).toContain('en hauteur')
-    // Redire le même sens ne fait rien.
-    const before = store.doc
-    store.setStretch({ axis: 'y' })
-    expect(store.doc).toBe(before)
-    // De retour en largeur, le sens ne s'écrit plus.
-    store.setStretch({ axis: 'x' })
-    expect(store.doc.stretch).toEqual({ from: 0, to: 16, initial: 2, min: 1, max: 6 })
+    // Décocher le dernier sens rend le composant ordinaire.
+    store.setStretchAxis('y', false)
+    expect(store.doc.stretch).toBeUndefined()
     // Un composant rendu extensible directement en hauteur.
-    store.setStretch(null)
-    store.setStretch({ axis: 'y' })
-    expect(store.doc.stretch).toMatchObject({ axis: 'y', from: 0, to: height * 4 })
+    store.setStretchAxis('y', true)
+    expect(store.doc.stretch).toEqual({
+      y: { from: 0, to: height * 4, initial: 1, min: 1, max: 12 }
+    })
+    expect(store.undoLabel).toBe('Composant extensible')
   })
 
-  it('garde le motif dans la hauteur de la boîte', () => {
+  it('garde chaque motif dans la boîte, dans son sens', () => {
     const store = useComponentEditorStore()
     store.setSize({ widthCells: 2, heightCells: 5 })
-    store.setStretch({ axis: 'y' })
-    store.setStretch({ from: 8, to: 16 })
-    expect(store.doc.stretch).toMatchObject({ axis: 'y', from: 8, to: 16 })
+    store.setStretchAxis('y', true)
+    store.setStretchSpan('y', { from: 8, to: 16 })
+    expect(store.doc.stretch?.y).toMatchObject({ from: 8, to: 16 })
     // Il ne sort pas par le bas ; la largeur de la boîte ne le borne pas.
-    store.setStretch({ from: 16, to: 24 })
-    expect(store.doc.stretch).toMatchObject({ from: 12, to: 20 })
+    store.setStretchSpan('y', { from: 16, to: 24 })
+    expect(store.doc.stretch?.y).toMatchObject({ from: 12, to: 20 })
     store.setSize({ widthCells: 1, heightCells: 4 })
-    expect(store.doc.stretch).toMatchObject({ axis: 'y', from: 8, to: 16 })
+    expect(store.doc.stretch?.y).toMatchObject({ from: 8, to: 16 })
     // La boîte gagne une cellule en haut : le dessin suit l'origine, le motif aussi.
     store.setBox({ x: 0, y: -1, w: 1, h: 5 })
     expect(store.doc.size.heightCells).toBe(5)
-    expect(store.doc.stretch).toMatchObject({ from: 12, to: 20 })
+    expect(store.doc.stretch?.y).toMatchObject({ from: 12, to: 20 })
+    // Dans les deux sens : la boîte gagne une cellule à gauche et deux en haut, chaque motif
+    // suit l'origine dans son sens.
+    store.setSize({ widthCells: 3, heightCells: 5 })
+    store.setStretchAxis('x', true)
+    store.setStretchSpan('x', { from: 4, to: 8 })
+    store.setBox({ x: -1, y: -2, w: 4, h: 7 })
+    expect(store.doc.stretch).toMatchObject({
+      x: { from: 8, to: 12 },
+      y: { from: 20, to: 28 }
+    })
+    // Rétrécie, elle ramène les deux motifs dedans.
+    store.setSize({ widthCells: 2, heightCells: 3 })
+    expect(store.doc.stretch).toMatchObject({
+      x: { from: 4, to: 8 },
+      y: { from: 4, to: 12 }
+    })
   })
 })
 

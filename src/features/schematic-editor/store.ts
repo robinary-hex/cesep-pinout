@@ -26,7 +26,7 @@ import {
   variantDefinition,
   insertVertex,
   sameComponentContent,
-  stretchCount,
+  stretchCounts,
   instanceDefinition,
   nearestWirePoint,
   instanceBounds,
@@ -74,6 +74,7 @@ import {
   withStyle,
   wiresFollowingJunctions,
   wiresFollowingPins,
+  type StretchAxis,
   type StretchEnd,
   zoomedView,
   type ColorChoice,
@@ -767,24 +768,31 @@ export const useSchematicStore = defineStore('schematic', () => {
   }
 
   /**
-   * Étire un composant extensible à `count` motifs (décision du 17 novembre 2026), le bout
-   * `fixed` restant en place : son début quand on tire la poignée de fin ou qu'on tape le
-   * nombre, sa fin quand on tire la poignée de début. Les fils soudés à ses broches suivent ;
-   * ceux d'une broche qui disparaît restent où ils sont, bout libre. Les valeurs des textes
-   * variables du motif suivent leur motif, comme les broches. Faux si rien ne change.
+   * Étire un composant extensible à `count` motifs (décision du 17 novembre 2026) dans un de
+   * ses sens (`axis` ; sans lui, le premier où il s'étire), le bout `fixed` restant en place :
+   * son début quand on tire la poignée de fin ou qu'on tape le nombre, sa fin quand on tire la
+   * poignée de début. Les fils soudés à ses broches suivent ; ceux d'une broche qui disparaît
+   * restent où ils sont, bout libre. Les valeurs des textes variables suivent leur texte, comme
+   * les broches. Faux si rien ne change.
    */
-  function setInstanceCount(id: string, count: number, fixed: StretchEnd = 'start'): boolean {
-    const change = restretch(doc.value, id, count, fixed)
+  function setInstanceCount(
+    id: string,
+    count: number,
+    fixed: StretchEnd = 'start',
+    axis?: StretchAxis
+  ): boolean {
+    const change = restretch(doc.value, id, count, fixed, axis)
     if (!change) return false
     const before = doc.value
     const fieldsBefore = doc.value.components.find((instance) => instance.id === id)?.fields
     return apply('Étirer le composant', (draft) => {
       const target = draft.components.find((instance) => instance.id === id)
       if (!target) return
-      target.count = change.instance.count
+      if (change.instance.countX !== undefined) target.countX = change.instance.countX
+      if (change.instance.countY !== undefined) target.countY = change.instance.countY
       target.x = change.instance.x
       target.y = change.instance.y
-      // Les valeurs des textes du motif suivent leur motif.
+      // Les valeurs des textes variables suivent leur texte.
       if (change.instance.fields !== fieldsBefore) target.fields = { ...change.instance.fields }
       settleWires(draft, before, change.pinsBefore)
     })
@@ -1048,6 +1056,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     const embedded = doc.value.embeddedDefs[def.id]
     const refresh = !embedded || !sameComponentContent(embedded, def)
     const shape = variantDefinition(def, current.variant)
+    const counts = stretchCounts(shape)
     applyWithElasticWires(`Poser ${def.name}`, (draft) => {
       if (refresh) draft.embeddedDefs[def.id] = castDraft(structuredClone(def))
       // Une plaque à trous se pose sous tout le reste : les composants vont dessus.
@@ -1067,9 +1076,10 @@ export const useSchematicStore = defineStore('schematic', () => {
         // Un composant se pose derrière les fils : ceux qu'on trace sur lui restent visibles.
         behindWires: true,
         ...(current.variant === null ? {} : { variant: current.variant }),
-        // Un composant extensible garde son nombre de motifs, même si sa définition change
-        // ensuite de nombre de départ.
-        ...(shape.stretch ? { count: stretchCount(shape, null) } : {})
+        // Un composant extensible garde ses nombres de motifs, un par sens où il s'étire, même
+        // si sa définition change ensuite de nombres de départ.
+        ...(shape.stretch?.x ? { countX: counts.x } : {}),
+        ...(shape.stretch?.y ? { countY: counts.y } : {})
       })
     })
     status.value = hasVariants(def)

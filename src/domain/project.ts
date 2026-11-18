@@ -20,7 +20,7 @@ import { styleProfileSchema, type StyleProfile } from './profile'
 import { stretchedDefinition } from './stretch'
 import { isUTurn, segmentStep } from './wires'
 
-export const PROJECT_SCHEMA_VERSION = 24
+export const PROJECT_SCHEMA_VERSION = 25
 
 /**
  * Style propre à un élément du montage (voir styles.ts) : le nom d'un des `styles` du montage ;
@@ -36,10 +36,12 @@ export const componentInstanceSchema = z.object({
   /** Variante du composant que cet exemplaire montre ; absent : la première. */
   variant: z.string().min(1).optional(),
   /**
-   * Nombre de motifs d'un composant extensible (voir stretch.ts) ; absent : son nombre de
-   * départ. Sans effet sur un composant qui ne l'est pas.
+   * Nombre de motifs d'un composant extensible (voir stretch.ts), en largeur (`countX`) et en
+   * hauteur (`countY`) ; absent : son nombre de départ dans ce sens. Sans effet dans un sens où
+   * le composant ne s'étire pas.
    */
-  count: z.number().int().positive().optional(),
+  countX: z.number().int().positive().optional(),
+  countY: z.number().int().positive().optional(),
   /**
    * Une plaque à trous montre aussi son dessous, à sa droite (voir boardFaces.ts) ; absent : son
    * dessus seul. Sans effet sur un composant qui n'est pas une plaque.
@@ -326,13 +328,13 @@ export function instanceBaseDefinition(
 
 /**
  * Le composant qu'un exemplaire posé dessine : sa définition embarquée, dans la variante que
- * l'exemplaire a choisie, étirée à son nombre de motifs si elle est extensible. Indéfini si le
- * montage n'a pas cette définition.
+ * l'exemplaire a choisie, étirée à ses nombres de motifs si elle est extensible, chaque texte
+ * variable avec son champ à lui. Indéfini si le montage n'a pas cette définition.
  */
 export function instanceDefinition(
   project: Pick<Project, 'embeddedDefs'>,
-  instance: Pick<ComponentInstance, 'defId' | 'variant' | 'count'>
+  instance: Pick<ComponentInstance, 'defId' | 'variant' | 'countX' | 'countY'>
 ): ComponentDefinition | undefined {
   const def = instanceBaseDefinition(project, instance)
-  return def ? stretchedDefinition(def, instance.count) : undefined
+  return def ? stretchedDefinition(def, { x: instance.countX, y: instance.countY }) : undefined
 }

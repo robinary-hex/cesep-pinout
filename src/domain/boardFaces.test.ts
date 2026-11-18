@@ -592,10 +592,10 @@ describe('plaque à trous : ce qu’elle emmène', () => {
     const doc = loaded()
     const stretchable = board()
     // Un motif d'une cellule, au milieu de la plaque : un trou de plus par motif.
-    stretchable.stretch = { from: 12, to: 16, initial: 1, min: 1, max: 6 }
+    stretchable.stretch = { x: { from: 12, to: 16, initial: 1, min: 1, max: 6 } }
     doc.embeddedDefs = { ...doc.embeddedDefs, plaque: stretchable }
     doc.components = doc.components.map((instance) =>
-      instance.id === 'b' ? { ...instance, count: 1 } : instance
+      instance.id === 'b' ? { ...instance, countX: 1 } : instance
     )
     // Deux motifs de plus par la fin : le bord droit recule de deux cellules, le dessous de quatre.
     const change = restretch(doc, 'b', 3, 'start')

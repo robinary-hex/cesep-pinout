@@ -280,7 +280,7 @@ describe('montage : composant extensible', () => {
     const def = createEmptyComponent('dupont', 'Dupont')
     def.size = { widthCells: 2, heightCells: 2 }
     def.pins = [{ id: 'p1', name: '1', kind: 'io', x: 1, y: 1 }]
-    def.stretch = { from: 2, to: 6, initial: 2, min: 1, max: 5 }
+    def.stretch = { x: { from: 2, to: 6, initial: 2, min: 1, max: 5 } }
     store.startPlacing(def)
     const id = store.placeAt(2, 3)
     store.startPlacing(createEmptyComponent('r', 'Résistance'))
@@ -301,19 +301,73 @@ describe('montage : composant extensible', () => {
     expect(field().value).toBe('2')
     expect([field().min, field().max]).toEqual(['1', '5'])
     await type('4')
-    expect(store.doc.components[0]).toMatchObject({ id, x: 2, count: 4 })
+    expect(store.doc.components[0]).toMatchObject({ id, x: 2, countX: 4 })
     expect(store.undoLabel).toBe('Étirer le composant')
     // Au-delà du maximum : ramené, et le champ le redit ; vide : rien ne change.
     await type('30')
-    expect(store.doc.components[0]?.count).toBe(5)
+    expect(store.doc.components[0]?.countX).toBe(5)
     expect(field().value).toBe('5')
     await type('')
-    expect(store.doc.components[0]?.count).toBe(5)
+    expect(store.doc.components[0]?.countX).toBe(5)
     expect(field().value).toBe('5')
+    // Un seul sens : un seul champ, « Étirement ».
+    expect(wrapper.findAll('.inspector .stretch-count span').map((span) => span.text())).toEqual([
+      'Étirement'
+    ])
     // Un composant ordinaire n'a pas ce champ.
     store.selection = [plain]
     await flushPromises()
     expect(wrapper.find('.inspector .stretch-count').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('dans les deux sens, le panneau a un nombre par sens, nommé comme on le voit', async () => {
+    const store = useSchematicStore()
+    const def = createEmptyComponent('grille', 'Grille')
+    def.size = { widthCells: 2, heightCells: 2 }
+    def.pins = [{ id: 'p1', name: '1', kind: 'io', x: 1, y: 1 }]
+    def.stretch = {
+      x: { from: 2, to: 6, initial: 3, min: 1, max: 5 },
+      y: { from: 2, to: 6, initial: 2, min: 1, max: 4 }
+    }
+    store.startPlacing(def)
+    const id = store.placeAt(2, 3)
+    store.stopPlacing()
+    if (!id) throw new Error('pose refusée')
+    store.selection = [id]
+    store.inspectorOpen = true
+    const wrapper = mount(SchematicEditor, { attachTo: document.body })
+    await flushPromises()
+    const fields = (): { label: string; input: HTMLInputElement }[] =>
+      wrapper.findAll('.inspector .stretch-count').map((entry) => ({
+        label: entry.get('span').text(),
+        input: entry.get('input').element
+      }))
+    const type = async (label: string, value: string): Promise<void> => {
+      const found = fields().find((entry) => entry.label === label)
+      if (!found) throw new Error(`champ « ${label} » introuvable`)
+      found.input.value = value
+      found.input.dispatchEvent(new Event('change', { bubbles: true }))
+      await flushPromises()
+    }
+    // Deux champs côte à côte : l'horizontal d'abord, chacun avec son nombre et ses bornes.
+    expect(fields().map((entry) => [entry.label, entry.input.value, entry.input.max])).toEqual([
+      ['Étirement horizontal', '3', '5'],
+      ['Étirement vertical', '2', '4']
+    ])
+    await type('Étirement vertical', '4')
+    expect(store.doc.components[0]).toMatchObject({ countX: 3, countY: 4 })
+    await type('Étirement horizontal', '1')
+    expect(store.doc.components[0]).toMatchObject({ countX: 1, countY: 4 })
+    // Tourné d'un quart de tour, c'est la hauteur du dessin qu'on voit à l'horizontale.
+    store.rotateSelection('cw')
+    await flushPromises()
+    expect(fields().map((entry) => [entry.label, entry.input.value])).toEqual([
+      ['Étirement horizontal', '4'],
+      ['Étirement vertical', '1']
+    ])
+    await type('Étirement horizontal', '2')
+    expect(store.doc.components[0]).toMatchObject({ countX: 1, countY: 2 })
     wrapper.unmount()
   })
 
@@ -382,7 +436,7 @@ describe('montage : composant extensible', () => {
         }
       ]
     }
-    def.stretch = { from: 2, to: 6, initial: 3, min: 1, max: 5 }
+    def.stretch = { x: { from: 2, to: 6, initial: 3, min: 1, max: 5 } }
     store.startPlacing(def)
     const id = store.placeAt(2, 3)
     store.stopPlacing()

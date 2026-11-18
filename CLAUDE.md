@@ -43,7 +43,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   centre de gravité, fin), le trait
   s'arrêtant à la base des pointes d'extrémité
   (`trimForArrows`), à l'écran comme à l'export. Un texte `variable` a pour contenu le nom du champ ; l'instance
-  posée fournit la valeur (`instance.fields`), sinon `defaultValue` s'affiche ; `bold`, `italic`,
+  posée fournit la valeur (`instance.fields`), sinon `defaultValue` s'affiche ; sur le montage,
+  chaque texte variable a son champ à lui, même si deux portent le même nom (`ownFieldNames`,
+  voir « Composants extensibles ») ; `bold`, `italic`,
   `underline` et `strike` stylent le texte, `vertical` le tourne de 90° autour du centre de sa
   boîte (`textLayoutBox`, `textTransform`) (`textStyleAttrs`, boutons à
   pictogramme dans le panneau) ; cocher ou décocher « Vertical » tourne aussi une boîte couchée
@@ -822,17 +824,24 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     (`setInstancesVariant`, par `applyWithElasticWires` : les fils posés sur ses broches suivent).
 - Composants extensibles (décision du 17 novembre 2026 ; `src/domain/stretch.ts`,
   `stretchPlacement.ts`) : un bornier à deux points qu'on étire à trois, un connecteur d'un
-  contact qui en prend huit. Deux traits coupent le dessin en un début, un motif et une fin
-  (`stretch` d'un `ComponentBody` : `axis`, `from`, `to` en quarts de cellule, `initial`,
-  `min`, `max` ; chaque variante a le sien) ; étirer le composant posé répète le motif.
-  - Sens (décision du 17 novembre 2026 ; `axis`, `stretchAxis`) : un dessin s'étire en
-    largeur (absent ou `x` : deux traits verticaux, un début, un motif, une fin) ou en
-    hauteur (`y` : deux traits horizontaux, un haut, un motif, un bas). Un seul sens par
-    dessin, au choix, pas les deux à la fois. `from` et `to` se lisent le long de ce sens
-    (`stretchExtent` : la largeur ou la hauteur de la boîte). `stretch.ts` ne raisonne
-    qu'en largeur : l'étirement en hauteur est le même, appliqué au dessin dont on a
-    échangé abscisses et ordonnées (`turnedDrawing`), puis remis à l'endroit. Tout ce qui
-    suit vaut donc dans les deux sens, « gauche » et « droite » se lisant « haut » et « bas ».
+  contact qui en prend huit. Deux traits coupent le dessin en un début, un motif et une fin ;
+  étirer le composant posé répète le motif. `stretch` d'un `ComponentBody` range ces réglages
+  par sens : `x` et `y`, chacun `from`, `to` en quarts de cellule, `initial`, `min`, `max`
+  (`StretchSpan`), et `models` à côté ; chaque variante a le sien.
+  - Sens (décision du 18 novembre 2026, qui revient sur celle de la veille, où un dessin
+    n'avait qu'un sens ; `stretchAxes`, `stretchAxis` pour le premier, `singleAxis`) : un
+    dessin s'étire en largeur (`x` : deux traits verticaux, un début, un motif, une fin), en
+    hauteur (`y` : deux traits horizontaux, un haut, un motif, un bas), ou dans les deux sens
+    à la fois. Chaque sens a alors son motif et ses nombres, et les quatre traits coupent le
+    dessin en neuf : les coins ne bougent pas, les bords se répètent dans leur sens, le centre
+    dans les deux. `from` et `to` se lisent le long de leur sens (`stretchExtent` : la largeur
+    ou la hauteur de la boîte). `stretch.ts` ne raisonne qu'en largeur : l'étirement en
+    hauteur est le même, appliqué au dessin dont on a échangé abscisses et ordonnées
+    (`turnedDrawing`), puis remis à l'endroit ; les deux sens s'enchaînent, la largeur
+    d'abord, puis la hauteur du résultat (`repeatedDrawing`). Tout ce qui suit vaut donc dans
+    les deux sens, « gauche » et « droite » se lisant « haut » et « bas ». Les fonctions qui
+    prennent des nombres de motifs acceptent un nombre seul, pour le premier sens, ou un par
+    sens (`WantedCounts`, `stretchCounts`).
   - Règle (`stretchedDefinition`) : ce qui est avant le motif ne bouge pas, ce qui est après
     suit ; ce qui tient dans le motif est recopié dans chaque motif, broches comprises ; une
     forme à cheval sur un trait s'allonge (un contour garde le rayon de ses coins, un texte
@@ -851,45 +860,64 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     Un seul morceau (tout le composant est le motif), deux ou trois parties : la même règle.
   - Broches d'un composant étiré : celles d'avant le motif, puis celles de chaque motif l'un
     après l'autre (identifiants `p1`, `p1#1`, `p1#2`… : `stretchPinId`), puis celles
-    d'après ; les numéros suivent cet ordre (`renumberPins`). La bibliothèque montre le
+    d'après ; les numéros suivent cet ordre (`renumberPins`). Recopiée en hauteur, une broche
+    porte ses deux rangs, celui de la largeur puis celui de la hauteur (`p1#2.1`, `p1#0.1`
+    pour un dessin qui ne s'étire qu'en hauteur ; `stretchPinSource`). Ces identifiants ne
+    sont écrits nulle part : les fils tiennent aux broches par leur place. La bibliothèque montre le
     composant comme on l'obtient en le posant : vignette et nombre de broches à son nombre de
     motifs de départ.
-  - Textes variables du motif (décision du 17 novembre 2026) : chaque copie a son champ à
-    elle, toujours, sans réglage. La première garde le nom du champ, les suivantes le font
-    suivre de leur rang (« Nom », « Nom 2 », « Nom 3 » : `stretchFieldName`), donc le
-    panneau du composant posé a une entrée par copie (`componentFields` du composant
-    étiré). Un texte variable hors du motif, ou à cheval sur un trait, reste seul. Quand le
-    composant s'étire, les valeurs suivent leur motif comme les broches
-    (`restretchedFields`, dans `restretch`) : par la fin rien ne bouge, par le début chaque
-    valeur change de rang avec son motif ; celle d'un motif retiré par le début est perdue.
-  - `instanceDefinition` rend le composant étiré au nombre de l'exemplaire (`count`, écrit à
-    la pose : il ne change pas si la définition change de nombre de départ ; ramené entre les
-    bornes à chaque dessin, `stretchCount`) : rendu, connectivité, élasticité et export n'ont
-    rien d'autre à savoir. `instanceBaseDefinition` rend le dessin d'avant étirement. Le
-    résultat est gardé par composant et par nombre : une définition ne se modifie jamais sur
-    place (Immer), sinon l'étirement gardé serait périmé.
-  - Éditeur de composants : section « Étirement » du panneau du composant. Trois boutons
-    radio (décision du 17 novembre 2026 ; `STRETCH_MODES`, `setStretchMode`) : « Désactivé »,
-    « Horizontal » (en largeur) ou « Vertical » (en hauteur) ; choisir un sens rend le
-    composant extensible. Puis le début et la taille du motif, « Au départ », « Minimum »,
-    « Maximum », les modèles, et l'aperçu, qui ne s'enregistre pas : un curseur large comme
-    le panneau, du minimum au maximum, un cran par nombre (`previewTicks`), et le composant
-    étiré à ce nombre, centré dans un cadre (`.preview-frame` ; `setStretch`,
-    `normalizedStretch`). Changer de sens remet le motif sur toute
-    l'étendue du nouveau et garde les nombres et les modèles. Sur la feuille, les deux
-    traits (`.cuts`, couchés quand le sens est la hauteur) : glisser le premier déplace le
-    motif, le second règle sa taille ; le motif reste dans la boîte quand elle change
-    (`setSize`, `setBox`).
-  - Montage : le composant seul sélectionné montre une poignée à chaque bout du sens où il
-    s'étire (`stretchHandles`, `.stretch-handle`) : une petite flèche pleine, juste hors du
-    cadre pointillé de la sélection, qui pointe vers l'extérieur (décision du 17 novembre
-    2026 ; `stretchGrips`, `STRETCH_ARROW_PX`, un disque invisible autour d'elle pour la
-    saisir) ; la tirer ajoute ou retire un motif par taille de
-    motif (`pulledCount`), avec aperçu, en une commande (`setInstanceCount`, `restretch`).
-    Le bout qu'on ne tire pas reste en place, rotation et miroir compris. Le panneau a un
-    champ « Étirement » : son nombre de motifs. Les fils suivent leurs broches (`stretchPinMap` : par la fin, les
-    motifs gardent leur rang ; par le début, ils se comptent depuis la fin) ; le fil d'une
-    broche qui disparaît reste où il est, bout libre.
+  - Un champ par texte variable (décision du 18 novembre 2026, qui élargit celle de la
+    veille ; `ownFieldNames` de component.ts, appliqué par `stretchedDefinition` à tout
+    composant posé, extensible ou non) : aucun champ ne règle deux textes. Dans le dessin
+    d'un composant posé, les textes variables du même nom sont numérotés dans l'ordre de
+    lecture, de haut en bas puis de gauche à droite : le premier garde le nom, les suivants
+    le font suivre de leur rang (« Pin », « Pin 2 », « Pin 3 »), en sautant un nom déjà
+    porté. Ça vaut pour les copies d'un texte du motif, pour un texte hors du motif qui porte
+    le même nom qu'un texte du motif (le cas qui a fait changer la règle : deux textes
+    réglés par le même champ), et pour deux textes du même nom d'un composant ordinaire.
+    L'éditeur de composants, lui, montre le dessin tel qu'on l'a nommé. Le panneau du
+    composant posé a une entrée par texte, dans ce même ordre (`componentFields`). Quand le
+    composant s'étire, les valeurs suivent leur texte, pas le nom du champ, qui change de
+    rang (`restretchedFields`, dans `restretch` : chaque texte se reconnaît à sa forme
+    d'origine et au rang de sa copie, `Origin`) : par la fin rien ne bouge, par le début
+    chaque valeur suit son motif ; celle d'un motif retiré est perdue. La migration du
+    projet 24 → 25 donne aux textes qui partageaient un champ la valeur qu'ils partageaient.
+  - `instanceDefinition` rend le composant étiré aux nombres de l'exemplaire (`countX`,
+    `countY`, un par sens où il s'étire, écrits à la pose : ils ne changent pas si la
+    définition change de nombres de départ ; ramenés entre les bornes à chaque dessin,
+    `stretchCounts`) : rendu, connectivité, élasticité et export n'ont rien d'autre à
+    savoir. `instanceBaseDefinition` rend le dessin d'avant étirement. Le résultat est gardé
+    par composant et par couple de nombres : une définition ne se modifie jamais sur place
+    (Immer), sinon l'étirement gardé serait périmé.
+  - Éditeur de composants : section « Étirement » du panneau du composant. Deux cases à
+    cocher (décision du 18 novembre 2026, à la place de trois boutons radio ;
+    `STRETCH_SENSES`, `setStretchAxis` du store) : « Horizontal » (en largeur) et
+    « Vertical » (en hauteur), l'une, l'autre, les deux ou aucune. Un sens qu'on coche prend
+    tout le dessin pour motif, de 1 à 12, sans toucher à l'autre ; décocher le dernier rend
+    le composant ordinaire (ses modèles partent avec). Puis, pour chaque sens coché (sous
+    son nom quand il y en a deux : `.stretch-span`, `.span-title`), le début et la taille du
+    motif, « Au départ », « Minimum », « Maximum » (`setStretchSpan`, `normalizedSpan`) ;
+    les modèles ; et l'aperçu, qui ne s'enregistre pas : un curseur par sens, large comme le
+    panneau, du minimum au maximum, un cran par nombre (`previewTicks`), et le composant
+    étiré à ces nombres, centré dans un cadre (`.preview-frame`). Sur la feuille, deux
+    traits par sens (`.cuts`, `.cuts-x`, `.cuts-y`, couchés pour la hauteur) et la bande du
+    motif entre eux, les deux bandes se recouvrant sur ce qui se répète dans les deux sens :
+    glisser le premier trait déplace le motif, le second règle sa taille ; chaque motif
+    reste dans la boîte quand elle change (`setSize`, `setBox`, `normalizedStretch`).
+  - Montage : le composant seul sélectionné montre une poignée à chaque bout de chaque sens
+    où il s'étire, quatre s'il s'étire dans les deux (`stretchHandles`, qui dit l'`axis` de
+    chacune ; `.stretch-handle`) : une petite flèche pleine, juste hors du cadre pointillé
+    de la sélection, qui pointe vers l'extérieur (décision du 17 novembre 2026 ;
+    `stretchGrips`, `STRETCH_ARROW_PX`, un disque invisible autour d'elle pour la saisir) ;
+    la tirer ajoute ou retire un motif par taille de motif dans son sens (`pulledCount`),
+    avec aperçu, en une commande (`setInstanceCount(id, nombre, bout fixe, sens)`,
+    `restretch`). Le bout qu'on ne tire pas reste en place, rotation et miroir compris. Le
+    panneau a un champ « Étirement », son nombre de motifs ; deux champs côte à côte quand
+    il s'étire dans les deux sens, « Étirement horizontal » et « Étirement vertical », nommés
+    d'après ce qu'on voit sur le montage, rotation comprise (`stretches` de
+    `SchematicInspector.vue`). Les fils suivent leurs broches (`stretchPinMap` : par la fin,
+    les motifs gardent leur rang ; par le début, ils se comptent depuis la fin) ; le fil
+    d'une broche qui disparaît reste où il est, bout libre.
   - Modèles par nombre (décision du 17 novembre 2026 ; `stretch.models`) : un dessin
     particulier pour un nombre précis de motifs (une pièce à un point, moulée d'un bloc)
     remplace alors le motif répété. On ne le choisit pas en posant le composant : c'est le
@@ -909,6 +937,11 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     de la variante (`shownVariant`, `variantBodyOf`), qu'on regarde le motif ou un modèle.
     La barre d'outils a la liste des dessins dès qu'il y a un modèle. Un modèle dont le
     nombre sort des bornes ne sert pas : le panneau le grise, les contrôles le disent.
+    Un modèle ne vaut que pour un composant qui s'étire dans un seul sens (décision du 18
+    novembre 2026 : dans les deux, il faudrait un dessin par couple de nombres) : cocher le
+    second sens les laisse dans le fichier, grisés, sans effet (`modelFor`), « + Modèle »
+    disparaît s'il n'y en a pas et se grise s'il y en a, et les contrôles le disent ;
+    décocher un sens les remet en service.
 - Plaques à trous (décision du 17 novembre 2026) : une plaque de prototypage (des trous au pas
   de 2,54 mm, des composants enfichés dessus, des fils soudés dessous) se dessine dans le
   montage, pas dans un mode à part. Une cellule vaut le pas des trous : les broches des
@@ -1180,9 +1213,9 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
     composant posé s'appelle « libellé » dans l'interface.
 - Interface, messages, commentaires, commits en français ; identifiants de code en anglais.
 - Fichiers JSON avec `schemaVersion` ; migrations dans `src/domain/migrations.ts` ; un fixture
-  par version dans `src/domain/fixtures/`. Versions courantes : composant 16, projet 24, paramètres 15,
-  diagramme 6 (composant 16 et projet 24, du 17 novembre 2026, pas encore publiés, portent les
-  composants extensibles : `stretch`, `crop`, `count`, et la plaque à trous : forme `holes`, sorte d'un fil `kind`, `underside` et `facesGap` d'une plaque posée, `footprint` d'une forme ; le projet 24 donne l'étain aux fils nus du 23, qui se dessinaient tous ainsi ; un composant ou un montage qu'ils
+  par version dans `src/domain/fixtures/`. Versions courantes : composant 17, projet 25, paramètres 15,
+  diagramme 6 (composant 17 et projet 25, du 18 novembre 2026, pas encore publiés, portent les
+  composants extensibles : `stretch` rangé par sens, `crop`, `countX` et `countY` d'un composant posé, et la plaque à trous : forme `holes`, sorte d'un fil `kind`, `underside` et `facesGap` d'une plaque posée, `footprint` d'une forme ; les versions 16 et 24, de la veille, n'ont pas été publiées non plus : elles n'avaient qu'un sens d'étirement (`stretch.axis`, `count`), que leurs migrations rangent sous le bon sens ; le projet 24 donne l'étain aux fils nus du 23, qui se dessinaient tous ainsi, et le 25 donne son propre champ à chaque texte variable, avec la valeur que partageaient ceux du même nom ; un composant ou un montage qu'ils
   enregistrent ne s'ouvrira plus dans la 1.9.1 ni avant ; paramètres 15 et diagramme 5 sont ceux de la 1.6.0, publiée le 11 novembre
   2026 : palette des diagrammes et dossier de Pinout dans les paramètres, couleur du texte
   d'un nœud dans le diagramme ; un diagramme enregistré par la 1.6.0 ne s'ouvre plus dans une

@@ -47,7 +47,7 @@ import {
   textLabelBounds,
   pulledCount,
   restretch,
-  stretchCount,
+  stretchCounts,
   stretchedDefinition,
   stretchHandles,
   THROUGH_MARK_COLOR,
@@ -83,6 +83,7 @@ import {
   type PinRef,
   type Project,
   type Solder,
+  type StretchAxis,
   type StretchEnd,
   type TextLabel,
   type ThroughMark,
@@ -171,10 +172,12 @@ type Drag =
   | { kind: 'band'; start: LocalPoint; current: LocalPoint; additive: boolean }
   | { kind: 'text-box'; start: GridPoint; current: GridPoint }
   | { kind: 'label-handle'; id: string; handleId: string; original: Box; preview: Box }
-  // Étirement d'un composant extensible par une de ses deux poignées.
+  // Étirement d'un composant extensible par une de ses poignées, dans un de ses sens.
   | {
       kind: 'stretch'
       id: string
+      /** Le sens du dessin qu'on étire : sa largeur, ou sa hauteur. */
+      axis: StretchAxis
       /** Le bout qu'on tire ; l'autre reste en place. */
       end: StretchEnd
       /** Où la poignée a été saisie, et le sens dans lequel la tirer allonge. */
@@ -348,7 +351,13 @@ function labelOffsetOf(id: string): { dx: number; dy: number } {
 const stretching = computed(() => {
   const current = drag.value
   if (current?.kind !== 'stretch') return null
-  return restretch(store.doc, current.id, current.count, current.end === 'end' ? 'start' : 'end')
+  return restretch(
+    store.doc,
+    current.id,
+    current.count,
+    current.end === 'end' ? 'start' : 'end',
+    current.axis
+  )
 })
 
 /**
@@ -373,7 +382,10 @@ const placed = computed<PlacedInstance[]>(() => {
     if (item.instance.id !== change.instance.id) return item
     return {
       instance: change.instance,
-      def: stretchedDefinition(baseOf(item), change.instance.count)
+      def: stretchedDefinition(baseOf(item), {
+        x: change.instance.countX,
+        y: change.instance.countY
+      })
     }
   })
 })
@@ -724,8 +736,9 @@ const SELECTION_MARGIN_CELLS = 0.15
 const STRETCH_ARROW_PX = { gap: 5, length: 10, half: 7, hit: 12 }
 
 /**
- * Poignées d'étirement : aux deux bouts d'un composant extensible seul sélectionné, hors
- * déplacement. Chacune est une petite flèche, juste hors du cadre pointillé de la sélection,
+ * Poignées d'étirement : aux deux bouts de chaque sens où s'étire un composant extensible seul
+ * sélectionné (quatre s'il s'étire dans les deux sens), hors déplacement. Chacune est une
+ * petite flèche, juste hors du cadre pointillé de la sélection,
  * qui pointe dans le sens où la tirer allonge le composant (décision du 17 novembre 2026 : une
  * barre posée sur le bord du dessin, à l'intérieur du cadre, se voyait mal). Pendant
  * l'étirement elles suivent le composant.
@@ -1515,17 +1528,20 @@ function onWireDown(wireId: string, event: PointerEvent): void {
 
 /** Appui sur une poignée d'étirement : le geste compte les motifs qu'on ajoute ou qu'on retire. */
 function onStretchDown(
-  handle: { instanceId: string; end: StretchEnd; dx: number; dy: number },
+  handle: { instanceId: string; axis: StretchAxis; end: StretchEnd; dx: number; dy: number },
   event: PointerEvent
 ): void {
   if (event.button !== 0 || store.panKeyHeld || store.tool !== 'select') return
   event.stopPropagation()
   const item = store.placed.find((candidate) => candidate.instance.id === handle.instanceId)
   if (!item) return
-  const count = stretchCount(item.def, item.instance.count)
+  const count = stretchCounts(item.def, { x: item.instance.countX, y: item.instance.countY })[
+    handle.axis
+  ]
   drag.value = {
     kind: 'stretch',
     id: handle.instanceId,
+    axis: handle.axis,
     end: handle.end,
     origin: toWorld(screenPoint(event)),
     dx: handle.dx,
@@ -1690,7 +1706,7 @@ function onPointerMove(event: PointerEvent): void {
       const item = store.placed.find((candidate) => candidate.instance.id === current.id)
       const pulled =
         (world.x - current.origin.x) * current.dx + (world.y - current.origin.y) * current.dy
-      if (item) current.count = pulledCount(item.def, current.original, pulled)
+      if (item) current.count = pulledCount(item.def, current.original, pulled, current.axis)
       break
     }
     case 'pin-wire':
@@ -1777,7 +1793,12 @@ function onPointerUp(event: PointerEvent): void {
   } else if (current.kind === 'stretch') {
     // Le bout qu'on ne tire pas reste en place.
     if (current.count !== current.original) {
-      store.setInstanceCount(current.id, current.count, current.end === 'end' ? 'start' : 'end')
+      store.setInstanceCount(
+        current.id,
+        current.count,
+        current.end === 'end' ? 'start' : 'end',
+        current.axis
+      )
     }
   } else if (current.kind === 'pin-wire') {
     if (current.moved) {
@@ -2434,8 +2455,9 @@ const cursorClass = computed(() => {
             />
             <g
               v-for="handle in stretchGrips"
-              :key="`stretch:${handle.end}`"
+              :key="`stretch:${handle.axis}:${handle.end}`"
               class="box-handle stretch-handle"
+              :class="`stretch-${handle.axis}-${handle.end}`"
               :style="{ cursor: handle.cursor }"
               @pointerdown="onStretchDown(handle, $event)"
             >

@@ -10,11 +10,13 @@ import {
   isBoard,
   componentFields,
   ROTATIONS,
-  stretchCount,
+  stretchAxes,
+  stretchCounts,
   TEXT_SCALES,
   type FreeEndStyle,
   type ProfileFact,
   type Rotation,
+  type StretchAxis,
   type StyleProfile,
   type TextAnchor
 } from '@/domain'
@@ -95,19 +97,57 @@ function setVariant(event: Event): void {
   store.setInstancesVariant([single.value.instance.id], (event.target as HTMLSelectElement).value)
 }
 
-/** Nombre de motifs du composant sélectionné, s'il est extensible. */
-const count = computed(() =>
-  single.value ? stretchCount(single.value.def, single.value.instance.count) : 1
-)
+/**
+ * Étirements du composant sélectionné : un nombre de motifs par sens où il s'étire. Quand il y
+ * en a deux, chacun est nommé d'après le sens qu'il a sur le montage, rotation comprise, et
+ * l'horizontal vient d'abord.
+ */
+const stretches = computed(() => {
+  const current = single.value
+  const stretch = current?.def.stretch
+  if (!current || !stretch) return []
+  const counts = stretchCounts(current.def, {
+    x: current.instance.countX,
+    y: current.instance.countY
+  })
+  // Tourné d'un quart de tour, le composant s'étire en hauteur là où son dessin le fait en largeur.
+  const turned = current.instance.rotation % 180 !== 0
+  const axes = stretchAxes(stretch)
+  return axes
+    .flatMap((axis) => {
+      const span = stretch[axis]
+      if (!span) return []
+      const upright = (axis === 'y') !== turned
+      return [
+        {
+          axis,
+          upright,
+          count: counts[axis],
+          min: span.min,
+          max: span.max,
+          label:
+            axes.length === 1
+              ? 'Étirement'
+              : upright
+                ? 'Étirement vertical'
+                : 'Étirement horizontal'
+        }
+      ]
+    })
+    .sort((a, b) => Number(a.upright) - Number(b.upright))
+})
 
 /** Étire le composant au nombre tapé ; son début reste en place, comme en tirant sa fin. */
-function setCount(event: Event): void {
+function setCount(axis: StretchAxis, event: Event): void {
   if (!single.value) return
   const field = event.target as HTMLInputElement
   const wanted = field.value.trim() === '' ? NaN : Number(field.value)
-  if (Number.isFinite(wanted)) store.setInstanceCount(single.value.instance.id, wanted)
+  if (Number.isFinite(wanted)) {
+    store.setInstanceCount(single.value.instance.id, wanted, 'start', axis)
+  }
   // Vide ou hors des bornes : le champ redit le nombre retenu.
-  field.value = String(count.value)
+  const kept = stretches.value.find((entry) => entry.axis === axis)
+  if (kept) field.value = String(kept.count)
 }
 
 /** Une plaque à trous montre son dessous à côté d'elle, ou non. */
@@ -475,21 +515,32 @@ function setLabelVertical(event: Event): void {
             </option>
           </select>
         </label>
-        <label v-if="single.def.stretch" class="field stretch-count">
-          <span
-            title="Nombre de motifs de ce composant extensible ; ses deux poignées l’étirent aussi"
+        <div
+          v-if="stretches.length > 0"
+          class="stretch-counts"
+          :class="{ pair: stretches.length > 1 }"
+        >
+          <label
+            v-for="entry in stretches"
+            :key="entry.axis"
+            class="field stretch-count"
+            :class="`stretch-count-${entry.axis}`"
           >
-            Étirement
-          </span>
-          <input
-            type="number"
-            step="1"
-            :min="single.def.stretch.min"
-            :max="single.def.stretch.max"
-            :value="count"
-            @change="setCount"
-          />
-        </label>
+            <span
+              title="Nombre de motifs de ce composant extensible ; ses poignées l’étirent aussi"
+            >
+              {{ entry.label }}
+            </span>
+            <input
+              type="number"
+              step="1"
+              :min="entry.min"
+              :max="entry.max"
+              :value="entry.count"
+              @change="setCount(entry.axis, $event)"
+            />
+          </label>
+        </div>
         <div v-if="libraryUpdate" class="notice">
           <Icon name="refresh" :size="16" class="notice-icon" />
           <div class="notice-body">

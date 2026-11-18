@@ -14,14 +14,15 @@ import {
   boxHandles,
   resizeBox,
   QUARTERS_PER_CELL,
-  stretchAxis,
+  stretchAxes,
   translatePrimitive,
   type ComponentDefinition,
   type Box,
   type LocalPoint,
   type Pin,
   type PinKind,
-  type Primitive
+  type Primitive,
+  type StretchAxis
 } from '@/domain'
 import { useLibraryStore } from '@/features/library/store'
 import ComponentGraphic from '@/render/ComponentGraphic.vue'
@@ -110,9 +111,9 @@ type Drag =
   | { kind: 'pan'; lastX: number; lastY: number }
   | { kind: 'text-box'; start: QPoint; current: QPoint }
   | { kind: 'resize-box'; handleId: string; preview: Box }
-  // Un trait de coupe d'un composant extensible : le premier (à gauche, ou en haut) déplace le
-  // motif, le second règle sa taille. Positions d'aperçu, en quarts de cellule.
-  | { kind: 'cut'; line: 'from' | 'to'; from: number; to: number }
+  // Un trait de coupe d'un composant extensible, dans un de ses sens : le premier (à gauche, ou
+  // en haut) déplace le motif, le second règle sa taille. Positions d'aperçu, en quarts de cellule.
+  | { kind: 'cut'; axis: StretchAxis; line: 'from' | 'to'; from: number; to: number }
 
 type Preview =
   | { kind: 'rect'; x: number; y: number; width: number; height: number }
@@ -636,60 +637,68 @@ interface CutLine {
 }
 
 /**
- * Traits de coupe d'un composant extensible, en pixels de la feuille : le motif est entre les
- * deux. Ils sont verticaux quand le composant s'étire en largeur, horizontaux quand il s'étire
- * en hauteur. Pendant qu'on en glisse un, ce sont ses positions d'aperçu.
+ * Traits de coupe d'un composant extensible, en pixels de la feuille, pour chaque sens où il
+ * s'étire : le motif est entre les deux. Ils sont verticaux pour la largeur, horizontaux pour la
+ * hauteur ; dans les deux sens, les quatre traits coupent le dessin en neuf, et les deux bandes
+ * se recouvrent sur ce qui se répète dans les deux. Pendant qu'on en glisse un, ce sont ses
+ * positions d'aperçu.
  */
 const cuts = computed(() => {
   const current = drag.value
   const shown = store.shown.stretch
-  if (!shown) return null
-  const stretch = current?.kind === 'cut' ? current : shown
-  const vertical = stretchAxis(shown) === 'y'
-  const from = px(stretch.from)
-  const to = px(stretch.to)
-  // Un trait dépasse un peu de la feuille ; sa prise, un triangle, est à son départ.
-  const line = (id: 'from' | 'to', at: number, title: string): CutLine =>
-    vertical
-      ? {
-          id,
-          title,
-          start: { x: -12, y: at },
-          end: { x: boxWidth.value + 12, y: at },
-          hit: { x: -18, y: at },
-          grip: `M -18 ${at - 6} v 12 l 8 -6 z`
-        }
-      : {
-          id,
-          title,
-          start: { x: at, y: -12 },
-          end: { x: at, y: boxHeight.value + 12 },
-          hit: { x: at, y: -18 },
-          grip: `M ${at - 6} -18 h 12 l -6 8 z`
-        }
-  return {
-    vertical,
-    band: vertical
-      ? { x: 0, y: from, width: boxWidth.value, height: to - from }
-      : { x: from, y: 0, width: to - from, height: boxHeight.value },
-    lines: [
-      line('from', from, 'Début du motif : le glisser déplace le motif'),
-      line(
-        'to',
-        to,
-        vertical
-          ? 'Fin du motif : le glisser règle sa hauteur'
-          : 'Fin du motif : le glisser règle sa largeur'
-      )
+  return stretchAxes(shown).flatMap((axis) => {
+    const saved = shown?.[axis]
+    if (!saved) return []
+    const span = current?.kind === 'cut' && current.axis === axis ? current : saved
+    const vertical = axis === 'y'
+    const from = px(span.from)
+    const to = px(span.to)
+    // Un trait dépasse un peu de la feuille ; sa prise, un triangle, est à son départ.
+    const line = (id: 'from' | 'to', at: number, title: string): CutLine =>
+      vertical
+        ? {
+            id,
+            title,
+            start: { x: -12, y: at },
+            end: { x: boxWidth.value + 12, y: at },
+            hit: { x: -18, y: at },
+            grip: `M -18 ${at - 6} v 12 l 8 -6 z`
+          }
+        : {
+            id,
+            title,
+            start: { x: at, y: -12 },
+            end: { x: at, y: boxHeight.value + 12 },
+            hit: { x: at, y: -18 },
+            grip: `M ${at - 6} -18 h 12 l -6 8 z`
+          }
+    return [
+      {
+        axis,
+        vertical,
+        band: vertical
+          ? { x: 0, y: from, width: boxWidth.value, height: to - from }
+          : { x: from, y: 0, width: to - from, height: boxHeight.value },
+        lines: [
+          line('from', from, 'Début du motif : le glisser déplace le motif'),
+          line(
+            'to',
+            to,
+            vertical
+              ? 'Fin du motif : le glisser règle sa hauteur'
+              : 'Fin du motif : le glisser règle sa largeur'
+          )
+        ]
+      }
     ]
-  }
+  })
 })
 
-function onCutDown(line: 'from' | 'to', event: PointerEvent): void {
-  const stretch = store.shown.stretch
-  if (event.button !== 0 || store.tool !== 'select' || spaceHeld.value || !stretch) return
+function onCutDown(axis: StretchAxis, line: 'from' | 'to', event: PointerEvent): void {
+  const span = store.shown.stretch?.[axis]
+  if (event.button !== 0 || store.tool !== 'select' || spaceHeld.value || !span) return
   event.stopPropagation()
-  drag.value = { kind: 'cut', line, from: stretch.from, to: stretch.to }
+  drag.value = { kind: 'cut', axis, line, from: span.from, to: span.to }
   capture(event)
 }
 
@@ -901,9 +910,8 @@ function onPointerMove(event: PointerEvent): void {
       ])
       break
     case 'cut': {
-      // Le long du sens où le composant s'étire : sa largeur, ou sa hauteur.
-      const shown = store.shown.stretch
-      const vertical = shown !== undefined && stretchAxis(shown) === 'y'
+      // Le long du sens que ce trait coupe : la largeur du composant, ou sa hauteur.
+      const vertical = current.axis === 'y'
       const width = (vertical ? size.value.heightCells : size.value.widthCells) * QUARTERS_PER_CELL
       const x = vertical ? toQuarters(cells).y : toQuarters(cells).x
       if (current.line === 'from') {
@@ -1080,7 +1088,7 @@ function onPointerUp(event: PointerEvent): void {
   drag.value = null
   switch (current.kind) {
     case 'cut':
-      store.setStretch({ from: current.from, to: current.to })
+      store.setStretchSpan(current.axis, { from: current.from, to: current.to })
       break
     case 'resize-box': {
       const box = current.preview
@@ -1265,25 +1273,26 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
             layer="all"
           />
 
-          <!-- Composant extensible : le motif, entre ses deux traits de coupe. -->
+          <!-- Composant extensible : dans chaque sens, le motif entre ses deux traits de coupe. -->
           <g
-            v-if="cuts"
+            v-for="cut in cuts"
+            :key="cut.axis"
             class="cuts"
-            :class="{ idle: store.tool !== 'select', vertical: cuts.vertical }"
+            :class="[`cuts-${cut.axis}`, { idle: store.tool !== 'select', vertical: cut.vertical }]"
           >
             <rect
               class="motif-band"
-              :x="cuts.band.x"
-              :y="cuts.band.y"
-              :width="cuts.band.width"
-              :height="cuts.band.height"
+              :x="cut.band.x"
+              :y="cut.band.y"
+              :width="cut.band.width"
+              :height="cut.band.height"
             />
             <g
-              v-for="line in cuts.lines"
+              v-for="line in cut.lines"
               :key="line.id"
               class="cut"
               :class="`cut-${line.id}`"
-              @pointerdown="onCutDown(line.id, $event)"
+              @pointerdown="onCutDown(cut.axis, line.id, $event)"
             >
               <title>{{ line.title }}</title>
               <line

@@ -10,7 +10,7 @@ import {
 } from './grid'
 import { pngDataUrlDimensions } from './png'
 
-export const COMPONENT_SCHEMA_VERSION = 16
+export const COMPONENT_SCHEMA_VERSION = 17
 
 export const pinKindSchema = z.enum(['in', 'out', 'io', 'power'])
 export type PinKind = z.infer<typeof pinKindSchema>
@@ -429,16 +429,10 @@ export const countModelSchema = z.object({
 export type CountModel = z.infer<typeof countModelSchema>
 
 /**
- * Composant extensible (décision du 17 novembre 2026, voir stretch.ts) : deux traits coupent le
- * dessin en un début, un motif et une fin ; étirer le composant posé répète le motif.
+ * Étirement d'un dessin dans un sens : deux traits le coupent en un début, un motif et une fin ;
+ * étirer le composant posé répète le motif.
  */
-export const stretchSchema = z.object({
-  /**
-   * Sens de l'étirement : absent ou 'x', en largeur (deux traits verticaux : un début, un motif,
-   * une fin) ; 'y', en hauteur (deux traits horizontaux : un haut, un motif, un bas). Un seul
-   * sens par dessin ; `from` et `to` se lisent le long de ce sens.
-   */
-  axis: z.enum(['x', 'y']).optional(),
+export const stretchSpanSchema = z.object({
   /** Premier trait du motif (celui de gauche, ou du haut), en quarts de cellule. */
   from: quarterSchema,
   /** Second trait ; le motif fait un nombre entier de cellules, pour les broches recopiées. */
@@ -446,8 +440,23 @@ export const stretchSchema = z.object({
   /** Nombre de motifs d'un exemplaire qu'on vient de poser. */
   initial: z.number().int().positive(),
   min: z.number().int().positive(),
-  max: z.number().int().positive(),
-  /** Dessins particuliers pour certains nombres de motifs ; absent tant qu'il n'y en a pas. */
+  max: z.number().int().positive()
+})
+export type StretchSpan = z.infer<typeof stretchSpanSchema>
+
+/**
+ * Composant extensible (décision du 17 novembre 2026, voir stretch.ts). Il s'étire en largeur
+ * (`x` : deux traits verticaux, un début, un motif, une fin), en hauteur (`y` : deux traits
+ * horizontaux, un haut, un motif, un bas), ou dans les deux sens à la fois (décision du 18
+ * novembre 2026) : chaque sens a son motif et ses nombres.
+ */
+export const stretchSchema = z.object({
+  x: stretchSpanSchema.optional(),
+  y: stretchSpanSchema.optional(),
+  /**
+   * Dessins particuliers pour certains nombres de motifs ; absent tant qu'il n'y en a pas. Ils
+   * ne servent qu'à un composant qui s'étire dans un seul sens.
+   */
   models: z.array(countModelSchema).optional()
 })
 export type Stretch = z.infer<typeof stretchSchema>
@@ -693,7 +702,6 @@ export interface ComponentField {
   unit: string
 }
 
-/** Champs variables d'un composant (textes variables), dans l'ordre du dessin, sans doublon. */
 /** Interligne des textes, en multiple de leur hauteur. */
 export const TEXT_LINE_HEIGHT = 1.2
 
@@ -795,11 +803,58 @@ export function layoutText(primitive: TextPrimitive, fields?: FieldValues): Text
   )
 }
 
+/** Textes variables d'un dessin, avec leur rang, dans l'ordre de lecture : de haut en bas, puis de gauche à droite. */
+function variableTexts(
+  primitives: readonly Primitive[]
+): { primitive: TextPrimitive; index: number }[] {
+  return primitives
+    .flatMap((primitive, index) =>
+      primitive.kind === 'text' && primitive.variable ? [{ primitive, index }] : []
+    )
+    .sort(
+      (a, b) => a.primitive.y - b.primitive.y || a.primitive.x - b.primitive.x || a.index - b.index
+    )
+}
+
+/**
+ * Chaque texte variable a son champ à lui (décision du 18 novembre 2026) : deux textes du même
+ * nom ne partagent pas une valeur, qu'on les ait dessinés ainsi ou qu'un composant étiré ait
+ * recopié le sien. Dans le dessin d'un composant posé, les textes variables de même nom sont
+ * numérotés dans l'ordre de lecture, de haut en bas puis de gauche à droite : le premier garde le
+ * nom, les suivants le font suivre de leur rang (« Pin », « Pin 2 », « Pin 3 »), en sautant un
+ * nom qu'un autre texte porte déjà. Rend le même tableau quand il n'y a rien à renommer.
+ */
+export function ownFieldNames(primitives: readonly Primitive[]): readonly Primitive[] {
+  const byName = new Map<string, { primitive: TextPrimitive; index: number }[]>()
+  for (const entry of variableTexts(primitives)) {
+    const group = byName.get(entry.primitive.text)
+    if (group) group.push(entry)
+    else byName.set(entry.primitive.text, [entry])
+  }
+  if ([...byName.values()].every((group) => group.length === 1)) return primitives
+  const taken = new Set(byName.keys())
+  const renamed = [...primitives]
+  for (const [name, group] of byName) {
+    let rank = 2
+    for (const entry of group.slice(1)) {
+      while (taken.has(`${name} ${rank}`)) rank++
+      const own = `${name} ${rank}`
+      taken.add(own)
+      renamed[entry.index] = { ...entry.primitive, text: own }
+    }
+  }
+  return renamed
+}
+
+/**
+ * Champs variables d'un composant (ses textes variables), dans l'ordre de lecture, sans doublon.
+ * Ceux d'un composant posé (`instanceDefinition`) ont chacun leur nom : un champ par texte.
+ */
 export function componentFields(def: ComponentDefinition): ComponentField[] {
   const seen = new Set<string>()
   const fields: ComponentField[] = []
-  for (const primitive of def.visual.primitives) {
-    if (primitive.kind !== 'text' || !primitive.variable || seen.has(primitive.text)) continue
+  for (const { primitive } of variableTexts(def.visual.primitives)) {
+    if (seen.has(primitive.text)) continue
     seen.add(primitive.text)
     fields.push({
       name: primitive.text,
@@ -1085,26 +1140,35 @@ function bodyIssues(def: ComponentDefinition): ComponentIssue[] {
 
   const stretch = def.stretch
   if (stretch) {
-    const span = stretch.to - stretch.from
-    if (span < QUARTERS_PER_CELL || span % QUARTERS_PER_CELL !== 0) {
-      issues.push({
-        level: 'error',
-        message: 'Composant extensible : le motif doit faire un nombre entier de cellules'
-      })
+    for (const axis of ['x', 'y'] as const) {
+      const span = stretch[axis]
+      if (!span) continue
+      const size = span.to - span.from
+      if (size < QUARTERS_PER_CELL || size % QUARTERS_PER_CELL !== 0) {
+        issues.push({
+          level: 'error',
+          message: 'Composant extensible : le motif doit faire un nombre entier de cellules'
+        })
+      }
+      if (span.min > span.max || span.initial < span.min || span.initial > span.max) {
+        issues.push({
+          level: 'error',
+          message:
+            'Composant extensible : le nombre de départ doit être entre le minimum et le maximum'
+        })
+      }
+      if (span.from < 0 || span.to > (axis === 'y' ? maxY : maxX)) {
+        issues.push({ level: 'warning', message: 'Le motif dépasse la boîte du composant' })
+      }
     }
-    if (
-      stretch.min > stretch.max ||
-      stretch.initial < stretch.min ||
-      stretch.initial > stretch.max
-    ) {
+    // Les modèles par nombre ne valent que pour un seul sens : celui du composant, s'il n'en a qu'un.
+    const single = stretch.x && stretch.y ? undefined : (stretch.x ?? stretch.y)
+    if (!single && (stretch.models?.length ?? 0) > 0) {
       issues.push({
-        level: 'error',
+        level: 'warning',
         message:
-          'Composant extensible : le nombre de départ doit être entre le minimum et le maximum'
+          'Les modèles par nombre ne servent pas à un composant qui s’étire dans les deux sens'
       })
-    }
-    if (stretch.from < 0 || stretch.to > (stretch.axis === 'y' ? maxY : maxX)) {
-      issues.push({ level: 'warning', message: 'Le motif dépasse la boîte du composant' })
     }
     const counts = new Set<number>()
     for (const model of stretch.models ?? []) {
@@ -1115,7 +1179,7 @@ function bodyIssues(def: ComponentDefinition): ComponentIssue[] {
         })
       }
       counts.add(model.count)
-      if (model.count < stretch.min || model.count > stretch.max) {
+      if (single && (model.count < single.min || model.count > single.max)) {
         issues.push({
           level: 'warning',
           message: `Modèle à ${model.count} : hors des nombres permis, il ne sert pas`
