@@ -56,9 +56,7 @@ function isOpen(name: string): boolean {
 /** Infobulle d'une vignette de la grille : le nom, que la grille ne montre pas, et les broches. */
 function tileTitle(entry: LibraryEntry): string {
   if (!entry.def) return entry.problem ?? 'Fichier illisible'
-  const action =
-    props.mode === 'place' ? ' — clic puis clic sur le montage, ou glisser-déposer' : ''
-  return `${entry.def.name} · ${contents(entry.def)}${action}`
+  return `${entry.def.name} · ${contents(entry.def)}`
 }
 
 /**
@@ -344,7 +342,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
         <button
           type="button"
           class="group-head"
-          :title="isOpen(group.name) ? 'Replier la catégorie' : 'Déplier la catégorie'"
+          :title="isOpen(group.name) ? 'Replier' : 'Déplier'"
           @click="toggleGroup(group.name)"
         >
           <Icon name="chevron-down" :size="12" class="chevron" />
@@ -402,8 +400,8 @@ async function remove(entry: LibraryEntry): Promise<void> {
               :title="
                 entry.def
                   ? mode === 'place'
-                    ? `Poser ${entry.def.name} : clic puis clic sur le montage, ou glisser-déposer`
-                    : `${entry.def.name} — clic : aperçu ; double-clic : garder l’onglet`
+                    ? `Poser ${entry.def.name}`
+                    : entry.def.name
                   : (entry.problem ?? '')
               "
               @click="pick(entry)"
@@ -431,7 +429,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
                 type="button"
                 class="variant-chip"
                 :class="{ current: isPlacingVariant(entry, variant.id) }"
-                :title="`Poser ${entry.def.name}, variante « ${variant.name} »`"
+                :title="`Poser « ${variant.name} »`"
                 @click="placeVariant(entry, variant.id)"
               >
                 {{ variant.name }}

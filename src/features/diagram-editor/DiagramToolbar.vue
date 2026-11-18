@@ -30,10 +30,8 @@ const fileLabel = computed(() => (store.filePath ? baseName(store.filePath) : 'N
 
 /** Infobulle du bouton de copie de style, selon qu'elle est en cours, possible ou non. */
 const styleCopyTitle = computed(() => {
-  if (store.tool === 'style') return 'Arrêter la copie de style (S ou Échap)'
-  return store.styleCandidate
-    ? 'Copier le style de la sélection : clic ou lasso sur les éléments du même type (S)'
-    : 'Copier le style (S) : sélectionne d’abord une forme, un lien ou un texte'
+  if (store.tool === 'style') return 'Arrêter la copie (S / Échap)'
+  return store.styleCandidate ? 'Copier le style (S)' : 'Sélectionne d’abord un élément'
 })
 
 function pickCustom(hex: string): void {
@@ -44,16 +42,16 @@ function pickCustom(hex: string): void {
 
 /** Fonds proposés, chacun montré par un petit nœud d'exemple dans la couleur courante. */
 const FILLS: { value: NodeFill; label: string; title: string }[] = [
-  { value: 'none', label: 'Contour', title: 'Fond : contour seul' },
+  { value: 'none', label: 'Contour', title: 'Fond : contour' },
   {
     value: 'tint',
     label: 'Teinté',
-    title: 'Fond : teinté, plus clair que le contour (plus sombre en thème sombre)'
+    title: 'Fond : teinté'
   },
   {
     value: 'solid',
     label: 'Plein',
-    title: 'Fond : plein, la couleur même, contour qui s’en détache'
+    title: 'Fond : plein'
   }
 ]
 
@@ -133,7 +131,7 @@ function toggleEndArrow(): void {
           type="button"
           class="tool icon-only"
           :class="{ active: store.tool === 'link' }"
-          title="Tracer un lien (F)"
+          title="Lien (F)"
           @click="store.startLinkTool()"
         >
           <Icon name="link" :size="18" />
@@ -142,7 +140,7 @@ function toggleEndArrow(): void {
           type="button"
           class="tool icon-only"
           :class="{ active: store.tool === 'text' }"
-          title="Poser un texte libre (E)"
+          title="Texte (E)"
           @click="store.startTextTool()"
         >
           <Icon name="type" :size="18" />
@@ -170,7 +168,7 @@ function toggleEndArrow(): void {
           type="button"
           class="tool fill-choice"
           :class="{ active: shownFill === fill.value }"
-          :title="`${fill.title} ; change aussi les nœuds sélectionnés`"
+          :title="fill.title"
           :aria-label="fill.label"
           @click="store.setCurrentFill(fill.value)"
         >
@@ -180,12 +178,12 @@ function toggleEndArrow(): void {
         </button>
       </div>
 
-      <div class="group" title="Style des prochains liens ; change aussi les liens sélectionnés">
+      <div class="group">
         <button
           type="button"
           class="tool icon-only"
           :class="{ active: startArrow }"
-          title="Flèche au départ du lien"
+          title="Flèche au départ"
           @click="toggleStartArrow"
         >
           <Icon name="arrow-left" />
@@ -194,7 +192,7 @@ function toggleEndArrow(): void {
           type="button"
           class="tool icon-only"
           :class="{ active: endArrow }"
-          title="Flèche à l'arrivée du lien"
+          title="Flèche à l’arrivée"
           @click="toggleEndArrow"
         >
           <Icon name="arrow-right" />
@@ -203,7 +201,7 @@ function toggleEndArrow(): void {
           type="button"
           class="tool icon-only"
           :class="{ active: dashed }"
-          title="Lien en pointillés"
+          title="Pointillés"
           @click="toggleDash"
         >
           <Icon name="dash" />
@@ -212,14 +210,10 @@ function toggleEndArrow(): void {
 
       <ToolbarPalette
         class="group palette"
-        :title="
-          store.paletteOnLinks
-            ? 'Couleur des prochains liens ; recolore aussi la sélection'
-            : 'Couleur des prochains nœuds ; recolore aussi la sélection'
-        "
+        :title="store.paletteOnLinks ? 'Couleur des liens' : 'Couleur des nœuds'"
         :swatches="store.colorChoices"
         :current="store.currentColor"
-        adder-title="Couleur personnalisée, gardée dans ce diagramme"
+        adder-title="Ajouter une couleur"
         custom-name="Couleur de ce diagramme"
         @pick="store.setCurrentColor"
         @add="pickCustom"
@@ -244,7 +238,7 @@ function toggleEndArrow(): void {
         type="button"
         class="tool icon-only"
         :class="{ active: store.inspectorOpen }"
-        title="Afficher ou masquer le panneau de propriétés (I)"
+        title="Propriétés (I)"
         @click="store.inspectorOpen = !store.inspectorOpen"
       >
         <Icon name="panel" :size="18" />

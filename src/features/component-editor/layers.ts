@@ -13,8 +13,8 @@ export type EditorLayer = 'all' | 'drawing' | 'pins' | 'footprint'
 export interface LayerInfo {
   id: EditorLayer
   label: string
-  /** Ce que le calque montre : l'infobulle de son bouton. */
-  hint: string
+  /** L'infobulle de son bouton : son nom, sans plus. */
+  tip: string
   /** Ce que la barre d'état dit quand on y passe. */
   status: string
   icon: IconName
@@ -24,28 +24,28 @@ export const LAYERS: readonly LayerInfo[] = [
   {
     id: 'all',
     label: 'Tout',
-    hint: 'dessin, broches et empreintes, tous sous la main',
+    tip: 'Tous les calques',
     status: 'Tout le composant : dessin, broches et empreintes.',
     icon: 'layers'
   },
   {
     id: 'drawing',
     label: 'Dessin',
-    hint: 'formes, textes et images ; broches estompées, empreintes cachées',
+    tip: 'Calque Dessin',
     status: 'Calque Dessin : les broches sont estompées, les empreintes cachées.',
     icon: 'shapes'
   },
   {
     id: 'pins',
     label: 'Broches',
-    hint: 'les broches seules ; dessin estompé, empreintes cachées',
+    tip: 'Calque Broches',
     status: 'Calque Broches : le dessin est estompé, les empreintes cachées.',
     icon: 'pins'
   },
   {
     id: 'footprint',
     label: 'Empreintes',
-    hint: 'la place du composant sur l’autre face d’une plaque ; ce qu’on y trace en devient une',
+    tip: 'Calque Empreintes',
     status: 'Calque Empreintes : ce qu’on trace en devient une ; le reste est estompé.',
     icon: 'footprint'
   }

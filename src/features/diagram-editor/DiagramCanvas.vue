@@ -1628,7 +1628,7 @@ const cursorClass = computed(() => {
           class="title"
           :rows="titleRows"
           placeholder="Titre"
-          title="Entrée valide, Maj+Entrée va à la ligne, Échap abandonne"
+          title="Maj+Entrée va à la ligne"
         />
         <input v-model="editing.subtitle" type="text" class="subtitle" placeholder="Sous-titre" />
       </div>

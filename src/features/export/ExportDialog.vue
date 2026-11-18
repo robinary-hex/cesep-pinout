@@ -192,11 +192,7 @@ function setMargin(event: Event): void {
           </label>
         </fieldset>
 
-        <label
-          v-if="inkFollowsBackground && options.background === 'transparent'"
-          class="check"
-          title="Sur un fond de couleur, l'encre suit déjà le fond : claire s'il est sombre"
-        >
+        <label v-if="inkFollowsBackground && options.background === 'transparent'" class="check">
           <input v-model="darkPage" type="checkbox" />
           <span>Pour une page sombre (encre claire)</span>
         </label>

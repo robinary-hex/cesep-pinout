@@ -30,7 +30,7 @@ const emit = defineEmits<{
     <button type="button" class="icon-only" title="Zoom arrière (molette)" @click="emit('zoomOut')">
       <Icon name="zoom-out" />
     </button>
-    <button type="button" class="zoom" title="Revenir à 100 % (1)" @click="emit('zoomReset')">
+    <button type="button" class="zoom" title="Zoom 100 % (1)" @click="emit('zoomReset')">
       {{ zoom }}
     </button>
     <button type="button" class="icon-only" title="Zoom avant (molette)" @click="emit('zoomIn')">
@@ -64,7 +64,7 @@ const emit = defineEmits<{
       type="button"
       class="icon-only remove"
       :disabled="!canDelete"
-      :title="canDelete ? 'Supprimer la sélection (Suppr)' : 'Rien de sélectionné'"
+      :title="canDelete ? 'Supprimer (Suppr)' : 'Rien de sélectionné'"
       @click="emit('remove')"
     >
       <Icon name="trash" />

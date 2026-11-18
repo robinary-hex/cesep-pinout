@@ -106,7 +106,7 @@ function open(file: DocumentFile, preview: boolean): void {
 }
 
 function fileTitle(file: DocumentFile): string {
-  return `${file.path} — clic : aperçu ; double-clic : garder l’onglet`
+  return file.path
 }
 
 // Menus contextuels
@@ -175,7 +175,7 @@ function openListMenu(event: MouseEvent): void {
         v-if="group.name.length > 0"
         type="button"
         class="group-head"
-        :title="isOpen(group.name) ? 'Replier le dossier' : 'Déplier le dossier'"
+        :title="isOpen(group.name) ? 'Replier' : 'Déplier'"
         @click="toggleGroup(group.name)"
       >
         <Icon name="chevron-down" :size="12" class="chevron" />

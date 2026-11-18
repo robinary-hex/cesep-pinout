@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import Icon from '@/ui/Icon.vue'
+import KeyCombo from '@/ui/KeyCombo.vue'
 import ModalDialog from '@/ui/ModalDialog.vue'
-import { comboTokens, SHORTCUT_SECTIONS } from './shortcuts'
+import { SHORTCUT_SECTIONS } from './shortcuts'
 
 // Aide : les raccourcis d'un éditeur à la fois, celui qu'on regarde d'abord ; des onglets, dans
 // l'ordre et au nom des boutons de mode, mènent aux autres. Le contenu est dans shortcuts.ts ;
@@ -47,7 +48,7 @@ const MODIFIERS: [string, string][] = [
       </nav>
       <ul class="modifiers">
         <li v-for="[key, meaning] in MODIFIERS" :key="key">
-          <kbd>{{ key }}</kbd>
+          <kbd class="keycap">{{ key }}</kbd>
           {{ meaning }}
         </li>
       </ul>
@@ -68,64 +69,13 @@ const MODIFIERS: [string, string][] = [
               <div class="keys">
                 <template v-for="(combo, rank) in row.keys" :key="combo">
                   <span v-if="rank > 0" class="joint">ou</span>
-                  <span class="combo">
-                    <template v-for="(token, place) in comboTokens(combo)" :key="place">
-                      <span v-if="place > 0" class="joint">+</span>
-                      <span v-if="token.mouse" class="mouse">
-                        <svg
-                          class="glyph"
-                          viewBox="0 0 20 20"
-                          width="16"
-                          height="16"
-                          aria-hidden="true"
-                        >
-                          <path class="shell" d="M5 7a5 5 0 0 1 10 0v6a5 5 0 0 1-10 0z" />
-                          <path
-                            v-if="token.mouse.button === 'left'"
-                            class="pressed"
-                            d="M10 2a5 5 0 0 0-5 5v2.5h5z"
-                          />
-                          <path
-                            v-if="token.mouse.button === 'right'"
-                            class="pressed"
-                            d="M10 2a5 5 0 0 1 5 5v2.5h-5z"
-                          />
-                          <path
-                            class="outline"
-                            d="M5 7a5 5 0 0 1 10 0v6a5 5 0 0 1-10 0z M5 9.5h10 M10 2v7.5"
-                          />
-                          <path
-                            v-if="token.mouse.button === 'middle' || token.mouse.button === 'wheel'"
-                            class="wheel"
-                            d="M8.5 4.6a1.5 1.5 0 0 1 3 0v2.4a1.5 1.5 0 0 1-3 0z"
-                          />
-                          <path
-                            v-if="token.mouse.drag"
-                            class="motion"
-                            d="M17 7.5l2.2 2.5-2.2 2.5 M3 7.5l-2.2 2.5 2.2 2.5"
-                          />
-                          <path
-                            v-if="token.mouse.button === 'wheel'"
-                            class="motion"
-                            d="M16.4 7.2l1.6-2 1.6 2 M16.4 12.8l1.6 2 1.6-2"
-                          />
-                          <path
-                            v-if="token.mouse.double"
-                            class="motion"
-                            d="M1.6 4.6l2 1.2 M4 1.2l1.2 2"
-                          />
-                        </svg>
-                        {{ token.text }}
-                      </span>
-                      <kbd v-else>{{ token.text }}</kbd>
-                    </template>
-                  </span>
+                  <KeyCombo :combo="combo" />
                 </template>
               </div>
               <div class="does">
                 <span class="label">{{ row.label }}</span>
                 <span v-if="row.withShift" class="more">
-                  <kbd>Maj</kbd>
+                  <kbd class="keycap">Maj</kbd>
                   {{ row.withShift }}
                 </span>
               </div>
@@ -243,72 +193,9 @@ const MODIFIERS: [string, string][] = [
   gap: 4px;
 }
 
-.combo {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  white-space: nowrap;
-}
-
 .joint {
   font-size: 11px;
   color: var(--text-faint);
-}
-
-/* Une touche : un capuchon, plus épais en bas. */
-kbd {
-  display: inline-block;
-  min-width: 22px;
-  padding: 0 6px;
-  font-size: 12px;
-  line-height: 17px;
-  text-align: center;
-  white-space: nowrap;
-  color: var(--text);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-bottom-width: 2px;
-  border-radius: 5px;
-}
-
-/* Un geste de souris : une pastille, avec la souris et son bouton enfoncé. */
-.mouse {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 0 8px 0 3px;
-  font-size: 12px;
-  line-height: 20px;
-  white-space: nowrap;
-  color: var(--text);
-  background: var(--accent-soft);
-  border-radius: 10px;
-}
-
-.glyph {
-  flex: none;
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.glyph .shell {
-  fill: var(--surface);
-}
-
-.glyph .outline {
-  stroke: var(--text);
-  stroke-width: 1.3;
-}
-
-.glyph .pressed,
-.glyph .wheel {
-  fill: var(--accent);
-}
-
-.glyph .motion {
-  stroke: var(--accent);
-  stroke-width: 1.6;
 }
 
 /* Ce que fait le geste : son libellé puis, à la suite et en petit, ce qu'il fait avec Maj. */

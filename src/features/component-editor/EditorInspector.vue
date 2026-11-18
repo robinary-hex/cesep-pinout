@@ -123,12 +123,12 @@ const STRETCH_SENSES: { axis: StretchAxis; label: string; title: string }[] = [
   {
     axis: 'x',
     label: 'Horizontal',
-    title: 'Le composant posé s’étire en largeur : un début, un motif, une fin'
+    title: 'S’étire en largeur'
   },
   {
     axis: 'y',
     label: 'Vertical',
-    title: 'Le composant posé s’étire en hauteur : un haut, un motif, un bas'
+    title: 'S’étire en hauteur'
   }
 ]
 
@@ -693,10 +693,7 @@ function setClosed(event: Event): void {
             </div>
           </div>
         </div>
-        <label
-          class="check"
-          title="Sinon le texte reste horizontal quelle que soit l'orientation du composant. Un miroir ne reflète jamais un texte."
-        >
+        <label class="check" title="Sinon il reste horizontal">
           <input
             type="checkbox"
             :checked="primitive.followsRotation"
@@ -704,7 +701,7 @@ function setClosed(event: Event): void {
           />
           <span>Tourne avec le composant sur le montage</span>
         </label>
-        <label class="check" title="Le texte est tourné de 90° et se lit de haut en bas">
+        <label class="check" title="Se lit de haut en bas">
           <input type="checkbox" :checked="primitive.vertical" @change="setVertical" />
           <span>Vertical</span>
         </label>
@@ -718,7 +715,7 @@ function setClosed(event: Event): void {
         <button
           type="button"
           :disabled="!imageSize.resized"
-          title="Rendre à l’image sa taille d’origine : 80 px du fichier par cellule"
+          title="80 px du fichier par cellule"
           @click="store.resetImageSize(primitiveIndex)"
         >
           Taille d’origine
@@ -861,10 +858,7 @@ function setClosed(event: Event): void {
           <input type="checkbox" :checked="primitive.closed" @change="setClosed" />
           <span>Fermée (polygone)</span>
         </label>
-        <label
-          class="check footprint"
-          title="La forme ne fait pas partie du composant posé : elle dit la place qu’il prend sur l’autre face d’une plaque à trous, où elle se dessine, fondue avec ses autres empreintes."
-        >
+        <label class="check footprint" title="Dessinée sur l’autre face seulement">
           <input type="checkbox" :checked="footprint" @change="setFootprint" />
           <span>Empreinte sur l’autre face d’une plaque</span>
         </label>
@@ -912,7 +906,7 @@ function setClosed(event: Event): void {
           <button
             type="button"
             class="small with-icon"
-            title="Nouvelle variante : une copie de celle qu’on regarde, à retoucher"
+            title="Copie de la variante affichée"
             @click="store.addVariant()"
           >
             <Icon name="plus" :size="13" /> Variante
@@ -947,7 +941,7 @@ function setClosed(event: Event): void {
               type="radio"
               name="shown-variant"
               :checked="variant.id === store.variantId"
-              :title="`Afficher la variante « ${variant.name} » : c’est elle qu’on modifie`"
+              :title="`Afficher « ${variant.name} »`"
               @click.stop
               @change="store.showVariant(variant.id)"
             />
@@ -958,13 +952,13 @@ function setClosed(event: Event): void {
               @click.stop="store.showVariant(variant.id)"
               @change="renameVariant(variant.id, $event)"
             />
-            <span class="grip" title="Glisser pour changer l’ordre des variantes">
+            <span class="grip" title="Glisser pour ranger">
               <Icon name="grip" :size="14" />
             </span>
             <button
               type="button"
               class="small icon-only"
-              title="Supprimer cette variante"
+              title="Supprimer la variante"
               @click.stop="store.removeVariant(variant.id)"
             >
               <Icon name="trash" :size="14" />
@@ -1030,8 +1024,8 @@ function setClosed(event: Event): void {
                 <span
                   :title="
                     entry.axis === 'y'
-                      ? 'Trait du haut, en cellules ; se glisse aussi sur le dessin'
-                      : 'Trait de gauche, en cellules ; se glisse aussi sur le dessin'
+                      ? 'Trait du haut, en cellules'
+                      : 'Trait de gauche, en cellules'
                   "
                 >
                   Début du motif
@@ -1045,7 +1039,7 @@ function setClosed(event: Event): void {
                 />
               </label>
               <label class="field">
-                <span title="En cellules entières : ce dont le composant s’allonge à chaque motif">
+                <span title="En cellules entières">
                   {{ entry.axis === 'y' ? 'Hauteur du motif' : 'Largeur du motif' }}
                 </span>
                 <input
@@ -1059,7 +1053,7 @@ function setClosed(event: Event): void {
             </div>
             <div class="counts">
               <label class="field">
-                <span title="Nombre de motifs du composant qu’on vient de poser">Au départ</span>
+                <span title="Nombre de motifs à la pose">Au départ</span>
                 <input
                   type="number"
                   min="1"
@@ -1094,20 +1088,13 @@ function setClosed(event: Event): void {
             v-if="spans.length === 1 || store.models.length > 0"
             class="block-title models-title"
           >
-            <span
-              class="sub-title"
-              title="Dessins particuliers pour certains nombres de motifs : ils y remplacent le motif répété"
-            >
-              Modèles
-            </span>
+            <span class="sub-title" title="Un dessin à part pour un nombre"> Modèles </span>
             <button
               type="button"
               class="small with-icon add-model"
               :disabled="spans.length !== 1"
               :title="
-                spans.length === 1
-                  ? 'Nouveau modèle : une copie du composant étiré à ce nombre, à retoucher'
-                  : 'Un modèle par nombre ne vaut que pour un composant qui s’étire dans un seul sens'
+                spans.length === 1 ? 'Copie du composant étiré' : 'Pour un seul sens d’étirement'
               "
               @click="store.addModel()"
             >
@@ -1124,7 +1111,7 @@ function setClosed(event: Event): void {
                 type="radio"
                 name="shown-model"
                 :checked="store.modelCount === null"
-                title="Afficher le dessin qui s’étire : c’est lui qu’on modifie"
+                title="Afficher le motif répété"
                 @click.stop
                 @change="store.showModel(null)"
               />
@@ -1141,7 +1128,7 @@ function setClosed(event: Event): void {
                 type="radio"
                 name="shown-model"
                 :checked="store.modelCount === model.count"
-                :title="`Afficher le modèle à ${model.count} : c’est lui qu’on modifie`"
+                :title="`Afficher le modèle à ${model.count}`"
                 @click.stop
                 @change="store.showModel(model.count)"
               />
@@ -1149,10 +1136,10 @@ function setClosed(event: Event): void {
                 class="model-name"
                 :title="
                   model.used
-                    ? 'Nombre de motifs auquel ce dessin remplace le motif répété'
+                    ? 'Nombre de motifs de ce modèle'
                     : spans.length > 1
-                      ? 'Le composant s’étire dans les deux sens : ce modèle ne sert pas'
-                      : 'Hors des nombres permis : ce modèle ne sert pas'
+                      ? 'Ne sert pas : deux sens d’étirement'
+                      : 'Ne sert pas : hors des nombres permis'
                 "
               >
                 <span>Modèle à</span>
@@ -1168,7 +1155,7 @@ function setClosed(event: Event): void {
               <button
                 type="button"
                 class="small icon-only"
-                title="Supprimer ce modèle : à ce nombre, le motif répété revient"
+                title="Supprimer le modèle"
                 @click.stop="store.removeModel(model.count)"
               >
                 <Icon name="trash" :size="14" />
@@ -1182,7 +1169,7 @@ function setClosed(event: Event): void {
               class="field preview-count"
               :class="`preview-${entry.axis}`"
             >
-              <span title="Ce que donne le composant étiré ; rien n’est enregistré">
+              <span title="Rien n’est enregistré">
                 {{ previewLabel(entry) }}
               </span>
               <input
@@ -1226,7 +1213,7 @@ function setClosed(event: Event): void {
           <button
             type="button"
             class="small with-icon"
-            title="Ajouter un groupe où ranger des broches"
+            title="Nouveau groupe de broches"
             @click="store.addPinGroup()"
           >
             <Icon name="plus" :size="13" /> Groupe
@@ -1247,13 +1234,13 @@ function setClosed(event: Event): void {
             <input
               type="text"
               :value="section.group.name"
-              title="Nom du groupe de broches"
+              title="Nom du groupe"
               @change="renamePinGroup(section.group.id, $event)"
             />
             <button
               type="button"
               class="small icon-only"
-              title="Défaire ce groupe : ses broches restent, sans groupe"
+              title="Défaire le groupe"
               @click="store.removePinGroup(section.group.id)"
             >
               <Icon name="trash" :size="14" />
@@ -1293,7 +1280,7 @@ function setClosed(event: Event): void {
                 {{ PIN_KIND_LABELS[kind] }}
               </option>
             </select>
-            <span class="grip" title="Glisser pour changer l’ordre ou le groupe">
+            <span class="grip" title="Glisser pour ranger">
               <Icon name="grip" :size="14" />
             </span>
           </div>

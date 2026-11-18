@@ -58,7 +58,7 @@ defineExpose({ focus })
       spellcheck="false"
       autocomplete="off"
       :disabled="disabled"
-      title="Code hexadécimal de la couleur, par exemple #d62828"
+      title="Code hexadécimal"
       @change="commit"
     />
   </span>

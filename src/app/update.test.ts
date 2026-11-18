@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { TIP_MAX_LENGTH } from '@/ui/tooltip'
 import { updateButtonLabel, updateButtonTitle, updateCheckMessage } from './update'
 
 describe('bouton de mise à jour', () => {
@@ -14,13 +15,23 @@ describe('bouton de mise à jour', () => {
     expect(updateButtonLabel({ state: 'installing', version: '1.2.0' })).toBe(
       'Installation de 1.2.0…'
     )
-    expect(updateButtonTitle({ state: 'installing', version: '1.2.0' })).toContain(
-      'Windows demande l’autorisation'
+    expect(updateButtonTitle({ state: 'installing', version: '1.2.0' })).toBe(
+      'Réponds à la question de Windows'
     )
     expect(updateButtonLabel({ state: 'manual', version: '1.2.0', url: 'https://x' })).toBe(
       'Nouvelle version 1.2.0 : télécharger'
     )
     expect(updateButtonTitle({ state: 'error', message: 'Pas de réseau' })).toBe('Pas de réseau')
+    // Ses infobulles sont courtes, comme toutes celles de l'application.
+    for (const title of [
+      updateButtonTitle({ state: 'available', version: '1.2.0' }),
+      updateButtonTitle({ state: 'downloading', percent: 42 }),
+      updateButtonTitle({ state: 'downloaded', version: '1.2.0' }),
+      updateButtonTitle({ state: 'installing', version: '1.2.0' }),
+      updateButtonTitle({ state: 'manual', version: '1.2.0', url: 'https://x' })
+    ]) {
+      expect(title.length, title).toBeLessThanOrEqual(TIP_MAX_LENGTH)
+    }
   })
 })
 

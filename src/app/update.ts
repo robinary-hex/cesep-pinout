@@ -23,15 +23,15 @@ export function updateButtonLabel(status: UpdateStatus): string {
 export function updateButtonTitle(status: UpdateStatus): string {
   switch (status.state) {
     case 'available':
-      return 'Une nouvelle version est publiée sur GitHub ; clic pour la télécharger en arrière-plan.'
+      return 'Télécharger en arrière-plan'
     case 'downloading':
-      return 'Téléchargement en cours ; tu peux continuer à travailler.'
+      return 'Tu peux continuer à travailler'
     case 'downloaded':
-      return 'La mise à jour est prête : clic pour l’installer et relancer Pinout.'
+      return 'Prête à installer'
     case 'installing':
-      return 'Windows demande l’autorisation d’installer : réponds à sa question. Pinout se ferme dès que l’installation démarre.'
+      return 'Réponds à la question de Windows'
     case 'manual':
-      return 'Version portable : ouvre la page de la release pour télécharger le nouvel exécutable.'
+      return 'Ouvrir la page de la release'
     case 'error':
       return status.message
   }

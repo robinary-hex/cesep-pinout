@@ -436,7 +436,7 @@ function setLabelVertical(event: Event): void {
         <button
           type="button"
           class="icon-only"
-          title="Exporter en PNG ou SVG (Ctrl+E)"
+          title="Exporter (Ctrl+E)"
           @click="emit('exportImage')"
         >
           <Icon name="export" />
@@ -461,7 +461,7 @@ function setLabelVertical(event: Event): void {
           <button
             type="button"
             class="small with-icon"
-            title="Modifier le style de ce montage seulement"
+            title="Ce montage seulement"
             @click="emit('editProfile')"
           >
             <Icon name="brush" :size="13" /> Modifier le style…
@@ -470,7 +470,7 @@ function setLabelVertical(event: Event): void {
             v-if="store.profileDiffs.length > 0"
             type="button"
             class="small with-icon"
-            title="Rétablit le profil de style général pour ce montage (annulable)"
+            title="Revenir au profil général"
             @click="store.adoptGeneralProfile()"
           >
             <Icon name="refresh" :size="13" /> Réinitialiser
@@ -487,7 +487,7 @@ function setLabelVertical(event: Event): void {
             <button
               type="button"
               class="small"
-              title="Sélectionner les éléments dessinés avec ce style"
+              title="Sélectionner ses éléments"
               @click="store.selectStyled(usage.name)"
             >
               Sélectionner
@@ -526,9 +526,7 @@ function setLabelVertical(event: Event): void {
             class="field stretch-count"
             :class="`stretch-count-${entry.axis}`"
           >
-            <span
-              title="Nombre de motifs de ce composant extensible ; ses poignées l’étirent aussi"
-            >
+            <span title="Nombre de motifs">
               {{ entry.label }}
             </span>
             <input
@@ -563,11 +561,7 @@ function setLabelVertical(event: Event): void {
             @change="store.setInstanceLabel(single.instance.id, inputValue($event).trim())"
           />
         </label>
-        <label
-          v-if="isBoard(single.def)"
-          class="check underside"
-          title="Dessine à droite de la plaque son dessous, vu retourné : les fils s’y soudent"
-        >
+        <label v-if="isBoard(single.def)" class="check underside" title="À droite, vu retourné">
           <input
             type="checkbox"
             :checked="single.instance.underside === true"
@@ -653,7 +647,7 @@ function setLabelVertical(event: Event): void {
           />
           <ColorAdder
             :value="singleWire?.color ?? store.paletteColor"
-            title="Couleur personnalisée, gardée dans ce montage"
+            title="Ajouter une couleur"
             @pick="recolorCustom"
           />
         </div>
@@ -737,11 +731,11 @@ function setLabelVertical(event: Event): void {
             </div>
           </div>
         </div>
-        <label class="check" title="Le texte est tourné de 90° et se lit de haut en bas">
+        <label class="check" title="Se lit de haut en bas">
           <input type="checkbox" :checked="singleLabel.vertical" @change="setLabelVertical" />
           <span>Vertical</span>
         </label>
-        <label class="check" title="Un fond de la couleur du papier masque ce qui passe derrière">
+        <label class="check" title="Masque ce qui passe derrière">
           <input type="checkbox" :checked="singleLabel.background" @change="setLabelBackground" />
           <span>Fond</span>
         </label>
@@ -783,10 +777,7 @@ function setLabelVertical(event: Event): void {
 
     <section v-if="store.hasSelection" class="block">
       <h3>Profil de style</h3>
-      <label
-        class="field"
-        title="Traits, coins, jonctions et polices de ce profil ; la taille de cellule reste celle du montage"
-      >
+      <label class="field" title="La grille reste celle du montage">
         <select
           class="style-choice"
           aria-label="Profil de style de la sélection"

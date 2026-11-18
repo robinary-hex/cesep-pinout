@@ -716,6 +716,33 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   diagramme, panneau d'un fil) est `src/ui/ColorAdder.vue` : il ouvre un petit volet avec ce même
   champ, le curseur dans le code ; choisir une couleur l'ajoute et referme le volet, Échap ou un
   clic ailleurs le referment.
+- Infobulles (décision du 18 novembre 2026 ; `src/ui/TooltipHost.vue`, `tooltip.ts`,
+  `KeyCombo.vue`, `keyCombo.ts`) : celles de l'application, jamais celles de Windows.
+  - Une infobulle nomme, elle n'explique pas : quelques mots, 40 caractères au plus sans
+    compter le raccourci (`TIP_MAX_LENGTH` ; `tooltip.test.ts` lit les sources et refuse un
+    texte plus long), ni phrase ni mode d'emploi (« Fil nu (N) », pas « Tracer un fil nu,
+    soudé à toutes les broches sur son trajet (N) »). Ce qui demande une explication est dans
+    l'aide (F1). Un contrôle qui a déjà son libellé n'a d'infobulle que si elle ajoute
+    quelque chose.
+  - Le raccourci s'écrit à la fin, entre parenthèses (« Propriétés (I) », « Fermer (clic
+    milieu) », « Arrêter la copie (S / Échap) » pour deux façons de faire), et se dessine
+    comme dans l'aide : une touche par capuchon, un geste de souris par pastille
+    (`KeyCombo.vue`). `tipContent` ne prend pour raccourci qu'une parenthèse faite de touches
+    et de gestes connus (`isKeyCombo`) : « Taille (pt) » reste du texte.
+  - On l'écrit dans `title`, comme toujours, ou dans `data-tip` sur un élément SVG (pas de
+    `<title>` de SVG : Windows montrerait la sienne). Rien n'est à brancher : l'hôte, monté
+    une fois par `App.vue`, écoute toute la fenêtre. Le temps du survol, il met de côté dans
+    `data-tip` le `title` de l'élément et de ses parents (tant qu'un `title` est là, Windows
+    montre son infobulle), et les rend en sortant ; il suit un `title` que l'application
+    change ou retire pendant le survol. Les tests lisent donc `title` comme avant.
+  - Elle vient après 450 ms de survol, la suivante aussitôt ; sous l'élément, centrée,
+    au-dessus quand la place manque, près du pointeur pour un grand élément. Un clic, une
+    touche ou la molette l'effacent, et elle ne revient pas tant qu'on reste sur le même
+    élément ; rien ne se montre pendant un geste.
+  - Allure : une boîte sombre aux coins arrondis, ses touches en clair (`--tip-*` de
+    style.css ; en thème sombre, un fond plus clair que les surfaces et un filet). Le
+    capuchon d'une touche est le même partout (`kbd.keycap` de style.css, couleurs par
+    `--key-*`).
 - Boîtes de dialogue : `src/ui/ModalDialog.vue` ; tant qu'une est ouverte (`openModals`), les
   éditeurs ignorent leurs raccourcis. `src/ui/PromptDialog.vue` (saisie d'une valeur) et
   `src/ui/ContextMenu.vue` (menu contextuel, entrées décrites dans `contextMenu.ts`, listes
@@ -734,7 +761,8 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   Un raccourci = une ligne, jamais deux (décision du 11 novembre 2026) : le geste dans une
   colonne étroite (144 px), ce qu'il fait, le pictogramme de l'action s'il a un bouton ou une
   entrée de menu. Le geste se dessine : une touche par capuchon (`kbd`), un geste de souris
-  par pastille, avec la souris et son bouton enfoncé (`MOUSE_GESTURES`, `comboTokens` ; « / »
+  par pastille, avec la souris et son bouton enfoncé (`KeyCombo.vue`, `MOUSE_GESTURES` et
+  `comboTokens` de `src/ui/keyCombo.ts`, les mêmes que dans les infobulles ; « / »
   sépare deux façons de faire, « + » ce qu'on fait ensemble ; un double-clic se dit « ×2 »,
   « déposer » est un fichier glissé dans la fenêtre). Ce qu'il fait tient en quelques mots (30
   caractères au plus, variante comprise : un test le vérifie) et dit sur quoi il porte quand

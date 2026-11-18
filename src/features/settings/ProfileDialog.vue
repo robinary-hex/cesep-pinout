@@ -238,7 +238,7 @@ async function remove(entry: SavedProfile): Promise<void> {
               type="radio"
               name="style-profile"
               :checked="entry === shownEntry"
-              :title="`Choisir le profil « ${entry.profile.name} »`"
+              :title="`Choisir « ${entry.profile.name} »`"
               @change="load(entry)"
             />
             <span class="name">{{ entry.profile.name }}</span>
@@ -246,7 +246,7 @@ async function remove(entry: SavedProfile): Promise<void> {
             <span
               v-if="entry === shownEntry && modified"
               class="badge changed"
-              title="Les réglages ci-dessous ne sont plus ceux du profil enregistré"
+              title="Diffère du profil enregistré"
             >
               modifié
             </span>
@@ -256,7 +256,7 @@ async function remove(entry: SavedProfile): Promise<void> {
             <button
               type="button"
               class="small icon-only"
-              title="Supprimer ce profil enregistré"
+              title="Supprimer le profil"
               @click.prevent="remove(entry)"
             >
               <Icon name="trash" :size="14" />
@@ -325,11 +325,7 @@ async function remove(entry: SavedProfile): Promise<void> {
         v-if="tab === 'montage'"
         type="button"
         :disabled="shownEntry !== null && !modified"
-        :title="
-          shownEntry
-            ? 'Remplace le profil enregistré de ce nom par les réglages ci-dessus'
-            : 'Garde ces réglages comme un profil à part, sous le nom du champ « Nom du profil »'
-        "
+        :title="shownEntry ? 'Remplace le profil de ce nom' : 'Nouveau profil, sous ce nom'"
         @click="saveNamed"
       >
         {{ shownEntry ? 'Mettre à jour le profil' : 'Enregistrer comme profil' }}

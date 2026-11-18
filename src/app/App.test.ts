@@ -538,7 +538,7 @@ describe('menu Fichier : fichiers récents', () => {
     await flushPromises()
     // En montage : les montages récents, le dernier ouvert d'abord, une croix chacun.
     expect(recents()).toEqual(['alarme.pinout', 'pompe.pinout'])
-    expect(crosses()[0]?.title).toBe('Retirer de la liste des fichiers récents')
+    expect(crosses()[0]?.title).toBe('Retirer de la liste')
     crosses()[0]?.click()
     await flushPromises()
     // Le menu reste ouvert, sans l'entrée ; le fichier existe toujours, le diagramme reste listé.

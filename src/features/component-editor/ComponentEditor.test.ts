@@ -84,7 +84,7 @@ describe('éditeur de composants : panneau de propriétés', () => {
     await press(wrapper.get('.component-graphic .interactive'))
     await press(wrapper.get('.canvas-scroll'))
     expect(wrapper.find('.inspector').exists()).toBe(true)
-    await wrapper.get('button[title^="Afficher ou masquer le panneau"]').trigger('click')
+    await wrapper.get('button[title^="Propriétés"]').trigger('click')
     expect(store.inspectorOpen).toBe(false)
     expect(wrapper.find('.inspector').exists()).toBe(false)
     // La croix du panneau le masque aussi.
@@ -515,8 +515,8 @@ describe('éditeur de composants : calques de travail', () => {
     const store = withLayers()
     const wrapper = mount(ComponentEditor, { attachTo: document.body })
     const layers = wrapper.findAll('.toolbar .layers button')
-    expect(layers.map((button) => button.attributes('title')?.split(' :')[0])).toEqual([
-      'Calque Tout',
+    expect(layers.map((button) => button.attributes('title'))).toEqual([
+      'Tous les calques',
       'Calque Dessin',
       'Calque Broches',
       'Calque Empreintes'
@@ -665,8 +665,8 @@ describe('éditeur de composants : variantes', () => {
     expect(wrapper.find('.variant-select').exists()).toBe(false)
     expect(wrapper.find('.variant-row').exists()).toBe(false)
     // Plus de bouton dans la barre d'outils : celui du panneau suffit.
-    expect(wrapper.find('.toolbar button[title^="Nouvelle variante"]').exists()).toBe(false)
-    await wrapper.get('.inspector button[title^="Nouvelle variante"]').trigger('click')
+    expect(wrapper.find('.toolbar button[title*="variante"]').exists()).toBe(false)
+    await wrapper.get('.inspector button[title="Copie de la variante affichée"]').trigger('click')
     expect(store.variants).toHaveLength(2)
     expect(store.variantId).toBe('v1')
     const select = wrapper.get('.variant-select')
@@ -1262,7 +1262,7 @@ describe('éditeur de composants : plaque à trous', () => {
     }
     await key('g')
     expect(store.tool).toBe('holes')
-    expect(wrapper.find('.toolbar button[title*="Plaque à trous"]').exists()).toBe(true)
+    expect(wrapper.find('.toolbar button[title^="Grille de trous"]').exists()).toBe(true)
     // De (1, 0) à (3, 2) cellules : trois colonnes, trois rangées.
     await send('pointerdown', at(1, 0))
     await send('pointermove', at(3, 2))

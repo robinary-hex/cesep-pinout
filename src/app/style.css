@@ -69,6 +69,14 @@
   --scrollbar-hover: #a9b2bc;
   /* Point « modifié » d'un onglet, sur la barre sombre : rouge en clair. */
   --tab-dot: #ff6b6b;
+  /* Infobulles : une boîte sombre, ses touches en clair. */
+  --tip-bg: #24292f;
+  --tip-border: #24292f;
+  --tip-text: #ffffff;
+  --tip-muted: rgba(255, 255, 255, 0.6);
+  --tip-key-bg: rgba(255, 255, 255, 0.12);
+  --tip-key-border: rgba(255, 255, 255, 0.34);
+  --tip-accent: #79c0ff;
 }
 
 :root[data-theme='dark'] {
@@ -127,6 +135,10 @@
   --scrollbar-hover: #525d6a;
   /* Ambre en sombre. */
   --tab-dot: #e3b341;
+  /* Sur les surfaces sombres, l'infobulle s'en détache par un fond plus clair et un filet. */
+  --tip-bg: #2d333b;
+  --tip-border: #57606a;
+  --tip-text: #f0f6fc;
 }
 
 * {
@@ -548,4 +560,21 @@ input[type='radio'] {
   left: -9px;
   width: 1px;
   background: var(--text-faint);
+}
+
+/* Une touche : un capuchon, plus épais en bas (aide, infobulles). Ses couleurs se règlent par
+   `--key-*` là où le fond n'est pas celui de l'interface. */
+kbd.keycap {
+  display: inline-block;
+  min-width: 22px;
+  padding: 0 6px;
+  font-size: 12px;
+  line-height: 17px;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--key-text, var(--text));
+  background: var(--key-bg, var(--surface-2));
+  border: 1px solid var(--key-border, var(--border));
+  border-bottom-width: 2px;
+  border-radius: 5px;
 }

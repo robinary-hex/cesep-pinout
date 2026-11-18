@@ -104,7 +104,7 @@ function onDragEnd(): void {
           type="button"
           class="tile"
           :class="{ current: store.placement === tile.shape }"
-          :title="`${tile.label} : clic ici puis sur le diagramme, ou glisser-déposer`"
+          :title="tile.label"
           draggable="true"
           @click="store.startPlacing(tile.shape)"
           @dragstart="onDragStart(tile.shape, $event)"

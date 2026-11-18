@@ -34,6 +34,7 @@ import Icon from '@/ui/Icon.vue'
 import type { IconName } from '@/ui/icons'
 import { openModals } from '@/ui/modalState'
 import { wheelOnNumberField } from '@/ui/numberWheel'
+import TooltipHost from '@/ui/TooltipHost.vue'
 import { applyTheme } from '@/ui/theme'
 import type { UpdateCheckResult, UpdateStatus } from '../../electron/api'
 import { openExternalFile } from './externalFiles'
@@ -219,7 +220,7 @@ const modes: Record<Mode, ModeAdapter> = {
     label: 'Composants',
     icon: 'chip',
     kind: 'composant',
-    dirtyTitle: "Un composant ouvert n'est pas enregistré",
+    dirtyTitle: 'Composant non enregistré',
     tabs: () =>
       editor.tabs.map((tab) => ({
         id: tab.id,
@@ -246,7 +247,7 @@ const modes: Record<Mode, ModeAdapter> = {
     label: 'Montage',
     icon: 'schematic',
     kind: 'montage',
-    dirtyTitle: "Un montage ouvert n'est pas enregistré",
+    dirtyTitle: 'Montage non enregistré',
     tabs: () =>
       schematic.tabs.map((tab) => ({
         id: tab.id,
@@ -274,7 +275,7 @@ const modes: Record<Mode, ModeAdapter> = {
     label: 'Diagramme',
     icon: 'diagram',
     kind: 'diagramme',
-    dirtyTitle: "Un diagramme ouvert n'est pas enregistré",
+    dirtyTitle: 'Diagramme non enregistré',
     tabs: () =>
       diagram.tabs.map((tab) => ({
         id: tab.id,
@@ -326,7 +327,7 @@ function keepTab(id: number): void {
 
 /** Infobulle d'un onglet : son fichier ; pour un aperçu, comment le garder. */
 function tabTitle(tab: StripTab): string {
-  return tab.preview ? `${tab.title} — aperçu : un double-clic garde l’onglet` : tab.title
+  return tab.preview ? `${tab.title} — aperçu` : tab.title
 }
 
 /** Ferme un onglet ; s'il est modifié, la question vient d'abord : enregistrer, ne pas enregistrer, annuler. */
@@ -439,7 +440,7 @@ function recentItem(file: string, open: (file: string) => void): MenuItem {
   return item(baseName(file), () => open(file), {
     icon: 'clock',
     remove: {
-      title: 'Retirer de la liste des fichiers récents',
+      title: 'Retirer de la liste',
       action: () => void library.removeRecentFile(file)
     }
   })
@@ -894,7 +895,7 @@ onUnmounted(() => {
           type="button"
           class="ghost icon-only menu-button"
           :class="{ open: fileMenu !== null }"
-          title="Menu : nouveau, ouvrir, enregistrer, exporter, paramètres, quitter"
+          title="Menu"
           aria-label="Menu"
           @click="openFileMenu"
         >
@@ -946,12 +947,12 @@ onUnmounted(() => {
         >
           <span class="doc-tab-label">
             <span class="doc-tab-name">{{ tab.name }}</span>
-            <span v-if="tab.dirty" class="doc-tab-dot" title="Modifications non enregistrées" />
+            <span v-if="tab.dirty" class="doc-tab-dot" title="Non enregistré" />
           </span>
           <button
             type="button"
             class="doc-tab-close"
-            :title="`Fermer ce ${strip.kind} (ou clic du milieu sur l’onglet)`"
+            title="Fermer (clic milieu)"
             @click.stop="closeTab(tab.id)"
           >
             ✕
@@ -1035,5 +1036,6 @@ onUnmounted(() => {
       @close="tabMenu = null"
     />
     <DialogHost />
+    <TooltipHost />
   </div>
 </template>

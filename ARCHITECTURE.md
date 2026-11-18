@@ -134,6 +134,12 @@ porte (`prunedStyles`, à chaque commande).
 fermer, confirmer une suppression) dans ses propres boîtes : une promesse par question, aucune
 boîte de message du système.
 
+`TooltipHost.vue` dessine les infobulles de toute l'application à la place de celles du
+système : monté une fois par la coque, il écoute la fenêtre et lit l'attribut `title` de ce
+qu'on survole (qu'il met de côté le temps du survol, pour que le système n'affiche pas la
+sienne). Les composants n'ont rien à brancher. `tooltip.ts` sépare le texte du raccourci écrit
+à sa suite ; `KeyCombo.vue` dessine ce raccourci, comme dans l'aide.
+
 `ContextMenu.vue` affiche les menus contextuels de toute l'application à partir d'une simple
 liste d'entrées (`contextMenu.ts` : action, titre, séparateur, pastilles, sous-menu) : chaque
 éditeur construit sa liste, le composant s'occupe de la placer, des sous-menus et de la

@@ -58,7 +58,7 @@ function pickCustom(hex: string): void {
           type="button"
           class="tool icon-only"
           :class="{ active: store.tool === 'wire' && store.wireKind === null }"
-          title="Tracer un fil (F)"
+          title="Fil (F)"
           @click="store.startWireTool()"
         >
           <Icon name="wire" :size="18" />
@@ -67,7 +67,7 @@ function pickCustom(hex: string): void {
           type="button"
           class="tool icon-only"
           :class="{ active: store.tool === 'wire' && store.wireKind === 'bare' }"
-          title="Tracer un fil nu, soudé à toutes les broches sur son trajet (N)"
+          title="Fil nu (N)"
           @click="store.startWireTool('bare')"
         >
           <Icon name="bare-wire" :size="18" />
@@ -76,7 +76,7 @@ function pickCustom(hex: string): void {
           type="button"
           class="tool icon-only"
           :class="{ active: store.tool === 'wire' && store.wireKind === 'jumper' }"
-          title="Poser un pont : un fil en courbe, de A à B (P)"
+          title="Pont (P)"
           @click="store.startWireTool('jumper')"
         >
           <Icon name="jumper" :size="18" />
@@ -85,7 +85,7 @@ function pickCustom(hex: string): void {
           type="button"
           class="tool icon-only"
           :class="{ active: store.tool === 'text' }"
-          title="Poser une étiquette texte (E)"
+          title="Étiquette (E)"
           @click="store.startTextTool()"
         >
           <Icon name="type" :size="18" />
@@ -94,10 +94,10 @@ function pickCustom(hex: string): void {
 
       <ToolbarPalette
         class="group"
-        title="Couleur des prochains fils ; recolore aussi les fils sélectionnés"
+        title="Couleur des fils"
         :swatches="store.colorChoices"
         :current="store.paletteColor"
-        adder-title="Couleur personnalisée, gardée dans ce montage"
+        adder-title="Ajouter une couleur"
         custom-name="Couleur de ce montage"
         @pick="store.setCurrentColor"
         @add="pickCustom"
@@ -106,11 +106,11 @@ function pickCustom(hex: string): void {
       />
 
       <div class="group">
-        <label class="check" title="Afficher les broches des composants">
+        <label class="check" title="Afficher les broches">
           <input v-model="store.showPins" type="checkbox" />
           Broches
         </label>
-        <label class="check" title="Entourer les broches reliées à rien">
+        <label class="check" title="Entourer les broches non reliées">
           <input v-model="store.showUnconnected" type="checkbox" />
           Non reliées
         </label>
@@ -130,7 +130,7 @@ function pickCustom(hex: string): void {
         type="button"
         class="tool icon-only"
         :class="{ active: store.inspectorOpen }"
-        title="Afficher ou masquer le panneau de propriétés (I)"
+        title="Propriétés (I)"
         @click="store.inspectorOpen = !store.inspectorOpen"
       >
         <Icon name="panel" :size="18" />

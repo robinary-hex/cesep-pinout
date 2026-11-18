@@ -1,7 +1,10 @@
 import type { IconName } from '@/ui/icons'
 
+// Les combinaisons se dessinent de la même façon dans l'aide et dans les infobulles.
+export { comboTokens, MOUSE_GESTURES, type KeyToken, type MouseGesture } from '@/ui/keyCombo'
+
 // Contenu de l'aide (F1) : les raccourcis de chaque éditeur, rangés par thème. ShortcutsHelp.vue
-// les dessine : une touche par capuchon, un geste de souris par pictogramme.
+// les dessine : une touche par capuchon, un geste de souris par pictogramme (`KeyCombo.vue`).
 //
 // Un raccourci tient sur une ligne (décision du 11 novembre 2026) : un geste court, un libellé de
 // quelques mots qui dit sur quoi il porte quand ce n'est pas évident (« Étiqueter un bout
@@ -16,7 +19,7 @@ import type { IconName } from '@/ui/icons'
 export interface Shortcut {
   /**
    * Combinaisons équivalentes. Dans chacune, « + » joint les touches et les gestes de souris
-   * (`MOUSE_GESTURES`).
+   * (`MOUSE_GESTURES` de `src/ui/keyCombo.ts`).
    */
   keys: string[]
   /** Ce que fait le geste, en quelques mots. */
@@ -38,48 +41,6 @@ export interface ShortcutSection {
   title: string
   icon: IconName
   categories: ShortcutCategory[]
-}
-
-/** Geste de souris : ce que dit sa pastille, le bouton qui travaille, s'il glisse ou clique deux fois. */
-export interface MouseGesture {
-  text: string
-  button: 'left' | 'right' | 'middle' | 'wheel'
-  drag?: boolean
-  double?: boolean
-}
-
-/**
- * Les gestes de souris que l'aide sait dessiner, par leur nom dans une combinaison. Un
- * double-clic se dit « ×2 », plus court ; « déposer », c'est glisser un fichier dans la fenêtre.
- */
-export const MOUSE_GESTURES: Record<string, MouseGesture> = {
-  clic: { text: 'clic', button: 'left' },
-  'double-clic': { text: 'clic ×2', button: 'left', double: true },
-  'clic droit': { text: 'clic droit', button: 'right' },
-  'clic milieu': { text: 'clic milieu', button: 'middle' },
-  'double-clic milieu': { text: 'milieu ×2', button: 'middle', double: true },
-  glisser: { text: 'glisser', button: 'left', drag: true },
-  'glisser milieu': { text: 'glisser milieu', button: 'middle', drag: true },
-  déposer: { text: 'déposer', button: 'left', drag: true },
-  molette: { text: 'molette', button: 'wheel' }
-}
-
-/** Ce qu'on écrit sur une touche quand ce n'est pas son nom. */
-const KEY_FACES: Record<string, string> = { Flèches: '← ↑ ↓ →' }
-
-/** Un morceau de combinaison : une touche (`mouse` nul) ou un geste de souris. */
-export interface KeyToken {
-  text: string
-  mouse: MouseGesture | null
-}
-
-/** Les touches et gestes d'une combinaison, dans l'ordre où on les fait. */
-export function comboTokens(combo: string): KeyToken[] {
-  return combo.split('+').map((part) => {
-    const name = part.trim()
-    const mouse = MOUSE_GESTURES[name] ?? null
-    return { text: mouse?.text ?? KEY_FACES[name] ?? name, mouse }
-  })
 }
 
 /** Une ligne de l'aide ; `keys` : les combinaisons équivalentes, séparées par « / ». */

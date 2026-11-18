@@ -680,14 +680,8 @@ const cuts = computed(() => {
           ? { x: 0, y: from, width: boxWidth.value, height: to - from }
           : { x: from, y: 0, width: to - from, height: boxHeight.value },
         lines: [
-          line('from', from, 'Début du motif : le glisser déplace le motif'),
-          line(
-            'to',
-            to,
-            vertical
-              ? 'Fin du motif : le glisser règle sa hauteur'
-              : 'Fin du motif : le glisser règle sa largeur'
-          )
+          line('from', from, 'Déplacer le motif'),
+          line('to', to, vertical ? 'Régler la hauteur du motif' : 'Régler la largeur du motif')
         ]
       }
     ]
@@ -1292,9 +1286,9 @@ defineExpose({ cancel, finishPolyline, popPolylinePoint, fitAndCenter })
               :key="line.id"
               class="cut"
               :class="`cut-${line.id}`"
+              :data-tip="line.title"
               @pointerdown="onCutDown(cut.axis, line.id, $event)"
             >
-              <title>{{ line.title }}</title>
               <line
                 class="cut-line"
                 :x1="line.start.x"

@@ -58,7 +58,7 @@ function showModel(event: Event): void {
           type="button"
           class="tool icon-only"
           :class="{ active: store.tool === tool.id }"
-          :title="`${tool.hint} (${tool.key.toUpperCase()})`"
+          :title="`${tool.label} (${tool.key.toUpperCase()})`"
           @click="store.tool = tool.id"
         >
           <Icon :name="tool.icon" :size="18" />
@@ -69,7 +69,7 @@ function showModel(event: Event): void {
         <button
           type="button"
           class="icon-only"
-          title="Importer une image PNG (80 px par cellule), posée comme une forme"
+          title="Importer une image PNG"
           @click="importImage(store)"
         >
           <Icon name="image" :size="18" />
@@ -85,7 +85,7 @@ function showModel(event: Event): void {
           role="radio"
           :class="{ active: store.layer === layer.id }"
           :aria-checked="store.layer === layer.id"
-          :title="`Calque ${layer.label} : ${layer.hint}`"
+          :title="layer.tip"
           @click="store.setLayer(layer.id)"
         >
           <Icon :name="layer.icon" :size="18" />
@@ -97,7 +97,7 @@ function showModel(event: Event): void {
           v-if="store.variants.length > 1"
           class="variant-select"
           :value="store.variantId"
-          title="Variante affichée : c’est elle qu’on modifie"
+          title="Variante affichée"
           @change="store.showVariant(($event.target as HTMLSelectElement).value)"
         >
           <option v-for="variant in store.variants" :key="variant.id" :value="variant.id">
@@ -108,7 +108,7 @@ function showModel(event: Event): void {
           v-if="store.models.length > 0"
           class="variant-select model-select"
           :value="store.modelCount ?? ''"
-          title="Dessin affiché : le motif qui se répète, ou le modèle particulier d’un nombre"
+          title="Dessin affiché"
           @change="showModel"
         >
           <option value="">Motif répété</option>
@@ -135,9 +135,7 @@ function showModel(event: Event): void {
         type="button"
         class="primary with-icon"
         :disabled="store.hasErrors"
-        :title="
-          store.hasErrors ? 'Corrige les erreurs avant d’enregistrer' : 'Enregistrer (Ctrl+S)'
-        "
+        :title="store.hasErrors ? 'Des erreurs sont à corriger' : 'Enregistrer (Ctrl+S)'"
         @click="emit('save')"
       >
         <Icon name="save" /> Enregistrer
@@ -146,7 +144,7 @@ function showModel(event: Event): void {
         type="button"
         class="tool icon-only"
         :class="{ active: store.inspectorOpen }"
-        title="Afficher ou masquer le panneau de propriétés (I)"
+        title="Propriétés (I)"
         @click="store.inspectorOpen = !store.inspectorOpen"
       >
         <Icon name="panel" :size="18" />

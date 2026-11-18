@@ -5,47 +5,23 @@ export type ToolId =
 
 export interface ToolInfo {
   id: ToolId
+  /** Le nom de l'outil : son infobulle, avec sa touche. */
   label: string
   /** Touche (lettre gravée, clavier AZERTY belge). Dans cet éditeur, R = rectangle. */
   key: string
-  hint: string
   icon: IconName
 }
 
 export const TOOLS: readonly ToolInfo[] = [
-  {
-    id: 'select',
-    label: 'Sélection',
-    key: 'v',
-    hint: 'Cliquer une forme ou une broche ; glisser pour déplacer',
-    icon: 'cursor'
-  },
-  { id: 'rect', label: 'Rectangle', key: 'r', hint: 'Glisser pour tracer', icon: 'square' },
-  { id: 'ellipse', label: 'Ellipse', key: 'o', hint: 'Glisser pour tracer', icon: 'circle' },
-  { id: 'dot', label: 'Point', key: 'n', hint: 'Cliquer pour poser un point', icon: 'dot' },
-  { id: 'line', label: 'Ligne', key: 'l', hint: 'Glisser du départ à l’arrivée', icon: 'line' },
-  {
-    id: 'polyline',
-    label: 'Polyligne',
-    key: 'p',
-    hint: 'Cliquer chaque sommet ; double-clic ou Entrée pour terminer',
-    icon: 'polyline'
-  },
-  { id: 'text', label: 'Texte', key: 'e', hint: 'Cliquer pour poser un texte', icon: 'type' },
-  {
-    id: 'pin',
-    label: 'Broche',
-    key: 'b',
-    hint: 'Broche : cliquer une intersection, ou glisser une zone pour en poser à toutes',
-    icon: 'pin'
-  },
-  {
-    id: 'holes',
-    label: 'Grille de trous',
-    key: 'g',
-    hint: 'Plaque à trous : glisser sur la zone des trous, un par intersection',
-    icon: 'holes'
-  }
+  { id: 'select', label: 'Sélection', key: 'v', icon: 'cursor' },
+  { id: 'rect', label: 'Rectangle', key: 'r', icon: 'square' },
+  { id: 'ellipse', label: 'Ellipse', key: 'o', icon: 'circle' },
+  { id: 'dot', label: 'Point', key: 'n', icon: 'dot' },
+  { id: 'line', label: 'Ligne', key: 'l', icon: 'line' },
+  { id: 'polyline', label: 'Polyligne', key: 'p', icon: 'polyline' },
+  { id: 'text', label: 'Texte', key: 'e', icon: 'type' },
+  { id: 'pin', label: 'Broche', key: 'b', icon: 'pin' },
+  { id: 'holes', label: 'Grille de trous', key: 'g', icon: 'holes' }
 ]
 
 export const TOOL_BY_KEY: Readonly<Record<string, ToolId>> = Object.fromEntries(

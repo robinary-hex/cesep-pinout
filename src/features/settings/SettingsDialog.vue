@@ -183,10 +183,7 @@ async function save(): Promise<void> {
 
         <section class="block">
           <h3>Dossier de Pinout</h3>
-          <p
-            class="hint path"
-            title="Tout y est rangé : Composants, Montages, Diagrammes, et Applications (réglages et profils). Les fichiers récents restent sur chaque machine."
-          >
+          <p class="hint path" title="Tout Pinout y est rangé">
             {{ library.dataRoot ?? 'Pas encore choisi' }}
           </p>
           <div class="row tight">

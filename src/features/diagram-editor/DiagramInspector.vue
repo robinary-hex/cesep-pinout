@@ -342,7 +342,7 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
         <button
           type="button"
           class="icon-only"
-          title="Exporter en PNG ou SVG (Ctrl+E)"
+          title="Exporter (Ctrl+E)"
           @click="emit('exportImage')"
         >
           <Icon name="export" />
@@ -361,7 +361,7 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
         <button
           type="button"
           class="small with-icon"
-          title="Rétablit le style général des diagrammes pour celui-ci (annulable)"
+          title="Revenir au style général"
           @click="store.adoptGeneralStyle()"
         >
           <Icon name="refresh" :size="13" /> Réinitialiser
@@ -418,7 +418,7 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
               type="button"
               class="auto"
               :class="{ current: singleNode.borderColor === null }"
-              title="D’après la couleur du fond, éclaircie ou foncée pour s’en détacher"
+              title="D’après la couleur du fond"
               @click="setNodeBorder(null)"
             >
               Auto
@@ -441,7 +441,7 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
             />
             <ColorAdder
               :value="singleNode.borderColor ?? singleNode.color"
-              title="Couleur personnalisée, gardée dans ce diagramme"
+              title="Ajouter une couleur"
               @pick="setCustomNodeBorder"
             />
           </div>
@@ -451,7 +451,7 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
             v-if="NODE_SPECS[singleNode.shape].text"
             type="button"
             class="with-icon"
-            title="Ajuste la taille du nœud à son texte, au plus près"
+            title="Ajuster la taille au texte"
             @click="store.fitNodeToText(singleNode.id)"
           >
             <Icon name="fit" /> Ajuster
@@ -473,7 +473,7 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
         </label>
         <div class="row">
           <div class="field">
-            <span title="Gras, italique, souligné et barré stylent le titre">Style du texte</span>
+            <span title="Le style vaut pour le titre">Style du texte</span>
             <div class="toggles">
               <button
                 v-for="option in NODE_TEXT_OPTIONS"
@@ -481,7 +481,7 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
                 type="button"
                 class="toggle"
                 :class="{ active: singleNode[option.key] }"
-                :title="`${option.label} (titre)`"
+                :title="option.label"
                 @click="toggleNodeText(option)"
               >
                 <Icon :name="option.icon" />
@@ -490,7 +490,7 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
                 type="button"
                 class="toggle"
                 :class="{ active: nodeIsMono }"
-                title="Chasse fixe, pour du code (titre et sous-titre)"
+                title="Chasse fixe"
                 @click="toggleNodeMono"
               >
                 <Icon name="code" />
@@ -498,11 +498,7 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
             </div>
           </div>
           <label class="field scale">
-            <span
-              title="Taille du titre dans une image exportée à ×1 (le double à ×2, le quadruple à ×4) ; le sous-titre suit dans la même proportion"
-            >
-              Taille (pt)
-            </span>
+            <span title="Taille du titre, à l’export ×1"> Taille (pt) </span>
             <input
               type="number"
               step="1"
@@ -520,7 +516,7 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
               type="button"
               class="auto"
               :class="{ current: singleNode.textColor === null }"
-              title="D’après la couleur de la forme, foncée ou éclaircie pour se lire"
+              title="D’après la couleur de la forme"
               @click="setNodeTextColor(null)"
             >
               Auto
@@ -568,9 +564,7 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
       </label>
       <div v-if="singleLink.label.length > 0" class="row">
         <label class="field">
-          <span title="Du départ (0) à l'arrivée (100) ; se règle aussi en la glissant">
-            Position le long du lien
-          </span>
+          <span title="0 : départ, 100 : arrivée"> Position le long du lien </span>
           <input
             type="range"
             min="0"
@@ -583,17 +577,13 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
         <button
           type="button"
           class="with-icon"
-          title="Met l'étiquette de l'autre côté du trait"
+          title="Passer de l’autre côté du trait"
           @click="flipLinkLabel"
         >
           <Icon name="swap" /> Côté
         </button>
       </div>
-      <label
-        v-if="singleLink.label.length > 0"
-        class="check"
-        title="Un fond de la couleur du papier masque ce qui passe derrière l'étiquette"
-      >
+      <label v-if="singleLink.label.length > 0" class="check" title="Masque ce qui passe derrière">
         <input
           type="checkbox"
           :checked="singleLink.labelBackground"
@@ -672,11 +662,7 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
             </select>
           </label>
           <label class="field">
-            <span
-              title="Taille du texte dans une image exportée à ×1 (le double à ×2, le quadruple à ×4)"
-            >
-              Taille (pt)
-            </span>
+            <span title="Taille à l’export ×1"> Taille (pt) </span>
             <input
               type="number"
               step="1"
@@ -709,11 +695,11 @@ function setTextBox(key: 'x' | 'y' | 'w' | 'h', event: Event): void {
             </div>
           </div>
         </div>
-        <label class="check" title="Le texte est tourné de 90° et se lit de haut en bas">
+        <label class="check" title="Se lit de haut en bas">
           <input type="checkbox" :checked="singleText.vertical" @change="setTextVertical" />
           <span>Vertical</span>
         </label>
-        <label class="check" title="Un fond de la couleur du papier masque ce qui passe derrière">
+        <label class="check" title="Masque ce qui passe derrière">
           <input type="checkbox" :checked="singleText.background" @change="setTextBackground" />
           <span>Fond</span>
         </label>

@@ -22,7 +22,7 @@ const FIELDS = [
   {
     key: 'nodeRadius',
     label: 'Coins (px)',
-    title: 'Rayon des coins des rectangles arrondis',
+    title: 'Coins des rectangles arrondis',
     step: 1,
     min: 0,
     max: 40,
@@ -58,7 +58,7 @@ const FIELDS = [
   {
     key: 'labelSize',
     label: 'Étiquettes (pt)',
-    title: 'Taille des étiquettes de lien, et des textes libres qu’on pose',
+    title: 'Étiquettes de lien et textes libres',
     step: 1,
     min: 6,
     max: 48,
@@ -95,7 +95,7 @@ function differs(key: keyof DiagramStyle): boolean {
 <template>
   <div class="fields">
     <label class="field" :class="{ differs: differs('font') }">
-      <span title="Police de tout le diagramme ; un nœud peut choisir la sienne">Police</span>
+      <span title="Police du diagramme">Police</span>
       <select :value="style.font" @change="setFont">
         <option value="sans">Normale</option>
         <option value="mono">Chasse fixe (code)</option>
