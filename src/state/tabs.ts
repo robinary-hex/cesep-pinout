@@ -7,6 +7,12 @@ import { History } from './history'
 // d'édition (vue, sélection…), et `activateTab` range l'un pour charger l'autre. Les trois
 // éditeurs (composants, montage, diagramme) partagent cette mécanique ; chacun y branche son
 // propre état d'édition par `capture` et `restore`.
+//
+// Onglet d'aperçu (décision du 18 novembre 2026) : un document ouvert d'un simple clic dans le
+// panneau latéral, pour y jeter un œil. Son titre est en italique, et il n'y en a qu'un par
+// éditeur : le document suivant ouvert de la même façon prend sa place, pour que les onglets ne
+// s'accumulent pas. Il devient un onglet comme les autres dès qu'on modifie son document, qu'on
+// l'enregistre ou qu'on le demande (`pinTab` : double-clic sur l'onglet ou sur le fichier).
 
 /** Onglet tel que la barre d'application le montre. */
 export interface DocumentTab {
@@ -15,6 +21,8 @@ export interface DocumentTab {
   /** Fichier ou dossier du document ; null tant qu'il n'a jamais été enregistré. */
   path: string | null
   dirty: boolean
+  /** Onglet d'aperçu : le prochain document ouvert en aperçu prendra sa place. */
+  preview: boolean
 }
 
 /** Ce qu'un onglet garde quand il n'est pas affiché. */
@@ -25,6 +33,8 @@ export interface StashedTab<D extends Objectish, E> {
   savedDoc: D | null
   path: string | null
   editing: E
+  /** Ouvert en aperçu, et pas encore gardé. */
+  preview: boolean
 }
 
 /** Document modifié d'un onglet, pour la copie de secours ; `key` est l'identifiant de l'onglet. */
@@ -64,7 +74,8 @@ export function useDocumentTabs<D extends Objectish & { name: string }, E>(
       history: new History<D>(doc),
       savedDoc: saved,
       path,
-      editing: options.freshEditing()
+      editing: options.freshEditing(),
+      preview: false
     }
   }
 
@@ -84,23 +95,36 @@ export function useDocumentTabs<D extends Objectish & { name: string }, E>(
   const doc = shallowRef<D>(history.value)
   const savedDoc = shallowRef<D | null>(firstTab.savedDoc)
   const path = ref<string | null>(null)
+  /** L'onglet affiché a été ouvert en aperçu, et n'est pas encore gardé. */
+  const preview = ref(false)
   const undoLabel = ref<string | null>(null)
   const redoLabel = ref<string | null>(null)
 
   const dirty = computed(() => options.needsSaving(doc.value, savedDoc.value, path.value))
   /** Onglet vierge : jamais enregistré, jamais touché. Un document qu'on ouvre prend sa place. */
   const pristine = computed(() => path.value === null && doc.value === savedDoc.value)
+  // Un onglet qui a quelque chose à enregistrer n'est plus un aperçu, quoi qu'il en soit : on
+  // ne le remplace pas sans rien demander.
   const tabs = computed<DocumentTab[]>(() =>
-    stashed.value.map((tab) =>
-      tab.id === activeTabId.value
-        ? { id: tab.id, name: doc.value.name, path: path.value, dirty: dirty.value }
-        : {
-            id: tab.id,
-            name: tab.history.value.name,
-            path: tab.path,
-            dirty: options.needsSaving(tab.history.value, tab.savedDoc, tab.path)
-          }
-    )
+    stashed.value.map((tab) => {
+      if (tab.id === activeTabId.value) {
+        return {
+          id: tab.id,
+          name: doc.value.name,
+          path: path.value,
+          dirty: dirty.value,
+          preview: preview.value && !dirty.value
+        }
+      }
+      const modified = options.needsSaving(tab.history.value, tab.savedDoc, tab.path)
+      return {
+        id: tab.id,
+        name: tab.history.value.name,
+        path: tab.path,
+        dirty: modified,
+        preview: tab.preview && !modified
+      }
+    })
   )
   const anyDirty = computed(() => tabs.value.some((tab) => tab.dirty))
 
@@ -115,7 +139,11 @@ export function useDocumentTabs<D extends Objectish & { name: string }, E>(
   /** Commande nommée sur le document affiché ; faux si elle n'a rien changé. */
   function apply(label: string, recipe: (draft: Draft<D>) => void): boolean {
     const changed = history.apply(label, recipe)
-    if (changed) sync()
+    if (changed) {
+      // Un document qu'on modifie n'est plus un aperçu : son onglet reste.
+      preview.value = false
+      sync()
+    }
     return changed
   }
 
@@ -147,7 +175,8 @@ export function useDocumentTabs<D extends Objectish & { name: string }, E>(
       history,
       savedDoc: savedDoc.value,
       path: path.value,
-      editing: options.capture()
+      editing: options.capture(),
+      preview: preview.value
     }
     stashed.value = stashed.value.map((tab) => (tab.id === id ? state : tab))
   }
@@ -157,6 +186,7 @@ export function useDocumentTabs<D extends Objectish & { name: string }, E>(
     history = tab.history
     savedDoc.value = tab.savedDoc
     path.value = tab.path
+    preview.value = tab.preview
     activeTabId.value = tab.id
     options.restore(tab.editing)
     sync()
@@ -191,18 +221,41 @@ export function useDocumentTabs<D extends Objectish & { name: string }, E>(
     stashed.value = list
   }
 
-  /** Montre un document dans un onglet : l'onglet affiché s'il est vierge, sinon un nouveau. */
-  function showInTab(document: D, saved: D | null, documentPath: string | null): void {
+  /**
+   * Montre un document dans un onglet : l'onglet affiché s'il est vierge, sinon un nouveau. Avec
+   * `asPreview`, c'est un onglet d'aperçu, qui prend la place de l'aperçu précédent s'il y en a
+   * un, où qu'il soit dans la rangée.
+   */
+  function showInTab(
+    document: D,
+    saved: D | null,
+    documentPath: string | null,
+    asPreview = false
+  ): void {
     options.beforeLeave?.()
-    const tab = freshTab(document, saved, documentPath)
-    if (pristine.value) {
-      const replaced = activeTabId.value
-      stashed.value = stashed.value.map((other) => (other.id === replaced ? tab : other))
-    } else {
+    const tab = { ...freshTab(document, saved, documentPath), preview: asPreview }
+    const previous = asPreview ? tabs.value.find((other) => other.preview) : undefined
+    const replaced = previous?.id ?? (pristine.value ? activeTabId.value : null)
+    if (replaced === null) {
       stash()
       stashed.value = [...stashed.value, tab]
+    } else {
+      // L'onglet remplacé disparaît ; s'il n'était pas affiché, celui qui l'est se range d'abord.
+      if (replaced !== activeTabId.value) stash()
+      stashed.value = stashed.value.map((other) => (other.id === replaced ? tab : other))
     }
     load(tab)
+  }
+
+  /** Garde un onglet d'aperçu : il devient un onglet comme les autres. */
+  function pinTab(id: number): void {
+    if (id === activeTabId.value) {
+      preview.value = false
+      return
+    }
+    stashed.value = stashed.value.map((tab) =>
+      tab.id === id && tab.preview ? { ...tab, preview: false } : tab
+    )
   }
 
   /** Nouveau document vierge, dans son onglet. */
@@ -215,6 +268,7 @@ export function useDocumentTabs<D extends Objectish & { name: string }, E>(
   function markSaved(savedPath: string): void {
     savedDoc.value = doc.value
     path.value = savedPath
+    preview.value = false
   }
 
   /**
@@ -277,6 +331,7 @@ export function useDocumentTabs<D extends Objectish & { name: string }, E>(
     cycleTab,
     moveTab,
     showInTab,
+    pinTab,
     showBlank,
     markSaved,
     closeTab,

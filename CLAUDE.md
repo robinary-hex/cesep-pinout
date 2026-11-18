@@ -236,7 +236,7 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
 - Session (décision du 11 novembre 2026 ; `src/app/session.ts`) : ce qui était ouvert revient au
   lancement suivant, avec l'onglet et le mode qu'on regardait. Seuls comptent les documents qui
   ont un fichier (montages, diagrammes, composants de la bibliothèque) : un document jamais
-  enregistré n'est pas retenu. La liste est réécrite à chaque changement d'onglet
+  enregistré n'est pas retenu, un onglet d'aperçu non plus. La liste est réécrite à chaque changement d'onglet
   (`currentSession`, `saveSession`), donc elle survit à un arrêt brutal ; elle vit dans la
   mémoire de l'interface (`localMemory.ts`), propre à la machine. Au lancement
   (`reopenLastSession` d'`App.vue`) : d'abord les copies de secours, puis la session (un
@@ -250,14 +250,26 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   bibliothèque de composants et celle des formes du diagramme ont la même largeur) ; un trait
   court (`.topbar-side::after`), comme les séparateurs des barres d'outils et non sur toute la
   hauteur de la barre, sépare les modes des onglets, à l'aplomb de la bordure du panneau.
-  Fenêtre étroite (décision du 17 novembre 2026 ; moins de 1100 px de large :
-  `@media (max-width: 1100px)` de style.css et des deux bibliothèques, la même limite dans
-  `src/ui/compactLayout.ts`) : le panneau latéral se réduit à 112 px et ne montre plus qu'une
-  colonne de vignettes, une forme ou un composant par ligne ; la bibliothèque de composants
-  passe en vignettes quel que soit `libraryView` (`useCompactLayout`), sans changer le
-  réglage. Le bloc gauche de la barre garde alors la place de ses boutons, sans s'aligner
-  sur le panneau. Ce que la coque demande à un
+  Le panneau latéral garde cette largeur quelle que soit la fenêtre (décision du 18 novembre
+  2026, qui revient sur celle du 17 : dans une fenêtre étroite il se réduisait à une colonne
+  de vignettes, trop peu pour la liste des fichiers). Ce que la coque demande à un
   mode (onglets, fermeture, enregistrement avant de quitter, statut) passe par son `ModeAdapter`.
+- Panneau latéral (décision du 18 novembre 2026 ; `src/app/SidePanel.vue`) : le même dans les
+  trois modes, toujours de la même disposition, pour que rien ne bouge d'un mode à l'autre :
+  une rangée d'onglets, le champ de recherche (`.side-head` : il est donc à la même hauteur
+  partout), puis la liste. Premier onglet : ce qu'on pose ou qu'on ouvre dans ce mode,
+  « Composants » (`LibraryPanel.vue`, modes Composants et Montage) ou « Formes »
+  (`DiagramLibrary.vue`) ; ces deux composants ne sont plus que des contenus du panneau, sans
+  en-tête à eux. Second onglet, « Fichiers » (`src/app/DocumentList.vue`) : les montages du
+  dossier `Montages`, ou les diagrammes du dossier `Diagrammes`, du dossier de Pinout,
+  sous-dossiers compris, un groupe repliable chacun (`listDocumentFiles` de
+  `src/io/documentFiles.ts` ; relus quand la fenêtre reprend la main et quand un fichier
+  vient d'être enregistré). Le mode Composants n'a pas cet onglet : la bibliothèque y est
+  déjà la liste de ses fichiers ; il garde pourtant la rangée d'onglets, avec le sien seul.
+  La recherche porte sur la liste qu'on regarde : composants (`library.search`), formes,
+  fichiers. On retrouve dans chaque mode l'onglet qu'on y regardait. Un clic sur un fichier
+  l'ouvre en aperçu, un double-clic pour de bon (voir « Onglets d'aperçu ») ; clic droit :
+  ouvrir, afficher dans l'Explorateur.
 - Barres d'outils des trois éditeurs : elles commencent toutes par `src/ui/ToolbarBasics.vue`,
   dans cet ordre (décision du 10 novembre 2026) : zoom arrière, valeur du zoom (un clic ou la
   touche 1 revient à 100 %), zoom avant, ajuster ; séparateur vertical ; annuler, rétablir,
@@ -330,6 +342,21 @@ le document « Pinout — Plan de conception » : https://claude.ai/artifact/HMf
   s'il est intact, ni s'il n'a jamais eu de fichier et qu'il est vide (`needsSaving`) ; de même un
   composant jamais enregistré et vierge. L'application se quitte alors sans question. Le presse-papiers est commun :
   coller dans un autre montage y embarque les définitions et les styles propres qui manquent.
+- Onglets d'aperçu (décision du 18 novembre 2026 ; `preview` dans `src/state/tabs.ts`, la
+  même mécanique pour les trois éditeurs) : un simple clic dans le panneau latéral (un
+  composant de la bibliothèque en mode Composants, un fichier de l'onglet « Fichiers » en
+  mode Montage ou Diagramme) ouvre le document dans un onglet d'aperçu, au titre en italique
+  (`.doc-tab.preview`). Il n'y en a qu'un par éditeur : le document suivant ouvert de la
+  même façon prend sa place, où qu'il soit dans la rangée (`showInTab(…, asPreview)`), pour
+  que les onglets ne s'accumulent pas quand on ne fait que consulter. Il devient un onglet
+  comme les autres (`pinTab`) dès qu'on modifie son document (`apply`), qu'on l'enregistre,
+  ou par un double-clic sur l'onglet ou sur le fichier ou le composant dans le panneau.
+  Toute autre ouverture est pour de bon : Ctrl+O, fichiers récents, fichier déposé,
+  « Ouvrir » d'un menu, « Modifier dans l'éditeur de composants ». Un aperçu ne revient pas
+  au lancement suivant (`openDocuments` de session.ts) et n'entre pas dans les fichiers
+  récents tant qu'il n'est pas gardé (`openPath(path, { preview })`, `pinTab` des stores).
+  Un onglet qui a quelque chose à enregistrer n'est jamais un aperçu : on ne le remplace
+  pas sans rien demander.
 - Onglets de composants : en mode Composants, la rangée d'onglets de la barre d'application montre
   les composants ouverts (même mécanique que les montages, dans le store de l'éditeur de
   composants : `useDocumentTabs`, `activateTab`, `newComponent`, `open` qui ramène l'onglet d'un

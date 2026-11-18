@@ -152,6 +152,7 @@ function files(kind: 'composant' | 'montage' | 'diagramme'): ShortcutCategory {
         : k('Ctrl+S', 'Enregistrer', { icon: 'save' }),
       ...(hasFile ? [k('Ctrl+E', 'Exporter en PNG ou SVG', { icon: 'export' })] : []),
       k('Ctrl+Tab', 'Onglet suivant', { withShift: 'précédent' }),
+      k('double-clic', 'Garder un onglet d’aperçu'),
       k('clic milieu', 'Fermer l’onglet'),
       k('déposer', 'Ouvrir un fichier')
     ]

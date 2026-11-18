@@ -199,23 +199,6 @@ body,
   background: var(--topbar-separator);
 }
 
-/* Fenêtre étroite (la même limite que src/ui/compactLayout.ts) : le panneau latéral se réduit
-   à une colonne de vignettes, pour laisser la place au dessin. Le bloc gauche de la barre
-   d'application, lui, garde la place de ses boutons : il ne s'aligne plus sur le panneau. */
-@media (max-width: 1100px) {
-  :root {
-    --side-panel-width: 112px;
-  }
-
-  .topbar-side {
-    width: auto;
-  }
-
-  .topbar .modes button {
-    min-width: 38px;
-  }
-}
-
 .topbar .menu-button {
   flex: none;
   width: 36px;
@@ -327,6 +310,11 @@ body,
 .doc-tab-name {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Onglet d'aperçu : ouvert pour un coup d'œil, il cédera sa place au suivant. */
+.doc-tab.preview .doc-tab-name {
+  font-style: italic;
 }
 
 .doc-tab-dot {

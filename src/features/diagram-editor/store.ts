@@ -91,6 +91,8 @@ export interface DiagramTabInfo {
   name: string
   filePath: string | null
   dirty: boolean
+  /** Onglet d'aperçu (voir tabs.ts) : titre en italique, remplacé par l'aperçu suivant. */
+  preview: boolean
 }
 
 /** Diagramme modifié, pour la copie de secours ; `key` est l'identifiant de son onglet. */
@@ -210,7 +212,8 @@ export const useDiagramStore = defineStore('diagram', () => {
       id: tab.id,
       name: tab.name,
       filePath: tab.path,
-      dirty: tab.dirty
+      dirty: tab.dirty,
+      preview: tab.preview
     }))
   )
 
@@ -384,34 +387,55 @@ export const useDiagramStore = defineStore('diagram', () => {
     status.value = ''
   }
 
-  function openDiagram(diagram: Diagram, path: string): void {
-    base.showInTab(diagram, diagram, path)
+  function openDiagram(diagram: Diagram, path: string, preview = false): void {
+    base.showInTab(diagram, diagram, path, preview)
     status.value = ''
   }
 
   /**
    * Ouvre un fichier de diagramme par son chemin ; vrai si l'ouverture a réussi. Un fichier déjà
-   * ouvert n'est pas relu : son onglet revient devant.
+   * ouvert n'est pas relu : son onglet revient devant. Avec `preview` (un simple clic dans
+   * l'onglet Fichiers du panneau latéral), il s'ouvre dans l'onglet d'aperçu, à la place de
+   * l'aperçu précédent, et ne compte pas parmi les fichiers récents ; ouvert pour de bon, un
+   * aperçu devient un onglet comme les autres.
    */
-  async function openPath(path: string): Promise<boolean> {
+  async function openPath(path: string, options: { preview?: boolean } = {}): Promise<boolean> {
+    const preview = options.preview === true
     const already = tabs.value.find((tab) => tab.filePath !== null && samePath(tab.filePath, path))
     if (already) {
       activateTab(already.id)
       status.value = `Déjà ouvert : ${path}`
+      if (!preview && already.preview) {
+        base.pinTab(already.id)
+        await library.addRecentFile(path)
+      }
       return true
     }
     try {
       const diagram = await readDiagram(path)
-      openDiagram(diagram, path)
+      openDiagram(diagram, path, preview)
       fitToContent()
-      status.value = `Ouvert : ${path}`
-      await library.addRecentFile(path)
+      status.value = preview
+        ? `Aperçu : ${path} — une modification ou un double-clic garde l’onglet.`
+        : `Ouvert : ${path}`
+      if (!preview) await library.addRecentFile(path)
       return true
     } catch (error) {
       status.value = `Ouverture impossible : ${error instanceof Error ? error.message : String(error)}`
       if (library.recentFiles.includes(path)) await library.removeRecentFile(path)
       return false
     }
+  }
+
+  /**
+   * Garde un onglet d'aperçu (double-clic sur l'onglet) : il devient un onglet comme les autres,
+   * et son fichier compte désormais parmi les fichiers récents.
+   */
+  function pinTab(id: number): void {
+    const tab = tabs.value.find((candidate) => candidate.id === id)
+    if (!tab?.preview) return
+    base.pinTab(id)
+    if (tab.filePath !== null) void library.addRecentFile(tab.filePath)
   }
 
   /** Reprend une copie de secours : le diagramme s'ouvre dans un onglet, comme non enregistré. */
@@ -1327,6 +1351,7 @@ export const useDiagramStore = defineStore('diagram', () => {
     revealInspector,
     clearSelection,
     activateTab,
+    pinTab,
     cycleTab,
     moveTab,
     closeTab,

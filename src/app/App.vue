@@ -9,9 +9,7 @@ import { importImageFile, isImagePath } from '@/features/component-editor/pngImp
 import { useComponentEditorStore } from '@/features/component-editor/store'
 import { closeDiagramTabAsking, saveDiagram } from '@/features/diagram-editor/diagramActions'
 import DiagramEditor from '@/features/diagram-editor/DiagramEditor.vue'
-import DiagramLibrary from '@/features/diagram-editor/DiagramLibrary.vue'
 import { useDiagramStore } from '@/features/diagram-editor/store'
-import LibraryPanel from '@/features/library/LibraryPanel.vue'
 import { useLibraryStore } from '@/features/library/store'
 import { closeTabAsking, saveProject } from '@/features/schematic-editor/projectActions'
 import SchematicEditor from '@/features/schematic-editor/SchematicEditor.vue'
@@ -48,6 +46,7 @@ import {
 } from './session'
 import DataFolderDialog from './DataFolderDialog.vue'
 import ShortcutsHelp from './ShortcutsHelp.vue'
+import SidePanel from './SidePanel.vue'
 import { updateButtonLabel, updateButtonTitle, updateCheckMessage } from './update'
 
 // Coque applicative : menu Fichier, bascule entre les modes (un pictogramme chacun), onglets des
@@ -182,6 +181,8 @@ interface StripTab {
   /** Fichier du montage ou du diagramme, dossier du composant ; null avant le premier enregistrement. */
   path: string | null
   dirty: boolean
+  /** Onglet d'aperçu : titre en italique ; un double-clic le garde. */
+  preview: boolean
 }
 
 /** Ce que la coque demande à un mode, quel que soit son éditeur. */
@@ -197,6 +198,8 @@ interface ModeAdapter {
   activeId: () => number
   anyDirty: () => boolean
   activate: (id: number) => void
+  /** Garde un onglet d'aperçu : il devient un onglet comme les autres. */
+  pin: (id: number) => void
   create: () => void
   /** Ferme un onglet ; s'il est modifié, la question vient d'abord. */
   close: (id: number) => Promise<unknown>
@@ -223,11 +226,13 @@ const modes: Record<Mode, ModeAdapter> = {
         name: tab.name,
         title: tab.folder ?? NOT_SAVED,
         path: tab.folder,
-        dirty: tab.dirty
+        dirty: tab.dirty,
+        preview: tab.preview
       })),
     activeId: () => editor.activeTabId,
     anyDirty: () => editor.anyDirty,
     activate: (id) => editor.activateTab(id),
+    pin: (id) => editor.pinTab(id),
     create: () => editor.newComponent(),
     close: (id) => closeComponentTabAsking(editor, library, id),
     move: (id, toIndex) => editor.moveTab(id, toIndex),
@@ -248,11 +253,13 @@ const modes: Record<Mode, ModeAdapter> = {
         name: tab.name,
         title: tab.filePath ?? NOT_SAVED,
         path: tab.filePath,
-        dirty: tab.dirty
+        dirty: tab.dirty,
+        preview: tab.preview
       })),
     activeId: () => schematic.activeTabId,
     anyDirty: () => schematic.anyDirty,
     activate: (id) => schematic.activateTab(id),
+    pin: (id) => schematic.pinTab(id),
     create: () => schematic.newProject(),
     close: (id) => closeTabAsking(schematic, library, id),
     move: (id, toIndex) => schematic.moveTab(id, toIndex),
@@ -274,11 +281,13 @@ const modes: Record<Mode, ModeAdapter> = {
         name: tab.name,
         title: tab.filePath ?? NOT_SAVED,
         path: tab.filePath,
-        dirty: tab.dirty
+        dirty: tab.dirty,
+        preview: tab.preview
       })),
     activeId: () => diagram.activeTabId,
     anyDirty: () => diagram.anyDirty,
     activate: (id) => diagram.activateTab(id),
+    pin: (id) => diagram.pinTab(id),
     create: () => diagram.newDiagram(),
     close: (id) => closeDiagramTabAsking(diagram, library, id),
     move: (id, toIndex) => diagram.moveTab(id, toIndex),
@@ -308,6 +317,16 @@ function showTab(id: number): void {
 
 function newTab(): void {
   current.value.create()
+}
+
+/** Double-clic sur un onglet d'aperçu : il reste, son titre n'est plus en italique. */
+function keepTab(id: number): void {
+  current.value.pin(id)
+}
+
+/** Infobulle d'un onglet : son fichier ; pour un aperçu, comment le garder. */
+function tabTitle(tab: StripTab): string {
+  return tab.preview ? `${tab.title} — aperçu : un double-clic garde l’onglet` : tab.title
 }
 
 /** Ferme un onglet ; s'il est modifié, la question vient d'abord : enregistrer, ne pas enregistrer, annuler. */
@@ -905,16 +924,21 @@ onUnmounted(() => {
           v-for="tab in strip.tabs"
           :key="`${strip.kind}-${tab.id}`"
           class="doc-tab"
-          :class="{ active: tab.id === strip.activeId, dragging: tab.id === draggedTabId }"
+          :class="{
+            active: tab.id === strip.activeId,
+            dragging: tab.id === draggedTabId,
+            preview: tab.preview
+          }"
           role="tab"
           tabindex="0"
           draggable="true"
-          :title="tab.title"
+          :title="tabTitle(tab)"
           @dragstart="onTabDragStart(tab.id, $event)"
           @dragover="onTabDragOver(tab.id, $event)"
           @drop.prevent
           @dragend="draggedTabId = null"
           @click="showTab(tab.id)"
+          @dblclick="keepTab(tab.id)"
           @keydown.enter="showTab(tab.id)"
           @mousedown.middle.prevent
           @auxclick.prevent="closeTabOnMiddle(tab.id, $event)"
@@ -982,12 +1006,7 @@ onUnmounted(() => {
       </div>
     </header>
     <main class="workspace">
-      <DiagramLibrary v-if="mode === 'diagram'" />
-      <LibraryPanel
-        v-else
-        :mode="mode === 'components' ? 'edit' : 'place'"
-        @edit="mode = 'components'"
-      />
+      <SidePanel :mode="mode" @edit="mode = 'components'" />
       <ComponentEditor v-if="mode === 'components'" ref="componentEditor" />
       <DiagramEditor v-else-if="mode === 'diagram'" ref="diagramEditor" />
       <SchematicEditor v-else ref="schematicEditor" @edit-component="editComponentOf" />

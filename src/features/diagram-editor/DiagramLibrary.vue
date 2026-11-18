@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import {
   createNode,
   DEFAULT_DIAGRAM_STYLE,
@@ -11,11 +12,14 @@ import {
 import DiagramNodeGraphic from '@/render/DiagramNodeGraphic.vue'
 import { useDiagramStore } from './store'
 
-// Bibliothèque du diagramme : les formes du catalogue, en vignettes, rangées par famille
-// (général, organigramme, activité, communication), sur trois colonnes, ou sur une seule quand
-// la fenêtre est étroite et que le panneau se réduit. Un clic puis un clic sur le
-// diagramme pose la forme, ou on la glisse directement dessus. Rien à créer ni à enregistrer ici :
-// les formes sont définies en dur dans le domaine.
+// Bibliothèque du diagramme, dans le panneau latéral (`src/app/SidePanel.vue`, qui porte les
+// onglets et le champ de recherche) : les formes du catalogue, en vignettes sur trois colonnes,
+// rangées par famille (général, organigramme, activité, communication). Un clic puis un clic
+// sur le diagramme pose la forme, ou on la glisse directement dessus. Rien à créer ni à
+// enregistrer ici : les formes sont définies en dur dans le domaine.
+
+/** `search` : ce qu'on a tapé dans le champ de recherche du panneau ; les formes dont le nom le contient. */
+const props = withDefaults(defineProps<{ search?: string }>(), { search: '' })
 
 const store = useDiagramStore()
 
@@ -62,6 +66,18 @@ const families = NODE_FAMILIES.map((family) => ({
   }))
 }))
 
+/** Les familles, réduites aux formes que garde la recherche. */
+const shown = computed(() => {
+  const needle = props.search.trim().toLowerCase()
+  if (needle.length === 0) return families
+  return families
+    .map((family) => ({
+      ...family,
+      tiles: family.tiles.filter((tile) => tile.label.toLowerCase().includes(needle))
+    }))
+    .filter((family) => family.tiles.length > 0)
+})
+
 function onDragStart(shape: NodeShape, event: DragEvent): void {
   store.startPlacing(shape)
   if (event.dataTransfer) {
@@ -77,11 +93,9 @@ function onDragEnd(): void {
 </script>
 
 <template>
-  <aside class="library">
-    <header class="library-head">
-      <h2>Formes</h2>
-    </header>
-    <section v-for="family in families" :key="family.label" class="family">
+  <div class="library">
+    <p v-if="shown.length === 0" class="hint">Rien ne correspond à la recherche.</p>
+    <section v-for="family in shown" :key="family.label" class="family">
       <h3>{{ family.label }}</h3>
       <div class="grid">
         <button
@@ -103,28 +117,22 @@ function onDragEnd(): void {
         </button>
       </div>
     </section>
-  </aside>
+  </div>
 </template>
 
 <style scoped>
 .library {
-  width: var(--side-panel-width);
-  flex: none;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
   overflow-y: auto;
 }
 
-.library-head {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.library-head h2 {
-  margin: 0;
-  font-size: 14px;
+.hint {
+  margin: 16px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 /* Titre d'une famille de formes : comme une catégorie de la bibliothèque de composants. */
@@ -143,26 +151,6 @@ function onDragEnd(): void {
   grid-template-columns: repeat(3, 1fr);
   gap: 4px;
   padding: 4px 8px 6px;
-}
-
-/* Fenêtre étroite : le panneau se réduit (`--side-panel-width`), une forme par ligne. */
-@media (max-width: 1100px) {
-  .library-head,
-  .family h3 {
-    padding-left: 8px;
-    padding-right: 8px;
-  }
-
-  .family h3 {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .grid {
-    grid-template-columns: minmax(0, 1fr);
-    padding: 4px 6px 6px;
-  }
 }
 
 .tile {

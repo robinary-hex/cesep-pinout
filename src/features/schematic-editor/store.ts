@@ -155,6 +155,8 @@ export interface TabInfo {
   name: string
   filePath: string | null
   dirty: boolean
+  /** Onglet d'aperçu (voir tabs.ts) : titre en italique, remplacé par l'aperçu suivant. */
+  preview: boolean
 }
 
 /** État d'édition qu'un onglet garde quand il n'est pas affiché. */
@@ -299,7 +301,8 @@ export const useSchematicStore = defineStore('schematic', () => {
       id: tab.id,
       name: tab.name,
       filePath: tab.path,
-      dirty: tab.dirty
+      dirty: tab.dirty,
+      preview: tab.preview
     }))
   )
   /** Profil effectif pour l'affichage : l'aperçu de la boîte de dialogue, sinon celui du projet. */
@@ -596,8 +599,13 @@ export const useSchematicStore = defineStore('schematic', () => {
   }
 
   /** Montre un document dans un onglet : l'onglet actif s'il est vierge, sinon un nouveau. */
-  function showInTab(project: Project, saved: Project | null, path: string | null): void {
-    base.showInTab(project, saved, path)
+  function showInTab(
+    project: Project,
+    saved: Project | null,
+    path: string | null,
+    preview = false
+  ): void {
+    base.showInTab(project, saved, path, preview)
     syncCurrentColor()
   }
 
@@ -607,34 +615,55 @@ export const useSchematicStore = defineStore('schematic', () => {
     status.value = ''
   }
 
-  function openProject(project: Project, path: string): void {
-    showInTab(project, project, path)
+  function openProject(project: Project, path: string, preview = false): void {
+    showInTab(project, project, path, preview)
     status.value = ''
   }
 
   /**
    * Ouvre un fichier de projet par son chemin ; vrai si l'ouverture a réussi. Un fichier déjà
-   * ouvert n'est pas relu : son onglet revient devant.
+   * ouvert n'est pas relu : son onglet revient devant. Avec `preview` (un simple clic dans
+   * l'onglet Fichiers du panneau latéral), il s'ouvre dans l'onglet d'aperçu, à la place de
+   * l'aperçu précédent, et ne compte pas parmi les fichiers récents ; ouvert pour de bon, un
+   * aperçu devient un onglet comme les autres.
    */
-  async function openPath(path: string): Promise<boolean> {
+  async function openPath(path: string, options: { preview?: boolean } = {}): Promise<boolean> {
+    const preview = options.preview === true
     const already = tabs.value.find((tab) => tab.filePath !== null && samePath(tab.filePath, path))
     if (already) {
       activateTab(already.id)
       status.value = `Déjà ouvert : ${path}`
+      if (!preview && already.preview) {
+        base.pinTab(already.id)
+        await library.addRecentFile(path)
+      }
       return true
     }
     try {
       const project = await readProject(path)
-      openProject(project, path)
+      openProject(project, path, preview)
       fitToContent()
-      status.value = `Ouvert : ${path}`
-      await library.addRecentFile(path)
+      status.value = preview
+        ? `Aperçu : ${path} — une modification ou un double-clic garde l’onglet.`
+        : `Ouvert : ${path}`
+      if (!preview) await library.addRecentFile(path)
       return true
     } catch (error) {
       status.value = `Ouverture impossible : ${error instanceof Error ? error.message : String(error)}`
       if (library.recentFiles.includes(path)) await library.removeRecentFile(path)
       return false
     }
+  }
+
+  /**
+   * Garde un onglet d'aperçu (double-clic sur l'onglet) : il devient un onglet comme les autres,
+   * et son fichier compte désormais parmi les fichiers récents.
+   */
+  function pinTab(id: number): void {
+    const tab = tabs.value.find((candidate) => candidate.id === id)
+    if (!tab?.preview) return
+    base.pinTab(id)
+    if (tab.filePath !== null) void library.addRecentFile(tab.filePath)
   }
 
   /** Reprend une copie de secours : le projet s'ouvre dans un onglet, comme non enregistré. */
@@ -2026,6 +2055,7 @@ export const useSchematicStore = defineStore('schematic', () => {
     restoreProject,
     markSaved,
     activateTab,
+    pinTab,
     cycleTab,
     moveTab,
     closeTab,

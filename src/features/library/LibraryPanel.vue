@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import {
   BASE_VARIANT,
   componentVariants,
@@ -15,7 +15,6 @@ import { bridge } from '@/io/bridge'
 import { deleteComponent, saveComponent, type LibraryEntry } from '@/io/library'
 import { baseName, samePath } from '@/io/paths'
 import ComponentThumbnail from '@/render/ComponentThumbnail.vue'
-import { useCompactLayout } from '@/ui/compactLayout'
 import ContextMenu from '@/ui/ContextMenu.vue'
 import { heading, item, SEPARATOR, submenu, type MenuItem } from '@/ui/contextMenu'
 import { confirmAction } from '@/ui/dialogs'
@@ -23,11 +22,12 @@ import Icon from '@/ui/Icon.vue'
 import PromptDialog from '@/ui/PromptDialog.vue'
 import { useLibraryStore } from './store'
 
-// Panneau de gauche : la bibliothèque de composants sur disque, en liste (nom, broches) ou en
-// grille de vignettes (nom au survol) selon le paramètre `libraryView` ; toujours en vignettes,
-// sur une colonne, quand la fenêtre est étroite et que le panneau se réduit.
-// En mode « edit », un clic ouvre le composant dans l'éditeur ; en mode « place », il le pose sur
-// le montage. Un clic droit ouvre un menu : sur un composant (ouvrir, dupliquer, renommer,
+// La bibliothèque de composants sur disque, dans le panneau latéral (`src/app/SidePanel.vue`,
+// qui porte les onglets et le champ de recherche) : en liste (nom, broches) ou en grille de
+// vignettes (nom au survol) selon le paramètre `libraryView`.
+// En mode « edit », un clic ouvre le composant dans l'onglet d'aperçu de l'éditeur (titre en
+// italique : le suivant prendra sa place) et un double-clic l'ouvre pour de bon ; en mode
+// « place », un clic le pose sur le montage. Un clic droit ouvre un menu : sur un composant (ouvrir, dupliquer, renommer,
 // catégorie, supprimer ; dans le montage, poser ou modifier), ou dans le vide (nouveau composant,
 // liste ou grille, dossier). Pas de boutons sur les composants, ni de bouton « Nouveau ».
 
@@ -38,13 +38,6 @@ const emit = defineEmits<{ edit: [] }>()
 const library = useLibraryStore()
 const editor = useComponentEditorStore()
 const schematic = useSchematicStore()
-
-/**
- * Liste ou grille : le réglage des paramètres, sauf quand la fenêtre est étroite. Le panneau se
- * réduit alors à une colonne de vignettes, sans place pour les lignes de la liste.
- */
-const compact = useCompactLayout()
-const view = computed(() => (compact.value ? 'grid' : library.libraryView))
 
 // Catégories repliables ; une recherche en cours montre tout, le temps de la recherche.
 const collapsed = ref(new Set<string>())
@@ -104,8 +97,17 @@ function pick(entry: LibraryEntry): void {
     schematic.startPlacing(entry.def, componentVariants(entry.def)[0]?.id ?? null)
     return
   }
-  // Chaque composant a son onglet ; déjà ouvert, le sien revient devant.
-  editor.open(entry.def, entry.folder)
+  // Un coup d'œil : l'onglet d'aperçu, que le composant suivant remplacera. Déjà ouvert, son
+  // onglet revient devant.
+  editor.open(entry.def, entry.folder, { preview: true })
+}
+
+/**
+ * Double-clic sur un composant, dans l'éditeur : il s'ouvre pour de bon, ou son onglet d'aperçu
+ * devient un onglet comme les autres.
+ */
+function keep(entry: LibraryEntry): void {
+  if (props.mode === 'edit' && entry.def) editor.open(entry.def, entry.folder)
 }
 
 // Glisser-déposer vers le montage : la pose démarre au début du glisser, le canevas pose au dépôt.
@@ -251,7 +253,7 @@ function openMenu(entry: LibraryEntry, event: MouseEvent): void {
   } else {
     if (def) {
       items.push(
-        item('Ouvrir', () => pick(entry), { icon: 'edit' }),
+        item('Ouvrir', () => keep(entry), { icon: 'edit' }),
         item('Dupliquer', () => duplicate(entry), { icon: 'duplicate' }),
         item('Renommer…', () => rename(entry), { icon: 'type' }),
         item('Catégorie…', () => recategorize(entry), { icon: 'tag' })
@@ -321,12 +323,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
 </script>
 
 <template>
-  <aside class="library">
-    <header class="library-head">
-      <h2>Composants</h2>
-      <input v-model="library.search" type="search" placeholder="Rechercher…" class="search" />
-    </header>
-
+  <div class="library">
     <p v-if="library.problem" class="problem">{{ library.problem }}</p>
 
     <div class="list" @contextmenu="openListMenu">
@@ -354,7 +351,7 @@ async function remove(entry: LibraryEntry): Promise<void> {
           <span class="group-name">{{ group.name }}</span>
           <span class="count">{{ group.entries.length }}</span>
         </button>
-        <template v-if="view === 'grid'">
+        <template v-if="library.libraryView === 'grid'">
           <div v-show="isOpen(group.name)" class="grid">
             <div
               v-for="entry in group.entries"
@@ -372,11 +369,12 @@ async function remove(entry: LibraryEntry): Promise<void> {
                 :disabled="!entry.def"
                 :title="tileTitle(entry)"
                 @click="pick(entry)"
+                @dblclick="keep(entry)"
               >
                 <ComponentThumbnail
                   v-if="entry.def"
                   :def="entry.def"
-                  :size="compact ? 64 : 48"
+                  :size="48"
                   :stroke-base="library.defaultProfile.componentStroke"
                 />
                 <span v-else class="thumb-missing">?</span>
@@ -405,10 +403,11 @@ async function remove(entry: LibraryEntry): Promise<void> {
                 entry.def
                   ? mode === 'place'
                     ? `Poser ${entry.def.name} : clic puis clic sur le montage, ou glisser-déposer`
-                    : `Ouvrir ${entry.def.name}`
+                    : `${entry.def.name} — clic : aperçu ; double-clic : garder l’onglet`
                   : (entry.problem ?? '')
               "
               @click="pick(entry)"
+              @dblclick="keep(entry)"
             >
               <ComponentThumbnail
                 v-if="entry.def"
@@ -452,39 +451,15 @@ async function remove(entry: LibraryEntry): Promise<void> {
       @submit="prompt.onSubmit($event)"
       @close="prompt = null"
     />
-  </aside>
+  </div>
 </template>
 
 <style scoped>
 .library {
-  width: var(--side-panel-width);
-  flex: none;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-}
-
-.library-head {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border-soft);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.library-head h2 {
-  margin: 0;
-  font-size: 14px;
-}
-
-.search {
-  font: inherit;
-  padding: 5px 8px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--surface-2);
-  color: var(--text);
 }
 
 .problem {
@@ -650,29 +625,6 @@ async function remove(entry: LibraryEntry): Promise<void> {
   grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
   gap: 4px;
   padding: 2px 10px 6px;
-}
-
-/* Fenêtre étroite : le panneau se réduit (`--side-panel-width`), une vignette par ligne. */
-@media (max-width: 1100px) {
-  .library-head {
-    padding-left: 8px;
-    padding-right: 8px;
-  }
-
-  .search {
-    min-width: 0;
-    padding: 5px 6px;
-  }
-
-  .group-head {
-    padding-left: 6px;
-    padding-right: 8px;
-  }
-
-  .grid {
-    grid-template-columns: minmax(0, 1fr);
-    padding: 2px 6px 6px;
-  }
 }
 
 .tile {

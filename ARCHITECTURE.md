@@ -225,6 +225,16 @@ empreinte (`footprint`) : elle ne se dessine pas sur le composant posé, mais su
 la plaque à deux faces qui le porte (`boardFootprints`), avec la plaque, fondue avec les autres
 empreintes du composant en une silhouette d'une allure fixe (`src/domain/footprint.ts`).
 
+## Onglets d'aperçu et panneau latéral
+
+`src/state/tabs.ts` tient aussi l'onglet d'aperçu : un document ouvert d'un clic dans le panneau
+latéral porte `preview`, et le suivant ouvert de la même façon le remplace. Une commande
+(`apply`), un enregistrement ou `pinTab` en font un onglet ordinaire ; la session ne le retient
+pas. Le panneau latéral (`src/app/SidePanel.vue`) a la même disposition dans les trois modes :
+des onglets, la recherche, une liste. Il compose la bibliothèque de composants, les formes du
+diagramme et la liste des fichiers du dossier de Pinout (`src/app/DocumentList.vue`,
+`src/io/documentFiles.ts`).
+
 ## Export
 
 `src/domain/svg.ts` construit un SVG autonome : viewBox en cellules (étendue du contenu plus une

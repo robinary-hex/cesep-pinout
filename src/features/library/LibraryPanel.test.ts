@@ -8,7 +8,6 @@ import { useSchematicStore } from '@/features/schematic-editor/store'
 import { setBridge } from '@/io/bridge'
 import { saveComponent } from '@/io/library'
 import { FakeFs } from '@/io/testing/fakeFs'
-import { useCompactLayout } from '@/ui/compactLayout'
 import { setDialogResponder } from '@/ui/dialogs'
 import { scriptDialogs, type DialogScript } from '@/ui/testing/dialogs'
 import { menuEntry, menuLabels, rightClick } from '@/ui/testing/menus'
@@ -30,7 +29,6 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
-  useCompactLayout().value = false
   setBridge(null)
   setDialogResponder(null)
   document.body.innerHTML = ''
@@ -54,27 +52,51 @@ describe('panneau de la bibliothèque', () => {
     wrapper.unmount()
   })
 
-  it('passe en vignettes, quel que soit le réglage, quand la fenêtre est étroite', async () => {
+  it('dans l’éditeur, un clic ouvre un aperçu que le composant suivant remplace ; un double-clic le garde', async () => {
+    const editor = useComponentEditorStore()
     const library = useLibraryStore()
+    await saveComponent(library.libraryDir, createEmptyComponent('bouton', 'Bouton'))
+    await library.refresh()
+    const wrapper = mount(LibraryPanel, { props: { mode: 'edit' }, attachTo: document.body })
+    await flushPromises()
+    const line = (name: string): ReturnType<typeof wrapper.get> => {
+      const found = wrapper.findAll('.item').find((item) => item.get('.name').text() === name)
+      if (!found) throw new Error(`composant « ${name} » introuvable`)
+      return found.get('.open')
+    }
+    const strip = (): [string, boolean][] => editor.tabs.map((tab) => [tab.name, tab.preview])
+    // Un clic : l'onglet d'aperçu, à la place du composant vierge du départ.
+    await line('LED').trigger('click')
+    expect(strip()).toEqual([['LED', true]])
+    expect(editor.status).toContain('Aperçu')
+    // Un autre composant : il prend la place de l'aperçu.
+    await line('Bouton').trigger('click')
+    expect(strip()).toEqual([['Bouton', true]])
+    // Un double-clic sur le composant garde son onglet ; le suivant s'ouvre à côté.
+    await line('Bouton').trigger('dblclick')
+    expect(strip()).toEqual([['Bouton', false]])
+    await line('LED').trigger('click')
+    expect(strip()).toEqual([
+      ['Bouton', false],
+      ['LED', true]
+    ])
+    // Une modification le garde aussi.
+    editor.addPin({ x: 0, y: 1 })
+    expect(strip()).toEqual([
+      ['Bouton', false],
+      ['LED', false]
+    ])
+    wrapper.unmount()
+  })
+
+  it('dans le montage, un clic pose le composant : aucun onglet ne s’ouvre', async () => {
+    const editor = useComponentEditorStore()
     const wrapper = mount(LibraryPanel, { props: { mode: 'place' }, attachTo: document.body })
     await flushPromises()
-    // Fenêtre large : la liste des paramètres, une ligne par composant.
-    expect(library.libraryView).toBe('list')
-    expect(wrapper.find('.item').exists()).toBe(true)
-    expect(wrapper.find('.tile').exists()).toBe(false)
-    // Fenêtre étroite : le panneau se réduit, une vignette par composant, le réglage intact.
-    useCompactLayout().value = true
-    await flushPromises()
-    expect(wrapper.find('.item').exists()).toBe(false)
-    expect(wrapper.findAll('.tile')).toHaveLength(1)
-    expect(wrapper.get('.tile-name').text()).toBe('LED')
-    expect(library.libraryView).toBe('list')
-    // Un clic sur la vignette pose toujours le composant.
-    await wrapper.get('.tile-open').trigger('click')
+    await wrapper.get('.item .open').trigger('click')
+    await wrapper.get('.item .open').trigger('dblclick')
     expect(useSchematicStore().placement?.def.id).toBe('led')
-    useCompactLayout().value = false
-    await flushPromises()
-    expect(wrapper.find('.item').exists()).toBe(true)
+    expect(editor.tabs.map((tab) => tab.name)).toEqual(['Nouveau composant'])
     wrapper.unmount()
   })
 

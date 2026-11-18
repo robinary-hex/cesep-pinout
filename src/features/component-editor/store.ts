@@ -83,6 +83,8 @@ export interface ComponentTabInfo {
   name: string
   folder: string | null
   dirty: boolean
+  /** Onglet d'aperçu (voir tabs.ts) : titre en italique, remplacé par l'aperçu suivant. */
+  preview: boolean
 }
 
 /**
@@ -218,7 +220,8 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
       id: tab.id,
       name: tab.name,
       folder: tab.path,
-      dirty: tab.dirty
+      dirty: tab.dirty,
+      preview: tab.preview
     }))
   )
   /**
@@ -361,9 +364,10 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   function showInTab(
     def: ComponentDefinition,
     saved: ComponentDefinition | null,
-    sourceFolder: string | null
+    sourceFolder: string | null,
+    preview = false
   ): void {
-    base.showInTab(def, saved, sourceFolder)
+    base.showInTab(def, saved, sourceFolder, preview)
     // Un composant qui s'ouvre occupe toute la zone d'édition.
     fitToViewport()
   }
@@ -377,19 +381,28 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
   /**
    * Ouvre un composant dans un onglet ; `sourceFolder` null = jamais enregistré (copie, import) :
    * il est alors à enregistrer. Un composant de la bibliothèque déjà ouvert n'est pas rechargé :
-   * son onglet revient devant.
+   * son onglet revient devant. Avec `preview` (un simple clic dans la bibliothèque), il s'ouvre
+   * dans l'onglet d'aperçu, à la place de l'aperçu précédent ; ouvert pour de bon, un aperçu
+   * devient un onglet comme les autres.
    */
-  function open(def: ComponentDefinition, sourceFolder: string | null): void {
+  function open(
+    def: ComponentDefinition,
+    sourceFolder: string | null,
+    options: { preview?: boolean } = {}
+  ): void {
+    const glance = options.preview === true && sourceFolder !== null
     if (sourceFolder !== null) {
       const already = tabs.value.find(
         (tab) => tab.folder !== null && samePath(tab.folder, sourceFolder)
       )
       if (already) {
         activateTab(already.id)
+        if (!glance) base.pinTab(already.id)
         return
       }
     }
-    showInTab(def, sourceFolder === null ? null : def, sourceFolder)
+    showInTab(def, sourceFolder === null ? null : def, sourceFolder, glance)
+    if (glance) status.value = 'Aperçu : une modification ou un double-clic garde l’onglet.'
     // On retrouve la variante qu'on regardait en l'enregistrant (celle de son aperçu) : un
     // simple ouvrir-enregistrer ne change donc pas l'aperçu.
     const preview = def.previewVariant
@@ -1528,6 +1541,7 @@ export const useComponentEditorStore = defineStore('componentEditor', () => {
     open,
     markSaved,
     activateTab,
+    pinTab: base.pinTab,
     cycleTab,
     moveTab,
     closeTab,

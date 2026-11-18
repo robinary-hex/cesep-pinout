@@ -11,7 +11,8 @@ import { samePath } from '@/io/paths'
 // lancement suivant. Seuls comptent les documents qui ont un fichier : un montage jamais
 // enregistré n'est pas retenu, donc pas rouvert. La liste est tenue à jour à chaque changement
 // d'onglet, pas seulement en quittant : elle survit aussi à un arrêt brutal. Elle vit dans la
-// mémoire de l'interface (propre à la machine), pas dans les paramètres.
+// mémoire de l'interface (propre à la machine), pas dans les paramètres. Un onglet d'aperçu
+// (voir tabs.ts) n'en fait pas partie : ouvert pour un coup d'œil, il ne revient pas.
 
 const SESSION_KEY = 'session'
 
@@ -38,12 +39,13 @@ interface Stores {
 }
 
 function openDocuments(
-  tabs: readonly { id: number; path: string | null }[],
+  tabs: readonly { id: number; path: string | null; preview: boolean }[],
   activeId: number
 ): Session['schematic'] {
+  const kept = tabs.filter((tab) => !tab.preview)
   return {
-    paths: tabs.flatMap((tab) => (tab.path === null ? [] : [tab.path])),
-    active: tabs.find((tab) => tab.id === activeId)?.path ?? null
+    paths: kept.flatMap((tab) => (tab.path === null ? [] : [tab.path])),
+    active: kept.find((tab) => tab.id === activeId)?.path ?? null
   }
 }
 
@@ -55,15 +57,15 @@ export function currentSession(
   return {
     mode,
     schematic: openDocuments(
-      schematic.tabs.map((tab) => ({ id: tab.id, path: tab.filePath })),
+      schematic.tabs.map((tab) => ({ id: tab.id, path: tab.filePath, preview: tab.preview })),
       schematic.activeTabId
     ),
     diagram: openDocuments(
-      diagram.tabs.map((tab) => ({ id: tab.id, path: tab.filePath })),
+      diagram.tabs.map((tab) => ({ id: tab.id, path: tab.filePath, preview: tab.preview })),
       diagram.activeTabId
     ),
     components: openDocuments(
-      editor.tabs.map((tab) => ({ id: tab.id, path: tab.folder })),
+      editor.tabs.map((tab) => ({ id: tab.id, path: tab.folder, preview: tab.preview })),
       editor.activeTabId
     )
   }

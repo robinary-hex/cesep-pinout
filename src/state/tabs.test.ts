@@ -34,7 +34,9 @@ function editor() {
 describe('onglets de documents', () => {
   it('part d’un onglet vierge, que le premier document ouvert remplace', () => {
     const { tabs } = editor()
-    expect(tabs.tabs.value).toEqual([{ id: 1, name: 'Sans titre', path: null, dirty: false }])
+    expect(tabs.tabs.value).toEqual([
+      { id: 1, name: 'Sans titre', path: null, dirty: false, preview: false }
+    ])
     expect(tabs.pristine.value).toBe(true)
     const opened = { name: 'Liste', lines: ['a'] }
     tabs.showInTab(opened, opened, 'C:/liste.txt')
@@ -136,5 +138,82 @@ describe('onglets de documents', () => {
     expect(tabs.doc.value).toBe(fresh)
     expect(tabs.undoLabel.value).toBeNull()
     expect(tabs.pristine.value).toBe(true)
+  })
+})
+
+describe('onglets de documents : l’onglet d’aperçu', () => {
+  const note = (name: string): Note => ({ name, lines: [name] })
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+  function opened() {
+    const { tabs, add } = editor()
+    /** Ouvre un document enregistré ; `glance` : en aperçu. */
+    const open = (name: string, glance = false): void => {
+      const doc = note(name)
+      tabs.showInTab(doc, doc, `C:/${name}.txt`, glance)
+    }
+    const strip = (): [string, boolean][] => tabs.tabs.value.map((tab) => [tab.name, tab.preview])
+    return { tabs, add, open, strip }
+  }
+
+  it('un aperçu prend la place de l’aperçu précédent ; gardé, il reste', () => {
+    const { tabs, open, strip } = opened()
+    // Le premier prend la place de l'onglet vierge du départ.
+    open('A', true)
+    expect(strip()).toEqual([['A', true]])
+    open('B', true)
+    expect(strip()).toEqual([['B', true]])
+    // Gardé (un double-clic) : le suivant s'ouvre à côté.
+    tabs.pinTab(tabs.activeTabId.value)
+    open('C', true)
+    expect(strip()).toEqual([
+      ['B', false],
+      ['C', true]
+    ])
+    // Un document ouvert pour de bon ne prend pas la place d'un aperçu.
+    open('D')
+    expect(strip()).toEqual([
+      ['B', false],
+      ['C', true],
+      ['D', false]
+    ])
+    // L'aperçu n'est plus l'onglet affiché : le suivant le remplace là où il est, et passe devant.
+    open('E', true)
+    expect(strip()).toEqual([
+      ['B', false],
+      ['E', true],
+      ['D', false]
+    ])
+    expect(tabs.doc.value.name).toBe('E')
+    // Un aperçu rangé se garde aussi (double-clic sur son onglet depuis un autre).
+    const glance = tabs.activeTabId.value
+    tabs.activateTab(tabs.tabs.value[0]?.id ?? 0)
+    tabs.pinTab(glance)
+    expect(strip()).toEqual([
+      ['B', false],
+      ['E', false],
+      ['D', false]
+    ])
+  })
+
+  it('une modification ou un enregistrement garde l’onglet', () => {
+    const { tabs, add, open, strip } = opened()
+    open('A', true)
+    add('x')
+    expect(strip()).toEqual([['A', false]])
+    // Annuler ne le rend pas à l'aperçu : on y a touché.
+    tabs.undo()
+    expect(strip()).toEqual([['A', false]])
+    open('B', true)
+    tabs.markSaved('C:/b2.txt')
+    expect(strip()).toEqual([
+      ['A', false],
+      ['B', false]
+    ])
+    // Un aperçu qu'on quitte puis retrouve reste un aperçu.
+    open('C', true)
+    const glance = tabs.activeTabId.value
+    tabs.activateTab(tabs.tabs.value[0]?.id ?? 0)
+    tabs.activateTab(glance)
+    expect(strip().at(-1)).toEqual(['C', true])
   })
 })

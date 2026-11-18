@@ -573,3 +573,138 @@ describe('menu Fichier : fichiers récents', () => {
     document.body.innerHTML = ''
   })
 })
+
+describe('panneau latéral : onglets, fichiers du dossier de Pinout, onglets d’aperçu', () => {
+  const MONTAGES = 'C:/fake/Donnees/Montages'
+  const DIAGRAMS = 'C:/fake/Donnees/Diagrammes'
+  const montage = (file: string, name: string): Promise<void> =>
+    fs.writeTextFile(
+      `${MONTAGES}/${file}`,
+      serializeProject(createEmptyProject(name, DEFAULT_PROFILE))
+    )
+
+  it('a la même disposition dans les trois modes ; « Fichiers » liste ceux du dossier de Pinout', async () => {
+    await montage('alim.pinout', 'Alim')
+    await montage('Robotique/moteur.pinout', 'Moteur')
+    await fs.writeTextFile(`${MONTAGES}/notes.txt`, 'pas un montage')
+    await fs.writeTextFile(
+      `${DIAGRAMS}/etats.pinuml`,
+      serializeDiagram(createEmptyDiagram('États'))
+    )
+    const wrapper = mount(App, { attachTo: document.body })
+    await flushPromises()
+    const sideTabs = (): string[] =>
+      wrapper.findAll('.side-panel .side-tab').map((tab) => tab.text())
+    const files = (): string[] => wrapper.findAll('.documents .file').map((file) => file.text())
+    const search = (): ReturnType<typeof wrapper.get> =>
+      wrapper.get('.side-panel .side-head .search')
+    const showFiles = async (): Promise<void> => {
+      await wrapper.findAll('.side-panel .side-tab')[1]?.trigger('click')
+      await flushPromises()
+    }
+    // Montage : les composants, puis les fichiers ; le champ de recherche sous les onglets.
+    expect(sideTabs()).toEqual(['Composants', 'Fichiers'])
+    expect(wrapper.find('.side-panel .library').exists()).toBe(true)
+    await showFiles()
+    expect(wrapper.find('.side-panel .library').exists()).toBe(false)
+    expect(files()).toEqual(['alim', 'moteur'])
+    expect(wrapper.findAll('.documents .group-name').map((name) => name.text())).toEqual([
+      'Robotique'
+    ])
+    // La recherche porte sur la liste qu'on regarde.
+    await search().setValue('mot')
+    expect(files()).toEqual(['moteur'])
+    await search().setValue('')
+    // Diagramme : les formes, que la recherche filtre aussi, puis ses fichiers à lui.
+    await wrapper.findAll('.modes button')[2]?.trigger('click')
+    await flushPromises()
+    expect(sideTabs()).toEqual(['Formes', 'Fichiers'])
+    expect(wrapper.findAll('.library .tile')).toHaveLength(17)
+    await search().setValue('nua')
+    expect(wrapper.findAll('.library .tile').map((tile) => tile.text())).toEqual(['Nuage'])
+    await search().setValue('')
+    await showFiles()
+    expect(files()).toEqual(['etats'])
+    // Composants : un seul onglet, la bibliothèque étant déjà la liste de ses fichiers ; la même
+    // rangée d'onglets et le même champ, à la même place.
+    await wrapper.findAll('.modes button')[0]?.trigger('click')
+    await flushPromises()
+    expect(sideTabs()).toEqual(['Composants'])
+    expect(
+      wrapper.findAll('.side-panel .side-head > *').map((part) => part.element.tagName)
+    ).toEqual(['NAV', 'INPUT'])
+    // De retour au montage, on retrouve l'onglet qu'on y regardait.
+    await wrapper.findAll('.modes button')[1]?.trigger('click')
+    await flushPromises()
+    expect(files()).toEqual(['alim', 'moteur'])
+    wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+
+  it('un clic ouvre un aperçu, en italique, que le fichier suivant remplace ; un double-clic le garde', async () => {
+    for (const name of ['a', 'b', 'c', 'd']) await montage(`${name}.pinout`, name.toUpperCase())
+    const wrapper = mount(App, { attachTo: document.body })
+    await flushPromises()
+    await wrapper.findAll('.side-panel .side-tab')[1]?.trigger('click')
+    await flushPromises()
+    const file = (name: string): ReturnType<typeof wrapper.get> => {
+      const found = wrapper.findAll('.documents .file').find((entry) => entry.text() === name)
+      if (!found) throw new Error(`fichier « ${name} » introuvable`)
+      return found
+    }
+    const press = async (name: string, type: 'click' | 'dblclick' = 'click'): Promise<void> => {
+      await file(name).trigger(type)
+      await flushPromises()
+    }
+    const strip = (): [string, boolean][] =>
+      wrapper
+        .findAll('.doc-tab')
+        .map((tab) => [tab.get('.doc-tab-name').text(), tab.classes().includes('preview')])
+    // Un clic : l'aperçu, à la place du montage vierge du lancement ; son fichier est marqué.
+    await press('a')
+    expect(strip()).toEqual([['A', true]])
+    expect(file('a').classes()).toContain('current')
+    expect(wrapper.get('.doc-tab').attributes('title')).toContain('aperçu')
+    await press('b')
+    expect(strip()).toEqual([['B', true]])
+    // Un double-clic sur l'onglet le garde : le fichier suivant s'ouvre à côté.
+    await wrapper.get('.doc-tab').trigger('dblclick')
+    await flushPromises()
+    expect(strip()).toEqual([['B', false]])
+    await press('c')
+    expect(strip()).toEqual([
+      ['B', false],
+      ['C', true]
+    ])
+    // Une modification garde l'onglet.
+    useSchematicStore().addLabel(0, 0)
+    await flushPromises()
+    expect(strip()).toEqual([
+      ['B', false],
+      ['C', false]
+    ])
+    // Un double-clic sur le fichier l'ouvre pour de bon.
+    await press('a')
+    await press('a', 'dblclick')
+    expect(strip()).toEqual([
+      ['B', false],
+      ['C', false],
+      ['A', false]
+    ])
+    // Un aperçu ne compte ni parmi les fichiers récents, ni dans la session : il ne reviendra pas.
+    await press('d')
+    expect(strip().at(-1)).toEqual(['D', true])
+    const recents = useLibraryStore().recentFiles
+    expect(recents).toContain(`${MONTAGES}/a.pinout`)
+    expect(recents).toContain(`${MONTAGES}/b.pinout`)
+    expect(recents).not.toContain(`${MONTAGES}/d.pinout`)
+    expect(JSON.parse(localStorage.getItem('pinout.session') ?? 'null')).toMatchObject({
+      schematic: {
+        paths: [`${MONTAGES}/b.pinout`, `${MONTAGES}/c.pinout`, `${MONTAGES}/a.pinout`],
+        active: null
+      }
+    })
+    wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+})
